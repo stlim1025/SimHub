@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SimCenter.Agent.Core\SimCenter.Agent.Core.csproj" />
+    <ProjectReference Include="..\SimCenter.Agent.Infrastructure\SimCenter.Agent.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RankingUpdated",
+  "type": "object",
+  "required": ["trackId", "gameCode", "period", "periodKey", "entries"],
+  "properties": {
+    "trackId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "트랙의 고유 GUID"
+    },
+    "gameCode": {
+      "type": "string",
+      "description": "게임 코드 (예: F1_25)"
+    },
+    "period": {
+      "type": "string",
+      "enum": ["daily", "monthly", "yearly"],
+      "description": "랭킹 기간"
+    },
+    "periodKey": {
+      "type": "string",
+      "description": "해당 기간의 키 값 (예: monthly -> '2026-07', daily -> '2026-07-06')"
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["rank", "displayName", "bestLapTimeMs", "setAt"],
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "bestLapTimeMs": {
+            "type": "integer"
+          },
+          "setAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    }
+  }
+}

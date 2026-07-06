@@ -76,7 +76,7 @@ SimCenter/
 
 | 항목 | 내용 |
 |---|---|
-| 런타임 | .NET 8 / C# / Windows |
+| 런타임 | .NET 9 / C# / Windows |
 | 입력 | F1 게임 UDP Telemetry (기본 20777) |
 | 처리 | Packet Parse → Lap/Sector Analyze → 의미 있는 **도메인 이벤트** 생성 |
 | 출력 | SignalR로 Backend에 이벤트 전송 (Raw 패킷 전송 금지) |

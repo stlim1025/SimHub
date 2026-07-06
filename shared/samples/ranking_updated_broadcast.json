@@ -1,0 +1,26 @@
+{
+  "trackId": "8f8b8941-cf8d-4e92-9111-c918a5e78a63",
+  "gameCode": "F1_25",
+  "period": "monthly",
+  "periodKey": "2026-07",
+  "entries": [
+    {
+      "rank": 1,
+      "displayName": "김레이서",
+      "bestLapTimeMs": 82012,
+      "setAt": "2026-07-06T10:22:45Z"
+    },
+    {
+      "rank": 2,
+      "displayName": "홍길동",
+      "bestLapTimeMs": 83452,
+      "setAt": "2026-07-06T09:15:32Z"
+    },
+    {
+      "rank": 3,
+      "displayName": "이속도",
+      "bestLapTimeMs": 84120,
+      "setAt": "2026-07-05T18:40:11Z"
+    }
+  ]
+}

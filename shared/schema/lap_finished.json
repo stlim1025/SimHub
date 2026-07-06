@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LapFinished",
+  "type": "object",
+  "required": ["sessionRef", "lapNumber", "lapTimeMs", "sectors", "isValid", "isOutOrInLap", "trackId"],
+  "properties": {
+    "sessionRef": {
+      "type": "string",
+      "description": "연관된 게임 세션 식별자"
+    },
+    "lapNumber": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "완료된 랩 번호"
+    },
+    "lapTimeMs": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "총 랩타임 (밀리초 단위)"
+    },
+    "sectors": {
+      "type": "array",
+      "description": "각 섹터별 기록 목록 (가변 섹터 지원)",
+      "items": {
+        "type": "object",
+        "required": ["sectorNumber", "sectorTimeMs"],
+        "properties": {
+          "sectorNumber": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sectorTimeMs": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "isValid": {
+      "type": "boolean",
+      "description": "게임 내 규칙(트랙 이탈, 컷팅 등)에 따른 랩 유효성 여부"
+    },
+    "isOutOrInLap": {
+      "type": "boolean",
+      "description": "아웃랩(차고에서 트랙으로 진입하는 첫 랩) 또는 인랩(피트로 복귀하는 마지막 랩)인지 여부"
+    },
+    "trackId": {
+      "type": "integer",
+      "description": "게임 UDP에서 제공하는 원시 트랙 ID"
+    }
+  }
+}

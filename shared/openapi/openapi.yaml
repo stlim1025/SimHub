@@ -1,0 +1,657 @@
+openapi: 3.0.3
+info:
+  title: SimCenter API
+  description: SimCenter 레이싱 시뮬레이터 카페 통합 운영 플랫폼 MVP REST API 계약서
+  version: 1.0.0
+servers:
+  - url: /api/v1
+    description: API v1 Base Path
+
+paths:
+  /auth/register:
+    post:
+      summary: 회원가입
+      operationId: register
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: 회원가입 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+        '400':
+          $ref: '#/components/responses/400ValidationError'
+        '500':
+          $ref: '#/components/responses/500ServerError'
+
+  /auth/login:
+    post:
+      summary: 로그인
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: 로그인 성공 및 JWT 발급
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          $ref: '#/components/responses/400ValidationError'
+        '401':
+          description: 로그인 실패 (아이디/비밀번호 불일치)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          $ref: '#/components/responses/500ServerError'
+
+  /me:
+    get:
+      summary: 내 프로필 조회
+      operationId: getMyProfile
+      responses:
+        '200':
+          description: 프로필 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '500':
+          $ref: '#/components/responses/500ServerError'
+
+  /sessions/check-in:
+    post:
+      summary: SimRig 체크인 (세션 시작)
+      operationId: checkInSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckInRequest'
+      responses:
+        '201':
+          description: 세션 체크인 성공 및 DrivingSession 생성
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DrivingSession'
+        '400':
+          $ref: '#/components/responses/400ValidationError'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '409':
+          description: 해당 Rig에 이미 다른 사용자의 활성 세션이 존재
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          $ref: '#/components/responses/500ServerError'
+
+  /sessions/{id}/check-out:
+    post:
+      summary: 세션 체크아웃 (종료)
+      operationId: checkOutSession
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 세션 ID (GUID)
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 세션 종료 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DrivingSession'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '403':
+          description: 본인의 세션이 아님
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: 세션을 찾을 수 없음
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          $ref: '#/components/responses/500ServerError'
+
+  /sessions/active:
+    get:
+      summary: 내 활성 세션 조회
+      operationId: getActiveSession
+      responses:
+        '200':
+          description: 활성 세션 조회 성공 (없으면 null 데이터 반환)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DrivingSession'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '500':
+          $ref: '#/components/responses/500ServerError'
+
+  /rankings:
+    get:
+      summary: 랭킹 TOP10 조회 (Time Trial 세션만)
+      operationId: getRankings
+      parameters:
+        - name: trackId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: 트랙 GUID
+        - name: period
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [daily, monthly, yearly]
+            default: monthly
+          description: 랭킹 기간
+        - name: gameCode
+          in: query
+          required: false
+          schema:
+            type: string
+            default: F1_25
+          description: 게임 코드
+        - name: date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: 랭킹 기준일 (미지정 시 오늘)
+      responses:
+        '200':
+          description: 랭킹 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RankingSnapshot'
+        '400':
+          $ref: '#/components/responses/400ValidationError'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '500':
+          $ref: '#/components/responses/500ServerError'
+
+  /tracks:
+    get:
+      summary: 트랙 목록 조회
+      operationId: getTracks
+      responses:
+        '200':
+          description: 트랙 목록 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrackListResponse'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '500':
+          $ref: '#/components/responses/500ServerError'
+
+  /me/laps:
+    get:
+      summary: 내 랩 기록 조회 (My Lap Record)
+      operationId: getMyLaps
+      parameters:
+        - name: trackId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: 필터링할 트랙 ID
+        - name: sessionType
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 필터링할 세션 타입 (예: TimeTrial)
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: 페이지 번호 (1-base)
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+          description: 페이지 크기
+      responses:
+        '200':
+          description: 내 기록 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyLapRecordResponse'
+        '400':
+          $ref: '#/components/responses/400ValidationError'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '500':
+          $ref: '#/components/responses/500ServerError'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    400ValidationError:
+      description: 요청 데이터 검증 실패 (RFC 7807 Problem Details)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationErrorDetails'
+    401Unauthorized:
+      description: 인증 정보가 없거나 올바르지 않음
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    500ServerError:
+      description: 서버 내부 에러
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+
+  schemas:
+    ProblemDetails:
+      type: object
+      required:
+        - type
+        - title
+        - status
+        - detail
+      properties:
+        type:
+          type: string
+          example: "https://simcenter/errors/unauthorized"
+        title:
+          type: string
+          example: "Unauthorized"
+        status:
+          type: integer
+          example: 401
+        detail:
+          type: string
+          example: "Access token is missing or invalid."
+        traceId:
+          type: string
+          example: "00-85f269a91176b668f447cfb62e49c71c-0000000000000000-00"
+
+    ValidationErrorDetails:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            errors:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: string
+              example:
+                rigCode:
+                  - "rigCode is required."
+
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+        - displayName
+      properties:
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+        password:
+          type: string
+          format: password
+          example: "SecureP@ss123"
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 50
+          example: "홍길동"
+
+    RegisterResponse:
+      type: object
+      required:
+        - userId
+        - displayName
+      properties:
+        userId:
+          type: string
+          format: uuid
+          example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        displayName:
+          type: string
+          example: "홍길동"
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+        password:
+          type: string
+          format: password
+          example: "SecureP@ss123"
+
+    LoginResponse:
+      type: object
+      required:
+        - accessToken
+        - expiresAt
+        - user
+      properties:
+        accessToken:
+          type: string
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        expiresAt:
+          type: string
+          format: date-time
+          example: "2026-07-06T10:00:00Z"
+        user:
+          $ref: '#/components/schemas/UserProfile'
+
+    UserProfile:
+      type: object
+      required:
+        - userId
+        - email
+        - displayName
+      properties:
+        userId:
+          type: string
+          format: uuid
+          example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+        displayName:
+          type: string
+          example: "홍길동"
+
+    CheckInRequest:
+      type: object
+      required:
+        - rigCode
+        - gameCode
+      properties:
+        rigCode:
+          type: string
+          example: "A-01"
+        gameCode:
+          type: string
+          example: "F1_25"
+
+    DrivingSession:
+      type: object
+      required:
+        - sessionId
+        - rigCode
+        - status
+        - startedAt
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+          example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        rigCode:
+          type: string
+          example: "A-01"
+        status:
+          type: string
+          enum: [Active, Ended]
+          example: "Active"
+        startedAt:
+          type: string
+          format: date-time
+          example: "2026-07-06T09:00:00Z"
+        endedAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-07-06T10:30:00Z"
+
+    RankingSnapshot:
+      type: object
+      required:
+        - trackId
+        - trackName
+        - gameCode
+        - period
+        - periodKey
+        - entries
+      properties:
+        trackId:
+          type: string
+          format: uuid
+          example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        trackName:
+          type: string
+          example: "Silverstone"
+        gameCode:
+          type: string
+          example: "F1_25"
+        period:
+          type: string
+          enum: [daily, monthly, yearly]
+          example: "monthly"
+        periodKey:
+          type: string
+          example: "2026-07"
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/RankingEntry'
+
+    RankingEntry:
+      type: object
+      required:
+        - rank
+        - displayName
+        - bestLapTimeMs
+        - setAt
+      properties:
+        rank:
+          type: integer
+          example: 1
+        displayName:
+          type: string
+          example: "홍길동"
+        bestLapTimeMs:
+          type: integer
+          example: 83452
+        setAt:
+          type: string
+          format: date-time
+          example: "2026-07-06T09:15:32Z"
+
+    TrackInfo:
+      type: object
+      required:
+        - trackId
+        - gameCode
+        - name
+      properties:
+        trackId:
+          type: string
+          format: uuid
+          example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        gameCode:
+          type: string
+          example: "F1_25"
+        name:
+          type: string
+          example: "Silverstone"
+
+    TrackListResponse:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrackInfo'
+
+    LapRecord:
+      type: object
+      required:
+        - lapId
+        - trackName
+        - gameCode
+        - sessionType
+        - lapTimeMs
+        - sectors
+        - isValid
+        - isRankingEligible
+        - setAt
+      properties:
+        lapId:
+          type: string
+          format: uuid
+          example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        trackName:
+          type: string
+          example: "Silverstone"
+        gameCode:
+          type: string
+          example: "F1_25"
+        sessionType:
+          type: string
+          example: "TimeTrial"
+        lapTimeMs:
+          type: integer
+          example: 83452
+        sectors:
+          type: array
+          items:
+            $ref: '#/components/schemas/SectorTimeInfo'
+        isValid:
+          type: boolean
+          example: true
+        isRankingEligible:
+          type: boolean
+          example: true
+        setAt:
+          type: string
+          format: date-time
+          example: "2026-07-06T09:15:32Z"
+
+    SectorTimeInfo:
+      type: object
+      required:
+        - sectorNumber
+        - sectorTimeMs
+      properties:
+        sectorNumber:
+          type: integer
+          example: 1
+        sectorTimeMs:
+          type: integer
+          example: 27010
+
+    MyLapRecordResponse:
+      type: object
+      required:
+        - laps
+      properties:
+        personalBest:
+          $ref: '#/components/schemas/PersonalBestInfo'
+          nullable: true
+        laps:
+          type: object
+          required:
+            - page
+            - pageSize
+            - total
+            - items
+          properties:
+            page:
+              type: integer
+              example: 1
+            pageSize:
+              type: integer
+              example: 20
+            total:
+              type: integer
+              example: 57
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/LapRecord'
+
+    PersonalBestInfo:
+      type: object
+      required:
+        - trackId
+        - lapTimeMs
+        - setAt
+      properties:
+        trackId:
+          type: string
+          format: uuid
+          example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        lapTimeMs:
+          type: integer
+          example: 83452
+        setAt:
+          type: string
+          format: date-time
+          example: "2026-07-06T09:15:32Z"
+
+security:
+  - BearerAuth: []

@@ -1,0 +1,30 @@
+{
+  "eventId": "a2c1e8df-9b43-4e4b-b892-31c3bf10a12e",
+  "rigCode": "A-01",
+  "gameCode": "F1_25",
+  "occurredAt": "2026-07-06T09:15:32.450Z",
+  "type": "LapFinished",
+  "payload": {
+    "sessionRef": "0xAB84EF293C29E10F",
+    "sessionType": "TimeTrial",
+    "lapNumber": 5,
+    "lapTimeMs": 83452,
+    "sectors": [
+      {
+        "sectorNumber": 1,
+        "sectorTimeMs": 27010
+      },
+      {
+        "sectorNumber": 2,
+        "sectorTimeMs": 30110
+      },
+      {
+        "sectorNumber": 3,
+        "sectorTimeMs": 26332
+      }
+    ],
+    "isValid": true,
+    "isOutOrInLap": false,
+    "trackId": 2
+  }
+}

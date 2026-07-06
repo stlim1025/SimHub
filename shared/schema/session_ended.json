@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SessionEnded",
+  "type": "object",
+  "required": ["sessionRef"],
+  "properties": {
+    "sessionRef": {
+      "type": "string",
+      "description": "종료된 게임 세션 식별자"
+    }
+  }
+}

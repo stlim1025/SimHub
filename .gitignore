@@ -46,3 +46,7 @@ Thumbs.db
 # ── Logs ────────────────────────────────────────────────
 logs/
 *.log
+
+# ── Local .NET SDK (dotnet-install.ps1 로컬 설치) ───────
+.dotnet/
+global.json

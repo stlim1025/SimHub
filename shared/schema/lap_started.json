@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LapStarted",
+  "type": "object",
+  "required": ["sessionRef", "lapNumber"],
+  "properties": {
+    "sessionRef": {
+      "type": "string",
+      "description": "연관된 게임 세션 식별자"
+    },
+    "lapNumber": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "새롭게 시작되는 랩 번호"
+    }
+  }
+}

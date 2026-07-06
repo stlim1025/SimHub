@@ -9,19 +9,24 @@
 
 ## 1. 한 줄 상태
 
-**설계(Design) 단계 완료 · 사용자 승인 완료. 아직 코드 0줄. 다음 단계 = Phase 0(계약·스캐폴딩) 상세 설계 착수.**
+**Phase 0(계약·스캐폴딩) 완료. 다음 단계 = Phase 1(Backend 코어/인증) 착수.**
 
 ---
 
 ## 2. 리포지토리 현재 상태
 
-- 위치(개발 PC 기준): `D:\SimHub`  (경로는 환경마다 다를 수 있음)
-- 형상: **Greenfield.** 현재 실제 파일은 아래뿐. 코드/솔루션/프로젝트 미생성.
+- 위치(개발 PC 기준): `D:\Project\SimHub` (경로는 환경마다 다를 수 있음)
+- 형상: **Phase 0 완료.** 계약 스펙 + 3개 솔루션 뼈대가 생성됨. 빌드 통과 확인.
   ```
-  CLAUDE.md            # 프로젝트 헌장(압축본, 71줄)
-  docs/00~09 + PROGRESS.md
+  CLAUDE.md                        # 프로젝트 헌장(압축본, 71줄)
+  docs/00~09 + PROGRESS.md         # 설계 문서 + 진행 상황
+  global.json                      # .NET 9 SDK 버전 고정
+  shared/                          # 계약(Contract) — OpenAPI, JSON Schema, Telemetry Spec, Samples
+  backend/                         # ASP.NET Core 9 Clean Architecture (빌드 ✅)
+  agent/                           # .NET 9 Agent — WPF Tray + Core + Infrastructure (빌드 ✅)
+  app/                             # Flutter Feature-First (pub get ✅)
   ```
-- Git: 미초기화(현 세션 기준). `shared/ backend/ agent/ app/` 폴더는 **아직 없음**(설계상 예정).
+- Git: 초기화 완료. `main` 브랜치.
 
 ---
 
@@ -43,26 +48,41 @@
 2. **핵심 결정 D-1~D-16 + D-8a 전부 확정** (§5 참조), 각 문서 반영 완료.
 3. **사용자 최종 승인 완료** (설계 세트 approve).
 4. **`CLAUDE.md` 압축 재작성** (646줄 → 71줄, 상세는 docs로 위임).
+5. **Phase 0 — 계약 & 스캐폴딩 완료:**
+   - `shared/openapi/openapi.yaml` — REST API OpenAPI 3.0 명세 (04 기반)
+   - `shared/schema/*.json` — SignalR/Telemetry 이벤트 페이로드 9종 JSON Schema
+   - `shared/telemetry/f1_25_udp_spec.md` — F1 25 UDP 패킷 오프셋 문서
+   - `shared/samples/` — LapFinished Envelope, RankingUpdated 샘플 JSON
+   - `backend/SimCenter.sln` — 4 src + 3 tests 프로젝트, 참조 관계 설정, **빌드 성공 (0 경고, 0 오류)**
+   - `agent/SimCenter.Agent.sln` — 3 src(Core/Infrastructure/WPF Tray) + 1 tests, **빌드 성공 (0 경고, 0 오류)**
+   - `app/` — Flutter Feature-First 구조, Riverpod/GoRouter/Dio/SignalR 의존성 설정 완료
 
 ---
 
 ## 4. 다음 할 일 (미완료) ⬜
 
-**다음 단계: Phase 0 — 계약 & 스캐폴딩 상세 설계 → 리뷰 → 구현.**
+**다음 단계: Phase 1 — Backend 코어/인증.**
 헌장 원칙에 따라 **바로 코드 작성 금지.** 먼저 아래를 "설계안"으로 제시하고 사용자 리뷰를 받는다.
 
-Phase 0 산출 목표:
-1. `shared/` 계약 초안 확정
-   - `shared/openapi/openapi.yaml` (04 API 기반)
-   - `shared/schema/*.json` (05 SignalR 이벤트 payload)
-   - `shared/telemetry/` (06 기반, F1 25 패킷 레이아웃 오프셋 문서화)
-   - `shared/samples/` (테스트용 고정 샘플)
-2. 3개 솔루션 뼈대 생성(빌드만 통과하는 빈 레이어 + DI 조립)
-   - `backend/`  : Domain/Application/Infrastructure/Api + tests (01 §2 구조)
-   - `agent/`    : Agent.Core/Infrastructure/Tray + tests (01 §3 구조)
-   - `app/`      : Flutter Feature First 스캐폴드 (01 §4 구조)
+Phase 1 산출 목표:
+1. **Domain Layer 구현**
+   - Entity 클래스: User, Store, SimRig, DrivingSession, Lap, LapSector, Track
+   - Value Object, Domain Event 정의
+   - 공통 규약: BaseEntity(Id, CreatedAt, UpdatedAt, IsDeleted), UUID v7 PK
+2. **Application Layer 구현**
+   - Repository 인터페이스 (IUserRepository, ILapRepository 등)
+   - Auth 유스케이스: Register, Login (JWT 발급)
+   - Session 유스케이스: CheckIn, CheckOut
+3. **Infrastructure Layer 구현**
+   - EF Core DbContext + Code First 마이그레이션
+   - Repository 구현체
+   - JWT 인증 서비스, IClock 구현체
+4. **Api Layer 구현**
+   - AuthController, SessionController 엔드포인트
+   - ExceptionHandlingMiddleware
+   - Program.cs DI 조립 및 파이프라인 설정
 
-이후 순서: P1 Backend 코어/인증 → P2 Agent Core → P3 실시간 인입 → P4 랭킹·브로드캐스트 → P5 Flutter MVP.
+이후 순서: P2 Agent Core → P3 실시간 인입 → P4 랭킹·브로드캐스트 → P5 Flutter MVP.
 (상세 `docs/07-roadmap.md`)
 
 ---
@@ -95,16 +115,18 @@ Phase 0 산출 목표:
 
 ## 6. 다른 환경에서 재개하는 방법
 
-1. 리포지토리를 새 위치에 배치(현재는 Git 미초기화 — 이동 시 `docs/`+`CLAUDE.md` 동반 필수).
-2. 새 세션에서 읽는 순서: **이 `PROGRESS.md` → `CLAUDE.md` → `docs/08`(결정) → 필요한 설계 문서.**
-3. 진행 지점: **§4 "다음 할 일" = Phase 0 상세 설계 착수.** 코드 착수 전 설계안 리뷰부터.
-4. 작업 규칙(헌장): 설계 → 리뷰 → 구현 → 리뷰. 추측 금지, 불확실하면 질문. 구조 임의 변경 금지.
+1. 리포지토리를 clone: `git clone https://github.com/stlim1025/SimHub.git`
+2. .NET 9 SDK 설치: `dotnet-install.ps1 -Channel 9.0` 또는 공식 인스톨러.
+3. Flutter SDK 설치 (Android/iOS/Web 타겟).
+4. 새 세션에서 읽는 순서: **이 `PROGRESS.md` → `CLAUDE.md` → `docs/08`(결정) → 필요한 설계 문서.**
+5. 진행 지점: **§4 "다음 할 일" = Phase 1 상세 설계 착수.** 코드 착수 전 설계안 리뷰부터.
+6. 작업 규칙(헌장): 설계 → 리뷰 → 구현 → 리뷰. 추측 금지, 불확실하면 질문. 구조 임의 변경 금지.
 
-### 개발 환경 전제(참고 · 미검증 항목은 착수 시 확인)
-- Backend/Agent: **.NET 8 SDK** 필요.
+### 개발 환경 전제(참고)
+- Backend/Agent: **.NET 9 SDK** 필요. (`global.json`에 9.0.315 고정)
 - Backend DB: **PostgreSQL** (EF Core Code First + Migration).
 - App: **Flutter SDK** (Android/iOS/Web).
-- Agent: Windows + F1 25(UDP Telemetry 활성, 기본 포트 20777).
+- Agent: Windows + F1 25(UDP Telemetry 활성, 기본 포트 20777). **WPF** 기반 트레이 앱.
 - Secrets(JWT 서명키, 장비 API Key, DB 접속)는 코드에 두지 않음(환경변수/User-Secrets).
 
 ---

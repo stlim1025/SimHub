@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PersonalBestAchieved",
+  "type": "object",
+  "required": ["userId", "trackId", "lapTimeMs"],
+  "properties": {
+    "userId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "기록 주행자의 고유 GUID"
+    },
+    "trackId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "트랙 고유 GUID"
+    },
+    "lapTimeMs": {
+      "type": "integer",
+      "description": "갱신된 새로운 최고 랩타임 (밀리초)"
+    },
+    "previousBestMs": {
+      "type": "integer",
+      "nullable": true,
+      "description": "이전의 개인 최고 랩타임 (밀리초, 기존 기록이 없는 경우 null)"
+    }
+  }
+}

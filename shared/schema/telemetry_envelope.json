@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TelemetryEnvelope",
+  "type": "object",
+  "required": ["eventId", "rigCode", "gameCode", "occurredAt", "type", "payload"],
+  "properties": {
+    "eventId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "에이전트가 발행한 고유 식별자로, 중복 전송 방지를 위한 멱등키 역할을 합니다."
+    },
+    "rigCode": {
+      "type": "string",
+      "description": "이벤트를 발생시킨 시뮬레이터 좌석(Rig) 식별 코드"
+    },
+    "gameCode": {
+      "type": "string",
+      "description": "대상 레이싱 게임 코드 (예: F1_25)"
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "이벤트가 발생한 실제 시각 (ISO 8601 UTC)"
+    },
+    "type": {
+      "type": "string",
+      "enum": ["SessionStarted", "LapStarted", "SectorCompleted", "LapFinished", "SessionEnded"],
+      "description": "이벤트 타입"
+    },
+    "payload": {
+      "type": "object",
+      "description": "이벤트 타입에 따라 결정되는 데이터 객체"
+    }
+  }
+}
