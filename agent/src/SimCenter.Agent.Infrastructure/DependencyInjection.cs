@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SimCenter.Agent.Core.Abstractions;
@@ -9,10 +10,12 @@ using SimCenter.Agent.Core.Telemetry.Events;
 using SimCenter.Agent.Infrastructure.Common;
 using SimCenter.Agent.Infrastructure.Configuration;
 using SimCenter.Agent.Infrastructure.Mapping;
+using SimCenter.Agent.Infrastructure.Outbox;
 using SimCenter.Agent.Infrastructure.Pipeline;
 using SimCenter.Agent.Infrastructure.Sinks;
 using SimCenter.Agent.Infrastructure.Time;
 using SimCenter.Agent.Infrastructure.Udp;
+using SimCenter.Agent.Infrastructure.Upload;
 
 namespace SimCenter.Agent.Infrastructure;
 
@@ -45,7 +48,11 @@ public static class DependencyInjection
         // LapAnalyzer는 상태 저장 — 단일 인스턴스로 파이프라인이 순차 소비.
         services.AddSingleton<LapAnalyzer>();
         services.AddSingleton<DomainEventFactory>();
-        services.AddSingleton<ITelemetrySink, LoggingTelemetrySink>();
+
+        // P3: 봉투를 Outbox(SQLite)에 적재하고, 업로더가 TelemetryHub로 배수한다(전송 실패에도 무손실).
+        services.AddSingleton<TelemetryOutbox>();
+        services.AddSingleton<ITelemetrySink, OutboxTelemetrySink>();
+        services.AddHostedService<TelemetryUploadService>();
 
         services.AddSingleton(sp =>
         {

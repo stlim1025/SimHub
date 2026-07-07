@@ -42,6 +42,7 @@ public sealed class ExceptionHandlingMiddleware
         {
             ValidationException ve => CreateProblem(StatusCodes.Status400BadRequest, "validation", "Validation failed", ve.Message, traceId, ve.Errors),
             AuthenticationException ae => CreateProblem(StatusCodes.Status401Unauthorized, "authentication", "Authentication failed", ae.Message, traceId),
+            ForbiddenException fe => CreateProblem(StatusCodes.Status403Forbidden, "forbidden", "Forbidden", fe.Message, traceId),
             NotFoundException ne => CreateProblem(StatusCodes.Status404NotFound, "not-found", "Resource not found", ne.Message, traceId),
             ConflictException ce => CreateProblem(StatusCodes.Status409Conflict, "conflict", "Conflict", ce.Message, traceId),
             _ => CreateProblem(StatusCodes.Status500InternalServerError, "internal", "An unexpected error occurred", "서버 오류가 발생했습니다.", traceId),

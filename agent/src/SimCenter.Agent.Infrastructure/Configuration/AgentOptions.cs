@@ -16,4 +16,13 @@ public sealed class AgentOptions
 
     /// <summary>기대 UDP 패킷 포맷(F1 25 = 2025). 불일치 패킷은 스킵(OCP, D-20).</summary>
     public int ExpectedPacketFormat { get; set; } = 2025;
+
+    /// <summary>TelemetryHub 엔드포인트(예: https://host/hubs/telemetry). 비면 업로드 비활성.</summary>
+    public string BackendUrl { get; set; } = string.Empty;
+
+    /// <summary>장비 인증 키 원문(D-21). 헤더 X-Agent-Key로 전송. 코드/리포에 하드코딩 금지.</summary>
+    public string AgentCredential { get; set; } = string.Empty;
+
+    /// <summary>Outbox SQLite 파일 경로(앱 실행 디렉터리 기준).</summary>
+    public string OutboxPath { get; set; } = "outbox.db";
 }

@@ -1,4 +1,5 @@
 using System.Text;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -28,12 +29,18 @@ public static class DependencyInjection
 
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<AppDbContext>());
         services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<ISimRigRepository, SimRigRepository>();
+        services.AddScoped<IDrivingSessionRepository, DrivingSessionRepository>();
+        services.AddScoped<ITrackRepository, TrackRepository>();
+        services.AddScoped<ILapRepository, LapRepository>();
+        services.AddScoped<IProcessedEventRepository, ProcessedEventRepository>();
         services.AddScoped<DbSeeder>();
 
         // ── 어댑터 ──
-        services.AddSingleton<IClock, SystemClock>();
+        services.AddSingleton<IClock, Time.SystemClock>();
         services.AddSingleton<IIdGenerator, UuidV7Generator>();
         services.AddSingleton<IPasswordHasher, BCryptPasswordHasher>();
+        services.AddSingleton<IApiKeyHasher, Sha256ApiKeyHasher>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
 
         // ── 인증(JWT Bearer) ──
@@ -58,7 +65,10 @@ public static class DependencyInjection
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.Key)),
                     ClockSkew = TimeSpan.FromSeconds(30),
                 };
-            });
+            })
+            // Agent(TelemetryHub) 전용 API Key 스킴(D-21). 사용자 JWT와 분리.
+            .AddScheme<AuthenticationSchemeOptions, AgentApiKeyAuthenticationHandler>(
+                AgentApiKeyDefaults.Scheme, _ => { });
 
         services.AddAuthorization();
 

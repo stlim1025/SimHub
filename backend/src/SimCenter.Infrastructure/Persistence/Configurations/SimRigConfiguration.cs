@@ -13,6 +13,10 @@ public sealed class SimRigConfiguration : IEntityTypeConfiguration<SimRig>
         builder.Property(x => x.RigCode).IsRequired().HasMaxLength(30);
         builder.Property(x => x.DisplayName).IsRequired().HasMaxLength(50);
 
+        // SHA-256 hex = 64자. 선택적(키 미발급 좌석 허용), 발급 시 Unique.
+        builder.Property(x => x.ApiKeyHash).HasMaxLength(64);
+
         builder.HasIndex(x => x.RigCode).IsUnique();
+        builder.HasIndex(x => x.ApiKeyHash).IsUnique();
     }
 }

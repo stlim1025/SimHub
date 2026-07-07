@@ -9,8 +9,11 @@
 
 ## 1. 한 줄 상태
 
-**Phase 2(Telemetry Agent — Core + UDP 수신) + Tray GUI(연결 상태 신호등) 완료 — 빌드 경고0, 단위테스트 36 통과,
-Cli/Tray 호스트 UDP 20777 바인딩 + 데이터그램 수신 스모크 확인, Tray 실행 확인. 서버 전송 없음(P3). 다음 단계 = Phase 3(실시간 인입).**
+**Phase 3(실시간 인입: Agent Outbox+SignalR → TelemetryHub → DB) 완료 — 백엔드 빌드 경고0/테스트 39,
+Agent 빌드 경고0/테스트 40, E2E 통합테스트(회원가입→로그인→체크인→Hub→DB Lap 귀속)를 실 PostgreSQL에서 통과.
+다음 단계 = Phase 4(랭킹·RankingHub 브로드캐스트).**
+
+(이전) Phase 2 + Tray GUI(연결 상태 신호등) 완료 — Cli/Tray UDP 20777 바인딩 + 수신 스모크, Tray 실행 확인.
 
 (이전) Phase 1(Backend 데이터/인증 코어) 완료 — 실 PostgreSQL 마이그레이션+시드+register/login/me E2E 검증.
 
@@ -98,21 +101,34 @@ Cli/Tray 호스트 UDP 20777 바인딩 + 데이터그램 수신 스모크 확인
    - **Tests:** Core에 `GameConnectionMonitorTests` 8종 추가(상태 전이/임계값/리스너 실패). 총 **36 통과**(Core 19 + Infra 17), 경고 0.
    - **검증:** 솔루션 빌드 0오류, Tray 실행 확인. (실제 F1 연결 라이브 검증은 §4-B, 하드웨어 의존 보류)
    - **미구현:** 연결 상태는 "패킷 도착"만 판정(파싱 성공 무관) — 포맷 불일치는 "감지 포맷" 필드로 노출. 랩 이벤트는 GUI 미표시(로그 싱크, Cli 콘솔로 관찰).
+9. **Phase 3 — 실시간 인입 (완료: 빌드·단위테스트·실 DB E2E):** 상세 [docs/10](./10-realtime-ingest.md). 결정 D-21~23.
+   - **Backend Application:** `SessionService`(체크인/아웃/활성, D-10 자동종료·타인점유 409),
+     `TelemetryIngestService`(멱등→세션매칭→Track매핑→랭킹적격→Lap+LapSector 저장), 포트
+     (`ISimRigRepository`/`IDrivingSessionRepository`/`ITrackRepository`/`ILapRepository`/`IProcessedEventRepository`/`IApiKeyHasher`),
+     Telemetry DTO(camelCase 계약), `ForbiddenException`(403).
+   - **Backend Infrastructure:** 리포지토리 구현 6종, `Sha256ApiKeyHasher`, `AgentApiKeyAuthenticationHandler`(스킴 `AgentApiKey`),
+     `ProcessedEvent`/`SimRig.ApiKeyHash` Configuration, **마이그레이션 `AddTelemetryIngest`**, 시더 좌석별 dev 키 프로비저닝.
+   - **Backend Api:** `SessionsController`(check-in/check-out/active), `Hubs/TelemetryHub`(`SubmitEvent`→반환값 Ack, `[Authorize(AgentApiKey)]`),
+     `Program.cs` SignalR(camelCase+enum문자열)·`MapHub("/hubs/telemetry")`.
+   - **Agent:** `ITelemetrySink`를 **`OutboxTelemetrySink`(SQLite Outbox 적재)** 로 교체, `TelemetryUploadService`
+     (HubConnection 자동재접속 + 지수백오프 배수, 응답 시 삭제·무응답만 재전송), `AgentOptions`에 BackendUrl/AgentCredential/OutboxPath.
+   - **Tests:** Backend Application +22(Session 13/Ingest 9) = 35, **E2E 통합 1**(실 PostgreSQL, 재실행 가능). Agent +4(Outbox/직렬화) = Infra 21. 경고 0.
+   - **정련(D-23):** Hub를 요청/응답(반환값 Ack)로 구현 — 05의 별도 Ack/Reject S→C 메서드 대신(상관관계 단순).
+   - **미구현(P4):** RankingHub 브로드캐스트·랭킹 재계산·랭킹 REST·PB 알림. 실 F1 라이브 검증(§4-B).
 
 ---
 
 ## 4. 다음 할 일 (미완료) ⬜
 
-**Phase 2 완료 → Phase 3(실시간 인입) 착수.**
+**Phase 3 완료 → Phase 4(랭킹·브로드캐스트) 착수.**
 
-### 4-A. 다음 단계 = Phase 3 — 실시간 인입 파이프라인 (Agent ↔ Backend)
+### 4-A. 다음 단계 = Phase 4 — 랭킹 계산 + RankingHub 브로드캐스트
 로드맵 07 기준. 착수 시 헌장대로 설계안 리뷰부터.
-- **Backend:** `TelemetryHub`(SignalR) 인입 + 멱등 처리(eventId) + 세션 매칭(RigCode↔활성 DrivingSession) + Lap/LapSector 저장.
-  체크인/체크아웃 API(`/sessions/check-in`,`/check-out`,`/active`) 구현(P1에서 P3로 연기한 세션 유스케이스).
-  Agent 장비 인증 = API Key(D-12).
-- **Agent:** `ITelemetrySink`를 **Outbox(SQLite) + SignalR Client 싱크로 교체**, 자동 재접속/재전송(멱등키+Ack, 지수 백오프).
-  ~~Tray 호스트(Generic Host 재사용)·트레이아이콘~~(Phase 2.5 완료) + **자동실행(Windows 시작 등록)** 남음. (Cli는 헤드리스 진단용으로 유지)
-- **산출물:** Agent가 낸 랩이 DB `Lap`으로 귀속 저장.
+- **Backend:** 랭킹 조회 REST(`GET /rankings` 트랙·기간 daily/monthly/yearly, Time Trial·랭킹적격만),
+  `GET /me/laps`(내 기록, 무효 랩 포함), `GET /tracks`. 랩 저장 시 랭킹 재계산 트리거.
+  `RankingHub`(Backend→App 브로드캐스트: `RankingUpdated`/`LapRecorded`/`PersonalBestAchieved`), 사용자 JWT 인증.
+- **잔여(P3에서 이월):** Agent **자동실행(Windows 시작 등록)**. 실 F1 라이브 검증(§4-B).
+- **산출물:** 앱이 트랙별 TOP10을 조회/실시간 수신.
 
 ### 4-B. 라이브 검증(하드웨어 의존, 보류 항목)
 - Agent Cli/Tray를 실 F1 25(UDP 20777)로 지향해 SessionStarted→LapStarted→SectorCompleted→LapFinished 로그 관찰.
@@ -152,6 +168,9 @@ Cli/Tray 호스트 UDP 20777 바인딩 + 데이터그램 수신 스모크 확인
 | D-15 | 무효 랩 저장 + 랭킹 제외(개별 조회 가능) |
 | D-16 | SessionType 구분, 실시간 랭킹 = Time Trial만, 타 세션 개별 조회 |
 | **D-20** | **F1 UDP 파싱 = F1Game.UDP(26.0.0) 채택, Infra에서 게임중립 모델로 매핑(Core 무의존)** |
+| D-21 | Agent 인증 = SimRig별 API Key(SHA-256 해시 저장, `X-Agent-Key`, 연결에 rigCode 귀속) |
+| D-22 | 활성 세션 없는 랩 = Drop+Ack. 영구 무효 = Reject. 무응답만 재전송 |
+| D-23 | P3 = 인입·저장·체크인(브로드캐스트 P4). TelemetryHub는 요청/응답(반환값 Ack) |
 
 **Future 결정(해당 Phase 착수 시 결정, 지금 불필요):** D-17(트레이스 저장 원칙 해석), D-18(트레이스 저장소), D-19(샘플링·채널·보존). → `docs/09`
 

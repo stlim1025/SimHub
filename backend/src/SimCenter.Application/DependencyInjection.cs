@@ -1,5 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using SimCenter.Application.Auth;
+using SimCenter.Application.Sessions;
+using SimCenter.Application.Telemetry;
 
 namespace SimCenter.Application;
 
@@ -9,6 +11,8 @@ public static class DependencyInjection
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<ISessionService, SessionService>();
+        services.AddScoped<ITelemetryIngestService, TelemetryIngestService>();
         return services;
     }
 }

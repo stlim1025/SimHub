@@ -24,6 +24,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
     public DbSet<DrivingSession> DrivingSessions => Set<DrivingSession>();
     public DbSet<Lap> Laps => Set<Lap>();
     public DbSet<LapSector> LapSectors => Set<LapSector>();
+    public DbSet<ProcessedEvent> ProcessedEvents => Set<ProcessedEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

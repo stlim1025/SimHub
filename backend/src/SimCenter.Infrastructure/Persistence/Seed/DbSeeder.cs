@@ -59,13 +59,24 @@ public sealed class DbSeeder
     private readonly AppDbContext _context;
     private readonly IIdGenerator _idGenerator;
     private readonly IClock _clock;
+    private readonly IApiKeyHasher _apiKeyHasher;
 
-    public DbSeeder(AppDbContext context, IIdGenerator idGenerator, IClock clock)
+    public DbSeeder(AppDbContext context, IIdGenerator idGenerator, IClock clock, IApiKeyHasher apiKeyHasher)
     {
         _context = context;
         _idGenerator = idGenerator;
         _clock = clock;
+        _apiKeyHasher = apiKeyHasher;
     }
+
+    /// <summary>
+    /// 개발용 Agent 키(결정적). 좌석별 원문 키 = 이 접두사 + RigCode.
+    /// 로컬 E2E에서 Agent appsettings의 AgentCredential에 이 원문을 넣는다. 운영 키 발급은 범위 밖.
+    /// </summary>
+    public const string DevApiKeyPrefix = "dev-agent-key-";
+
+    /// <summary>좌석 코드로 개발용 원문 키를 만든다(시드/문서 공용).</summary>
+    public static string DevApiKeyFor(string rigCode) => DevApiKeyPrefix + rigCode;
 
     public async Task SeedAsync(CancellationToken cancellationToken = default)
     {
@@ -93,13 +104,22 @@ public sealed class DbSeeder
 
     private async Task SeedRigsAsync(Guid storeId, DateTime now, CancellationToken cancellationToken)
     {
-        var existingCodes = await _context.SimRigs.Select(x => x.RigCode).ToListAsync(cancellationToken);
-        var existing = existingCodes.ToHashSet();
+        var existingRigs = await _context.SimRigs.ToListAsync(cancellationToken);
+        var byCode = existingRigs.ToDictionary(x => x.RigCode);
 
         foreach (var (rigCode, displayName) in SeedRigs)
         {
-            if (existing.Contains(rigCode))
+            var apiKeyHash = _apiKeyHasher.Hash(DevApiKeyFor(rigCode));
+
+            if (byCode.TryGetValue(rigCode, out var existing))
             {
+                // 기존 좌석에 키가 없으면 개발용 키를 백필한다(멱등).
+                if (string.IsNullOrEmpty(existing.ApiKeyHash))
+                {
+                    existing.ApiKeyHash = apiKeyHash;
+                    existing.UpdatedAt = now;
+                }
+
                 continue;
             }
 
@@ -109,6 +129,7 @@ public sealed class DbSeeder
                 StoreId = storeId,
                 RigCode = rigCode,
                 DisplayName = displayName,
+                ApiKeyHash = apiKeyHash,
                 CreatedAt = now,
             }, cancellationToken);
         }
