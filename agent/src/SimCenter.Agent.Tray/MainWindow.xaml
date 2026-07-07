@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:SimCenter.Agent.Tray"
         mc:Ignorable="d"
-        Title="SimCenter Agent" Height="340" Width="420"
+        Title="SimCenter Agent" Height="500" Width="440"
         ResizeMode="CanMinimize"
         WindowStartupLocation="CenterScreen"
         Background="#1E1E22">
@@ -26,6 +26,7 @@
 
     <Grid Margin="20">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -65,7 +66,27 @@
             </Border>
         </StackPanel>
 
-        <TextBlock Grid.Row="3" Style="{StaticResource Label}" FontSize="11"
+        <!-- 실시간 수신 그래프 -->
+        <Grid Grid.Row="3" Margin="0,16,0,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <Grid Grid.Row="0" Margin="0,0,0,6">
+                <TextBlock Text="실시간 수신 (pkt/s)" Style="{StaticResource Label}" />
+                <TextBlock x:Name="RateValue" Style="{StaticResource Value}" Text="0" />
+            </Grid>
+            <Border Grid.Row="1" Background="#17171A" CornerRadius="6" Padding="6">
+                <Grid x:Name="ChartArea" ClipToBounds="True" SizeChanged="ChartArea_SizeChanged">
+                    <!-- 채움(면적) + 상단 라인. Points는 코드비하인드에서 갱신 -->
+                    <Polygon x:Name="RateFill" Fill="#263FB950" />
+                    <Polyline x:Name="RateLine" Stroke="#3FB950" StrokeThickness="1.5"
+                              StrokeLineJoin="Round" />
+                </Grid>
+            </Border>
+        </Grid>
+
+        <TextBlock Grid.Row="4" Style="{StaticResource Label}" FontSize="11" Margin="0,10,0,0"
                    Text="창을 닫아도 트레이에서 계속 실행됩니다. 종료는 트레이 아이콘 메뉴에서." />
     </Grid>
 </Window>
