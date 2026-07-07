@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SimCenter.Agent.Core.Abstractions;
 using SimCenter.Agent.Core.Analysis;
+using SimCenter.Agent.Core.Connection;
 using SimCenter.Agent.Core.Telemetry.Events;
 using SimCenter.Agent.Infrastructure.Common;
 using SimCenter.Agent.Infrastructure.Configuration;
@@ -24,6 +25,10 @@ public static class DependencyInjection
 
         services.AddSingleton<IClock, SystemClock>();
         services.AddSingleton<IIdGenerator, UuidV7Generator>();
+
+        // 게임 연결 상태 모니터(GUI가 폴링).
+        services.AddSingleton<ConnectionThresholds>();
+        services.AddSingleton<GameConnectionMonitor>();
 
         services.AddSingleton(sp =>
         {

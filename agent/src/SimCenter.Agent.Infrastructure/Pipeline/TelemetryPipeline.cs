@@ -1,5 +1,7 @@
+using System.Buffers.Binary;
 using Microsoft.Extensions.Logging;
 using SimCenter.Agent.Core.Analysis;
+using SimCenter.Agent.Core.Connection;
 using SimCenter.Agent.Infrastructure.Mapping;
 using SimCenter.Agent.Infrastructure.Sinks;
 using SimCenter.Agent.Infrastructure.Udp;
@@ -17,6 +19,7 @@ public sealed class TelemetryPipeline
     private readonly LapAnalyzer _analyzer;
     private readonly DomainEventFactory _factory;
     private readonly ITelemetrySink _sink;
+    private readonly GameConnectionMonitor _monitor;
     private readonly ILogger<TelemetryPipeline> _logger;
 
     public TelemetryPipeline(
@@ -25,6 +28,7 @@ public sealed class TelemetryPipeline
         LapAnalyzer analyzer,
         DomainEventFactory factory,
         ITelemetrySink sink,
+        GameConnectionMonitor monitor,
         ILogger<TelemetryPipeline> logger)
     {
         _listener = listener;
@@ -32,6 +36,7 @@ public sealed class TelemetryPipeline
         _analyzer = analyzer;
         _factory = factory;
         _sink = sink;
+        _monitor = monitor;
         _logger = logger;
     }
 
@@ -39,6 +44,10 @@ public sealed class TelemetryPipeline
 
     private async Task HandleDatagramAsync(ReadOnlyMemory<byte> datagram, CancellationToken cancellationToken)
     {
+        // 데이터그램 도착 = "게임이 보내는 중" 신호(파싱 성공과 무관). 앞 2바이트가 m_packetFormat(uint16 LE).
+        int? packetFormat = datagram.Length >= 2 ? BinaryPrimitives.ReadUInt16LittleEndian(datagram.Span) : null;
+        _monitor.RecordDatagram(packetFormat);
+
         // 매핑은 동기(Span) — await 이전에 프레임 목록으로 물질화한다.
         IReadOnlyList<Core.Telemetry.Frames.ITelemetryFrame> frames;
         try

@@ -1,9 +1,10 @@
-﻿<Application x:Class="SimCenter.Agent.Tray.App"
+<Application x:Class="SimCenter.Agent.Tray.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:SimCenter.Agent.Tray"
-             StartupUri="MainWindow.xaml">
+             ShutdownMode="OnExplicitShutdown">
+    <!-- StartupUri 없음: DI 호스트를 먼저 조립하고 App.OnStartup에서 창을 생성한다.
+         닫기는 트레이로 최소화이므로 종료는 트레이 메뉴에서만(OnExplicitShutdown). -->
     <Application.Resources>
-         
     </Application.Resources>
 </Application>

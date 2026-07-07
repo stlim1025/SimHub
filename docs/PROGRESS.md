@@ -9,8 +9,8 @@
 
 ## 1. 한 줄 상태
 
-**Phase 2(Telemetry Agent — Core + UDP 수신) 완료 — 빌드 경고0, 단위테스트 28 통과,
-Cli 호스트 UDP 20777 바인딩 + 데이터그램 수신 스모크 확인. 서버 전송 없음(P3). 다음 단계 = Phase 3(실시간 인입).**
+**Phase 2(Telemetry Agent — Core + UDP 수신) + Tray GUI(연결 상태 신호등) 완료 — 빌드 경고0, 단위테스트 36 통과,
+Cli/Tray 호스트 UDP 20777 바인딩 + 데이터그램 수신 스모크 확인, Tray 실행 확인. 서버 전송 없음(P3). 다음 단계 = Phase 3(실시간 인입).**
 
 (이전) Phase 1(Backend 데이터/인증 코어) 완료 — 실 PostgreSQL 마이그레이션+시드+register/login/me E2E 검증.
 
@@ -86,8 +86,18 @@ Cli 호스트 UDP 20777 바인딩 + 데이터그램 수신 스모크 확인. 서
    - **Tests:** Core 11(LapAnalyzer/Factory) + 신규 Infrastructure 17(매퍼/리스너) = **28 통과**, 경고 0.
    - **검증:** Cli 실행 → UDP 20777 바인딩 로그 확인, 임의 데이터그램 수신 시 무크래시(매퍼 예외 흡수).
    - **contract:** `shared/schema/lap_finished.json`에 `sessionType` 추가(코드/docs/06 일치화).
-   - **미구현(P3):** 서버 전송·Outbox(SQLite)·SignalR·재접속·Tray 호스트/트레이아이콘/자동실행. `ITelemetrySink`가 교체 지점.
+   - **미구현(P3):** 서버 전송·Outbox(SQLite)·SignalR·재접속·자동실행. `ITelemetrySink`가 교체 지점. (Tray 호스트/트레이아이콘 = item 8에서 완료)
    - **참고:** F1 `Track` enum 확인 결과 7=Silverstone, 2=Shanghai → 백엔드 시드가 옳았음(스펙 문서 예시가 오기).
+8. **Phase 2.5 — Tray GUI(게임 연결 상태 표시) (완료: 빌드·단위테스트·실행 확인):**
+   - **Agent.Core.Connection (순수, IClock 기반):** `ConnectionState`(🔴/🟡/🟢), `ConnectionSnapshot`,
+     `ConnectionThresholds`(Connected 2s/Waiting 6s), **`GameConnectionMonitor`**(lock 스레드안전 — UDP 스레드가 통지, GUI 스레드가 폴링).
+   - **Agent.Infrastructure:** `TelemetryHostedService`(Cli·Tray 공유 BackgroundService, 리스너 실패→모니터 통지),
+     `TelemetryPipeline`이 데이터그램마다 `RecordDatagram`(앞 2바이트 = m_packetFormat) 통지. Cli는 `TelemetryWorker`→`TelemetryHostedService`로 교체.
+   - **Agent.Tray:** WPF+WinForms(`NotifyIcon` 신호등 아이콘/툴팁, 트레이 메뉴 열기·종료), Generic Host 조립(Cli와 동일 파이프라인),
+     `MainWindow`가 500ms `DispatcherTimer`로 `GetSnapshot()` 폴링 → 상태·포트·수신수·마지막 수신·감지 포맷·오류 표시. 닫기=트레이 최소화.
+   - **Tests:** Core에 `GameConnectionMonitorTests` 8종 추가(상태 전이/임계값/리스너 실패). 총 **36 통과**(Core 19 + Infra 17), 경고 0.
+   - **검증:** 솔루션 빌드 0오류, Tray 실행 확인. (실제 F1 연결 라이브 검증은 §4-B, 하드웨어 의존 보류)
+   - **미구현:** 연결 상태는 "패킷 도착"만 판정(파싱 성공 무관) — 포맷 불일치는 "감지 포맷" 필드로 노출. 랩 이벤트는 GUI 미표시(로그 싱크, Cli 콘솔로 관찰).
 
 ---
 
@@ -101,7 +111,7 @@ Cli 호스트 UDP 20777 바인딩 + 데이터그램 수신 스모크 확인. 서
   체크인/체크아웃 API(`/sessions/check-in`,`/check-out`,`/active`) 구현(P1에서 P3로 연기한 세션 유스케이스).
   Agent 장비 인증 = API Key(D-12).
 - **Agent:** `ITelemetrySink`를 **Outbox(SQLite) + SignalR Client 싱크로 교체**, 자동 재접속/재전송(멱등키+Ack, 지수 백오프).
-  Tray 호스트(Generic Host 재사용)·트레이아이콘·자동실행. (Cli는 헤드리스 진단용으로 유지)
+  ~~Tray 호스트(Generic Host 재사용)·트레이아이콘~~(Phase 2.5 완료) + **자동실행(Windows 시작 등록)** 남음. (Cli는 헤드리스 진단용으로 유지)
 - **산출물:** Agent가 낸 랩이 DB `Lap`으로 귀속 저장.
 
 ### 4-B. 라이브 검증(하드웨어 의존, 보류 항목)
