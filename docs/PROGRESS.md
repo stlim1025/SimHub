@@ -9,8 +9,10 @@
 
 ## 1. 한 줄 상태
 
-**Phase 1(Backend 데이터/인증 코어) 완료 — 빌드/단위테스트(17) 통과(경고 0),
-실 PostgreSQL 마이그레이션 적용 + 시드 + register/login/me E2E 검증 완료. 다음 단계 = Phase 2(Agent Core).**
+**Phase 2(Telemetry Agent — Core + UDP 수신) 완료 — 빌드 경고0, 단위테스트 28 통과,
+Cli 호스트 UDP 20777 바인딩 + 데이터그램 수신 스모크 확인. 서버 전송 없음(P3). 다음 단계 = Phase 3(실시간 인입).**
+
+(이전) Phase 1(Backend 데이터/인증 코어) 완료 — 실 PostgreSQL 마이그레이션+시드+register/login/me E2E 검증.
 
 ---
 
@@ -72,41 +74,49 @@
      appsettings(Jwt/ConnectionStrings 구조), UserSecretsId.
    - **Tests:** Domain 3 + Application(AuthService) 13 통과. `dotnet build` 경고 0/오류 0.
    - **로컬 도구:** `dotnet-ef` 9.0.0 로컬 도구(`.config/dotnet-tools.json`) 설치.
+7. **Phase 2 — Telemetry Agent (Core + UDP 수신) (완료: 빌드·단위테스트·Cli 스모크):**
+   - **Agent.Core (라이브러리 무의존, 순수):** `IClock`/`IIdGenerator`, 게임중립 프레임(`SessionFrame`/`LapFrame`/
+     `EventMarker`, `ITelemetryFrame`), 이벤트 모델(SessionStarted/LapStarted/SectorCompleted/LapFinished/SessionEnded
+     + `TelemetryEnvelope`/`AgentIdentity`), **`LapAnalyzer`**(엣지 트리거 상태머신, 3섹터 분해·유효성·아웃인랩), `DomainEventFactory`.
+   - **Agent.Infrastructure:** **F1Game.UDP 26.0.0** 참조. `F1PacketMapper`(UnionPacket→게임중립 프레임, PlayerCarIndex,
+     세션타입 정규화, 섹터 분+ms 합산, `m_packetFormat` 검증), `UdpTelemetryListener`(UdpClient 수신 루프),
+     `TelemetryPipeline`(수신→매핑→분석→봉투→싱크), `ITelemetrySink`+`LoggingTelemetrySink`, `SystemClock`/`UuidV7Generator`,
+     `AgentOptions`, `AddAgentInfrastructure()`.
+   - **Agent.Cli (신규 프로젝트):** Generic Host + `TelemetryWorker`(BackgroundService) + Serilog 콘솔 + appsettings. `sln` 추가.
+   - **Tests:** Core 11(LapAnalyzer/Factory) + 신규 Infrastructure 17(매퍼/리스너) = **28 통과**, 경고 0.
+   - **검증:** Cli 실행 → UDP 20777 바인딩 로그 확인, 임의 데이터그램 수신 시 무크래시(매퍼 예외 흡수).
+   - **contract:** `shared/schema/lap_finished.json`에 `sessionType` 추가(코드/docs/06 일치화).
+   - **미구현(P3):** 서버 전송·Outbox(SQLite)·SignalR·재접속·Tray 호스트/트레이아이콘/자동실행. `ITelemetrySink`가 교체 지점.
+   - **참고:** F1 `Track` enum 확인 결과 7=Silverstone, 2=Shanghai → 백엔드 시드가 옳았음(스펙 문서 예시가 오기).
 
 ---
 
 ## 4. 다음 할 일 (미완료) ⬜
 
-**Phase 1 완료 → Phase 2 착수.**
+**Phase 2 완료 → Phase 3(실시간 인입) 착수.**
 
-### 4-A. Phase 1 실 DB 검증 (완료 ✅)
-- 로컬 개발 환경(이 PC) User-Secrets 주입 완료:
-  `ConnectionStrings:Postgres = Host=localhost;Port=5432;Database=simcenter;Username=postgres;Password=1234`,
-  `Jwt:Key = (dev 전용)`. **다른 PC/환경에서는 각자 User-Secrets 재주입 필요**(시크릿은 리포에 없음).
-- `dotnet ef database update` → `simcenter` DB 생성 + `InitialCreate` 적용 성공.
-- API 시작 시 시드 적용: Store 1 / SimRig 4(A-01~04) / Track 27(F1_25). 재기동 시 멱등.
-- E2E 검증: register **201**, login **200(JWT)**, GET /me(Bearer) **200**, 잘못된 비번 **401**,
-  중복 가입 **409**, 토큰 없음 **401** — 모두 RFC7807 ProblemDetails.
-- PK는 UUID v7 확인(`019f3ac0-...`).
+### 4-A. 다음 단계 = Phase 3 — 실시간 인입 파이프라인 (Agent ↔ Backend)
+로드맵 07 기준. 착수 시 헌장대로 설계안 리뷰부터.
+- **Backend:** `TelemetryHub`(SignalR) 인입 + 멱등 처리(eventId) + 세션 매칭(RigCode↔활성 DrivingSession) + Lap/LapSector 저장.
+  체크인/체크아웃 API(`/sessions/check-in`,`/check-out`,`/active`) 구현(P1에서 P3로 연기한 세션 유스케이스).
+  Agent 장비 인증 = API Key(D-12).
+- **Agent:** `ITelemetrySink`를 **Outbox(SQLite) + SignalR Client 싱크로 교체**, 자동 재접속/재전송(멱등키+Ack, 지수 백오프).
+  Tray 호스트(Generic Host 재사용)·트레이아이콘·자동실행. (Cli는 헤드리스 진단용으로 유지)
+- **산출물:** Agent가 낸 랩이 DB `Lap`으로 귀속 저장.
 
-### 4-B. 범위 결정 반영 (이번 세션 확정)
-- **Phase 1 범위 = Auth만**(로드맵 07 준수). 세션 **체크인/체크아웃 유스케이스·컨트롤러는 P3로 연기**.
-  단, DrivingSession/Lap/LapSector **엔티티 스키마는 InitialCreate에 선반영**(마이그레이션 난개발 회피).
+### 4-B. 라이브 검증(하드웨어 의존, 보류 항목)
+- Agent Cli/Tray를 실 F1 25(UDP 20777)로 지향해 SessionStarted→LapStarted→SectorCompleted→LapFinished 로그 관찰.
+  현재는 게임/장비 없어 단위테스트 + 스모크(바인딩/무크래시)까지만 검증됨.
 
-### 4-C. 다음 단계 = Phase 2 — Telemetry Agent (Core)
-- **파싱 = F1Game.UDP(26.0.0) 채택(D-20).** 오프셋 수제 파싱 금지.
-  - `Agent.Infrastructure`: UDP 소켓 수신 + F1Game.UDP로 파싱 → **게임중립 입력 모델(예: LapSnapshot)로 매핑**.
-  - `Agent.Core`: 매핑된 모델을 받아 LapAnalyzer(세션/랩/섹터/완주 판정) + 도메인 이벤트 생성.
-    **F1Game.UDP 무의존 유지**(순수 로직·단위테스트·타 게임 확장). 고정 샘플로 LapFinished 판정 검증.
-  - 런타임 `m_packetFormat` 검증(불일치 경고/스킵).
-- 착수 시 헌장대로 설계안 리뷰부터. 이후 순서: P3 실시간 인입 → P4 랭킹·브로드캐스트 → P5 Flutter MVP. (상세 `docs/07-roadmap.md`)
+### 4-C. 확정 범위 메모
+- Phase 1 = Auth만(세션 유스케이스 P3로 연기, 엔티티 스키마는 선반영).
+- Phase 2 = Core 두뇌 + F1 매퍼 + UDP 소켓(전송 없음). 파싱은 F1Game.UDP(26.0.0) 위임(D-20).
 
 ### 4-D. 확인 필요 (문서 정합성)
-- `shared/telemetry/f1_25_udp_spec.md` §m_trackId 예시가 "2: Silverstone"으로 기재됨(예시·"등").
-  Codemasters 표준은 **2=Shanghai, 7=Silverstone**. `DbSeeder`는 표준 매핑으로 시드했으므로,
-  스펙 문서의 예시 수정 여부를 확인할 것.
-  - 참고: `m_trackId` 정수→트랙 매핑은 F1Game.UDP가 파싱해줘도 **DB Track 마스터 시드는 우리 책임**.
-    권위 있는 대조 소스: [hotlaps/f1-game-udp-specs](https://github.com/hotlaps/f1-game-udp-specs) (EA/Codemasters UDP 스펙).
+- `shared/telemetry/f1_25_udp_spec.md` §m_trackId 예시 "2: Silverstone"은 **오기**. F1 `Track` enum 확인 결과
+  **2=Shanghai, 7=Silverstone**(코드/시드가 옳음). 스펙 문서 예시 수정만 남음(파싱은 라이브러리 위임이라 기능 영향 없음).
+  - 권위 대조 소스: [hotlaps/f1-game-udp-specs](https://github.com/hotlaps/f1-game-udp-specs).
+- 로컬 개발 User-Secrets(이 PC): `ConnectionStrings:Postgres`(localhost/postgres/1234), `Jwt:Key`(dev). **다른 환경은 재주입 필요**(리포 미포함).
 
 ---
 

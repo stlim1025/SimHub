@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "LapFinished",
   "type": "object",
-  "required": ["sessionRef", "lapNumber", "lapTimeMs", "sectors", "isValid", "isOutOrInLap", "trackId"],
+  "required": ["sessionRef", "lapNumber", "lapTimeMs", "sectors", "isValid", "isOutOrInLap", "trackId", "sessionType"],
   "properties": {
     "sessionRef": {
       "type": "string",
@@ -47,6 +47,11 @@
     "trackId": {
       "type": "integer",
       "description": "게임 UDP에서 제공하는 원시 트랙 ID"
+    },
+    "sessionType": {
+      "type": "string",
+      "enum": ["Unknown", "TimeTrial", "Practice", "Qualifying", "Race"],
+      "description": "게임중립 세션 유형. 실시간 랭킹은 TimeTrial만 집계(D-16). Backend가 Lap에 복사."
     }
   }
 }
