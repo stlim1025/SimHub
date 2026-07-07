@@ -1,6 +1,6 @@
 # PROGRESS — 진행 상황 / 인수인계
 
-> Last Updated: 2026-07-06
+> Last Updated: 2026-07-07
 > **이 문서 목적:** 다른 PC·다른 세션에서도 작업을 그대로 이어가기 위한 단일 상태 파일.
 > 새 세션은 이 파일 → `CLAUDE.md` → `docs/00~09` 순으로 읽으면 맥락이 복원된다.
 > (주의: AI 메모리는 머신 로컬(`~/.claude`)이라 이동하지 않는다. **진행 상태의 진실 원천은 이 문서**다.)
@@ -9,7 +9,8 @@
 
 ## 1. 한 줄 상태
 
-**Phase 0(계약·스캐폴딩) 완료. 다음 단계 = Phase 1(Backend 코어/인증) 착수.**
+**Phase 1(Backend 데이터/인증 코어) 완료 — 빌드/단위테스트(17) 통과(경고 0),
+실 PostgreSQL 마이그레이션 적용 + 시드 + register/login/me E2E 검증 완료. 다음 단계 = Phase 2(Agent Core).**
 
 ---
 
@@ -56,34 +57,50 @@
    - `backend/SimCenter.sln` — 4 src + 3 tests 프로젝트, 참조 관계 설정, **빌드 성공 (0 경고, 0 오류)**
    - `agent/SimCenter.Agent.sln` — 3 src(Core/Infrastructure/WPF Tray) + 1 tests, **빌드 성공 (0 경고, 0 오류)**
    - `app/` — Flutter Feature-First 구조, Riverpod/GoRouter/Dio/SignalR 의존성 설정 완료
+6. **Phase 1 — Backend 데이터/인증 코어 (완료: 빌드·단위테스트·실 DB E2E 검증):**
+   - **Domain:** `BaseEntity`, 열거형(`SessionType`/`SessionStatus`), 7개 엔티티
+     (User/Store/SimRig/Track/DrivingSession/Lap/LapSector), `GameCodes` 상수. 프레임워크 무의존.
+   - **Application:** 포트(`IIdGenerator`/`IPasswordHasher`/`IJwtTokenGenerator`/`IUserRepository`/`IUnitOfWork`),
+     예외(Validation/Conflict/NotFound/Authentication), `AuthService`(register/login/me), `AddApplication()`.
+   - **Infrastructure:** `AppDbContext`(소프트삭제 전역필터 + UTC 컨버터 + snake_case), 엔티티별 Configuration
+     (User Email uq, SimRig RigCode uq, Track (GameCode,GameTrackId) uq, DrivingSession **부분 유니크 `status='Active'`**,
+     Lap 랭킹 인덱스 3종, LapSector (LapId,SectorNumber) uq), `UserRepository`, `DbSeeder`(Store1/Rig4/F1트랙27),
+     `BCryptPasswordHasher`, `JwtTokenGenerator`(HS256), `SystemClock`, `UuidV7Generator`, `AddInfrastructure()`,
+     `DesignTimeDbContextFactory`, **`InitialCreate` 마이그레이션 생성**.
+   - **Api:** `Program.cs`(Serilog + Swagger(JWT) + 인증/인가 + 예외미들웨어 + 시작 시 Migrate&Seed),
+     `AuthController`(POST auth/register·auth/login, GET me), `ExceptionHandlingMiddleware`(RFC7807),
+     appsettings(Jwt/ConnectionStrings 구조), UserSecretsId.
+   - **Tests:** Domain 3 + Application(AuthService) 13 통과. `dotnet build` 경고 0/오류 0.
+   - **로컬 도구:** `dotnet-ef` 9.0.0 로컬 도구(`.config/dotnet-tools.json`) 설치.
 
 ---
 
 ## 4. 다음 할 일 (미완료) ⬜
 
-**다음 단계: Phase 1 — Backend 코어/인증.**
-헌장 원칙에 따라 **바로 코드 작성 금지.** 먼저 아래를 "설계안"으로 제시하고 사용자 리뷰를 받는다.
+**Phase 1 완료 → Phase 2 착수.**
 
-Phase 1 산출 목표:
-1. **Domain Layer 구현**
-   - Entity 클래스: User, Store, SimRig, DrivingSession, Lap, LapSector, Track
-   - Value Object, Domain Event 정의
-   - 공통 규약: BaseEntity(Id, CreatedAt, UpdatedAt, IsDeleted), UUID v7 PK
-2. **Application Layer 구현**
-   - Repository 인터페이스 (IUserRepository, ILapRepository 등)
-   - Auth 유스케이스: Register, Login (JWT 발급)
-   - Session 유스케이스: CheckIn, CheckOut
-3. **Infrastructure Layer 구현**
-   - EF Core DbContext + Code First 마이그레이션
-   - Repository 구현체
-   - JWT 인증 서비스, IClock 구현체
-4. **Api Layer 구현**
-   - AuthController, SessionController 엔드포인트
-   - ExceptionHandlingMiddleware
-   - Program.cs DI 조립 및 파이프라인 설정
+### 4-A. Phase 1 실 DB 검증 (완료 ✅)
+- 로컬 개발 환경(이 PC) User-Secrets 주입 완료:
+  `ConnectionStrings:Postgres = Host=localhost;Port=5432;Database=simcenter;Username=postgres;Password=1234`,
+  `Jwt:Key = (dev 전용)`. **다른 PC/환경에서는 각자 User-Secrets 재주입 필요**(시크릿은 리포에 없음).
+- `dotnet ef database update` → `simcenter` DB 생성 + `InitialCreate` 적용 성공.
+- API 시작 시 시드 적용: Store 1 / SimRig 4(A-01~04) / Track 27(F1_25). 재기동 시 멱등.
+- E2E 검증: register **201**, login **200(JWT)**, GET /me(Bearer) **200**, 잘못된 비번 **401**,
+  중복 가입 **409**, 토큰 없음 **401** — 모두 RFC7807 ProblemDetails.
+- PK는 UUID v7 확인(`019f3ac0-...`).
 
-이후 순서: P2 Agent Core → P3 실시간 인입 → P4 랭킹·브로드캐스트 → P5 Flutter MVP.
-(상세 `docs/07-roadmap.md`)
+### 4-B. 범위 결정 반영 (이번 세션 확정)
+- **Phase 1 범위 = Auth만**(로드맵 07 준수). 세션 **체크인/체크아웃 유스케이스·컨트롤러는 P3로 연기**.
+  단, DrivingSession/Lap/LapSector **엔티티 스키마는 InitialCreate에 선반영**(마이그레이션 난개발 회피).
+
+### 4-C. 다음 단계 = Phase 2 — Telemetry Agent (Core)
+- `Agent.Core`: UDP 수신 + 패킷 파싱 + LapAnalyzer + 단위 테스트(고정 샘플 패킷으로 LapFinished 판정 검증).
+- 이후 순서: P3 실시간 인입 → P4 랭킹·브로드캐스트 → P5 Flutter MVP. (상세 `docs/07-roadmap.md`)
+
+### 4-D. 확인 필요 (문서 정합성)
+- `shared/telemetry/f1_25_udp_spec.md` §m_trackId 예시가 "2: Silverstone"으로 기재됨(예시·"등").
+  Codemasters 표준은 **2=Shanghai, 7=Silverstone**. `DbSeeder`는 표준 매핑으로 시드했으므로,
+  스펙 문서의 예시 수정 여부를 확인할 것.
 
 ---
 

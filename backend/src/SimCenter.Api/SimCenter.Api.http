@@ -1,6 +1,26 @@
 @SimCenter.Api_HostAddress = http://localhost:5284
 
-GET {{SimCenter.Api_HostAddress}}/weatherforecast/
-Accept: application/json
+### 회원가입
+POST {{SimCenter.Api_HostAddress}}/api/v1/auth/register
+Content-Type: application/json
+
+{
+  "email": "driver@simcenter.test",
+  "password": "P@ssw0rd!",
+  "displayName": "홍길동"
+}
+
+### 로그인 (accessToken 획득)
+POST {{SimCenter.Api_HostAddress}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "driver@simcenter.test",
+  "password": "P@ssw0rd!"
+}
+
+### 내 프로필 (위 로그인 응답의 accessToken을 붙여넣기)
+GET {{SimCenter.Api_HostAddress}}/api/v1/me
+Authorization: Bearer <accessToken>
 
 ###
