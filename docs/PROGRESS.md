@@ -94,13 +94,19 @@
   단, DrivingSession/Lap/LapSector **엔티티 스키마는 InitialCreate에 선반영**(마이그레이션 난개발 회피).
 
 ### 4-C. 다음 단계 = Phase 2 — Telemetry Agent (Core)
-- `Agent.Core`: UDP 수신 + 패킷 파싱 + LapAnalyzer + 단위 테스트(고정 샘플 패킷으로 LapFinished 판정 검증).
-- 이후 순서: P3 실시간 인입 → P4 랭킹·브로드캐스트 → P5 Flutter MVP. (상세 `docs/07-roadmap.md`)
+- **파싱 = F1Game.UDP(26.0.0) 채택(D-20).** 오프셋 수제 파싱 금지.
+  - `Agent.Infrastructure`: UDP 소켓 수신 + F1Game.UDP로 파싱 → **게임중립 입력 모델(예: LapSnapshot)로 매핑**.
+  - `Agent.Core`: 매핑된 모델을 받아 LapAnalyzer(세션/랩/섹터/완주 판정) + 도메인 이벤트 생성.
+    **F1Game.UDP 무의존 유지**(순수 로직·단위테스트·타 게임 확장). 고정 샘플로 LapFinished 판정 검증.
+  - 런타임 `m_packetFormat` 검증(불일치 경고/스킵).
+- 착수 시 헌장대로 설계안 리뷰부터. 이후 순서: P3 실시간 인입 → P4 랭킹·브로드캐스트 → P5 Flutter MVP. (상세 `docs/07-roadmap.md`)
 
 ### 4-D. 확인 필요 (문서 정합성)
 - `shared/telemetry/f1_25_udp_spec.md` §m_trackId 예시가 "2: Silverstone"으로 기재됨(예시·"등").
   Codemasters 표준은 **2=Shanghai, 7=Silverstone**. `DbSeeder`는 표준 매핑으로 시드했으므로,
   스펙 문서의 예시 수정 여부를 확인할 것.
+  - 참고: `m_trackId` 정수→트랙 매핑은 F1Game.UDP가 파싱해줘도 **DB Track 마스터 시드는 우리 책임**.
+    권위 있는 대조 소스: [hotlaps/f1-game-udp-specs](https://github.com/hotlaps/f1-game-udp-specs) (EA/Codemasters UDP 스펙).
 
 ---
 
@@ -125,6 +131,7 @@
 | D-14 | 대상 게임 = F1 25(`F1_25`), 도메인은 게임 중립 |
 | D-15 | 무효 랩 저장 + 랭킹 제외(개별 조회 가능) |
 | D-16 | SessionType 구분, 실시간 랭킹 = Time Trial만, 타 세션 개별 조회 |
+| **D-20** | **F1 UDP 파싱 = F1Game.UDP(26.0.0) 채택, Infra에서 게임중립 모델로 매핑(Core 무의존)** |
 
 **Future 결정(해당 Phase 착수 시 결정, 지금 불필요):** D-17(트레이스 저장 원칙 해석), D-18(트레이스 저장소), D-19(샘플링·채널·보존). → `docs/09`
 
