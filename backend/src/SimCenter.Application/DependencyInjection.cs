@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using SimCenter.Application.Auth;
+using SimCenter.Application.Rankings;
 using SimCenter.Application.Sessions;
 using SimCenter.Application.Telemetry;
 
@@ -13,6 +14,7 @@ public static class DependencyInjection
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<ISessionService, SessionService>();
         services.AddScoped<ITelemetryIngestService, TelemetryIngestService>();
+        services.AddScoped<IRankingService, RankingService>();
         return services;
     }
 }

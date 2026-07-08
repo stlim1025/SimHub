@@ -2,6 +2,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using SimCenter.Application.Common.Interfaces;
+using SimCenter.Application.Rankings;
+using SimCenter.Application.Rankings.Notifications;
 using SimCenter.Domain.Entities;
 using SimCenter.Domain.Enums;
 
@@ -29,6 +31,8 @@ public sealed class TelemetryIngestService : ITelemetryIngestService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IIdGenerator _idGenerator;
     private readonly IClock _clock;
+    private readonly IRankingService _ranking;
+    private readonly IRankingNotifier _notifier;
     private readonly ILogger<TelemetryIngestService> _logger;
 
     public TelemetryIngestService(
@@ -40,6 +44,8 @@ public sealed class TelemetryIngestService : ITelemetryIngestService
         IUnitOfWork unitOfWork,
         IIdGenerator idGenerator,
         IClock clock,
+        IRankingService ranking,
+        IRankingNotifier notifier,
         ILogger<TelemetryIngestService> logger)
     {
         _processed = processed;
@@ -50,6 +56,8 @@ public sealed class TelemetryIngestService : ITelemetryIngestService
         _unitOfWork = unitOfWork;
         _idGenerator = idGenerator;
         _clock = clock;
+        _ranking = ranking;
+        _notifier = notifier;
         _logger = logger;
     }
 
@@ -139,6 +147,16 @@ public sealed class TelemetryIngestService : ITelemetryIngestService
                 .ToList(),
         };
 
+        // 6. PB 판정: 저장 커밋 전에 이전 최고(랭킹적격)를 조회한다. 현재 랩은 아직 미저장이라 자기비교가 없다.
+        int? previousBestMs = null;
+        var isPersonalBest = false;
+        if (isRankingEligible)
+        {
+            var previousBest = await _laps.GetPersonalBestLapAsync(session.UserId, track.Id, envelope.GameCode, cancellationToken);
+            previousBestMs = previousBest?.LapTimeMs;
+            isPersonalBest = previousBest is null || lap.LapTimeMs < previousBest.LapTimeMs;
+        }
+
         await _laps.AddAsync(lap, cancellationToken);
         await _processed.AddAsync(new ProcessedEvent
         {
@@ -147,13 +165,50 @@ public sealed class TelemetryIngestService : ITelemetryIngestService
             ProcessedAt = now,
         }, cancellationToken);
 
-        // 6. Lap + 멱등 기록을 한 트랜잭션으로 커밋.
+        // 7. Lap + 멱등 기록을 한 트랜잭션으로 커밋.
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(
             "랩 저장 rig={Rig} user={User} track={Track} lapMs={LapMs} eligible={Eligible} eventId={EventId}",
             authenticatedRigCode, session.UserId, track.Name, lap.LapTimeMs, isRankingEligible, envelope.EventId);
 
+        // 8. 실시간 브로드캐스트(커밋 이후 best-effort). 랩은 이미 저장됐으므로 실패해도 Ack를 유지한다.
+        //    Agent 연결 취소와 앱 브로드캐스트를 분리하기 위해 CancellationToken.None을 사용한다.
+        await BroadcastAsync(lap, session.UserId, track.Id, envelope.GameCode, isRankingEligible, isPersonalBest, previousBestMs);
+
         return IngestResult.Ack();
+    }
+
+    /// <summary>
+    /// 저장된 랩에 대한 실시간 이벤트를 발행한다(05 §3). 유효 랩→LapRecorded, PB 갱신→PersonalBestAchieved(user 그룹),
+    /// 랭킹적격→월별 TOP N 재조회 후 RankingUpdated(track 그룹, D-8a). 어떤 실패도 Ack에 영향을 주지 않는다.
+    /// </summary>
+    private async Task BroadcastAsync(
+        Lap lap, Guid userId, Guid trackId, string gameCode, bool isRankingEligible, bool isPersonalBest, int? previousBestMs)
+    {
+        try
+        {
+            if (lap.IsValid)
+            {
+                await _notifier.LapRecordedAsync(new LapRecordedNotice(
+                    lap.Id, userId, trackId, lap.SessionType.ToString(), lap.LapTimeMs, lap.IsValid, lap.IsRankingEligible));
+            }
+
+            if (isPersonalBest)
+            {
+                await _notifier.PersonalBestAchievedAsync(
+                    new PersonalBestNotice(userId, trackId, lap.LapTimeMs, previousBestMs));
+            }
+
+            if (isRankingEligible)
+            {
+                var snapshot = await _ranking.GetRankingAsync(trackId, gameCode, RankingPeriod.Monthly, date: null);
+                await _notifier.RankingUpdatedAsync(snapshot);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "랩 저장 후 브로드캐스트 실패 lapId={LapId} track={TrackId}", lap.Id, trackId);
+        }
     }
 }

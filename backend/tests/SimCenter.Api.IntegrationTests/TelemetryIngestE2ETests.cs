@@ -97,6 +97,19 @@ public sealed class TelemetryIngestE2ETests : IClassFixture<TelemetryIngestE2ETe
         Assert.Equal(83452, lap!.LapTimeMs);
         Assert.True(lap.IsRankingEligible);
         Assert.Equal(3, lap.Sectors.Count);
+
+        // 7. 내 랩 기록(REST): 개인 최고 + 섹터 3개가 조회된다(04 §3.9).
+        var myLaps = await client.GetFromJsonAsync<JsonElement>($"/api/v1/me/laps?trackId={lap.TrackId}");
+        Assert.Equal(83452, myLaps.GetProperty("personalBest").GetProperty("lapTimeMs").GetInt32());
+        Assert.Contains(myLaps.GetProperty("laps").GetProperty("items").EnumerateArray(), it =>
+            it.GetProperty("lapTimeMs").GetInt32() == 83452 && it.GetProperty("sectors").GetArrayLength() == 3);
+
+        // 8. 랭킹 REST(monthly): 적격 랩이 TOP10에 반영된다(occurredAt 2026-07-07 → 서울 7월).
+        var rankings = await client.GetFromJsonAsync<JsonElement>(
+            $"/api/v1/rankings?trackId={lap.TrackId}&period=monthly&date=2026-07-07");
+        Assert.Equal("2026-07", rankings.GetProperty("periodKey").GetString());
+        Assert.Contains(rankings.GetProperty("entries").EnumerateArray(),
+            e => e.GetProperty("bestLapTimeMs").GetInt32() == 83452);
     }
 
     /// <summary>시드된 A-01 좌석의 활성 세션을 모두 종료해 체크인이 항상 가능하게 한다.</summary>

@@ -14,4 +14,14 @@ public sealed class TrackRepository : ITrackRepository
     public Task<Track?> GetByGameTrackIdAsync(string gameCode, int gameTrackId, CancellationToken cancellationToken = default)
         => _context.Tracks.FirstOrDefaultAsync(
             x => x.GameCode == gameCode && x.GameTrackId == gameTrackId, cancellationToken);
+
+    public Task<Track?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+        => _context.Tracks.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+
+    public async Task<IReadOnlyList<Track>> GetAllAsync(CancellationToken cancellationToken = default)
+        => await _context.Tracks
+            .AsNoTracking()
+            .OrderBy(x => x.GameCode)
+            .ThenBy(x => x.Name)
+            .ToListAsync(cancellationToken);
 }

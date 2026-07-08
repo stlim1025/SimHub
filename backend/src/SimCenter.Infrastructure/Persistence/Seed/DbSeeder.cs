@@ -15,6 +15,7 @@ namespace SimCenter.Infrastructure.Persistence.Seed;
 public sealed class DbSeeder
 {
     private const string SeedStoreName = "SimCenter 1호점";
+    private const string SeedStoreTimeZoneId = "Asia/Seoul"; // 랭킹 기간 경계 기준(D-8/D-24).
 
     // F1 25 UDP m_trackId → 트랙명(Codemasters 표준 매핑).
     private static readonly (int GameTrackId, string Name)[] F1Tracks =
@@ -94,10 +95,23 @@ public sealed class DbSeeder
         var store = await _context.Stores.FirstOrDefaultAsync(x => x.Name == SeedStoreName, cancellationToken);
         if (store is not null)
         {
+            // 기존 매장에 타임존이 비어 있으면 백필한다(멱등).
+            if (string.IsNullOrEmpty(store.TimeZoneId))
+            {
+                store.TimeZoneId = SeedStoreTimeZoneId;
+                store.UpdatedAt = now;
+            }
+
             return store;
         }
 
-        store = new Store { Id = _idGenerator.NewId(), Name = SeedStoreName, CreatedAt = now };
+        store = new Store
+        {
+            Id = _idGenerator.NewId(),
+            Name = SeedStoreName,
+            TimeZoneId = SeedStoreTimeZoneId,
+            CreatedAt = now,
+        };
         await _context.Stores.AddAsync(store, cancellationToken);
         return store;
     }

@@ -33,6 +33,7 @@ public static class DependencyInjection
         services.AddScoped<IDrivingSessionRepository, DrivingSessionRepository>();
         services.AddScoped<ITrackRepository, TrackRepository>();
         services.AddScoped<ILapRepository, LapRepository>();
+        services.AddScoped<IStoreRepository, StoreRepository>();
         services.AddScoped<IProcessedEventRepository, ProcessedEventRepository>();
         services.AddScoped<DbSeeder>();
 

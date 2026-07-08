@@ -2,6 +2,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging.Abstractions;
 using SimCenter.Application.Common.Interfaces;
+using SimCenter.Application.Rankings;
+using SimCenter.Application.Rankings.Notifications;
 using SimCenter.Application.Telemetry;
 using SimCenter.Domain.Entities;
 using SimCenter.Domain.Enums;
@@ -24,6 +26,8 @@ public class TelemetryIngestServiceTests
     private readonly FakeTrackRepository _tracks = new();
     private readonly FakeLapRepository _laps = new();
     private readonly FakeUnitOfWork _uow = new();
+    private readonly FakeRankingService _ranking = new();
+    private readonly FakeRankingNotifier _notifier = new();
 
     private readonly Guid _userId = Guid.Parse("00000000-0000-0000-0000-0000000000a1");
     private readonly Guid _rigId = Guid.Parse("00000000-0000-0000-0000-0000000000e1");
@@ -39,7 +43,8 @@ public class TelemetryIngestServiceTests
 
         _sut = new TelemetryIngestService(
             _processed, _rigs, _sessions, _tracks, _laps, _uow,
-            new SequentialIdGenerator(), new FakeClock(Now), NullLogger<TelemetryIngestService>.Instance);
+            new SequentialIdGenerator(), new FakeClock(Now), _ranking, _notifier,
+            NullLogger<TelemetryIngestService>.Instance);
     }
 
     private void GiveActiveSession() => _sessions.Items.Add(new DrivingSession
@@ -114,6 +119,79 @@ public class TelemetryIngestServiceTests
 
         var lap = Assert.Single(_laps.Items);
         Assert.False(lap.IsRankingEligible);
+    }
+
+    [Fact]
+    public async Task EligibleLap_Broadcasts_LapRecorded_PersonalBest_AndRankingUpdated()
+    {
+        GiveActiveSession();
+
+        await _sut.IngestAsync(LapFinished(), RigCode);
+
+        var recorded = Assert.Single(_notifier.LapRecords);
+        Assert.Equal(_userId, recorded.UserId);
+        Assert.Equal(_trackId, recorded.TrackId);
+        Assert.True(recorded.IsRankingEligible);
+
+        var pb = Assert.Single(_notifier.PersonalBests);
+        Assert.Equal(83452, pb.LapTimeMs);
+        Assert.Null(pb.PreviousBestMs); // 첫 기록이라 이전 최고 없음.
+
+        var snapshot = Assert.Single(_notifier.RankingUpdates);
+        Assert.Equal(_trackId, snapshot.TrackId);
+        Assert.Equal(1, _ranking.RankingCalls);
+    }
+
+    [Fact]
+    public async Task EligibleLap_SlowerThanExistingBest_NoPersonalBest_ButStillRankingUpdated()
+    {
+        GiveActiveSession();
+        // 더 빠른 기존 최고(랭킹적격)를 미리 심는다.
+        _laps.Items.Add(new Lap
+        {
+            Id = Guid.NewGuid(),
+            DrivingSessionId = _sessionId,
+            UserId = _userId,
+            TrackId = _trackId,
+            GameCode = GameCode,
+            SessionType = SessionType.TimeTrial,
+            LapNumber = 1,
+            LapTimeMs = 80000, // 들어오는 83452보다 빠름.
+            IsValid = true,
+            IsRankingEligible = true,
+            SetAt = Now.AddMinutes(-10),
+        });
+
+        await _sut.IngestAsync(LapFinished(), RigCode);
+
+        Assert.Empty(_notifier.PersonalBests);          // PB 아님.
+        Assert.Single(_notifier.RankingUpdates);         // 랭킹은 여전히 갱신.
+        Assert.Single(_notifier.LapRecords);
+    }
+
+    [Fact]
+    public async Task NonEligibleValidLap_BroadcastsLapRecorded_ButNotRanking()
+    {
+        GiveActiveSession();
+
+        // Race 세션 = 유효하지만 랭킹 비적격.
+        await _sut.IngestAsync(LapFinished(sessionType: SessionType.Race), RigCode);
+
+        Assert.Single(_notifier.LapRecords);     // 유효 랩이므로 LapRecorded는 발행.
+        Assert.Empty(_notifier.RankingUpdates);  // 비적격이라 랭킹 미브로드캐스트.
+        Assert.Empty(_notifier.PersonalBests);
+        Assert.Equal(0, _ranking.RankingCalls);
+    }
+
+    [Fact]
+    public async Task InvalidLap_DoesNotBroadcastLapRecorded()
+    {
+        GiveActiveSession();
+
+        await _sut.IngestAsync(LapFinished(isValid: false), RigCode);
+
+        Assert.Empty(_notifier.LapRecords);
+        Assert.Empty(_notifier.RankingUpdates);
     }
 
     [Fact]
@@ -234,6 +312,12 @@ public class TelemetryIngestServiceTests
 
         public Task<Track?> GetByGameTrackIdAsync(string gameCode, int gameTrackId, CancellationToken ct = default)
             => Task.FromResult(Items.FirstOrDefault(x => x.GameCode == gameCode && x.GameTrackId == gameTrackId));
+
+        public Task<Track?> GetByIdAsync(Guid id, CancellationToken ct = default)
+            => Task.FromResult(Items.FirstOrDefault(x => x.Id == id));
+
+        public Task<IReadOnlyList<Track>> GetAllAsync(CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<Track>>(Items.ToList());
     }
 
     private sealed class FakeLapRepository : ILapRepository
@@ -243,6 +327,66 @@ public class TelemetryIngestServiceTests
         public Task AddAsync(Lap lap, CancellationToken ct = default)
         {
             Items.Add(lap);
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<RankingLapRow>> GetRankingAsync(
+            Guid trackId, string gameCode, SessionType sessionType, DateTime fromUtc, DateTime toUtc, int top, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<RankingLapRow>>(new List<RankingLapRow>());
+
+        public Task<(IReadOnlyList<Lap> Items, int Total)> GetMyLapsAsync(
+            Guid userId, Guid? trackId, SessionType? sessionType, int skip, int take, CancellationToken ct = default)
+            => Task.FromResult(((IReadOnlyList<Lap>)Items, Items.Count));
+
+        public Task<Lap?> GetPersonalBestLapAsync(Guid userId, Guid trackId, string gameCode, CancellationToken ct = default)
+            => Task.FromResult(Items
+                .Where(l => l.UserId == userId && l.TrackId == trackId && l.GameCode == gameCode && l.IsRankingEligible)
+                .OrderBy(l => l.LapTimeMs)
+                .FirstOrDefault());
+    }
+
+    private sealed class FakeRankingService : IRankingService
+    {
+        public int RankingCalls { get; private set; }
+
+        public Task<RankingSnapshotDto> GetRankingAsync(
+            Guid trackId, string gameCode, RankingPeriod period, DateOnly? date, CancellationToken ct = default)
+        {
+            RankingCalls++;
+            return Task.FromResult(new RankingSnapshotDto(
+                trackId, "Silverstone", gameCode, period.ToString().ToLowerInvariant(), "2026-07",
+                new List<RankingEntryDto>()));
+        }
+
+        public Task<TrackListResponse> GetTracksAsync(CancellationToken ct = default)
+            => throw new NotImplementedException();
+
+        public Task<MyLapsResponse> GetMyLapsAsync(
+            Guid userId, Guid? trackId, SessionType? sessionType, int page, int pageSize, CancellationToken ct = default)
+            => throw new NotImplementedException();
+    }
+
+    private sealed class FakeRankingNotifier : IRankingNotifier
+    {
+        public List<RankingSnapshotDto> RankingUpdates { get; } = new();
+        public List<LapRecordedNotice> LapRecords { get; } = new();
+        public List<PersonalBestNotice> PersonalBests { get; } = new();
+
+        public Task RankingUpdatedAsync(RankingSnapshotDto snapshot, CancellationToken ct = default)
+        {
+            RankingUpdates.Add(snapshot);
+            return Task.CompletedTask;
+        }
+
+        public Task LapRecordedAsync(LapRecordedNotice notice, CancellationToken ct = default)
+        {
+            LapRecords.Add(notice);
+            return Task.CompletedTask;
+        }
+
+        public Task PersonalBestAchievedAsync(PersonalBestNotice notice, CancellationToken ct = default)
+        {
+            PersonalBests.Add(notice);
             return Task.CompletedTask;
         }
     }

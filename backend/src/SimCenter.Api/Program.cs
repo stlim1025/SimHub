@@ -4,7 +4,9 @@ using Microsoft.OpenApi.Models;
 using Serilog;
 using SimCenter.Api.Hubs;
 using SimCenter.Api.Middleware;
+using SimCenter.Api.Notifications;
 using SimCenter.Application;
+using SimCenter.Application.Rankings.Notifications;
 using SimCenter.Infrastructure;
 using SimCenter.Infrastructure.Persistence;
 using SimCenter.Infrastructure.Persistence.Seed;
@@ -20,6 +22,9 @@ builder.Host.UseSerilog((context, config) =>
 // ── 계층 서비스 등록 ──
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+
+// 실시간 브로드캐스트 포트(Application) → SignalR 구현(Api). 의존 방향 Api → Application 유지.
+builder.Services.AddScoped<IRankingNotifier, RankingNotifier>();
 
 builder.Services.AddControllers();
 
@@ -72,6 +77,7 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<TelemetryHub>("/hubs/telemetry");
+app.MapHub<RankingHub>("/hubs/ranking");
 
 app.Run();
 

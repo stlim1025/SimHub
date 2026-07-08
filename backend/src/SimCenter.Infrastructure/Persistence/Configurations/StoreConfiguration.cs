@@ -11,6 +11,7 @@ public sealed class StoreConfiguration : IEntityTypeConfiguration<Store>
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.Name).IsRequired().HasMaxLength(100);
+        builder.Property(x => x.TimeZoneId).IsRequired().HasMaxLength(64);
 
         builder.HasMany(x => x.Rigs)
             .WithOne(x => x.Store!)
