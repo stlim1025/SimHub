@@ -26,6 +26,18 @@ builder.Services.AddInfrastructure(builder.Configuration);
 // 실시간 브로드캐스트 포트(Application) → SignalR 구현(Api). 의존 방향 Api → Application 유지.
 builder.Services.AddScoped<IRankingNotifier, RankingNotifier>();
 
+// Flutter 웹 dev 실행을 위한 CORS(Development 전용). 루프백 오리진만 반사 허용 → 운영은 미개방.
+const string DevCorsPolicy = "DevCors";
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddCors(options =>
+        options.AddPolicy(DevCorsPolicy, policy =>
+            policy.SetIsOriginAllowed(origin => Uri.TryCreate(origin, UriKind.Absolute, out var uri) && uri.IsLoopback)
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials()));
+}
+
 builder.Services.AddControllers();
 
 // ── SignalR(실시간 인입, 05-signalr-design). JSON은 camelCase + enum 문자열로 계약 고정. ──
@@ -70,7 +82,15 @@ if (app.Environment.IsDevelopment())
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseSerilogRequestLogging();
 
-app.UseHttpsRedirection();
+// 운영은 HTTPS 강제. 개발은 앱(웹/에뮬레이터) cleartext 접속을 위해 리다이렉트를 생략한다.
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
+else
+{
+    app.UseCors(DevCorsPolicy);
+}
 
 app.UseAuthentication();
 app.UseAuthorization();

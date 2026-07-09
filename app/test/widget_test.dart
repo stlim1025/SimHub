@@ -1,30 +1,17 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:simcenter_app/main.dart';
+import 'package:simcenter_app/core/util/lap_time.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  group('formatLapTime', () {
+    test('밀리초를 m:ss.mmm로 표기', () {
+      expect(formatLapTime(83452), '1:23.452');
+      expect(formatLapTime(60000), '1:00.000');
+      expect(formatLapTime(9999), '0:09.999');
+      expect(formatLapTime(0), '0:00.000');
+    });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
-
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    test('음수는 플레이스홀더', () {
+      expect(formatLapTime(-1), '--:--.---');
+    });
   });
 }

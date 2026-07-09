@@ -66,6 +66,23 @@ public static class DependencyInjection
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.Key)),
                     ClockSkew = TimeSpan.FromSeconds(30),
                 };
+
+                // WebSocket은 Authorization 헤더를 실을 수 없으므로 RankingHub 경로에 한해 쿼리 access_token을 토큰으로 채택한다
+                // (SignalR+JWT 표준). REST는 계속 헤더만 허용 → 쿼리 토큰 로그 유출면을 Hub로 한정.
+                options.Events = new JwtBearerEvents
+                {
+                    OnMessageReceived = context =>
+                    {
+                        var accessToken = context.Request.Query["access_token"].ToString();
+                        if (!string.IsNullOrEmpty(accessToken)
+                            && context.HttpContext.Request.Path.StartsWithSegments("/hubs/ranking"))
+                        {
+                            context.Token = accessToken;
+                        }
+
+                        return Task.CompletedTask;
+                    },
+                };
             })
             // Agent(TelemetryHub) 전용 API Key 스킴(D-21). 사용자 JWT와 분리.
             .AddScheme<AuthenticationSchemeOptions, AgentApiKeyAuthenticationHandler>(

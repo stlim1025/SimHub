@@ -1,6 +1,6 @@
 # PROGRESS — 진행 상황 / 인수인계
 
-> Last Updated: 2026-07-08
+> Last Updated: 2026-07-09
 > **이 문서 목적:** 다른 PC·다른 세션에서도 작업을 그대로 이어가기 위한 단일 상태 파일.
 > 새 세션은 이 파일 → `CLAUDE.md` → `docs/00~09` 순으로 읽으면 맥락이 복원된다.
 > (주의: AI 메모리는 머신 로컬(`~/.claude`)이라 이동하지 않는다. **진행 상태의 진실 원천은 이 문서**다.)
@@ -9,9 +9,14 @@
 
 ## 1. 한 줄 상태
 
-**Phase 4(랭킹 계산 REST + RankingHub 브로드캐스트) 완료 — 백엔드 빌드 경고0/테스트 54
+**Phase 5(Flutter MVP 앱) 완료 — MVP 스코프 달성. 앱: Splash→Login→Home→Today's Ranking(실시간)
+→My Lap Record 풀 라우팅, Riverpod+GoRouter+dio(REST)+signalr_netcore(RankingHub 구독/재동기화).
+`flutter analyze` 이슈 0 · `flutter test` 6/6 통과. 백엔드는 개발용 CORS·SignalR 쿼리토큰 지원 추가
+(빌드 경고0/테스트 54 유지). 남은 이월분 = Agent 자동실행 + 실 F1 라이브 검증(§4-B).**
+
+(이전) Phase 4(랭킹 계산 REST + RankingHub 브로드캐스트) 완료 — 백엔드 빌드 경고0/테스트 54
 (Domain 3 + Application 49 + E2E 2), 실 PostgreSQL에서 마이그레이션(`AddStoreTimeZone`)·시더 백필·
-`/rankings`·`/me/laps` E2E 통과. 다음 단계 = Phase 5(Flutter MVP 앱).**
+`/rankings`·`/me/laps` E2E 통과.
 
 (이전) Phase 3(실시간 인입: Agent Outbox+SignalR → TelemetryHub → DB) 완료 — E2E 통합테스트
 (회원가입→로그인→체크인→Hub→DB Lap 귀속)를 실 PostgreSQL에서 통과.
@@ -134,20 +139,33 @@
      `Program.cs` 등록·`MapHub("/hubs/ranking")`.
    - **Tests:** Application +14(RankingPeriodRange 4/RankingService 6/Ingest 브로드캐스트 4) = 49, E2E +랭킹·내랩 조회 확장. 경고 0.
    - **미구현(P5):** Flutter 앱 소비. 잔여(이월): Agent 자동실행. 실 F1 라이브 검증(§4-B).
+11. **Phase 5 — Flutter MVP 앱 (완료: analyze 이슈0·test 6/6·백엔드 회귀0):** 로드맵 07 기준. **MVP 스코프 달성.**
+   - **App core(`lib/core/`):** `config/app_config.dart`(baseUrl/Hub URL), `network/`(`dio_provider` JWT 인터셉터·401 이벤트,
+     `api_exception`(RFC7807 파싱), `auth_events`), `storage/token_store`(SharedPreferences 토큰 보관),
+     `router/app_router`(GoRouter + 인증 리다이렉트 가드 + `_RouterNotifier` refreshListenable), `theme/app_theme`(Material3),
+     `realtime/ranking_hub_client`(signalr_netcore 자동재접속 + `SubscribeTrack` 재구독 + `RankingUpdated`/`LapRecorded`/`PersonalBestAchieved` 수신),
+     `util/lap_time`(ms→m:ss.mmm 포맷, 음수 플레이스홀더).
+   - **App features(Feature-First 4피처 × domain/data/application/presentation):**
+     `auth`(LoginResult 모델·AuthRepository·AuthController(세션복원/login/logout)·Splash/Login 화면),
+     `session`(체크인/아웃 SessionController·SessionRepository),
+     `ranking`(RankingSnapshot/Entry·Track 모델·RankingRepository·Home(트랙목록)·TodayRanking(실시간 TOP10) 화면·providers),
+     `laps`(MyLaps/Lap/LapSector 모델(personalBest null 허용)·LapsRepository(`/me/laps`)·MyLaps 화면·providers).
+   - **Backend 앱 지원(회귀 없음):** 개발환경 한정 CORS(루프백 오리진만 반사, 운영 미개방), 개발 시 `UseHttpsRedirection` 생략(에뮬레이터/웹 cleartext),
+     `JwtBearerEvents.OnMessageReceived`로 `/hubs/ranking` 경로에 한해 `access_token` 쿼리 토큰 채택(WebSocket JWT 표준, REST는 헤더만).
+   - **Android:** `INTERNET` 권한(main 매니페스트), `network_security_config.xml`(기본 cleartext 차단 + `10.0.2.2`/`localhost`/`127.0.0.1`만 개발 허용).
+   - **Tests:** `models_test`(LoginResult/RankingSnapshot/MyLaps/Track fromJson 4) + `widget_test`(formatLapTime 2) = **6 통과**, `flutter analyze` 이슈 0.
+   - **미구현(이월):** Agent 자동실행(Windows 시작 등록). 실 F1 라이브 검증(§4-B). 체크인은 QR/수동 진입 UI 미정련(리포지토리·컨트롤러는 준비됨).
 
 ---
 
 ## 4. 다음 할 일 (미완료) ⬜
 
-**Phase 4 완료 → Phase 5(Flutter MVP 앱) 착수.**
+**Phase 5 완료 → MVP 스코프 종료. 남은 것은 이월분(Agent 자동실행)·라이브 검증(하드웨어 의존)·이후 Future 기능.**
 
-### 4-A. 다음 단계 = Phase 5 — Flutter MVP 앱
-로드맵 07 기준. 착수 시 헌장대로 설계안 리뷰부터.
-- **App:** Splash → Login → Home → Today's Ranking(실시간) → My Lap Record.
-  Riverpod + GoRouter + `dio`(REST: `/auth`·`/rankings`·`/tracks`·`/me/laps`) + `signalr_netcore`(RankingHub 구독:
-  `RankingUpdated`/`LapRecorded`/`PersonalBestAchieved`, `SubscribeTrack`). 재접속 시 그룹 재구독 + REST 재동기화.
-- **잔여(P3/P4에서 이월):** Agent **자동실행(Windows 시작 등록)**. 실 F1 라이브 검증(§4-B).
-- **산출물(MVP 완료):** 앱에서 로그인·체크인·실시간 TOP10·내 기록 확인.
+### 4-A. 이월분 (P3~P5에서 미완료)
+- Agent **자동실행(Windows 시작 등록)** — Tray 부팅 시 자동 기동/재접속.
+- 체크인 진입 UI 정련(현재 SessionController/Repository는 완비, 화면 트리거만 미정련).
+- **산출물(MVP 완료):** 앱에서 로그인·체크인·실시간 TOP10·내 기록 확인 — 코드/테스트 상 달성, 실 기기·라이브 통합 검증은 §4-B.
 
 ### 4-B. 라이브 검증(하드웨어 의존, 보류 항목)
 - Agent Cli/Tray를 실 F1 25(UDP 20777)로 지향해 SessionStarted→LapStarted→SectorCompleted→LapFinished 로그 관찰.

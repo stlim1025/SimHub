@@ -1,8 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 네트워크 접근(REST/SignalR). 릴리스 빌드도 인터넷이 필요하므로 main 매니페스트에 명시. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="simcenter_app"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="false"
+        android:networkSecurityConfig="@xml/network_security_config">
         <activity
             android:name=".MainActivity"
             android:exported="true"
