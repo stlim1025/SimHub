@@ -6,14 +6,26 @@ import 'package:signalr_netcore/signalr_client.dart';
 import '../config/app_config.dart';
 import '../storage/token_store.dart';
 
+/// 허브 연결을 만드는 함수. 테스트에서 실제 서버 없이 가짜 연결을 넣을 때만 바꾼다.
+typedef HubConnectionFactory = HubConnection Function();
+
 /// RankingHub(05 §3) 클라이언트. 사용자 JWT는 accessTokenFactory로 주입(secure store),
 /// 자동 재접속 + 재접속 시 관심 트랙 재구독(05 §5). feature 결합을 피하려 raw Map 페이로드를 스트림으로 노출한다.
 class RankingHubClient {
-  RankingHubClient(this._tokenStore);
+  RankingHubClient(this._tokenStore, {HubConnectionFactory? connectionFactory})
+      : _connectionFactory = connectionFactory;
 
   final TokenStore _tokenStore;
+  final HubConnectionFactory? _connectionFactory;
   HubConnection? _connection;
   String? _subscribedTrackId;
+
+  /// 진행 중인 첫 연결. 동시에 불린 [connect]가 이 Future를 함께 기다려 연결을 하나만 만든다.
+  /// 실패하거나 [stop]되면 비워서 다음 호출이 새로 연결한다.
+  Future<void>? _connecting;
+
+  /// [stop]·[dispose]마다 올린다. 연결 중에 세대가 바뀌면 늦게 열린 연결은 버린다.
+  int _generation = 0;
 
   final _rankingUpdated = StreamController<Map<String, dynamic>>.broadcast();
   final _lapRecorded = StreamController<Map<String, dynamic>>.broadcast();
@@ -25,20 +37,29 @@ class RankingHubClient {
 
   bool get _isConnected => _connection?.state == HubConnectionState.Connected;
 
-  Future<void> connect() async {
+  Future<void> connect() {
     if (_connection != null) {
-      return;
+      return Future.value();
     }
 
-    final conn = HubConnectionBuilder()
-        .withUrl(
-          AppConfig.rankingHubUrl,
-          options: HttpConnectionOptions(
-            accessTokenFactory: () async => await _tokenStore.readToken() ?? '',
-          ),
-        )
-        .withAutomaticReconnect()
-        .build();
+    final inFlight = _connecting;
+    if (inFlight != null) {
+      return inFlight;
+    }
+
+    late final Future<void> attempt;
+    attempt = _open(_generation).whenComplete(() {
+      // 성공·실패 모두 비운다. 성공하면 이후 호출은 _connection으로 바로 돌아간다.
+      if (identical(_connecting, attempt)) {
+        _connecting = null;
+      }
+    });
+    _connecting = attempt;
+    return attempt;
+  }
+
+  Future<void> _open(int generation) async {
+    final conn = _createConnection();
 
     conn.on('RankingUpdated', (args) => _emit(_rankingUpdated, args));
     conn.on('LapRecorded', (args) => _emit(_lapRecorded, args));
@@ -52,6 +73,11 @@ class RankingHubClient {
     });
 
     await conn.start();
+    if (generation != _generation) {
+      // 연결하는 동안 stop()·dispose()가 불렸다 — 이 연결은 쓰지 않고 닫는다.
+      await conn.stop();
+      return;
+    }
     _connection = conn;
   }
 
@@ -73,10 +99,25 @@ class RankingHubClient {
   }
 
   Future<void> stop() async {
-    await _connection?.stop();
-    _connection = null;
+    _generation++;
+    _connecting = null;
     _subscribedTrackId = null;
+    final conn = _connection;
+    _connection = null;
+    await conn?.stop();
   }
+
+  HubConnection _createConnection() => _connectionFactory?.call() ?? _buildConnection();
+
+  HubConnection _buildConnection() => HubConnectionBuilder()
+      .withUrl(
+        AppConfig.rankingHubUrl,
+        options: HttpConnectionOptions(
+          accessTokenFactory: () async => await _tokenStore.readToken() ?? '',
+        ),
+      )
+      .withAutomaticReconnect()
+      .build();
 
   void _emit(StreamController<Map<String, dynamic>> controller, List<Object?>? args) {
     if (args != null && args.isNotEmpty && args.first is Map) {
@@ -85,6 +126,8 @@ class RankingHubClient {
   }
 
   void dispose() {
+    _generation++;
+    _connecting = null;
     _rankingUpdated.close();
     _lapRecorded.close();
     _personalBest.close();
