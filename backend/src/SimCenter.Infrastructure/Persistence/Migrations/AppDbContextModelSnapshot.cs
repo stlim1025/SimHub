@@ -17,10 +17,112 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.1")
+                .HasAnnotation("ProductVersion", "10.0.1")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
+
+            modelBuilder.Entity("SimCenter.Domain.Entities.AgentDevice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ApiKeyHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("api_key_hash");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<DateTime?>("LastSeenAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_seen_at");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("name");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_agent_devices");
+
+                    b.HasIndex("ApiKeyHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_agent_devices_api_key_hash");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_agent_devices_user_id");
+
+                    b.ToTable("agent_devices", (string)null);
+                });
+
+            modelBuilder.Entity("SimCenter.Domain.Entities.AgentPairingCode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("code_hash");
+
+                    b.Property<DateTime?>("ConsumedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("consumed_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_agent_pairing_codes");
+
+                    b.HasIndex("CodeHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_agent_pairing_codes_code_hash");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_agent_pairing_codes_user_id");
+
+                    b.ToTable("agent_pairing_codes", (string)null);
+                });
 
             modelBuilder.Entity("SimCenter.Domain.Entities.DrivingSession", b =>
                 {
@@ -430,6 +532,30 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                     b.ToTable("users", (string)null);
                 });
 
+            modelBuilder.Entity("SimCenter.Domain.Entities.AgentDevice", b =>
+                {
+                    b.HasOne("SimCenter.Domain.Entities.User", "User")
+                        .WithMany("AgentDevices")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_agent_devices_users_user_id");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("SimCenter.Domain.Entities.AgentPairingCode", b =>
+                {
+                    b.HasOne("SimCenter.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_agent_pairing_codes_users_user_id");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("SimCenter.Domain.Entities.DrivingSession", b =>
                 {
                     b.HasOne("SimCenter.Domain.Entities.SimRig", "SimRig")
@@ -513,6 +639,8 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("SimCenter.Domain.Entities.User", b =>
                 {
+                    b.Navigation("AgentDevices");
+
                     b.Navigation("Sessions");
                 });
 #pragma warning restore 612, 618

@@ -1,7 +1,6 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using SimCenter.Application.Common.Exceptions;
+using SimCenter.Api.Common;
 using SimCenter.Application.Rankings;
 using SimCenter.Domain.Enums;
 
@@ -23,21 +22,7 @@ public sealed class MeController(IRankingService rankingService) : ControllerBas
         [FromQuery] int pageSize = 20,
         CancellationToken cancellationToken = default)
     {
-        var result = await rankingService.GetMyLapsAsync(GetUserId(), trackId, sessionType, page, pageSize, cancellationToken);
+        var result = await rankingService.GetMyLapsAsync(User.GetRequiredUserId(), trackId, sessionType, page, pageSize, cancellationToken);
         return Ok(result);
-    }
-
-    /// <summary>인증 주체(sub 클레임)에서 사용자 ID를 추출한다.</summary>
-    private Guid GetUserId()
-    {
-        var value = User.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? User.FindFirstValue("sub");
-
-        if (!Guid.TryParse(value, out var userId))
-        {
-            throw new AuthenticationException("유효하지 않은 토큰입니다.");
-        }
-
-        return userId;
     }
 }

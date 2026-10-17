@@ -5,6 +5,7 @@ using Serilog;
 using SimCenter.Api.Hubs;
 using SimCenter.Api.Middleware;
 using SimCenter.Api.Notifications;
+using SimCenter.Api.RateLimiting;
 using SimCenter.Application;
 using SimCenter.Application.Rankings.Notifications;
 using SimCenter.Infrastructure;
@@ -39,6 +40,9 @@ if (builder.Environment.IsDevelopment())
 }
 
 builder.Services.AddControllers();
+
+// ── 연결 API 요청 제한(11 §4.4): /agent/pair는 IP당, 코드 발급은 사용자당 분당 10회. ──
+builder.Services.AddSimCenterRateLimiting();
 
 // ── SignalR(실시간 인입, 05-signalr-design). JSON은 camelCase + enum 문자열로 계약 고정. ──
 builder.Services.AddSignalR()
@@ -94,6 +98,7 @@ else
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter(); // 인증 뒤: 사용자 파티션이 주체를 읽고, 401 요청이 한도를 소모하지 않는다.
 
 app.MapControllers();
 app.MapHub<TelemetryHub>("/hubs/telemetry");

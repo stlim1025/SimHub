@@ -2,11 +2,9 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Http.Connections;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using SimCenter.Infrastructure.Persistence;
 
 namespace SimCenter.Api.IntegrationTests;
@@ -15,7 +13,7 @@ namespace SimCenter.Api.IntegrationTests;
 /// Agent → TelemetryHub → DB 전체 경로 E2E. 실 PostgreSQL(로컬 dev)이 필요하다.
 /// 흐름: 회원가입 → 로그인 → A-01 체크인 → Hub 접속(dev API Key) → LapFinished 전송 → DB Lap 귀속 확인.
 /// </summary>
-public sealed class TelemetryIngestE2ETests : IClassFixture<TelemetryIngestE2ETests.ApiFactory>
+public sealed class TelemetryIngestE2ETests : IClassFixture<ApiFactory>
 {
     private const string RigCode = "A-01";
     private const string DevKey = "dev-agent-key-A-01"; // DbSeeder.DevApiKeyFor("A-01")
@@ -150,14 +148,4 @@ public sealed class TelemetryIngestE2ETests : IClassFixture<TelemetryIngestE2ETe
     }
 
     private sealed record SubmitAck(bool Acknowledged, string? RejectReason);
-
-    /// <summary>Development 환경으로 부팅해 user-secrets 로드 + 마이그레이션/시드가 실행되게 한다.</summary>
-    public sealed class ApiFactory : WebApplicationFactory<Program>
-    {
-        protected override IHost CreateHost(IHostBuilder builder)
-        {
-            builder.UseEnvironment("Development");
-            return base.CreateHost(builder);
-        }
-    }
 }

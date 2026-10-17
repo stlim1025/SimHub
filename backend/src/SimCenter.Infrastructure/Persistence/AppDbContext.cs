@@ -25,6 +25,8 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, ITransactionRunner
     public DbSet<Lap> Laps => Set<Lap>();
     public DbSet<LapSector> LapSectors => Set<LapSector>();
     public DbSet<ProcessedEvent> ProcessedEvents => Set<ProcessedEvent>();
+    public DbSet<AgentDevice> AgentDevices => Set<AgentDevice>();
+    public DbSet<AgentPairingCode> AgentPairingCodes => Set<AgentPairingCode>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
