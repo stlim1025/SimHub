@@ -20,6 +20,8 @@ internal static class SessionClassifiedPayloads
     /// 커리어 모드(<c>DriverCareer</c>) 세션 순위표 payload. 차는 <c>carIndex</c> 0부터 <paramref name="carCount"/>대,
     /// 순위는 <c>carIndex + 1</c>이다. 드라이버 이름은 <c>"{namePrefix} {carIndex}"</c>이고 플레이어 차만 게임 드라이버 ID가 없다.
     /// 스틴트의 실제 컴파운드 라벨은 <paramref name="actualCompound"/>(기본 null이면 스틴트마다 <c>C0</c>~<c>C5</c>)다.
+    /// 점수는 <paramref name="awardsPoints"/>가 true면 <c>max(0, 25 - 3 × carIndex)</c>, false면 전부 0(예선 등)이다.
+    /// <paramref name="playerCarIndex"/>가 차 범위 밖(예: -1)이면 플레이어 차가 없는 순위표다.
     /// </summary>
     public static object Build(
         int carCount,
@@ -32,10 +34,12 @@ internal static class SessionClassifiedPayloads
         int playerCarIndex = 0,
         int trackId = SeedTrackId,
         string namePrefix = "DRIVER",
-        string? actualCompound = null)
+        string? actualCompound = null,
+        bool awardsPoints = true)
     {
         var results = Enumerable.Range(0, carCount)
-            .Select(carIndex => BuildResult(carIndex, stintsPerCar, carIndex == playerCarIndex, namePrefix, actualCompound))
+            .Select(carIndex => BuildResult(
+                carIndex, stintsPerCar, carIndex == playerCarIndex, namePrefix, actualCompound, awardsPoints))
             .ToArray();
 
         return new
@@ -55,7 +59,8 @@ internal static class SessionClassifiedPayloads
         };
     }
 
-    private static object BuildResult(int carIndex, int stintsPerCar, bool isPlayer, string namePrefix, string? actualCompound)
+    private static object BuildResult(
+        int carIndex, int stintsPerCar, bool isPlayer, string namePrefix, string? actualCompound, bool awardsPoints)
     {
         var tyreStints = Enumerable.Range(1, stintsPerCar)
             .Select(stint => new
@@ -73,7 +78,7 @@ internal static class SessionClassifiedPayloads
             position = carIndex + 1,
             gridPosition = carIndex + 1,
             numLaps = 15,
-            points = Math.Max(0, 25 - (carIndex * 3)),
+            points = awardsPoints ? Math.Max(0, 25 - (carIndex * 3)) : 0,
             numPitStops = stintsPerCar,
             numPenalties = 0,
             resultStatus = "Finished",

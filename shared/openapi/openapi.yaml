@@ -157,7 +157,7 @@ paths:
           required: false
           schema:
             type: string
-          description: 필터링할 세션 타입 (예: TimeTrial)
+          description: '필터링할 세션 타입 (예: TimeTrial)'
         - name: sort
           in: query
           required: false
@@ -214,6 +214,167 @@ paths:
                 $ref: '#/components/schemas/MyTracksResponse'
         '401':
           $ref: '#/components/responses/401Unauthorized'
+        '500':
+          $ref: '#/components/responses/500ServerError'
+
+  /me/seasons:
+    get:
+      summary: 내 시즌 목록 조회 (Seasons)
+      description: |
+        내 시즌을 마지막 세션 시각(`lastSessionAt`) 내림차순으로 돌려준다(같으면 Id 내림차순).
+        내 순위·점수와 선두는 시즌 Standings(기록된 세션의 점수 합, 본 레이스 카운트백)에서 계산한다.
+        시즌 목록은 한 번에 그 시즌들의 결과를 읽어 순위를 계산하므로 `pageSize` 최대는 20이다.
+
+        데이터는 Agent가 보내는 `SessionClassified` 이벤트로 쌓인다
+        ([session_classified.json](../schema/session_classified.json)).
+      operationId: getMySeasons
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: 페이지 번호 (1-base). 1 미만이면 1로 보정한다.
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+            maximum: 20
+          description: 페이지 크기. 1 미만이면 기본값(20), 최대(20)를 넘으면 최대로 보정한다.
+      responses:
+        '200':
+          description: 내 시즌 목록 조회 성공 (시즌이 없으면 빈 목록)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SeasonSummaryPage'
+        '400':
+          $ref: '#/components/responses/400ValidationError'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '500':
+          $ref: '#/components/responses/500ServerError'
+
+  /me/seasons/{seasonId}:
+    get:
+      summary: 내 시즌 상세 조회 (Season 탭 · Standings 탭 · 결과표 탭)
+      description: |
+        시즌 헤더 + 라운드(그랑프리 주말) 목록 + Standings(드라이버·컨스트럭터, 결과표 칸 포함)를 한 번에 돌려준다.
+        세 탭이 같은 스냅샷을 쓰기 때문이다.
+        남의 시즌과 없는 시즌은 같은 404다(존재 여부를 알려 주지 않는다).
+        `seasonId`가 GUID 형식이 아니면 경로가 맞지 않아 404다.
+      operationId: getMySeason
+      parameters:
+        - name: seasonId
+          in: path
+          required: true
+          description: 시즌 ID (GUID)
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 내 시즌 상세 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SeasonDetail'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '404':
+          description: 시즌을 찾을 수 없음 (남의 시즌 포함)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          $ref: '#/components/responses/500ServerError'
+
+  /me/sessions:
+    get:
+      summary: 내 세션 목록 조회 (Sessions)
+      description: |
+        최종 순위가 확정된 세션(Time Trial 제외)을 분류 시각(`classifiedAt`) 내림차순으로 돌려준다(같으면 Id 내림차순).
+        `My*` 필드는 내 차 결과에서 읽으며, 내 차 결과가 없으면 null이다.
+
+        데이터는 Agent가 보내는 `SessionClassified` 이벤트로 쌓인다
+        ([session_classified.json](../schema/session_classified.json)).
+      operationId: getMySessions
+      parameters:
+        - name: sessionType
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [Practice, Qualifying, Race]
+          description: |
+            세션 유형 필터. 대소문자를 구분하지 않으며 이 세 이름만 허용한다
+            (`TimeTrial`·숫자·오타는 400, 비어 있으면 전체).
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: 페이지 번호 (1-base). 1 미만이면 1로 보정한다.
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+          description: 페이지 크기. 1 미만이면 기본값(20), 최대(100)를 넘으면 최대로 보정한다.
+      responses:
+        '200':
+          description: 내 세션 목록 조회 성공 (세션이 없으면 빈 목록)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionSummaryPage'
+        '400':
+          $ref: '#/components/responses/400ValidationError'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '500':
+          $ref: '#/components/responses/500ServerError'
+
+  /me/sessions/{sessionId}:
+    get:
+      summary: 내 세션 상세 조회 (Session 결과표)
+      description: |
+        세션 헤더 + 결과(`position` 오름차순, 같으면 `carIndex`)를 돌려준다.
+        남의 세션과 없는 세션은 같은 404다(존재 여부를 알려 주지 않는다).
+        `sessionId`가 GUID 형식이 아니면 경로가 맞지 않아 404다.
+      operationId: getMySession
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          description: 세션 ID (GUID)
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 내 세션 상세 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionDetail'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '404':
+          description: 세션을 찾을 수 없음 (남의 세션 포함)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
         '500':
           $ref: '#/components/responses/500ServerError'
 
@@ -783,6 +944,585 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AgentDevice'
+
+    GameModeName:
+      type: string
+      description: |
+        게임 모드. 시즌은 DriverCareer·MyTeamCareer·OnlineCareer·ChallengeCareer·GrandPrix에서만 만들어진다.
+        Time Trial 모드의 순위표는 저장하지 않는다(Laps·Rankings 담당).
+      enum: [Other, DriverCareer, MyTeamCareer, OnlineCareer, ChallengeCareer, GrandPrix, Online, Story]
+      example: "DriverCareer"
+
+    SessionTypeName:
+      type: string
+      description: 세션 유형. Time Trial 세션은 저장하지 않는다.
+      enum: [Unknown, Practice, Qualifying, Race]
+      example: "Race"
+
+    SessionKindName:
+      type: string
+      description: 세션 상세 종류. 알 수 없는 값은 Unknown이다.
+      enum:
+        - Unknown
+        - Practice1
+        - Practice2
+        - Practice3
+        - ShortPractice
+        - Qualifying1
+        - Qualifying2
+        - Qualifying3
+        - ShortQualifying
+        - OneShotQualifying
+        - SprintShootout1
+        - SprintShootout2
+        - SprintShootout3
+        - ShortSprintShootout
+        - OneShotSprintShootout
+        - Race
+        - Race2
+        - Race3
+        - TimeTrial
+      example: "Race"
+
+    ResultStatusName:
+      type: string
+      description: 결과 상태. 알 수 없는 값은 Unknown이다.
+      enum: [Unknown, Active, Finished, DidNotFinish, Disqualified, NotClassified, Retired]
+      example: "Finished"
+
+    TyreCompoundName:
+      type: string
+      description: 화면용 타이어 컴파운드. 알 수 없는 값은 Unknown이다.
+      enum: [Unknown, Soft, Medium, Hard, Intermediate, Wet]
+      example: "Medium"
+
+    SeasonSummary:
+      type: object
+      description: |
+        시즌 요약. 내가 Standings에 없으면 `myPosition`·`myPoints`가, Standings가 비면 `leaderName`·`leaderPoints`가 null이다.
+        점수는 int 상한으로 자른 값이다.
+      required:
+        - seasonId
+        - gameCode
+        - gameMode
+        - firstSessionAt
+        - lastSessionAt
+        - roundCount
+      properties:
+        seasonId:
+          type: string
+          format: uuid
+          example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        gameCode:
+          type: string
+          example: "F1_25"
+        gameMode:
+          $ref: '#/components/schemas/GameModeName'
+        firstSessionAt:
+          type: string
+          format: date-time
+          description: 기록된 세션의 분류 시각 최소값(UTC)
+          example: "2026-10-01T09:00:00Z"
+        lastSessionAt:
+          type: string
+          format: date-time
+          description: 기록된 세션의 분류 시각 최대값(UTC)
+          example: "2026-10-17T09:15:32Z"
+        roundCount:
+          type: integer
+          description: 기록된 라운드(그랑프리 주말) 수
+          example: 6
+        myPosition:
+          type: integer
+          nullable: true
+          description: 내 Standings 순위. 내가 결과에 없으면 null
+          example: 3
+        myPoints:
+          type: integer
+          nullable: true
+          description: 내 시즌 점수. 내가 결과에 없으면 null
+          example: 87
+        leaderName:
+          type: string
+          nullable: true
+          description: Standings 1위 드라이버 이름. 결과가 없으면 null
+          example: "VERSTAPPEN"
+        leaderPoints:
+          type: integer
+          nullable: true
+          description: Standings 1위 점수. 결과가 없으면 null
+          example: 120
+
+    SeasonSummaryPage:
+      type: object
+      required:
+        - page
+        - pageSize
+        - total
+        - items
+      properties:
+        page:
+          type: integer
+          example: 1
+        pageSize:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 2
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SeasonSummary'
+
+    SeasonDetail:
+      type: object
+      required:
+        - season
+        - rounds
+        - standings
+      properties:
+        season:
+          $ref: '#/components/schemas/SeasonSummary'
+        rounds:
+          type: array
+          description: 라운드 번호 오름차순(주말의 첫 세션 시각 순서로 1부터 매긴다)
+          items:
+            $ref: '#/components/schemas/SeasonRound'
+        standings:
+          $ref: '#/components/schemas/SeasonStandings'
+
+    SeasonRound:
+      type: object
+      required:
+        - round
+        - weekendId
+        - trackName
+        - firstSessionAt
+        - sessions
+      properties:
+        round:
+          type: integer
+          example: 1
+        weekendId:
+          type: string
+          format: uuid
+          example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        trackName:
+          type: string
+          example: "Bahrain"
+        firstSessionAt:
+          type: string
+          format: date-time
+          example: "2026-10-01T09:00:00Z"
+        winnerName:
+          type: string
+          nullable: true
+          description: 본 레이스 1위 드라이버 이름. 본 레이스가 없으면 null
+          example: "NORRIS"
+        myPoints:
+          type: integer
+          nullable: true
+          description: 그 주말 내 점수 합(계산 대상 세션만). 내 결과가 없으면 null
+          example: 12
+        sessions:
+          type: array
+          description: 저장된 모든 세션(분류 시각 오름차순)
+          items:
+            $ref: '#/components/schemas/SeasonRoundSession'
+
+    SeasonRoundSession:
+      type: object
+      description: 라운드 안의 세션 칩. 내 결과가 없으면 `myPosition`·`myResultStatus`가 null이다.
+      required:
+        - sessionId
+        - sessionType
+        - sessionKind
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+          example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        sessionType:
+          $ref: '#/components/schemas/SessionTypeName'
+        sessionKind:
+          $ref: '#/components/schemas/SessionKindName'
+        myPosition:
+          type: integer
+          nullable: true
+          example: 4
+        myResultStatus:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/ResultStatusName'
+
+    SeasonStandings:
+      type: object
+      required:
+        - drivers
+        - constructors
+      properties:
+        drivers:
+          type: array
+          description: |
+            드라이버 순위. 점수 내림차순 → 본 레이스 1위 수, 2위 수 … 내림차순 → 이름 순.
+            점수·우승·포디움 집계는 계산 대상 세션(주말·세션 종류별 최신 1건) 기준이고, 우승·포디움·카운트백은 본 레이스만 센다.
+          items:
+            $ref: '#/components/schemas/DriverStanding'
+        constructors:
+          type: array
+          description: 컨스트럭터 순위. 점수 내림차순 → 우승 수 → 팀 이름 순. 팀 정보가 없는 결과는 제외한다.
+          items:
+            $ref: '#/components/schemas/ConstructorStanding'
+
+    DriverStanding:
+      type: object
+      description: 이름·팀·AI 여부는 그 드라이버의 가장 최근 세션 값이다.
+      required:
+        - position
+        - driverKey
+        - name
+        - teamName
+        - teamColor
+        - isPlayer
+        - isAiControlled
+        - points
+        - wins
+        - podiums
+        - cells
+      properties:
+        position:
+          type: integer
+          example: 1
+        driverKey:
+          type: string
+          description: 시즌 안의 드라이버 식별 키 (`player` | `driver:{id}` | `name:{NAME}#{raceNumber}` | `car:{sessionRef}:{carIndex}`)
+          example: "driver:9"
+        name:
+          type: string
+          description: 드라이버 이름. 이름이 없으면 `Car {carIndex+1}`
+          example: "VERSTAPPEN"
+        teamName:
+          type: string
+          example: "Red Bull Racing"
+        teamColor:
+          type: string
+          description: 팀 색 (`#RRGGBB`)
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          example: "#3671C6"
+        isPlayer:
+          type: boolean
+          example: false
+        isAiControlled:
+          type: boolean
+          example: true
+        points:
+          type: integer
+          example: 120
+        wins:
+          type: integer
+          description: 본 레이스 1위 횟수
+          example: 3
+        podiums:
+          type: integer
+          description: 본 레이스 3위 이내 횟수
+          example: 5
+        cells:
+          type: array
+          description: 그 드라이버가 결과를 가진 라운드의 결과표 칸(라운드 번호 오름차순)
+          items:
+            $ref: '#/components/schemas/StandingCell'
+
+    StandingCell:
+      type: object
+      description: |
+        결과표 한 칸(드라이버 × 라운드). `position`·`resultStatus`는 그 라운드 본 레이스의 결과이며 본 레이스 기록이 없으면 null,
+        `points`는 그 주말 계산 대상 세션의 점수 합(스프린트 포함)이다.
+      required:
+        - round
+        - points
+      properties:
+        round:
+          type: integer
+          example: 1
+        position:
+          type: integer
+          nullable: true
+          example: 1
+        resultStatus:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/ResultStatusName'
+        points:
+          type: integer
+          example: 25
+
+    ConstructorStanding:
+      type: object
+      required:
+        - position
+        - teamId
+        - teamName
+        - teamColor
+        - points
+        - wins
+      properties:
+        position:
+          type: integer
+          example: 1
+        teamId:
+          type: integer
+          description: 게임 팀 ID
+          example: 2
+        teamName:
+          type: string
+          example: "Red Bull Racing"
+        teamColor:
+          type: string
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          example: "#3671C6"
+        points:
+          type: integer
+          example: 190
+        wins:
+          type: integer
+          example: 3
+
+    SessionSummary:
+      type: object
+      description: |
+        세션 목록 한 줄. `my*`는 내 차 결과에서 읽으며 내 차 결과가 없으면 전부 null이다.
+        `myBestLapTimeMs`는 기록이 없으면(0) null, 시즌에 속하지 않은 세션이면 `seasonId`가 null이다.
+      required:
+        - sessionId
+        - classifiedAt
+        - trackName
+        - sessionType
+        - sessionKind
+        - gameMode
+        - carCount
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+          example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        classifiedAt:
+          type: string
+          format: date-time
+          description: 순위표가 확정된 시각(UTC)
+          example: "2026-10-17T09:15:32Z"
+        trackName:
+          type: string
+          example: "Spa"
+        sessionType:
+          $ref: '#/components/schemas/SessionTypeName'
+        sessionKind:
+          $ref: '#/components/schemas/SessionKindName'
+        gameMode:
+          $ref: '#/components/schemas/GameModeName'
+        seasonId:
+          type: string
+          format: uuid
+          nullable: true
+          description: 시즌에 속하지 않은 세션이면 null
+          example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        carCount:
+          type: integer
+          description: 활성 결과 행 수
+          example: 22
+        myPosition:
+          type: integer
+          nullable: true
+          example: 4
+        myGridPosition:
+          type: integer
+          nullable: true
+          example: 6
+        myResultStatus:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/ResultStatusName'
+        myBestLapTimeMs:
+          type: integer
+          nullable: true
+          description: 내 베스트 랩(ms). 기록이 없으면 null
+          example: 105321
+        myPoints:
+          type: integer
+          nullable: true
+          example: 12
+
+    SessionSummaryPage:
+      type: object
+      required:
+        - page
+        - pageSize
+        - total
+        - items
+      properties:
+        page:
+          type: integer
+          example: 1
+        pageSize:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 4
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SessionSummary'
+
+    SessionDetail:
+      type: object
+      required:
+        - session
+        - results
+      properties:
+        session:
+          $ref: '#/components/schemas/SessionDetailHeader'
+        results:
+          type: array
+          description: '`position` 오름차순, 같으면 `carIndex` 오름차순'
+          items:
+            $ref: '#/components/schemas/SessionResult'
+
+    SessionDetailHeader:
+      description: 세션 요약의 모든 필드 + 세션 설정. 시즌에 속하지 않은 세션이면 `round`가 null이다.
+      allOf:
+        - $ref: '#/components/schemas/SessionSummary'
+        - type: object
+          required:
+            - totalLaps
+            - aiDifficulty
+            - isNetworkGame
+          properties:
+            totalLaps:
+              type: integer
+              example: 15
+            aiDifficulty:
+              type: integer
+              example: 85
+            isNetworkGame:
+              type: boolean
+              example: false
+            round:
+              type: integer
+              nullable: true
+              description: 시즌 상세의 라운드 번호와 같은 계산. 시즌에 속하지 않으면 null
+              example: 7
+
+    SessionResult:
+      type: object
+      description: |
+        세션 결과 한 줄(차 1대). `bestLapTimeMs`·`totalRaceTimeMs`는 0이면 null이고,
+        `isFastestLap`은 기록이 있는 행 중 최소값(같으면 모두 true)이다.
+        `teamId`·`raceNumber`는 참가자 정보가 없으면 null이며 이때 팀 이름은 `Unknown Team`이다.
+      required:
+        - position
+        - carIndex
+        - name
+        - teamName
+        - teamColor
+        - isAiControlled
+        - isPlayer
+        - gridPosition
+        - numLaps
+        - isFastestLap
+        - penaltiesTimeMs
+        - numPenalties
+        - numPitStops
+        - points
+        - resultStatus
+        - tyreStints
+      properties:
+        position:
+          type: integer
+          example: 1
+        carIndex:
+          type: integer
+          example: 0
+        name:
+          type: string
+          description: 드라이버 이름. 이름이 없으면 `Car {carIndex+1}`
+          example: "NORRIS"
+        teamId:
+          type: integer
+          nullable: true
+          example: 8
+        teamName:
+          type: string
+          example: "McLaren"
+        teamColor:
+          type: string
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          example: "#FF8000"
+        raceNumber:
+          type: integer
+          nullable: true
+          example: 4
+        isAiControlled:
+          type: boolean
+          example: true
+        isPlayer:
+          type: boolean
+          example: false
+        gridPosition:
+          type: integer
+          example: 1
+        numLaps:
+          type: integer
+          example: 15
+        bestLapTimeMs:
+          type: integer
+          nullable: true
+          example: 104987
+        isFastestLap:
+          type: boolean
+          example: true
+        totalRaceTimeMs:
+          type: integer
+          nullable: true
+          description: 총 레이스 시간(ms, 패널티 제외). 없으면 null
+          example: 1598765
+        penaltiesTimeMs:
+          type: integer
+          example: 0
+        numPenalties:
+          type: integer
+          example: 0
+        numPitStops:
+          type: integer
+          example: 1
+        points:
+          type: integer
+          example: 25
+        resultStatus:
+          $ref: '#/components/schemas/ResultStatusName'
+        tyreStints:
+          type: array
+          description: 스틴트 번호 순서
+          items:
+            $ref: '#/components/schemas/TyreStint'
+
+    TyreStint:
+      type: object
+      required:
+        - endLap
+        - visualCompound
+      properties:
+        endLap:
+          type: integer
+          description: 그 스틴트가 끝난 랩
+          example: 7
+        visualCompound:
+          $ref: '#/components/schemas/TyreCompoundName'
+        actualCompound:
+          type: string
+          nullable: true
+          description: 게임 중립 문자열 라벨 (예 `C3`). 없으면 null
+          example: "C3"
 
 security:
   - BearerAuth: []

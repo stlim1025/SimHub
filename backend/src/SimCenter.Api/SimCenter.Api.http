@@ -23,4 +23,20 @@ Content-Type: application/json
 GET {{SimCenter.Api_HostAddress}}/api/v1/me
 Authorization: Bearer <accessToken>
 
+### 내 시즌 목록 (page 1, pageSize 최대 20)
+GET {{SimCenter.Api_HostAddress}}/api/v1/me/seasons?page=1&pageSize=20
+Authorization: Bearer <accessToken>
+
+### 내 시즌 상세 (seasonId는 위 목록 응답에서 복사)
+GET {{SimCenter.Api_HostAddress}}/api/v1/me/seasons/<seasonId>
+Authorization: Bearer <accessToken>
+
+### 내 세션 목록 (sessionType은 Practice | Qualifying | Race, 대소문자 무시, 생략하면 전체)
+GET {{SimCenter.Api_HostAddress}}/api/v1/me/sessions?sessionType=Race&page=1&pageSize=15
+Authorization: Bearer <accessToken>
+
+### 내 세션 상세 (sessionId는 위 목록 응답에서 복사)
+GET {{SimCenter.Api_HostAddress}}/api/v1/me/sessions/<sessionId>
+Authorization: Bearer <accessToken>
+
 ###

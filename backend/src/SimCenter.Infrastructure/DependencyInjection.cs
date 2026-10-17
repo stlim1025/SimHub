@@ -38,6 +38,8 @@ public static class DependencyInjection
         services.AddScoped<IAgentPairingCodeRepository, AgentPairingCodeRepository>();
         services.AddScoped<ISeasonRepository, SeasonRepository>();
         services.AddScoped<IGameSessionRepository, GameSessionRepository>();
+        services.AddScoped<ISeasonQueryRepository, SeasonQueryRepository>();
+        services.AddScoped<IGameSessionQueryRepository, GameSessionQueryRepository>();
         services.AddScoped<DbSeeder>();
 
         // ── 어댑터 ──
