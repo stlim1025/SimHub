@@ -29,7 +29,10 @@ public sealed record LapFinishedPayloadDto(
 /// <summary>단일 섹터(가변 섹터, D-7).</summary>
 public sealed record SectorDto(int SectorNumber, int SectorTimeMs);
 
-/// <summary>인입 처리 결과. Ack=처리/무시 완료(Outbox flush), Reject=영구 무효(Outbox 폐기).</summary>
+/// <summary>
+/// 인입 처리 결과. Ack=처리/무시 완료(Outbox flush), Reject=영구 무효(Outbox 폐기).
+/// 단, 연결 해제 Reject(<see cref="TelemetryIngestService.RevokedDeviceReason"/>)는 Agent가 보관하고 업로드를 멈춘다(11 §6.4).
+/// </summary>
 public sealed record IngestResult(bool Acknowledged, string? RejectReason)
 {
     public static IngestResult Ack() => new(true, null);

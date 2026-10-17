@@ -27,6 +27,7 @@ public sealed class TelemetryHub : Hub
     /// <summary>
     /// 모든 도메인 이벤트의 단일 인입점. 처리 결과(Ack/Reject)를 반환값으로 돌려준다(요청/응답).
     /// Ack·Reject 모두 Agent는 Outbox에서 flush하며, 재전송은 응답 없음(네트워크 장애)일 때만.
+    /// 예외: 연결 해제 Reject(<see cref="TelemetryIngestService.RevokedDeviceReason"/>)는 Agent가 항목을 보관하고 업로드를 멈춘다(11 §6.4).
     /// </summary>
     public async Task<IngestResult> SubmitEvent(TelemetryEnvelopeDto envelope)
     {

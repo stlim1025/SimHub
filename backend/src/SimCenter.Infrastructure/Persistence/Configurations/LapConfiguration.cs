@@ -17,6 +17,9 @@ public sealed class LapConfiguration : IEntityTypeConfiguration<Lap>
         builder.Property(x => x.SetAt).IsRequired();
 
         // 랩을 보낸 장치(D-25). 장치 해제는 soft delete라 랩이 남고, 실제 삭제로 랩이 연쇄 삭제되지 않도록 Restrict.
+        // 주의(Ruling R10): AgentDevice는 soft-delete 필터 대상이고 이 관계는 필수라, Lap.AgentDevice를 거치는
+        // Include·프로젝션은 inner join이 되어 연결 해제된 장치의 랩을 숨긴다. 장치 정보가 필요하면
+        // IgnoreQueryFilters()나 AgentDeviceId 기준 left join을 쓴다. 모델 변경(추가 마이그레이션)을 피하려고 내비게이션은 유지한다.
         builder.HasOne(x => x.AgentDevice)
             .WithMany()
             .HasForeignKey(x => x.AgentDeviceId)

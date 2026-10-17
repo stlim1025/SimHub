@@ -11,6 +11,13 @@ public class Lap : BaseEntity
 {
     /// <summary>랩을 보낸 Agent 장치(D-25). 해제된 장치의 랩도 기록으로 남는다.</summary>
     public Guid AgentDeviceId { get; set; }
+
+    /// <summary>
+    /// 랩을 보낸 장치(내비게이션). <b>주의:</b> <c>AgentDevice</c> 엔티티에는 전역 soft-delete 필터가 걸려 있어,
+    /// 이 내비게이션을 거치는 <c>Include</c>·프로젝션(<c>lap.AgentDevice.Name</c> 등)은 <b>연결 해제된 장치의 랩을 결과에서 빼 버린다</b>
+    /// (필수 관계라 EF가 inner join을 쓴다). 장치 정보가 필요하면 <c>IgnoreQueryFilters()</c>를 쓰거나
+    /// <see cref="AgentDeviceId"/>로 left join한다. EF 모델(마이그레이션 스냅샷)을 바꾸지 않으려고 내비게이션은 유지한다(Ruling R10).
+    /// </summary>
     public AgentDevice? AgentDevice { get; set; }
 
     /// <summary>랩 주인 = 장치 주인(인입 시 확정). 조회·랭킹 성능을 위해 랩에 직접 둔다.</summary>
