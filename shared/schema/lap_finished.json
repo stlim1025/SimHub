@@ -52,6 +52,26 @@
       "type": "string",
       "enum": ["Unknown", "TimeTrial", "Practice", "Qualifying", "Race"],
       "description": "게임중립 세션 유형. 실시간 랭킹은 TimeTrial만 집계(D-16). Backend가 Lap에 복사."
+    },
+    "gameMode": {
+      "type": "string",
+      "enum": ["Other", "DriverCareer", "MyTeamCareer", "OnlineCareer", "ChallengeCareer", "GrandPrix", "TimeTrial", "Online", "Story"],
+      "description": "선택. 게임 모드. Backend가 gameMode·링크 식별자로 Lap.SessionKey를 계산해 저장만 한다(P8에서 GameSession과 연결, 12 §4.6). 없으면 Other로 보고 uid 키를 만든다."
+    },
+    "seasonLinkId": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "선택. 게임의 SeasonLinkIdentifier(uint). 없으면 0 — 없으면 세션 키는 uid:{sessionRef}가 된다."
+    },
+    "weekendLinkId": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "선택. 게임의 WeekendLinkIdentifier(uint). 없으면 0 — 없으면 세션 키는 uid:{sessionRef}가 된다."
+    },
+    "sessionLinkId": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "선택. 게임의 SessionLinkIdentifier(uint). 없으면 0 — 없으면 세션 키는 uid:{sessionRef}가 된다."
     }
   }
 }
