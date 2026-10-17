@@ -1,7 +1,8 @@
 # 03 · Entity Design — ERD · 공통 규약
 
-> Status: **Design (미승인)** · Last Updated: 2026-07-06
-> 대상: Backend (EF Core, Code First, PostgreSQL). MVP 범위 Entity만 정의한다.
+> Status: **Design (미승인)** · Last Updated: 2026-10-17 (P6 개인 모드 반영)
+> 대상: Backend (EF Core, Code First, PostgreSQL). 현재 구현 범위 Entity만 정의한다.
+> P6에서 `Store`·`SimRig`·`DrivingSession`을 제거하고 `AgentDevice`·`AgentPairingCode`를 추가했다(D-25, [11](./11-personal-mode.md)).
 
 ---
 
@@ -11,7 +12,7 @@
 
 | 규약 | 결정(안) |
 |---|---|
-| Primary Key | **`Guid` (UUID v7)** — 분산 생성/멀티스토어/외부 노출 안전. 순차성 위해 v7. (D-6 확정) |
+| Primary Key | **`Guid` (UUID v7)** — 분산 생성/외부 노출 안전. 순차성 위해 v7. (D-6 확정) |
 | 멀티게임 | 모든 게임 종속 데이터는 `GameCode`를 보유. F1 전용 가정 금지(가변 섹터 등) — D-7/D-16 확정 |
 | 공통 시간 | `CreatedAt` (UTC), `UpdatedAt` (UTC, nullable) 모든 Entity 포함 |
 | Soft Delete | `IsDeleted` (bool) + 글로벌 쿼리 필터로 자동 제외 |
@@ -34,63 +35,51 @@ abstract Entity
 
 ---
 
-## 2. MVP ERD
+## 2. ERD
 
 ```
-┌──────────────┐         ┌──────────────┐
-│    Store     │1       *│   SimRig     │
-│──────────────│─────────│──────────────│
-│ Id (PK)      │         │ Id (PK)      │
-│ Name         │         │ StoreId (FK) │
-│ IsDeleted    │         │ RigCode (uq) │  ◄── Agent config가 참조
-│ CreatedAt    │         │ DisplayName  │
-└──────────────┘         │ IsDeleted    │
-                         └──────┬───────┘
-                                │1
-                                │
-                                │*
-┌──────────────┐         ┌──────┴────────────┐        ┌──────────────┐
-│    User      │1       *│  DrivingSession   │*      1│    (User)    │
-│──────────────│─────────│───────────────────│────────│  (binding)   │
-│ Id (PK)      │         │ Id (PK)           │        └──────────────┘
-│ Email (uq)   │         │ UserId (FK)       │
-│ PasswordHash │         │ SimRigId (FK)     │
-│ DisplayName  │         │ StoreId (FK)      │
-│ IsDeleted    │         │ GameCode          │
-│ CreatedAt    │         │ Status(Active/End)│
-└──────┬───────┘         │ StartedAt        │
-       │1                │ EndedAt (null)   │
-       │                 └─────────┬─────────┘
-       │*                          │1
-       │              ┌────────────┘*
-       │              │
-┌──────┴──────────────┴──────┐        ┌──────────────┐
-│           Lap              │*      1│    Track     │
-│────────────────────────────│────────│──────────────│
-│ Id (PK)                    │        │ Id (PK)      │
-│ DrivingSessionId (FK)      │        │ GameCode     │
-│ UserId (FK)                │        │ GameTrackId  │
-│ TrackId (FK)               │        │ Name         │
-│ GameCode                   │        │ (uq: GameCode│
-│ SessionType (enum)         │        │   +GameTrackId)│
-│ LapNumber                  │        └──────────────┘
-│ LapTimeMs (int)            │
-│ IsValid (bool)             │1
-│ IsInvalidatedManually(bool)│
-│ IsRankingEligible (bool)   │*
-│ SetAt (UTC)                │──┐
-│ CreatedAt                  │  │ 1
-└────────────────────────────┘  │
-                                │*
-                        ┌───────┴────────┐
-                        │   LapSector    │   ◄── 가변 섹터(D-7): 게임별 섹터 수 상이
-                        │────────────────│
-                        │ Id (PK)        │
-                        │ LapId (FK)     │
-                        │ SectorNumber   │  (1..N)
-                        │ SectorTimeMs   │
-                        │ (uq: LapId+No) │
-                        └────────────────┘
+┌──────────────┐1       *┌────────────────┐        ┌──────────────────┐
+│    User      │─────────│  AgentDevice   │        │ AgentPairingCode │
+│──────────────│         │────────────────│        │──────────────────│
+│ Id (PK)      │         │ Id (PK)        │        │ Id (PK)          │
+│ Email (uq)   │         │ UserId (FK)    │        │ UserId (FK)      │
+│ PasswordHash │         │ Name           │        │ CodeHash (uq)    │
+│ DisplayName  │         │ ApiKeyHash(uq) │        │ ExpiresAt (UTC)  │
+│ IsDeleted    │         │ LastSeenAt     │        │ ConsumedAt (null)│
+│ CreatedAt    │         │ IsDeleted      │        │ IsDeleted        │
+└──────┬───────┘         └───────┬────────┘        └─────────┬────────┘
+       │1                        │1                          │*
+       │                         │                           └── User(1) (UserId FK)
+       │*                        │*
+┌──────┴─────────────────────────┴──┐        ┌──────────────┐
+│               Lap                 │*      1│    Track     │
+│───────────────────────────────────│────────│──────────────│
+│ Id (PK)                           │        │ Id (PK)      │
+│ AgentDeviceId (FK)                │        │ GameCode     │
+│ UserId (FK)                       │        │ GameTrackId  │
+│ TrackId (FK)                      │        │ Name         │
+│ GameCode                          │        │ (uq: GameCode│
+│ SessionType (enum)                │        │   +GameTrackId)│
+│ LapNumber                         │        └──────────────┘
+│ LapTimeMs (int)                   │
+│ IsValid (bool)                    │1
+│ IsInvalidatedManually (bool)      │
+│ IsRankingEligible (bool)          │*
+│ SetAt (UTC)                       │──┐
+│ CreatedAt                         │  │ 1
+└───────────────────────────────────┘  │
+                                       │*
+                               ┌───────┴────────┐
+                               │   LapSector    │   ◄── 가변 섹터(D-7): 게임별 섹터 수 상이
+                               │────────────────│
+                               │ Id (PK)        │
+                               │ LapId (FK)     │
+                               │ SectorNumber   │  (1..N)
+                               │ SectorTimeMs   │
+                               │ (uq: LapId+No) │
+                               └────────────────┘
+
+(별도) ProcessedEvent(EventId PK) — 인입 멱등 원장. BaseEntity 아님.
 ```
 
 ---
@@ -103,73 +92,64 @@ abstract Entity
 |---|---|---|---|
 | Id | Guid | PK | |
 | Email | string(256) | Unique, NotNull | 로그인 식별자 |
-| PasswordHash | string | NotNull | ASP.NET Identity Hasher 또는 BCrypt |
+| PasswordHash | string | NotNull | BCrypt |
 | DisplayName | string(50) | NotNull | 랭킹 공개명 |
 | CreatedAt / UpdatedAt / IsDeleted | 공통 | | |
 
-### 3.2 Store
+내비게이션: `AgentDevices` (P6에서 `Sessions` 대체).
+
+### 3.2 AgentDevice (신규 · D-25)
+
+내 계정에 연결된 PC(Agent 1대).
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | Id | Guid | PK | |
-| Name | string(100) | NotNull | |
-| 공통 필드 | | | MVP는 시드로 단일 매장 1개 |
+| UserId | Guid | FK→User, NotNull, `Restrict` | 장치 주인. 인덱스 `UserId` |
+| Name | string(50) | NotNull | 1~50자. 기본값은 Agent가 보낸 컴퓨터 이름 |
+| ApiKeyHash | string(64) | **Unique**, NotNull | 장치 키의 SHA-256 hex. 원문은 저장하지 않는다 |
+| LastSeenAt | DateTime? | nullable (UTC) | 마지막 이벤트 수신 시각. 쓰기는 1분에 한 번으로 제한 |
+| 공통 필드 | | | **연결 해제 = soft delete.** 전역 필터로 인증 조회에서 자동 제외 |
 
-### 3.3 SimRig
+### 3.3 AgentPairingCode (신규 · D-26)
+
+웹에서 발급하는 1회용 연결 코드.
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | Id | Guid | PK | |
-| StoreId | Guid | FK→Store, NotNull | |
-| RigCode | string(30) | **Unique** | Agent config·체크인 QR이 참조하는 코드 (예: `A-01`) |
-| DisplayName | string(50) | NotNull | UI 표시 (예: "1번 좌석") |
-| 공통 필드 | | | |
+| UserId | Guid | FK→User, NotNull, `Restrict` | 코드를 발급한 사용자. 인덱스 `UserId` |
+| CodeHash | string(64) | **Unique**, NotNull | 정규화(대문자, 하이픈·공백 제거)한 코드의 SHA-256 hex |
+| ExpiresAt | DateTime | NotNull (UTC) | 발급 후 10분 |
+| ConsumedAt | DateTime? | nullable (UTC) | 값이 있으면 재사용 불가. 소비는 조건부 UPDATE로 원자적 |
+| 공통 필드 | | | 새 코드 발급 시 같은 사용자의 미사용 코드는 soft delete로 무효화 |
 
 ### 3.4 Track
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | Id | Guid | PK | |
-| GameCode | string(20) | NotNull | 예: `F1_24` |
+| GameCode | string(20) | NotNull | 예: `F1_25` |
 | GameTrackId | int | NotNull | 게임 UDP가 주는 트랙 정수 ID |
 | Name | string(80) | NotNull | 예: "Silverstone" |
 | — | | Unique(GameCode, GameTrackId) | 게임별 트랙 유일성 |
 
-> Track은 마스터 데이터. Migration Seed로 F1 트랙 목록을 미리 채운다.
+> Track은 마스터 데이터. Migration Seed로 F1 트랙 목록을 미리 채운다(P6에서도 유지).
 
-### 3.5 DrivingSession
-
-| 컬럼 | 타입 | 제약 | 비고 |
-|---|---|---|---|
-| Id | Guid | PK | |
-| UserId | Guid | FK→User, NotNull | 체크인한 사용자 |
-| SimRigId | Guid | FK→SimRig, NotNull | |
-| StoreId | Guid | FK→Store, NotNull | 조회 편의(비정규화) |
-| GameCode | string(20) | NotNull | 예: `F1_25` (D-14) |
-| SessionType | enum | NotNull | 게임 세션 모드(D-16). F1: TimeTrial/Practice/Qualifying/Race/Unknown |
-| Status | enum(Active/Ended) | NotNull | |
-| StartedAt | DateTime | NotNull (UTC) | |
-| EndedAt | DateTime? | nullable | |
-| 공통 필드 | | | |
-
-**제약/인덱스**
-- **부분 유니크 인덱스:** `(SimRigId) WHERE Status = Active` → Rig당 활성 세션 1개 보장.
-- 인덱스: `(SimRigId, Status, StartedAt)` — Agent 이벤트의 세션 매칭 조회용.
-
-### 3.6 Lap
+### 3.5 Lap
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
 | Id | Guid | PK | |
-| DrivingSessionId | Guid | FK→DrivingSession, NotNull | |
-| UserId | Guid | FK→User, NotNull | 세션에서 확정(비정규화, 조회 성능) |
+| AgentDeviceId | Guid | FK→AgentDevice, NotNull, `Restrict` | 랩을 올린 장치 (P6에서 `DrivingSessionId` 대체) |
+| UserId | Guid | FK→User, NotNull, `Restrict` | 장치 주인(비정규화, 조회 성능). P6부터 FK 보유 |
 | TrackId | Guid | FK→Track, NotNull | |
-| GameCode | string(20) | NotNull | 세션에서 복사(비정규화, 랭킹 필터) |
-| SessionType | enum | NotNull | 세션에서 복사(비정규화). 랭킹은 `TimeTrial`만(D-16) |
-| LapNumber | int | NotNull | 세션 내 랩 번호 |
+| GameCode | string(20) | NotNull | 이벤트에서 복사(비정규화, 랭킹 필터) |
+| SessionType | enum | NotNull | 이벤트에서 복사. 랭킹은 `TimeTrial`만(D-16) |
+| LapNumber | int | NotNull | 게임 세션 내 랩 번호 |
 | LapTimeMs | int | NotNull | 밀리초 (정수 저장 — 부동소수 오차 회피) |
 | IsValid | bool | NotNull | 게임 판정(트랙 이탈 등) |
-| IsInvalidatedManually | bool | default false | 운영자 수동 무효화 |
+| IsInvalidatedManually | bool | default false | 수동 무효화 |
 | IsRankingEligible | bool | NotNull | **파생 플래그**: IsValid && !수동무효 && SessionType=TimeTrial && !아웃/인랩 |
 | SetAt | DateTime | NotNull (UTC) | 랩 완주 시각 |
 | CreatedAt | | | 서버 수신 시각 |
@@ -180,13 +160,14 @@ abstract Entity
 - **섹터는 별도 `LapSector` 테이블(D-7).** F1은 3섹터지만, 추후 타 게임은 섹터 수가 다를 수 있어
   가변 구조로 정규화한다. (F1 전용 가정 제거)
 - **랩타임은 `int` 밀리초** — `decimal`/`double` 대신 정수로 정밀도·정렬 안정성 확보.
+- **귀속(D-25):** `UserId = device.UserId`, `AgentDeviceId = device.Id`. 인입 시점의 장치 주인으로 확정한다.
 
 **인덱스 (랭킹 쿼리 최적화)**
 - `(TrackId, GameCode, SessionType, IsRankingEligible, SetAt)` — 기간별 트랙 랭킹 필터.
 - `(UserId, TrackId, LapTimeMs)` — 개인 최고 기록 조회.
 - `(TrackId, LapTimeMs) WHERE IsRankingEligible = true` — 랭킹 정렬.
 
-### 3.7 LapSector (신규 · D-7)
+### 3.6 LapSector (D-7)
 
 | 컬럼 | 타입 | 제약 | 비고 |
 |---|---|---|---|
@@ -199,12 +180,20 @@ abstract Entity
 > 조회 최적화를 위해 랩 목록 화면에서는 `Include(LapSectors)`로 함께 로드하거나,
 > 상세 조회 시에만 로드하는 정책을 유스케이스별로 선택한다.
 
+### 3.7 ProcessedEvent
+
+| 컬럼 | 타입 | 제약 | 비고 |
+|---|---|---|---|
+| EventId | Guid | PK | Agent가 생성한 멱등키 |
+
+> 인입 멱등 원장. BaseEntity가 아니며(추가 전용) Soft Delete 대상이 아니다. 상세: [10](./10-realtime-ingest.md).
+
 ---
 
 ## 4. Ranking — Entity 없음 (Read Model)
 
 Ranking은 테이블을 만들지 않는다. `Lap` + `User` 조인 쿼리로 계산한다.
-**기간(period)**은 파라미터로, MVP는 daily. 월별/연도별도 동일 쿼리 형태로 확장한다(D-8).
+**기간(period)**은 파라미터로, 일/월/연을 모두 같은 쿼리 형태로 지원한다(D-8).
 
 **TOP10 (개념 쿼리 · 기간 파라미터화)**
 ```sql
@@ -221,26 +210,35 @@ ORDER BY best_ms ASC
 LIMIT 10;
 ```
 
-- **기간 경계(D-8):** 일별=매장 로컬 타임존 자정~자정, 월별=해당 월, 연도별=해당 연도.
-  경계는 매장 로컬 타임존으로 계산 후 UTC로 변환해 `set_at` 비교.
+- **기간 경계(D-8 · D-27):** 일별=설정 타임존 자정~자정, 월별=해당 월, 연도별=해당 연도.
+  타임존은 서버 설정 `Ranking:TimeZoneId`(기본 `Asia/Seoul`, 시작 시 검증)로 계산 후 UTC로 변환해 `set_at` 비교.
 - **실시간 랭킹(SignalR) 기본 기준 = 월별(D-8a).** 즉 `@periodStart/End`는 "이번 달"로 계산.
 - **개별 기록 조회(D-16)**는 `is_ranking_eligible` 필터 없이 모든 세션·무효 랩까지 노출.
+- **내 트랙 요약(`/me/tracks`):** 내 랩이 1개 이상 있는 트랙별 `lapCount`, `bestValidLapTimeMs`(`IsValid` 랩 중 최소, 세션 유형 무관 —
+  랭킹용 PB와 다른 값), `lastSetAt`.
 
 ---
 
 ## 5. 마이그레이션 & 시드 전략
 
-- **Code First + EF Migration.** 초기 마이그레이션에 스키마 생성.
-- **Seed 데이터:** Store 1개, SimRig N개, Track 마스터(F1 트랙 목록). 별도 Seeder로 관리.
+- **Code First + EF Migration.** 시작 시 자동 Migrate & Seed.
+- **Seed 데이터:** Track 마스터(F1 트랙 목록)만. 매장·좌석·개발용 좌석 키 시드는 P6에서 제거됐다.
 - Soft Delete 글로벌 필터, UTC 변환 규약을 `DbContext.OnModelCreating`에 일괄 적용.
+- **P6 마이그레이션 2건:**
+  - `AddAgentDevices` — `agent_devices`·`agent_pairing_codes` 추가(가산적).
+  - `PersonalMode` — 기존 `laps`·`lap_sectors`·`processed_events` 행 삭제(귀속할 장치가 없는 로컬 개발·테스트 데이터, 사용자 승인),
+    `laps.driving_session_id` 제거 + `laps.agent_device_id`·`user_id` FK 추가, `driving_sessions`·`sim_rigs`·`stores` 삭제. 회원·트랙은 유지.
+  - 스펙은 1건이었으나 EF Core 9+가 태스크 사이의 pending model change를 거부해 둘로 나눴다([11](./11-personal-mode.md) §3.4).
 
 ---
 
 ## 6. 확정된 결정 (반영 완료)
 
-- **D-1 ✅** 멀티스토어 `StoreId` 선반영 (이 ERD 반영됨)
+- **D-25 ✅** 개인 모드: `Store`·`SimRig`·`DrivingSession` 제거, `AgentDevice` 추가 (~~D-1 `StoreId`~~ 대체)
+- **D-26 ✅** `AgentPairingCode` — 1회용 연결 코드
+- **D-27 ✅** 랭킹 기간 경계 타임존 = 서버 설정 (~~`Store.TimeZoneId`~~ 대체)
 - **D-6 ✅** PK = `Guid(UUID v7)`
 - **D-7 ✅** 섹터 = 별도 `LapSector` 테이블(가변, 타 게임 대비)
-- **D-8 ✅** 랭킹 기간 = 일/월/연, 일별 경계 = 매장 로컬 자정
+- **D-8 ✅** 랭킹 기간 = 일/월/연
 - **D-15 ✅** 무효 랩 저장 + `IsRankingEligible`로 랭킹 제외
 - **D-16 ✅** `SessionType` 저장, 랭킹은 TimeTrial만, 타 세션 개별 조회 가능

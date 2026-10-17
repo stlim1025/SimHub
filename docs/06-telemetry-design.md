@@ -1,7 +1,8 @@
 # 06 · Telemetry Event Design (F1 UDP)
 
-> Status: **Design (미승인)** · Last Updated: 2026-07-06
+> Status: **Design (미승인)** · Last Updated: 2026-10-17 (P6 개인 모드 반영)
 > 계약 원본: `shared/telemetry/`. Agent(`Agent.Core`)의 파싱·판정 규칙을 정의한다.
+> P6에서 Agent 설정(`RigCode`·`BackendUrl`·`AgentCredential` → `ServerBaseUrl` + 장치 키 파일)과 envelope(`rigCode` 삭제)이 바뀌었다([11](./11-personal-mode.md) §6).
 > **대상:** F1 25 (`GameCode = F1_25`, D-14 확정). 추후 타 게임 지원 대비해 파서를 게임별로
 > 교체 가능하게 설계하고, 도메인 이벤트는 게임 중립적으로 유지한다(가변 섹터·세션타입).
 
@@ -123,7 +124,6 @@ Idle ──SessionStart──► InSession ──lapNum 증가──► LapInPro
 // 예: LapFinished
 {
   "eventId": "guid",
-  "rigCode": "A-01",
   "gameCode": "F1_25",
   "occurredAt": "2026-07-06T09:03:21Z",
   "type": "LapFinished",
@@ -146,6 +146,7 @@ Idle ──SessionStart──► InSession ──lapNum 증가──► LapInPro
 
 - `trackId`(게임 정수) → Backend가 `Track` 마스터(GameCode+GameTrackId)로 변환.
 - `eventId`는 Agent가 생성하는 **멱등키**. 재전송 시 동일 값 → Backend 중복 제거.
+- envelope에는 사용자·좌석 식별자가 없다. 귀속은 서버가 **인증된 장치 키**로 결정한다(장치 주인, D-25).
 
 ---
 
@@ -170,16 +171,30 @@ DomainEvent ──► [SQLite Outbox: status=Pending] ──► SignalR 전송 �
 
 | 항목 | 예시 | 비고 |
 |---|---|---|
-| `RigCode` | `A-01` | 이 Agent가 담당하는 좌석. 서버 SimRig.RigCode와 일치 |
 | `UdpPort` | `20777` | 게임 텔레메트리 포트 |
-| `BackendUrl` | `https://.../hubs/telemetry` | |
+| `ServerBaseUrl` | `http://localhost:5284` | 연결 API는 `{ServerBaseUrl}/api/v1/agent/pair`, 허브는 `{ServerBaseUrl}/hubs/telemetry`. 비우면 업로드 비활성 |
 | `GameCode` | `F1_25` | 대상 게임(D-14 확정) |
-| `AgentCredential` | (secret) | 장비 인증(D-12) — 코드에 하드코딩 금지 |
+| `ExpectedPacketFormat` | `2025` | `m_packetFormat` 검증 |
+| `OutboxPath` | `outbox.db` | SQLite Outbox 위치 |
+
+**장치 키(자격)** 는 설정 파일이 아니라 `%LOCALAPPDATA%\SimCenter\Agent\device.key`에 **Windows DPAPI(CurrentUser)** 로 암호화해 저장한다
+(`IDeviceCredentialStore`, D-26). 파일이 없으면 "미연결", 복호화에 실패하면 미연결로 보고 오류 로그를 남긴다.
+
+**계정 연결**
+- Cli: `dotnet run -- pair <코드>` (`agent/src/SimCenter.Agent.Cli`에서 실행). 성공 시 키를 저장하고 종료 코드 0, 실패 시 1.
+- Tray: "계정 연결" 영역(코드 입력 + [연결], 상태 `미연결` / `연결됨 · {PC 이름}` / `다시 연결 필요`, [이 PC 연결 끊기] = 로컬 키 삭제).
+
+**업로드 규칙** (`TelemetryUploadService`)
+- 키가 없으면 업로드를 멈추되 UDP 수신과 Outbox 적재는 계속한다. 키가 저장되면(10초마다 파일 재확인 + 변경 이벤트) 바로 시작한다.
+- 허브 연결이 **401**이면 재시도를 멈추고 `다시 연결 필요`가 된다(Outbox 항목은 보존). 새 키가 저장될 때까지 업로드하지 않는다.
+- 그 밖의 네트워크 오류는 지수 백오프(최대 30초)로 재시도한다.
+- 연결 전에 쌓인 이벤트는 연결 후 업로드되어 그 계정에 귀속된다.
 
 ---
 
 ## 7. 확정된 결정 (반영 완료)
 
+- **D-26 ✅** Agent 인증 = 장치 키(DPAPI 저장). 활성 세션이 없으면 랩을 버리던 규칙(~~D-22~~)은 사라졌다 — 랩은 항상 장치 주인에게 귀속된다.
 - **D-14 ✅** F1 25 대상. `m_packetFormat` 버전 검증 + 게임별 파서 확장 여지(OCP).
 - **D-15 ✅** 무효/아웃/인랩도 저장, 랭킹 적격 판정은 Backend가 최종 수행.
 - **D-16 ✅** SessionType 캡처, 실시간 랭킹은 Time Trial만. 타 세션 개별 조회 가능.

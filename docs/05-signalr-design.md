@@ -1,7 +1,8 @@
 # 05 · SignalR Event Design
 
-> Status: **Design (미승인)** · Last Updated: 2026-07-06
+> Status: **Design (미승인)** · Last Updated: 2026-10-17 (P6 개인 모드 반영)
 > 계약 원본: `shared/schema/*.json`. 두 개의 Hub로 **인입(Ingest)**과 **브로드캐스트(Broadcast)**를 분리한다.
+> P6에서 Agent 인증이 좌석 키에서 **장치 키**로 바뀌었고 envelope의 `rigCode`가 사라졌다(D-25·D-26, [11](./11-personal-mode.md) §5).
 
 ---
 
@@ -25,8 +26,11 @@
 ### 2.1 연결/인증
 
 - Endpoint: `/hubs/telemetry`
-- 인증: **Agent 전용 자격**(장비 토큰/API Key). 사용자 JWT와 분리. → D-12
-- 그룹: 연결 시 `RigCode` 기준으로 그룹 배정(운영 모니터링용, MVP 선택).
+- 인증: **장치 키**(`AgentDevice`별 장기 키). 헤더 `X-Agent-Key`(대체 수단으로 `access_token` 쿼리), 서버는 SHA-256 해시로 장치를 특정한다.
+  사용자 JWT와 완전히 분리된 `AgentApiKey` 스킴이다. → D-26 (연결 코드를 장치 키로 교환하는 흐름은 [11](./11-personal-mode.md) §4)
+- 연결에 귀속되는 클레임: `deviceId`(AgentDevice.Id), `sub`(장치 주인 UserId). `rigCode` 클레임은 없다.
+- **연결 해제된 장치의 키로 새로 연결하면 401.** Agent는 재시도를 멈추고 `다시 연결 필요` 상태가 된다.
+- 그룹: 사용하지 않는다(좌석 그룹 폐지).
 
 ### 2.2 Client → Server (Agent가 호출)
 
@@ -42,8 +46,7 @@
 ```jsonc
 {
   "eventId": "guid",              // Agent 생성, 멱등키 (중복 재전송 대비)
-  "rigCode": "A-01",              // 어느 좌석에서 발생했는가
-  "gameCode": "F1_24",
+  "gameCode": "F1_25",
   "occurredAt": "2026-07-06T09:00:00Z",  // 게임 이벤트 발생 시각(Agent 로컬→UTC)
   "type": "LapFinished",          // 이벤트 타입 (아래 표)
   "payload": { /* type별 상이 */ }
@@ -63,17 +66,22 @@
 `sectors[]` = `[{ sectorNumber, sectorTimeMs }, ...]` (게임별 개수 상이).
 `sessionType` = 게임 세션 모드. 랭킹 적격 판정은 Backend가 수행(D-15/D-16).
 
-- `sessionRef` = Agent 로컬 게임세션 식별자(Backend DrivingSession과 다름). Backend가 rig+시간으로 매핑.
+- `sessionRef` = Agent 로컬 게임세션 식별자(`m_sessionUID`). P6 서버는 저장에 쓰지 않는다(P7에서 시즌·세션 묶음에 활용 예정).
 - `trackId` = 게임 UDP의 트랙 정수 ID → Backend가 Track 마스터로 변환.
+- **귀속:** 서버는 envelope이 아니라 **인증된 장치**를 신뢰한다. `Lap.UserId = device.UserId`, `Lap.AgentDeviceId = device.Id`.
 
-### 2.5 Server → Client (Backend가 Agent에 응답)
+### 2.5 서버 응답 (Ack / Reject)
 
-| 메서드 | 용도 |
+D-23 정련: `SubmitEvent`는 별도 S→C 메서드 대신 **반환값 `IngestResult{acknowledged, rejectReason}`** 으로 응답한다(요청/응답).
+
+| 응답 | 용도 |
 |---|---|
-| `Ack(eventId)` | 수신·처리 확인 → Agent가 Outbox에서 flush |
-| `Reject(eventId, reason)` | 검증 실패(무시하되 로깅) |
+| Ack | 수신·처리 확인 → Agent가 Outbox에서 flush |
+| Reject(reason) | 영구 무효(파싱 실패·트랙 매핑 없음·**연결이 해제된 장치**). Agent는 Outbox에서 폐기, 서버는 로깅 |
 
-> **멱등성:** Backend는 `eventId`로 중복을 걸러낸다(재전송 안전). Agent는 Ack 받을 때까지 Outbox 보관.
+> **멱등성:** Backend는 `eventId`로 중복을 걸러낸다(재전송 안전). Agent는 응답을 받을 때까지 Outbox 보관(무응답만 재전송).
+> **해제된 장치:** 이미 열린 연결로 이벤트를 보내도 인입 시 장치를 다시 확인해 Reject("연결이 해제된 장치입니다.")한다.
+> `AgentDevice.LastSeenAt`은 모든 이벤트 유형에서 갱신하되 1분에 한 번만 쓴다.
 
 ---
 
@@ -133,7 +141,7 @@
 Agent                TelemetryHub          Backend App-Service        RankingHub          App
   │  SubmitEvent(env)     │                      │                        │                │
   ├──────────────────────►│  검증/멱등체크        │                        │                │
-  │                       ├─► 세션매칭·Lap저장 ──►│                        │                │
+  │                       ├─► 장치확인·Lap저장 ──►│                        │                │
   │                       │                      ├─ 랭킹 재계산            │                │
   │       Ack(eventId)    │◄─────────────────────┤                        │                │
   │◄──────────────────────┤                      ├─ RankingUpdated ──────►│  broadcast ───►│
@@ -151,7 +159,7 @@ Agent                TelemetryHub          Backend App-Service        RankingHub
 
 ## 6. 결정 반영/기본값
 
-- **D-12** Agent 인증 = 장비별 API Key (권장 기본값, 추후 강화)
+- **D-26 ✅** Agent 인증 = 장치별 키(1회용 연결 코드로 교환, SHA-256 해시 저장) (~~D-12/D-21 좌석 API Key~~ 대체)
 - **D-13** 이벤트 순서 보장 = 세션 단위 (기본값)
 - **D-7 ✅** LapFinished 섹터 = 가변 배열
 - **D-16 ✅** SessionStarted에 sessionType 포함, 실시간 랭킹은 Time Trial만 브로드캐스트

@@ -1,7 +1,8 @@
 # 00 · Overview — Monorepo 구조 · 프로젝트 역할 · Dependency 방향
 
-> Status: **Design (미승인)** · Last Updated: 2026-07-06
+> Status: **Design (미승인)** · Last Updated: 2026-10-17 (P6 개인 모드 반영)
 > 이 문서는 설계안이며, 구현 전 승인이 필요합니다. 미확정 항목은 [08-open-decisions.md](./08-open-decisions.md) 참조.
+> P6에서 카페 모델(매장·좌석·체크인)을 **개인 모델(내 PC의 Agent를 내 계정에 연결)** 로 바꿨다 → [11-personal-mode.md](./11-personal-mode.md).
 
 ---
 
@@ -31,7 +32,12 @@ SimCenter/
 │   ├── 05-signalr-design.md
 │   ├── 06-telemetry-design.md
 │   ├── 07-roadmap.md
-│   └── 08-open-decisions.md
+│   ├── 08-open-decisions.md
+│   ├── 09-lap-telemetry-trace.md
+│   ├── 10-realtime-ingest.md
+│   ├── 11-personal-mode.md
+│   ├── PROGRESS.md           # 진행 상황 / 인수인계
+│   └── TESTING-local-e2e.md  # 로컬 E2E 가이드
 │
 ├── shared/                   # 프로젝트 계약(Contract) — 코드가 아닌 스펙
 │   ├── openapi/              # REST API 계약 (openapi.yaml)
@@ -81,7 +87,8 @@ SimCenter/
 | 처리 | Packet Parse → Lap/Sector Analyze → 의미 있는 **도메인 이벤트** 생성 |
 | 출력 | SignalR로 Backend에 이벤트 전송 (Raw 패킷 전송 금지) |
 | 내구성 | 오프라인 시 SQLite 캐시 → 복구 시 자동 재전송 |
-| 형태 | Windows Tray Application (자동 실행 / 자동 재접속) |
+| 계정 연결 | 웹에서 받은 1회용 코드 → **장치별 키**(DPAPI로 로컬 저장, `X-Agent-Key`). 연결 전에는 업로드만 멈추고 수신·Outbox 적재는 계속(D-26) |
+| 형태 | Windows Tray Application (자동 실행 / 자동 재접속) + 개발용 Cli(`pair <코드>`) |
 
 ### 3.3 `backend` — Core / Orchestrator (핵심 서버)
 
@@ -90,8 +97,8 @@ SimCenter/
 | 런타임 | ASP.NET Core 10 |
 | 아키텍처 | Clean Architecture + Repository Pattern |
 | DB | PostgreSQL (EF Core, Code First, Migration) |
-| 제공 | REST API(조회/명령) + SignalR Hub(실시간 이벤트) + JWT 인증 |
-| 역할 | Agent 이벤트 수신·검증·영속화 → 랭킹 계산 → App에 브로드캐스트 |
+| 제공 | REST API(조회/명령) + SignalR Hub(실시간 이벤트) + JWT 인증(사용자) + 장치 키 인증(Agent) |
+| 역할 | Agent 연결(코드→장치 키) · 이벤트 수신·검증·영속화(장치 주인에게 귀속) → 랭킹 계산 → App에 브로드캐스트 |
 
 ### 3.4 `app` — Consumer / Experience (소비자)
 
@@ -100,7 +107,7 @@ SimCenter/
 | 런타임 | Flutter (Android / iOS / Web) |
 | 아키텍처 | Feature First + Riverpod + GoRouter + Material 3 |
 | 입력 | Backend REST(조회) + SignalR(실시간 랭킹 갱신) |
-| MVP 화면 | Splash · Login · Home · Today's Ranking · My Lap Record |
+| 화면 (P6) | 사이드바 셸(≥900px 고정, 미만 서랍) — Dashboard · Laps · Leaderboard · Telemetry App (+ Splash · Login). Seasons·Sessions·Analytics는 P7·P10 |
 
 ---
 
@@ -153,13 +160,16 @@ SimCenter/
    │ UDP 20777 (Raw Packet)
    ▼
 [Agent] ── Parse ─► Lap Analyzer ─► 도메인 이벤트(LapFinished 등)
-   │ SignalR (TelemetryHub.SubmitEvent)          │ 오프라인 시
-   ▼                                             ▼
-[Backend Ingest] ── 검증 ─► 영속화(Lap 저장) ─► 랭킹 재계산   [SQLite 캐시]→복구 시 재전송
+   │ SignalR (TelemetryHub.SubmitEvent, 장치 키 X-Agent-Key)   │ 오프라인 시
+   ▼                                                           ▼
+[Backend Ingest] ── 검증 ─► 영속화(Lap 저장, 장치 주인에게 귀속) ─► 랭킹 재계산   [SQLite 캐시]→복구 시 재전송
    │ SignalR (RankingHub 브로드캐스트)
    ▼
-[App] ── Today's TOP10 실시간 갱신 / My Lap Record 조회(REST)
+[App] ── Leaderboard TOP10 실시간 갱신 / Laps·Dashboard 조회(REST)
 ```
+
+> **계정 연결(최초 1회):** 웹 Telemetry App에서 1회용 코드 발급(`POST /me/agent-pairing-codes`) → Agent에 입력(`pair <코드>`) →
+> `POST /agent/pair`로 장치 키 수령 → DPAPI 저장. 흐름 상세는 [11-personal-mode.md](./11-personal-mode.md) §4.
 
 상세 흐름과 이벤트 계약은 다음 문서 참조:
 - Telemetry 판정/이벤트 → [06-telemetry-design.md](./06-telemetry-design.md)
@@ -170,8 +180,10 @@ SimCenter/
 
 ## 6. 핵심 결정 (확정 · [08](./08-open-decisions.md))
 
-- **D-1 ✅** 멀티스토어 `StoreId` 선반영 (SaaS 확장 대비)
-- **D-2 ✅** 랩-사용자 귀속 = 앱 체크인 세션 (Agent 무상태·무인증)
+- **D-25 ✅** 제품 방향 = 개인 모드. 매장·좌석·체크인을 쓰지 않고, 랩은 **계정에 연결된 Agent 장치의 주인**에게 귀속한다
+  (D-1 멀티스토어 `StoreId`, D-2 체크인 세션 귀속을 대체)
+- **D-26 ✅** Agent 계정 연결 = 1회용 연결 코드(10분) → 장치별 키
+- **D-27 ✅** 랭킹 기간 경계 타임존 = 서버 설정 `Ranking:TimeZoneId`(기본 `Asia/Seoul`)
 - **D-14 ✅** 대상 게임 = F1 25 (`F1_25`), 단 도메인은 게임 중립 설계(가변 섹터 등 타 게임 확장 대비)
 
 > 결정에 따라 **F1 전용이 아닌 게임 확장 가능 구조**로 설계를 정렬했다. 전체 결정 목록/근거는

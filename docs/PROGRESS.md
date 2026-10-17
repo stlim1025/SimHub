@@ -1,18 +1,25 @@
 # PROGRESS — 진행 상황 / 인수인계
 
-> Last Updated: 2026-07-09
+> Last Updated: 2026-10-17
 > **이 문서 목적:** 다른 PC·다른 세션에서도 작업을 그대로 이어가기 위한 단일 상태 파일.
-> 새 세션은 이 파일 → `CLAUDE.md` → `docs/00~09` 순으로 읽으면 맥락이 복원된다.
+> 새 세션은 이 파일 → `CLAUDE.md` → `docs/00~11` 순으로 읽으면 맥락이 복원된다.
 > (주의: AI 메모리는 머신 로컬(`~/.claude`)이라 이동하지 않는다. **진행 상태의 진실 원천은 이 문서**다.)
 
 ---
 
 ## 1. 한 줄 상태
 
-**Phase 5(Flutter MVP 앱) 완료 — MVP 스코프 달성. 앱: Splash→Login→Home→Today's Ranking(실시간)
+**Phase 6(개인 모드 전환 + 웹 셸) 완료 — 카페 모델(매장·좌석·체크인)을 개인 모델로 전환. 웹에서 1회용 연결 코드를 받아
+Agent가 `pair`(장치별 키, DPAPI 저장)로 내 계정에 연결하고, 랩은 장치 주인에게 귀속된다. 앱은 사이드바 셸
+(Dashboard · Laps · Leaderboard · Telemetry App). 테스트: Backend 95(Domain 3 + Application 76 + 통합 16) ·
+Agent 94(Core 19 + Infrastructure 75) · App 127 전부 통과, `flutter analyze` 이슈 0, 컴파일러 경고 0
+(NuGet 취약성 권고 NU1902/NU1903만 — P6 이전부터 있던 타 패키지(SignalR.Common·SQLitePCLRaw·Cryptography.Xml/Pkcs) 대상).
+헤드리스 통합 확인(가입→코드 발급→`pair`→허브 연결→장치 목록→해제→Agent 401 중단) 통과, 랩 단계만 F1 25 없어 보류. 다음 = P7 시즌·세션 수집.**
+
+(이전) Phase 5(Flutter MVP 앱) 완료 — MVP 스코프 달성. 앱: Splash→Login→Home→Today's Ranking(실시간)
 →My Lap Record 풀 라우팅, Riverpod+GoRouter+dio(REST)+signalr_netcore(RankingHub 구독/재동기화).
 `flutter analyze` 이슈 0 · `flutter test` 6/6 통과. 백엔드는 개발용 CORS·SignalR 쿼리토큰 지원 추가
-(빌드 경고0/테스트 54 유지). 남은 이월분 = Agent 자동실행 + 실 F1 라이브 검증(§4-B).**
+(빌드 경고0/테스트 54 유지). 남은 이월분 = Agent 자동실행 + 실 F1 라이브 검증(§4-B).
 
 (이전) Phase 4(랭킹 계산 REST + RankingHub 브로드캐스트) 완료 — 백엔드 빌드 경고0/테스트 54
 (Domain 3 + Application 49 + E2E 2), 실 PostgreSQL에서 마이그레이션(`AddStoreTimeZone`)·시더 백필·
@@ -30,10 +37,10 @@
 ## 2. 리포지토리 현재 상태
 
 - 위치(개발 PC 기준): `D:\Project\SimHub` (경로는 환경마다 다를 수 있음)
-- 형상: **Phase 0 완료.** 계약 스펙 + 3개 솔루션 뼈대가 생성됨. 빌드 통과 확인.
+- 형상: **Phase 0~6 완료.** 계약 스펙 + 3개 솔루션이 구현됨. 빌드·테스트 통과 확인. (브랜치 `feat/p6-personal-mode`에서 P6 작업)
   ```
-  CLAUDE.md                        # 프로젝트 헌장(압축본, 71줄)
-  docs/00~09 + PROGRESS.md         # 설계 문서 + 진행 상황
+  CLAUDE.md                        # 프로젝트 헌장(압축본)
+  docs/00~11 + PROGRESS.md + TESTING-local-e2e.md   # 설계 문서 + 진행 상황 + 로컬 E2E 가이드
   global.json                      # .NET 10 SDK 버전 고정
   shared/                          # 계약(Contract) — OpenAPI, JSON Schema, Telemetry Spec, Samples
   backend/                         # ASP.NET Core 10 Clean Architecture (빌드 ✅)
@@ -59,7 +66,10 @@
    | `07-roadmap.md` | Phase 0~5 MVP + Future |
    | `08-open-decisions.md` | 결정 근거 + 전체 확정 요약표 |
    | `09-lap-telemetry-trace.md` | 상세 텔레메트리 조회(Future 설계) |
-2. **핵심 결정 D-1~D-16 + D-8a 전부 확정** (§5 참조), 각 문서 반영 완료.
+   | `10-realtime-ingest.md` | P3 실시간 인입 As-Built (P6 반영) |
+   | `11-personal-mode.md` | P6 개인 모드 전환 + 웹 셸 설계·구현 기록 |
+   | `TESTING-local-e2e.md` | 로컬 E2E 가이드 (웹 가입 → 코드 발급 → `pair` → 주행 확인) |
+2. **핵심 결정 D-1~D-16 + D-8a 전부 확정** (§5 참조), 각 문서 반영 완료. (P6에서 D-1·D-2·D-10·D-12·D-21·D-22는 D-25로 대체)
 3. **사용자 최종 승인 완료** (설계 세트 approve).
 4. **`CLAUDE.md` 압축 재작성** (646줄 → 71줄, 상세는 docs로 위임).
 5. **Phase 0 — 계약 & 스캐폴딩 완료:**
@@ -154,22 +164,51 @@
      `JwtBearerEvents.OnMessageReceived`로 `/hubs/ranking` 경로에 한해 `access_token` 쿼리 토큰 채택(WebSocket JWT 표준, REST는 헤더만).
    - **Android:** `INTERNET` 권한(main 매니페스트), `network_security_config.xml`(기본 cleartext 차단 + `10.0.2.2`/`localhost`/`127.0.0.1`만 개발 허용).
    - **Tests:** `models_test`(LoginResult/RankingSnapshot/MyLaps/Track fromJson 4) + `widget_test`(formatLapTime 2) = **6 통과**, `flutter analyze` 이슈 0.
-   - **미구현(이월):** Agent 자동실행(Windows 시작 등록). 실 F1 라이브 검증(§4-B). 체크인은 QR/수동 진입 UI 미정련(리포지토리·컨트롤러는 준비됨).
+   - **미구현(이월):** Agent 자동실행(Windows 시작 등록). 실 F1 라이브 검증(§4-B). (체크인 UI 정련은 P6에서 체크인 자체가 제거되어 불필요해졌다.)
+12. **Phase 6 — 개인 모드 전환 + 웹 셸 (완료: Backend 95 · Agent 94 · App 127 통과, analyze 이슈 0, 헤드리스 통합 확인):** 설계 [docs/11](./11-personal-mode.md), 결정 D-25~27.
+    위 3~11번의 `Store`/`SimRig`/`DrivingSession`/체크인/좌석 키 서술은 당시 카페 모델 기록이며 P6에서 대체됐다.
+   - **Backend:**
+     - Domain: `AgentDevice`(소유자·이름·`ApiKeyHash`·`LastSeenAt`, 해제 = soft delete)·`AgentPairingCode`(해시·만료·`ConsumedAt`) 추가,
+       `Lap`에 `AgentDeviceId`·`UserId` FK, `Store`/`SimRig`/`DrivingSession`/`SessionStatus`와 관련 저장소·서비스·`SessionsController`·좌석 시드 제거.
+     - Application(`AgentDevices/`): `AgentPairingService`(코드 8자·`XXXX-XXXX`·10분·이전 미사용 코드 무효화, 연결 시 정규화·원자적 소비·장치 생성·키 1회 반환),
+       `AgentDeviceService`(목록·해제, 남의 장치 403/없는 장치 404), `/me/tracks` 요약(`bestValidLapTimeMs`), `/me/laps?sort=recent|fastest`,
+       랭킹 타임존 = `Ranking:TimeZoneId`(기본 `Asia/Seoul`, `ValidateOnStart`).
+     - 인입: `AgentApiKey` 핸들러가 장치 키로 `AgentDevice`를 특정(클레임 `deviceId`·`sub`, 해제 장치는 401),
+       `TelemetryIngestService`가 매 이벤트마다 장치 재확인(해제 시 Reject "연결이 해제된 장치입니다."), `LastSeenAt` 1분 제한 갱신, 활성 세션 없는 랩 Drop 규칙 삭제,
+       envelope `rigCode` 삭제.
+     - Api: `AgentPairingController`(`POST /agent/pair`, 익명·IP당 분당 10회), `MyAgentDevicesController`(`POST /me/agent-pairing-codes` 사용자당 분당 10회, `GET`·`DELETE /me/agent-devices`),
+       `MeController`(`/me/tracks`, `/me/laps`). 내장 Rate Limiting 사용(새 패키지 없음).
+     - **마이그레이션 2건:** `AddAgentDevices`(가산적) + `PersonalMode`(기존 랩·섹터·멱등 기록 삭제, 세션·좌석·매장 테이블 삭제). 설계는 1건이었으나 EF Core 9+가 태스크 사이의 pending model change를 거부해 나눴다.
+   - **Agent:** `ServerBaseUrl`(기본 `http://localhost:5284`)이 `BackendUrl`/`RigCode`/`AgentCredential`을 대체. 장치 키는 `DpapiDeviceCredentialStore`가
+     `%LOCALAPPDATA%\SimCenter\Agent\device.key`에 DPAPI(CurrentUser)로 저장(`System.Security.Cryptography.ProtectedData`).
+     Cli `dotnet run -- pair <코드>`(`PairCommand`, 성공 0/실패 1), Tray "계정 연결" 영역(`미연결`/`연결됨 · PC 이름`/`다시 연결 필요`, 연결 끊기 = 로컬 키 삭제).
+     `TelemetryUploadService`: 키 없으면 업로드 대기(수신·Outbox 적재 계속), 10초마다 키 파일 재확인, 401이면 재시도를 멈추고 Outbox 보존. envelope에서 `rigCode` 제거.
+   - **App:** 사이드바 셸(≥900px 고정 220px, 미만 서랍) + 어두운 남색/인디고 테마. 경로 `/`(Dashboard), `/laps`·`/laps/tracks/:trackId`(Laps), `/leaderboard?trackId=`,
+     `/telemetry-app`(연결 코드 발급·연결된 PC 목록/해제·Connection Status). `features/session`·체크인 카드·`/home`·`/rankings/:trackId` 제거.
+     실행: `flutter run -d web-server --web-hostname localhost --web-port 5960 --dart-define=API_BASE_URL=http://localhost:5284`.
+   - **계약·문서:** `shared/openapi/openapi.yaml`(세션 경로 제거, 신규 API), `shared/schema/telemetry_envelope.json`·samples에서 `rigCode` 제거,
+     `CLAUDE.md`·`docs/00~08·10·11`·`TESTING-local-e2e.md` 개인 모드로 갱신.
+   - **검증(헤드리스, 이 PC):** 백엔드(`--launch-profile http`) 기동 → 임시 사용자 가입·로그인 → 연결 코드 발급 → Cli `pair` 성공(종료 0, `device.key` 생성) →
+     `GET /me/agent-devices`에 PC 이름·`lastSeenAt null` → Cli 실행 로그 `TelemetryHub 연결됨` → `DELETE /me/agent-devices/{id}` 204 →
+     Agent 재시작 시 401 경고로 업로드 중단("다시 연결이 필요합니다") → 같은 코드 재사용 400, 잘못된 코드 연타 시 429. 끝난 뒤 `device.key` 삭제(PC 미연결 상태로 복원).
+     **F1 25가 없어 랩 업로드 단계는 보류**(§4-B). Flutter 화면은 브라우저 육안 확인 대상.
 
 ---
 
 ## 4. 다음 할 일 (미완료) ⬜
 
-**Phase 5 완료 → MVP 스코프 종료. 남은 것은 이월분(Agent 자동실행)·라이브 검증(하드웨어 의존)·이후 Future 기능.**
+**Phase 6 완료 → 다음 = P7 시즌·세션 수집**(`SeasonLinkIdentifier`/`WeekendLinkIdentifier`/`SessionLinkIdentifier`로 시즌 → 그랑프리 → 세션을 묶고,
+`FinalClassification`·`Participants`로 전 드라이버 결과·Standings 저장 → Seasons·Sessions 화면). 설계 → 리뷰 → 계획 → 구현 → 리뷰 순서로 착수한다(로드맵: [07](./07-roadmap.md), [11](./11-personal-mode.md) §0).
+이후 P8 세션 상세 → P9 랩 상세·텔레메트리 → P10 Analytics → P11 Agent 배포.
 
-### 4-A. 이월분 (P3~P5에서 미완료)
-- Agent **자동실행(Windows 시작 등록)** — Tray 부팅 시 자동 기동/재접속.
-- 체크인 진입 UI 정련(현재 SessionController/Repository는 완비, 화면 트리거만 미정련).
-- **산출물(MVP 완료):** 앱에서 로그인·체크인·실시간 TOP10·내 기록 확인 — 코드/테스트 상 달성, 실 기기·라이브 통합 검증은 §4-B.
+### 4-A. 이월분
+- Agent **자동실행(Windows 시작 등록)** — Tray 부팅 시 자동 기동/재접속. (설치 파일·자동 업데이트와 함께 P11에서 다룰 후보)
+- P6 웹 화면의 육안 확인(브라우저)은 컨트롤러 확인 대상.
 
 ### 4-B. 라이브 검증(하드웨어 의존, 보류 항목)
-- Agent Cli/Tray를 실 F1 25(UDP 20777)로 지향해 SessionStarted→LapStarted→SectorCompleted→LapFinished 로그 관찰.
-  현재는 게임/장비 없어 단위테스트 + 스모크(바인딩/무크래시)까지만 검증됨.
+- Agent Cli/Tray를 실 F1 25(UDP 20777)로 지향해 SessionStarted→LapStarted→SectorCompleted→LapFinished 로그 관찰,
+  Time Trial 1랩 후 Laps·Leaderboard·Dashboard 반영 확인([TESTING-local-e2e.md](./TESTING-local-e2e.md) §5).
+  현재는 게임/장비 없어 단위테스트 + 통합(E2E) + 헤드리스 연결 확인까지만 검증됨.
 
 ### 4-C. 확정 범위 메모
 - Phase 1 = Auth만(세션 유스케이스 P3로 연기, 엔티티 스키마는 선반영).
@@ -187,28 +226,31 @@
 
 | ID | 결정 |
 |---|---|
-| D-1 | 멀티스토어 `StoreId` 선반영 |
-| D-2 | 랩-사용자 귀속 = 앱 체크인 세션(Agent 무상태·무인증) |
+| D-1 | ~~멀티스토어 `StoreId` 선반영~~ → D-25로 대체 |
+| D-2 | ~~랩-사용자 귀속 = 앱 체크인 세션(Agent 무상태·무인증)~~ → D-25로 대체 |
 | D-3 | 유스케이스 = 얇은 Service + 인터페이스 (MediatR 보류) |
 | D-4 | App = `dio` + `signalr_netcore` (잠정) |
 | D-5 | Car/차량 개념 MVP 제외 |
 | D-6 | PK = `Guid(UUID v7)` |
 | D-7 | 섹터 = 가변 `LapSector` 테이블 (타 게임 대비) |
-| D-8 | 랭킹 = 일/월/연 지원, 일별 경계 = 매장 로컬 자정 |
+| D-8 | 랭킹 = 일/월/연 지원, 일별 경계 = 로컬 자정(타임존은 D-27 서버 설정) |
 | **D-8a** | **실시간 랭킹 기본 기준 = 월별(monthly)** |
 | D-9 | Refresh Token MVP 제외 |
-| D-10 | 중복 활성 세션 = 사용자 본인 이전 세션 자동 종료 |
+| D-10 | ~~중복 활성 세션 = 사용자 본인 이전 세션 자동 종료~~ → D-25로 대체 |
 | D-11 | 회원가입 = 앱 직접 가입(self-signup) |
-| D-12 | Agent 인증 = 장비별 API Key |
+| D-12 | ~~Agent 인증 = 장비별 API Key~~ → D-25로 대체 |
 | D-13 | 이벤트 순서 = 세션 단위 |
 | D-14 | 대상 게임 = F1 25(`F1_25`), 도메인은 게임 중립 |
 | D-15 | 무효 랩 저장 + 랭킹 제외(개별 조회 가능) |
 | D-16 | SessionType 구분, 실시간 랭킹 = Time Trial만, 타 세션 개별 조회 |
 | **D-20** | **F1 UDP 파싱 = F1Game.UDP(26.0.0) 채택, Infra에서 게임중립 모델로 매핑(Core 무의존)** |
-| D-21 | Agent 인증 = SimRig별 API Key(SHA-256 해시 저장, `X-Agent-Key`, 연결에 rigCode 귀속) |
-| D-22 | 활성 세션 없는 랩 = Drop+Ack. 영구 무효 = Reject. 무응답만 재전송 |
-| D-23 | P3 = 인입·저장·체크인(브로드캐스트 P4). TelemetryHub는 요청/응답(반환값 Ack) |
-| **D-24** | **랭킹 기간 경계 타임존 = `Store.TimeZoneId`(IANA). 랭킹 = 쿼리 온디맨드. 브로드캐스트 = 커밋 후 best-effort(`IRankingNotifier`)** |
+| D-21 | ~~Agent 인증 = SimRig별 API Key(`rigCode` 귀속)~~ → D-25로 대체 (`X-Agent-Key`·SHA-256 해시 저장은 D-26이 계승) |
+| D-22 | ~~활성 세션 없는 랩 = Drop+Ack~~ → D-25로 대체. 영구 무효 = Reject, 무응답만 재전송은 유지 |
+| D-23 | P3 = 인입·저장(브로드캐스트 P4). TelemetryHub는 요청/응답(반환값 Ack) |
+| **D-24** | **랭킹 = 쿼리 온디맨드. 브로드캐스트 = 커밋 후 best-effort(`IRankingNotifier`)** (타임존 출처 `Store.TimeZoneId`는 D-27로 대체) |
+| **D-25** | **개인 모드 전환: 매장·좌석·체크인 제거, 랩 귀속 = 계정에 연결된 Agent 장치(장치 주인)** |
+| **D-26** | **Agent 계정 연결 = 1회용 연결 코드(10분) → 장치별 키(`X-Agent-Key`, SHA-256 해시, DPAPI 로컬 저장, `deviceId`·`sub` 클레임)** |
+| **D-27** | **랭킹 기간 경계 타임존 = 서버 설정 `Ranking:TimeZoneId`(기본 `Asia/Seoul`, 시작 시 검증)** |
 
 **Future 결정(해당 Phase 착수 시 결정, 지금 불필요):** D-17(트레이스 저장 원칙 해석), D-18(트레이스 저장소), D-19(샘플링·채널·보존). → `docs/09`
 
@@ -220,15 +262,17 @@
 2. .NET 10 SDK 설치: `dotnet-install.ps1 -Channel 10.0` 또는 공식 인스톨러.
 3. Flutter SDK 설치 (Android/iOS/Web 타겟).
 4. 새 세션에서 읽는 순서: **이 `PROGRESS.md` → `CLAUDE.md` → `docs/08`(결정) → 필요한 설계 문서.**
-5. 진행 지점: **§4 "다음 할 일" = Phase 1 상세 설계 착수.** 코드 착수 전 설계안 리뷰부터.
+5. 진행 지점: **§4 "다음 할 일" = P7 시즌·세션 수집 설계 착수.** 코드 착수 전 설계안 리뷰부터. (P6 브랜치 `feat/p6-personal-mode`의 머지 여부는 git으로 확인)
 6. 작업 규칙(헌장): 설계 → 리뷰 → 구현 → 리뷰. 추측 금지, 불확실하면 질문. 구조 임의 변경 금지.
+7. 로컬에서 직접 돌려 보려면 [TESTING-local-e2e.md](./TESTING-local-e2e.md) (가입 → 연결 코드 → `pair` → 주행).
 
 ### 개발 환경 전제(참고)
 - Backend/Agent: **.NET 10 SDK** 필요. (`global.json`에 10.0.301 고정)
 - Backend DB: **PostgreSQL** (EF Core Code First + Migration).
-- App: **Flutter SDK** (Android/iOS/Web).
-- Agent: Windows + F1 25(UDP Telemetry 활성, 기본 포트 20777). **WPF** 기반 트레이 앱.
-- Secrets(JWT 서명키, 장비 API Key, DB 접속)는 코드에 두지 않음(환경변수/User-Secrets).
+- App: **Flutter SDK** (Android/iOS/Web). 웹 실행은 `flutter run -d web-server --web-hostname localhost --web-port 5960 --dart-define=API_BASE_URL=http://localhost:5284`.
+- Agent: Windows + F1 25(UDP Telemetry 활성, 기본 포트 20777). **WPF** 기반 트레이 앱. 장치 키는 DPAPI로 `%LOCALAPPDATA%\SimCenter\Agent\device.key`에 저장.
+- Secrets(JWT 서명키, DB 접속)는 코드에 두지 않음(환경변수/User-Secrets). 장치 키는 서버에 해시만 저장하고 원문은 Agent PC의 DPAPI 파일에만 있다.
+- 이 PC 환경 메모: `DOTNET_ROOT`는 `C:\Program Files\dotnet`, `flutter test`는 영문 `TEMP`/`TMP`(예: `C:\Temp`)가 필요하다 — [TESTING-local-e2e.md](./TESTING-local-e2e.md) §6.
 
 ---
 

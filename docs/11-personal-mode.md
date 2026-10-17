@@ -1,8 +1,9 @@
 # 11 · Personal Mode (Phase 6) — 개인 모드 전환 + 웹 셸
 
-> Status: **Design (승인됨 · 미구현)** · Last Updated: 2026-10-17
+> Status: **Implemented (2026-10-17)** · Last Updated: 2026-10-17
 > 카페 모델(매장·좌석·체크인)을 **개인 모델(내 PC의 Agent를 내 계정에 연결)** 로 전환하고,
-> F1Laps를 참고한 **사이드바 웹 셸**을 만든다. 결정은 [08](./08-open-decisions.md)에 D-25~27로 기록한다(구현 시).
+> F1Laps를 참고한 **사이드바 웹 셸**을 만들었다. 결정은 [08](./08-open-decisions.md)에 D-25~27로 기록했다.
+> 구현 중 달라진 점: 마이그레이션이 1건이 아니라 **2건**(`AddAgentDevices` + `PersonalMode`)이다 — §3.4.
 
 ---
 
@@ -39,7 +40,7 @@ F1Laps와 비슷한 구성(Dashboard · Seasons · Sessions · Laps · Analytics
 
 ---
 
-## 2. 결정 (구현 시 [08](./08-open-decisions.md)에 기록)
+## 2. 결정 ([08](./08-open-decisions.md)에 기록됨)
 
 ### D-25. 제품 방향 = 개인 모드로 전환
 - 카페 운영 모델(매장·좌석·체크인)을 쓰지 않는다. 사용자가 **자기 PC에 Agent를 설치하고 자기 계정에 연결**한다.
@@ -105,14 +106,17 @@ F1Laps와 비슷한 구성(Dashboard · Seasons · Sessions · Laps · Analytics
 - 서비스·DTO·컨트롤러: `SessionService`, `SessionDtos`, `SessionsController`
 - 시드: 매장, 좌석 A-01~A-04, 개발용 좌석 키(`dev-agent-key-A-0x`). **트랙 시드는 유지.**
 
-### 3.4 마이그레이션 `PersonalMode` (1건)
+### 3.4 마이그레이션 2건: `AddAgentDevices` + `PersonalMode`
 
-1. `laps`, `lap_sectors`, `processed_events`의 **기존 행을 삭제**한다.
+> **구현 메모:** 설계는 1건이었으나, EF Core 9+가 태스크 사이의 pending model change를 거부해 가산적인 `AddAgentDevices`(4번)와
+> `PersonalMode`(1~3번)로 **나눴다.** 최종 스키마는 설계와 같다.
+
+1. (`PersonalMode`) `laps`, `lap_sectors`, `processed_events`의 **기존 행을 삭제**한다.
    - 이유: 현재 랩은 모두 로컬 개발·테스트 데이터이고, 귀속할 장치가 없다. `AgentDeviceId`를 영구히 null 허용으로 두는 것보다 깔끔하다(사용자 승인 2026-10-17).
    - 회원(`users`)과 트랙(`tracks`)은 그대로 둔다.
 2. `laps.driving_session_id` 컬럼·FK·인덱스 삭제, `laps.agent_device_id` 추가(FK), `laps.user_id` FK 추가.
 3. `driving_sessions`, `sim_rigs`, `stores` 테이블 삭제.
-4. `agent_devices`, `agent_pairing_codes` 테이블 생성.
+4. (`AddAgentDevices`) `agent_devices`, `agent_pairing_codes` 테이블 생성.
 
 ---
 

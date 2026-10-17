@@ -1,6 +1,6 @@
 # 01 · Architecture — Solution 구조 · 폴더 구조 · Layer 규칙
 
-> Status: **Design (미승인)** · Last Updated: 2026-07-06
+> Status: **Design (미승인)** · Last Updated: 2026-10-17 (P6: Flutter feature 목록만 현행화)
 
 ---
 
@@ -150,12 +150,12 @@ app/
     ├── shared/
     │   ├── widgets/                # 공통 위젯
     │   └── models/                 # shared 계약 기반 공통 DTO
-    └── features/
-        ├── splash/
-        ├── auth/                   # Login
-        ├── home/
-        ├── ranking/                # Today's Ranking
-        └── lap_record/             # My Lap Record
+    └── features/                   # P6 기준 (사이드바 셸 안의 화면들)
+        ├── auth/                   # Splash · Login
+        ├── dashboard/              # Dashboard (최근 랩 · 연결 상태)
+        ├── laps/                   # Laps (트랙 목록 · 트랙별 랩 표)
+        ├── ranking/                # Leaderboard (실시간 TOP10)
+        └── devices/                # Telemetry App (연결 코드 · 연결된 PC · Connection Status)
 ```
 
 ### 4.2 Feature 내부 레이어 (각 feature 동일 구조)
