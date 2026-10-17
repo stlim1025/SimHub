@@ -26,6 +26,7 @@ F1 25 (UDP 20777) ──► Agent(Cli/Tray) ──SignalR(장치 키)──► B
   - DB(`simcenter`)는 미리 안 만들어도 된다 — 백엔드가 시작 시 **마이그레이션으로 생성 + 시드**한다.
   - 시드 결과: 트랙 마스터(F1_25)뿐이다. 매장·좌석·개발용 좌석 키는 없다(P6에서 제거).
   - ⚠️ P6 이전 DB에서 처음 띄우면 마이그레이션 `PersonalMode`가 **기존 랩·섹터·멱등 기록을 삭제**하고 매장·좌석·세션 테이블을 지운다(회원·트랙은 유지).
+  - 백엔드 통합 테스트(`dotnet test`)는 같은 연결 정보로 **별도 DB `simcenter_test`**를 쓴다(개발 DB에 테스트 데이터가 쌓이지 않음) → §9.
 
 ---
 
@@ -161,6 +162,7 @@ ORDER BY l.created_at DESC LIMIT 5;
 | 백엔드 시작 실패(연결 문자열/JWT) | user-secrets 미주입 → §0 |
 | 백엔드 시작 실패(`Ranking:TimeZoneId`) | 잘못된 IANA 타임존 이름 → `Asia/Seoul` 등으로 수정 |
 | 웹이 서버에 못 붙음(CORS/연결 실패) | 실행 시 `--dart-define=API_BASE_URL=http://localhost:5284` 누락, 또는 백엔드가 Development가 아님(개발 CORS는 루프백 오리진만 허용) |
+| `dotnet test`가 빌드 중 `MSB3027`(파일이 `SimCenter.Api`에 의해 잠겨 있음)로 실패 | 백엔드(`dotnet run`)가 떠 있어 `src/SimCenter.Api/bin`이 잠김 → 백엔드를 끄거나 `dotnet test backend/SimCenter.sln --artifacts-path <임시 폴더>`로 빌드 출력을 분리 |
 | `dotnet test`/`dotnet run`이 `You must install or update .NET`로 실패 | 사용자 환경 변수 `DOTNET_ROOT`가 .NET 10 런타임이 없는 폴더(예: `%USERPROFILE%\.dotnet`)를 가리킴 → `C:\Program Files\dotnet`으로 바꾸고 터미널 재시작 |
 | `flutter test`가 진행 없이 멈춤(`-v` 로그에 `Could not prepare isolate`) | Windows 사용자 이름에 한글 등 비ASCII 문자가 있어 임시 폴더 경로를 못 읽음 → 사용자 `TEMP`/`TMP`를 영문 경로(예: `C:\Temp`)로 바꾸고 터미널 재시작 |
 
@@ -181,3 +183,42 @@ ORDER BY l.created_at DESC LIMIT 5;
   Seasons·Sessions·랩 상세는 P7 이후.
 - 네트워크가 끊겨도 이벤트는 Agent의 `outbox.db`(SQLite)에 쌓였다가 재연결 시 자동 재전송된다.
 - 상세 설계: [10-realtime-ingest.md](./10-realtime-ingest.md), [11-personal-mode.md](./11-personal-mode.md).
+
+---
+
+## 9. 통합 테스트 DB와 개발 DB의 테스트 데이터 정리
+
+**통합 테스트 DB 분리**
+- `dotnet test backend/SimCenter.sln`의 통합 테스트(`SimCenter.Api.IntegrationTests`)는 user-secrets의 `ConnectionStrings:Postgres`에서
+  **Database만 `simcenter_test`로 바꿔** 쓴다(호스트·계정·비밀번호 재사용, 추가 설정 없음). DB가 없으면 테스트가 만든다.
+- 실행 시작 시 한 번 테스트 DB를 마이그레이션·시드하고 **이전 실행 데이터를 비운다**(트랙 시드·마이그레이션 이력은 유지).
+  반복 실행해도 쌓이지 않고, 마지막 실행의 데이터는 디버깅용으로 남는다.
+- 비우기는 연결된 DB 이름이 `simcenter_test`일 때만 한다(아니면 아무것도 지우지 않고 실패). 여러 터미널에서 동시에 돌리면 뒤 실행이 앞 실행이 끝날 때까지 기다린다.
+
+**개발 DB(`simcenter`)에 남은 테스트 데이터 정리**
+분리 전에 돌린 테스트가 개발 DB에 `e2e-…@simcenter.test` 계정(Leaderboard의 `E2E 드라이버`)과 장치·연결 코드·랩·섹터를 남겼다.
+수동 점검용 `p6check-…` 계정도 같이 지운다. **되돌릴 수 없으니** 필요하면 먼저 `pg_dump`로 백업하고, psql에서 `simcenter`에 접속해 직접 실행한다.
+```sql
+BEGIN;
+
+CREATE TEMP TABLE cleanup_users ON COMMIT DROP AS
+  SELECT id FROM users WHERE email LIKE 'e2e-%' OR email LIKE 'p6check-%';
+CREATE TEMP TABLE cleanup_laps ON COMMIT DROP AS
+  SELECT id FROM laps
+  WHERE user_id IN (SELECT id FROM cleanup_users)
+     OR agent_device_id IN (SELECT id FROM agent_devices WHERE user_id IN (SELECT id FROM cleanup_users));
+
+-- 대상 수 확인
+SELECT (SELECT count(*) FROM cleanup_users) AS users, (SELECT count(*) FROM cleanup_laps) AS laps;
+
+-- FK 순서: 섹터 → 랩 → 장치·연결 코드 → 사용자
+DELETE FROM lap_sectors         WHERE lap_id  IN (SELECT id FROM cleanup_laps);
+DELETE FROM laps                WHERE id      IN (SELECT id FROM cleanup_laps);
+DELETE FROM agent_devices       WHERE user_id IN (SELECT id FROM cleanup_users);
+DELETE FROM agent_pairing_codes WHERE user_id IN (SELECT id FROM cleanup_users);
+DELETE FROM users               WHERE id      IN (SELECT id FROM cleanup_users);
+
+-- 위 숫자가 예상과 같으면 COMMIT; 아니면 ROLLBACK; 을 직접 입력한다.
+```
+- 멱등 기록(`processed_events`)은 이벤트 ID만 있고 사용자와 연결되지 않아 남겨도 화면에 영향이 없다.
+- 위 SQL은 P6 스키마 기준이다. 이후 사용자·랩을 참조하는 테이블이 생기면 그 테이블을 먼저 지우도록 추가한다.
