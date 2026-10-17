@@ -107,7 +107,7 @@ SimCenter/
 | 런타임 | Flutter (Android / iOS / Web) |
 | 아키텍처 | Feature First + Riverpod + GoRouter + Material 3 |
 | 입력 | Backend REST(조회) + SignalR(실시간 랭킹 갱신) |
-| 화면 (P6) | 사이드바 셸(≥900px 고정, 미만 서랍) — Dashboard · Laps · Leaderboard · Telemetry App (+ Splash · Login). Seasons·Sessions·Analytics는 P7·P10 |
+| 화면 (P7) | 사이드바 셸(≥900px 고정, 미만 서랍) — Dashboard · Seasons · Sessions · Laps · Leaderboard · Telemetry App (+ Splash · Login). Analytics는 P10 |
 
 ---
 

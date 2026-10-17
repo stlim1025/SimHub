@@ -1,8 +1,9 @@
 # 04 · REST API Design
 
-> Status: **Design (미승인)** · Last Updated: 2026-10-17 (P6 개인 모드 반영)
+> Status: **Design (미승인)** · Last Updated: 2026-10-18 (P7 시즌·세션 API 반영, 앞서 P6 개인 모드 반영)
 > 계약 원본: `shared/openapi/openapi.yaml`. JSON body는 **camelCase**.
 > P6에서 `/sessions/*`(체크인)를 제거하고 Agent 연결·장치·내 트랙 API를 추가했다(D-25·D-26, [11](./11-personal-mode.md) §8).
+> P7에서 내 시즌·세션 조회 API 4개를 추가했다(`/me/seasons`, `/me/seasons/{id}`, `/me/sessions`, `/me/sessions/{id}`, D-34, [12](./12-seasons-sessions.md) §7).
 
 ---
 
@@ -40,7 +41,7 @@
 | 400 | 검증 실패 (연결 코드가 틀림·만료·사용됨·무효화됨도 모두 같은 400) |
 | 401 | 미인증 (토큰 없음/만료) |
 | 403 | 권한 없음 (남의 장치 해제 시도 등) |
-| 404 | 리소스 없음 |
+| 404 | 리소스 없음 (시즌·세션은 **남의 것도 없는 것과 똑같이 404** — 존재 여부를 알려 주지 않는다, D-34. GUID가 아닌 Id는 라우트가 맞지 않아 404) |
 | 409 | 상태 충돌 (예: 이미 가입된 이메일) |
 | 429 | 요청 제한 초과 (`POST /agent/pair` IP당 분당 10회, 코드 발급 사용자당 분당 10회) |
 | 500 | 서버 오류 (상세 미노출, traceId만) |
@@ -60,6 +61,10 @@
 | DELETE | `/api/v1/me/agent-devices/{deviceId}` | ✅ | PC 연결 해제 |
 | GET | `/api/v1/me/tracks` | ✅ | 내 기록이 있는 트랙 요약 |
 | GET | `/api/v1/me/laps` | ✅ | 내 랩 기록 (정렬 `recent`/`fastest`) |
+| GET | `/api/v1/me/seasons` | ✅ | 내 시즌 목록(`lastSessionAt` 내림차순) |
+| GET | `/api/v1/me/seasons/{seasonId}` | ✅ | 시즌 상세: 라운드 + Standings(결과표 칸 포함) |
+| GET | `/api/v1/me/sessions` | ✅ | 내 세션 목록(`sessionType` 필터, `classifiedAt` 내림차순) |
+| GET | `/api/v1/me/sessions/{sessionId}` | ✅ | 세션 상세: 전 드라이버 결과(AI 포함) |
 | GET | `/api/v1/rankings` | ✅ | TOP10 (트랙 · 기간 daily/monthly/yearly) |
 | GET | `/api/v1/tracks` | ✅ | 트랙 목록(마스터) |
 
@@ -208,6 +213,78 @@ My Lap Record. **모든 세션·무효 랩까지 조회 가능**(D-15/D-16). `se
 }
 ```
 
+### 3.12 GET `/me/seasons?page=1&pageSize=20`
+내 시즌 목록. `lastSessionAt` 내림차순(같으면 Id 내림차순). 응답은 `{ page, pageSize, total, items[] }`.
+```jsonc
+// 200 items[]
+{ "seasonId": "guid", "gameCode": "F1_25", "gameMode": "DriverCareer",
+  "firstSessionAt": "...", "lastSessionAt": "...", "roundCount": 6,
+  "myPosition": 3, "myPoints": 87,                       // 내가 결과에 없으면 null
+  "leaderName": "VERSTAPPEN", "leaderPoints": 120 }      // 결과가 없으면 null
+```
+- `pageSize` 기본 20, **최대 20**(목록 한 번에 그 시즌들의 결과 행을 읽어 순위를 계산하기 때문). 페이지 보정은 `/me/laps`와 같다(page < 1 → 1, pageSize ≤ 0 → 기본값, 최대 초과 → 최대).
+- 시즌 표시 이름은 따로 저장하지 않는다. 앱이 `gameMode` 라벨 + 시작 날짜로 만든다.
+
+### 3.13 GET `/me/seasons/{seasonId}`
+시즌 상세 — 헤더 + 라운드 + Standings. 세 탭(Season · Results · Standings)이 같은 스냅샷을 쓰므로 한 번에 내려 준다.
+```jsonc
+// 200
+{ "season": { /* 3.12의 items[] 한 줄과 같다 */ },
+  "rounds": [
+    { "round": 1, "weekendId": "guid", "trackName": "Bahrain", "firstSessionAt": "...",
+      "winnerName": "NORRIS",                  // 본 레이스 1위. 본 레이스가 없으면 null
+      "myPoints": 12,                          // 그 주말 내 점수 합(계산 대상 세션만). 내 결과가 없으면 null
+      "sessions": [                            // classifiedAt 오름차순, 저장된 모든 세션
+        { "sessionId": "guid", "sessionType": "Race", "sessionKind": "Race",
+          "myPosition": 4, "myResultStatus": "Finished" } ] } ],
+  "standings": {
+    "drivers": [
+      { "position": 1, "driverKey": "driver:9", "name": "VERSTAPPEN",
+        "teamName": "Red Bull Racing", "teamColor": "#3671C6",
+        "isPlayer": false, "isAiControlled": true, "points": 120, "wins": 3, "podiums": 5,
+        "cells": [ { "round": 1, "position": 1, "resultStatus": "Finished", "points": 25 } ] } ],
+    "constructors": [
+      { "position": 1, "teamId": 2, "teamName": "Red Bull Racing", "teamColor": "#3671C6", "points": 190, "wins": 3 } ] } }
+```
+- `round`는 기록된 주말 순서(`firstSessionAt`, Id 순)로 1부터 계산한 값이라 게임의 라운드와 다를 수 있다.
+- `standings.drivers[].cells`는 그 드라이버가 결과를 가진 라운드만 담는다. `cell.position`·`cell.resultStatus`는 그 라운드에 본 레이스 기록이 없으면 null, `cell.points`는 그 주말 계산 대상 세션의 점수 합(스프린트 포함)이다.
+- Standings 계산 규칙(기록된 세션 점수 합, 같은 주말·종류는 최신 1건, 우승·카운트백은 본 레이스만)은 [12](./12-seasons-sessions.md) §7.3·D-31.
+- 팀 이름·색은 서버의 게임별 카탈로그가 풀어 준다(D-33): 없는 팀 ID → `Team {id}` + 중립 회색, 팀 정보 없음 → `Unknown Team`. 색은 `#RRGGBB`.
+
+### 3.14 GET `/me/sessions?sessionType={opt}&page=1&pageSize=20`
+내 세션 목록. `classifiedAt` 내림차순(같으면 Id 내림차순). 최종 순위가 확정된 세션만 나온다(D-30).
+```jsonc
+// 200 items[]
+{ "sessionId": "guid", "classifiedAt": "...", "trackName": "Spa",
+  "sessionType": "Race", "sessionKind": "Race", "gameMode": "DriverCareer",
+  "seasonId": null,                                       // 시즌 대상이 아니면 null
+  "carCount": 22,
+  "myPosition": 4, "myGridPosition": 6, "myResultStatus": "Finished",
+  "myBestLapTimeMs": 105321, "myPoints": 12 }             // 내 차 결과가 없으면 my* 전부 null, 베스트 랩 0 → null
+```
+- `sessionType`(선택) = `Practice` | `Qualifying` | `Race`(대소문자 무시). 그 밖의 값(`TimeTrial`, 숫자 `4`, 오타)은 **400**(`errors.sessionType[0]` = "sessionType는 Practice/Qualifying/Race 중 하나여야 합니다.").
+- `pageSize` 기본 20, 최대 100(앱은 15개씩 요청). 페이지 보정은 `/me/laps`와 같다.
+
+### 3.15 GET `/me/sessions/{sessionId}`
+세션 상세 — 헤더 + 전 드라이버 결과(AI 포함). `position` 오름차순(같으면 `carIndex`).
+```jsonc
+// 200
+{ "session": { /* 3.14의 items[] 한 줄 + */ "totalLaps": 15, "aiDifficulty": 85, "isNetworkGame": false,
+               "round": 7 },                              // 시즌 상세의 라운드 번호와 같은 계산. 시즌이 없으면 null
+  "results": [
+    { "position": 1, "carIndex": 0, "name": "NORRIS",
+      "teamId": 8, "teamName": "McLaren", "teamColor": "#FF8000", "raceNumber": 4,
+      "isAiControlled": true, "isPlayer": false,
+      "gridPosition": 1, "numLaps": 15,
+      "bestLapTimeMs": 104987, "isFastestLap": true,
+      "totalRaceTimeMs": 1598765, "penaltiesTimeMs": 0, "numPenalties": 0, "numPitStops": 1,
+      "points": 25, "resultStatus": "Finished",
+      "tyreStints": [ { "endLap": 7, "visualCompound": "Medium", "actualCompound": "C3" } ] } ] }
+```
+- `bestLapTimeMs`·`totalRaceTimeMs`는 0이면 null(0을 "값 없음"으로 내보내지 않는다). `teamId`·`raceNumber`는 참가자 정보가 없으면 null.
+- `name`: 드라이버 이름이 없으면 `Car {carIndex+1}`. `isFastestLap`: `bestLapTimeMs`가 null이 아닌 행 중 최소값(같으면 모두 true).
+- 남의 세션·없는 세션은 404(D-34).
+
 ---
 
 ## 4. 인증/인가 설계
@@ -224,7 +301,8 @@ My Lap Record. **모든 세션·무효 랩까지 조회 가능**(D-15/D-16). `se
 
 ## 5. 페이징/정렬 공통 규약
 
-- 페이징: `page`(1-base), `pageSize`(기본 20, 최대 100). 웹 트랙별 랩 표는 15개씩 요청한다.
+- 페이징: `page`(1-base), `pageSize`(기본 20, 최대 100). 웹 트랙별 랩 표와 Sessions 표는 15개씩 요청한다.
+  예외: `/me/seasons`는 최대 20(시즌마다 결과 행을 읽어 순위를 계산한다). 범위를 벗어난 값은 오류가 아니라 보정한다(page < 1 → 1, pageSize ≤ 0 → 기본값, 최대 초과 → 최대).
 - 응답 래퍼: `{ page, pageSize, total, items[] }`.
 - 정렬: 랭킹은 항상 lapTimeMs ASC. 내 기록은 `sort`로 선택(기본 `recent` = `setAt DESC`).
 
@@ -235,6 +313,8 @@ My Lap Record. **모든 세션·무효 랩까지 조회 가능**(D-15/D-16). `se
 - **D-25 ✅** 개인 모드 — 체크인 API 제거 (~~D-10 중복 세션 정책~~ 불필요)
 - **D-26 ✅** Agent 연결 = 1회용 코드 → 장치 키 (`/me/agent-pairing-codes`, `/agent/pair`)
 - **D-27 ✅** 랭킹 타임존 = 서버 설정 `Ranking:TimeZoneId`
+- **D-33 ✅** 팀 이름·색은 서버가 내려 준다(`teamName`·`teamColor`, 게임별 정적 카탈로그)
+- **D-34 ✅** 남의 시즌·세션 조회 = 404 (P6의 장치 해제는 쓰기 작업이라 403 유지)
 - **D-9 ✅** Refresh Token = 제외 (access token만)
 - **D-11 ✅** 회원가입 = 앱에서 직접 가입(self-signup) → `/auth/register` 유지
 - **D-8 ✅** 랭킹 = 일/월/연 기간 파라미터 (`/rankings?period=`)

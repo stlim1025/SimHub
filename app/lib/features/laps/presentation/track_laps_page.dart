@@ -6,8 +6,8 @@ import 'package:intl/intl.dart';
 import '../../../core/layout/layout_constants.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/util/lap_time.dart';
-import '../../../core/util/pagination.dart';
 import '../../../core/widgets/error_retry.dart';
+import '../../../core/widgets/pagination_bar.dart';
 import '../application/laps_providers.dart';
 import '../domain/lap_models.dart';
 import 'empty_laps_card.dart';
@@ -103,7 +103,12 @@ class _TrackLapsPageState extends ConsumerState<TrackLapsPage> {
                   children: [
                     _LapsTable(laps: data.laps),
                     const SizedBox(height: 12),
-                    _PaginationBar(data: data, onPageChanged: _changePage),
+                    PaginationBar(
+                      page: data.page,
+                      pageSize: data.pageSize,
+                      total: data.total,
+                      onPageChanged: _changePage,
+                    ),
                   ],
                 ),
         ),
@@ -210,39 +215,6 @@ class _LapTimeCell extends StatelessWidget {
           const Icon(Icons.check, size: 16, color: AppColors.success, semanticLabel: '유효')
         else
           Text('무효', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.danger)),
-      ],
-    );
-  }
-}
-
-class _PaginationBar extends StatelessWidget {
-  const _PaginationBar({required this.data, required this.onPageChanged});
-
-  final MyLaps data;
-  final ValueChanged<int> onPageChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final hasPrevious = data.page > 1;
-    final hasNext = data.page * data.pageSize < data.total;
-
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            paginationLabel(page: data.page, pageSize: data.pageSize, total: data.total),
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textMuted),
-          ),
-        ),
-        OutlinedButton(
-          onPressed: hasPrevious ? () => onPageChanged(data.page - 1) : null,
-          child: const Text('이전'),
-        ),
-        const SizedBox(width: 8),
-        OutlinedButton(
-          onPressed: hasNext ? () => onPageChanged(data.page + 1) : null,
-          child: const Text('다음'),
-        ),
       ],
     );
   }

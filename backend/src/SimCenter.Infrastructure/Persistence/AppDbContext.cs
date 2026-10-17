@@ -24,6 +24,11 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, ITransactionRunner
     public DbSet<ProcessedEvent> ProcessedEvents => Set<ProcessedEvent>();
     public DbSet<AgentDevice> AgentDevices => Set<AgentDevice>();
     public DbSet<AgentPairingCode> AgentPairingCodes => Set<AgentPairingCode>();
+    public DbSet<Season> Seasons => Set<Season>();
+    public DbSet<RaceWeekend> RaceWeekends => Set<RaceWeekend>();
+    public DbSet<GameSession> GameSessions => Set<GameSession>();
+    public DbSet<SessionResult> SessionResults => Set<SessionResult>();
+    public DbSet<SessionResultTyreStint> SessionResultTyreStints => Set<SessionResultTyreStint>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

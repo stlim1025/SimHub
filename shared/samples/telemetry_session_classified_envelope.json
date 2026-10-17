@@ -1,0 +1,703 @@
+{
+  "eventId": "7d1f3a52-6b0c-4f1e-9a43-2c8e5b7d9f10",
+  "gameCode": "F1_25",
+  "occurredAt": "2026-10-17T11:42:18.230Z",
+  "type": "SessionClassified",
+  "payload": {
+    "sessionRef": "1844674407370955161",
+    "trackId": 10,
+    "sessionType": "Race",
+    "sessionKind": "Race",
+    "gameMode": "DriverCareer",
+    "seasonLinkId": 2847561234,
+    "weekendLinkId": 99112233,
+    "sessionLinkId": 44556677,
+    "totalLaps": 29,
+    "aiDifficulty": 85,
+    "isNetworkGame": false,
+    "results": [
+      {
+        "carIndex": 0,
+        "isPlayer": false,
+        "position": 2,
+        "gridPosition": 1,
+        "numLaps": 29,
+        "points": 18,
+        "numPitStops": 1,
+        "numPenalties": 0,
+        "resultStatus": "Finished",
+        "bestLapTimeMs": 81371,
+        "totalRaceTimeMs": 2497330,
+        "penaltiesTimeMs": 0,
+        "driverName": "AI DRIVER 01",
+        "gameDriverId": 0,
+        "teamId": 0,
+        "raceNumber": 10,
+        "isAiControlled": true,
+        "tyreStints": [
+          {
+            "endLap": 12,
+            "visualCompound": "Medium",
+            "actualCompound": "C3"
+          },
+          {
+            "endLap": 29,
+            "visualCompound": "Hard",
+            "actualCompound": "C2"
+          }
+        ]
+      },
+      {
+        "carIndex": 1,
+        "isPlayer": false,
+        "position": 3,
+        "gridPosition": 3,
+        "numLaps": 29,
+        "points": 15,
+        "numPitStops": 1,
+        "numPenalties": 0,
+        "resultStatus": "Finished",
+        "bestLapTimeMs": 81508,
+        "totalRaceTimeMs": 2501540,
+        "penaltiesTimeMs": 0,
+        "driverName": "AI DRIVER 02",
+        "gameDriverId": 1,
+        "teamId": 0,
+        "raceNumber": 11,
+        "isAiControlled": true,
+        "tyreStints": [
+          {
+            "endLap": 13,
+            "visualCompound": "Soft",
+            "actualCompound": "C4"
+          },
+          {
+            "endLap": 29,
+            "visualCompound": "Hard",
+            "actualCompound": "C2"
+          }
+        ]
+      },
+      {
+        "carIndex": 2,
+        "isPlayer": false,
+        "position": 4,
+        "gridPosition": 4,
+        "numLaps": 29,
+        "points": 12,
+        "numPitStops": 1,
+        "numPenalties": 0,
+        "resultStatus": "Finished",
+        "bestLapTimeMs": 81645,
+        "totalRaceTimeMs": 2505750,
+        "penaltiesTimeMs": 0,
+        "driverName": "AI DRIVER 03",
+        "gameDriverId": 2,
+        "teamId": 1,
+        "raceNumber": 12,
+        "isAiControlled": true,
+        "tyreStints": [
+          {
+            "endLap": 14,
+            "visualCompound": "Hard",
+            "actualCompound": "C2"
+          },
+          {
+            "endLap": 29,
+            "visualCompound": "Medium",
+            "actualCompound": "C3"
+          }
+        ]
+      },
+      {
+        "carIndex": 3,
+        "isPlayer": true,
+        "position": 1,
+        "gridPosition": 2,
+        "numLaps": 29,
+        "points": 25,
+        "numPitStops": 1,
+        "numPenalties": 0,
+        "resultStatus": "Finished",
+        "bestLapTimeMs": 81234,
+        "totalRaceTimeMs": 2493120,
+        "penaltiesTimeMs": 0,
+        "driverName": "S. LIM",
+        "gameDriverId": null,
+        "teamId": 1,
+        "raceNumber": 26,
+        "isAiControlled": false,
+        "tyreStints": [
+          {
+            "endLap": 15,
+            "visualCompound": "Medium",
+            "actualCompound": "C3"
+          },
+          {
+            "endLap": 29,
+            "visualCompound": "Hard",
+            "actualCompound": "C2"
+          }
+        ]
+      },
+      {
+        "carIndex": 4,
+        "isPlayer": false,
+        "position": 5,
+        "gridPosition": 5,
+        "numLaps": 29,
+        "points": 10,
+        "numPitStops": 1,
+        "numPenalties": 0,
+        "resultStatus": "Finished",
+        "bestLapTimeMs": 81782,
+        "totalRaceTimeMs": 2509960,
+        "penaltiesTimeMs": 0,
+        "driverName": "AI DRIVER 05",
+        "gameDriverId": 4,
+        "teamId": 2,
+        "raceNumber": 14,
+        "isAiControlled": true,
+        "tyreStints": [
+          {
+            "endLap": 16,
+            "visualCompound": "Soft",
+            "actualCompound": "C4"
+          },
+          {
+            "endLap": 29,
+            "visualCompound": "Hard",
+            "actualCompound": "C2"
+          }
+        ]
+      },
+      {
+        "carIndex": 5,
+        "isPlayer": false,
+        "position": 6,
+        "gridPosition": 6,
+        "numLaps": 29,
+        "points": 8,
+        "numPitStops": 1,
+        "numPenalties": 0,
+        "resultStatus": "Finished",
+        "bestLapTimeMs": 81919,
+        "totalRaceTimeMs": 2514170,
+        "penaltiesTimeMs": 0,
+        "driverName": "AI DRIVER 06",
+        "gameDriverId": 5,
+        "teamId": 2,
+        "raceNumber": 15,
+        "isAiControlled": true,
+        "tyreStints": [
+          {
+            "endLap": 12,
+            "visualCompound": "Hard",
+            "actualCompound": "C2"
+          },
+          {
+            "endLap": 29,
+            "visualCompound": "Medium",
+            "actualCompound": "C3"
+          }
+        ]
+      },
+      {
+        "carIndex": 6,
+        "isPlayer": false,
+        "position": 7,
+        "gridPosition": 7,
+        "numLaps": 29,
+        "points": 6,
+        "numPitStops": 1,
+        "numPenalties": 1,
+        "resultStatus": "Finished",
+        "bestLapTimeMs": 82056,
+        "totalRaceTimeMs": 2518380,
+        "penaltiesTimeMs": 5000,
+        "driverName": "AI DRIVER 07",
+        "gameDriverId": 6,
+        "teamId": 3,
+        "raceNumber": 16,
+        "isAiControlled": true,
+        "tyreStints": [
+          {
+            "endLap": 13,
+            "visualCompound": "Medium",
+            "actualCompound": "C3"
+          },
+          {
+            "endLap": 29,
+            "visualCompound": "Hard",
+            "actualCompound": "C2"
+          }
+        ]
+      },
+      {
+        "carIndex": 7,
+        "isPlayer": false,
+        "position": 8,
+        "gridPosition": 8,
+        "numLaps": 29,
+        "points": 4,
+        "numPitStops": 1,
+        "numPenalties": 0,
+        "resultStatus": "Finished",
+        "bestLapTimeMs": 82193,
+        "totalRaceTimeMs": 2522590,
+        "penaltiesTimeMs": 0,
+        "driverName": "AI DRIVER 08",
+        "gameDriverId": 7,
+        "teamId": 3,
+        "raceNumber": 17,
+        "isAiControlled": true,
+        "tyreStints": [
+          {
+            "endLap": 14,
+            "visualCompound": "Soft",
+            "actualCompound": "C4"
+          },
+          {
+            "endLap": 29,
+            "visualCompound": "Hard",
+            "actualCompound": "C2"
+          }
+        ]
+      },
+      {
+        "carIndex": 8,
+        "isPlayer": false,
+        "position": 9,
+        "gridPosition": 9,
+        "numLaps": 29,
+        "points": 2,
+        "numPitStops": 1,
+        "numPenalties": 0,
+        "resultStatus": "Finished",
+        "bestLapTimeMs": 82330,
+        "totalRaceTimeMs": 2526800,
+        "penaltiesTimeMs": 0,
+        "driverName": "AI DRIVER 09",
+        "gameDriverId": 8,
+        "teamId": 4,
+        "raceNumber": 18,
+        "isAiControlled": true,
+        "tyreStints": [
+          {
+            "endLap": 15,
+            "visualCompound": "Hard",
+            "actualCompound": "C2"
+          },
+          {
+            "endLap": 29,
+            "visualCompound": "Medium",
+            "actualCompound": "C3"
+          }
+        ]
+      },
+      {
+        "carIndex": 9,
+        "isPlayer": false,
+        "position": 10,
+        "gridPosition": 10,
+        "numLaps": 29,
+        "points": 1,
+        "numPitStops": 1,
+        "numPenalties": 0,
+        "resultStatus": "Finished",
+        "bestLapTimeMs": 82467,
+        "totalRaceTimeMs": 2531010,
+        "penaltiesTimeMs": 0,
+        "driverName": "AI DRIVER 10",
+        "gameDriverId": 9,
+        "teamId": 4,
+        "raceNumber": 19,
+        "isAiControlled": true,
+        "tyreStints": [
+          {
+            "endLap": 16,
+            "visualCompound": "Medium",
+            "actualCompound": "C3"
+          },
+          {
+            "endLap": 29,
+            "visualCompound": "Hard",
+            "actualCompound": "C2"
+          }
+        ]
+      },
+      {
+        "carIndex": 10,
+        "isPlayer": false,
+        "position": 11,
+        "gridPosition": 11,
+        "numLaps": 29,
+        "points": 0,
+        "numPitStops": 1,
+        "numPenalties": 0,
+        "resultStatus": "Finished",
+        "bestLapTimeMs": 82604,
+        "totalRaceTimeMs": 2535220,
+        "penaltiesTimeMs": 0,
+        "driverName": "AI DRIVER 11",
+        "gameDriverId": 10,
+        "teamId": 5,
+        "raceNumber": 20,
+        "isAiControlled": true,
+        "tyreStints": [
+          {
+            "endLap": 12,
+            "visualCompound": "Soft",
+            "actualCompound": "C4"
+          },
+          {
+            "endLap": 29,
+            "visualCompound": "Hard",
+            "actualCompound": "C2"
+          }
+        ]
+      },
+      {
+        "carIndex": 11,
+        "isPlayer": false,
+        "position": 12,
+        "gridPosition": 12,
+        "numLaps": 29,
+        "points": 0,
+        "numPitStops": 1,
+        "numPenalties": 0,
+        "resultStatus": "Finished",
+        "bestLapTimeMs": 82741,
+        "totalRaceTimeMs": 2539430,
+        "penaltiesTimeMs": 0,
+        "driverName": "AI DRIVER 12",
+        "gameDriverId": 11,
+        "teamId": 5,
+        "raceNumber": 21,
+        "isAiControlled": true,
+        "tyreStints": [
+          {
+            "endLap": 13,
+            "visualCompound": "Hard",
+            "actualCompound": "C2"
+          },
+          {
+            "endLap": 29,
+            "visualCompound": "Medium",
+            "actualCompound": "C3"
+          }
+        ]
+      },
+      {
+        "carIndex": 12,
+        "isPlayer": false,
+        "position": 13,
+        "gridPosition": 13,
+        "numLaps": 29,
+        "points": 0,
+        "numPitStops": 1,
+        "numPenalties": 0,
+        "resultStatus": "Finished",
+        "bestLapTimeMs": 82878,
+        "totalRaceTimeMs": 2543640,
+        "penaltiesTimeMs": 0,
+        "driverName": "AI DRIVER 13",
+        "gameDriverId": 12,
+        "teamId": 6,
+        "raceNumber": 22,
+        "isAiControlled": true,
+        "tyreStints": [
+          {
+            "endLap": 14,
+            "visualCompound": "Medium",
+            "actualCompound": "C3"
+          },
+          {
+            "endLap": 29,
+            "visualCompound": "Hard",
+            "actualCompound": "C2"
+          }
+        ]
+      },
+      {
+        "carIndex": 13,
+        "isPlayer": false,
+        "position": 14,
+        "gridPosition": 14,
+        "numLaps": 29,
+        "points": 0,
+        "numPitStops": 1,
+        "numPenalties": 0,
+        "resultStatus": "Finished",
+        "bestLapTimeMs": 83015,
+        "totalRaceTimeMs": 2547850,
+        "penaltiesTimeMs": 0,
+        "driverName": "AI DRIVER 14",
+        "gameDriverId": 13,
+        "teamId": 6,
+        "raceNumber": 23,
+        "isAiControlled": true,
+        "tyreStints": [
+          {
+            "endLap": 15,
+            "visualCompound": "Soft",
+            "actualCompound": "C4"
+          },
+          {
+            "endLap": 29,
+            "visualCompound": "Hard",
+            "actualCompound": "C2"
+          }
+        ]
+      },
+      {
+        "carIndex": 14,
+        "isPlayer": false,
+        "position": 15,
+        "gridPosition": 15,
+        "numLaps": 29,
+        "points": 0,
+        "numPitStops": 1,
+        "numPenalties": 0,
+        "resultStatus": "Finished",
+        "bestLapTimeMs": 83152,
+        "totalRaceTimeMs": 2552060,
+        "penaltiesTimeMs": 0,
+        "driverName": "AI DRIVER 15",
+        "gameDriverId": 14,
+        "teamId": 7,
+        "raceNumber": 24,
+        "isAiControlled": true,
+        "tyreStints": [
+          {
+            "endLap": 16,
+            "visualCompound": "Hard",
+            "actualCompound": "C2"
+          },
+          {
+            "endLap": 29,
+            "visualCompound": "Medium",
+            "actualCompound": "C3"
+          }
+        ]
+      },
+      {
+        "carIndex": 15,
+        "isPlayer": false,
+        "position": 16,
+        "gridPosition": 16,
+        "numLaps": 29,
+        "points": 0,
+        "numPitStops": 1,
+        "numPenalties": 0,
+        "resultStatus": "Finished",
+        "bestLapTimeMs": 83289,
+        "totalRaceTimeMs": 2556270,
+        "penaltiesTimeMs": 0,
+        "driverName": "AI DRIVER 16",
+        "gameDriverId": 15,
+        "teamId": 7,
+        "raceNumber": 25,
+        "isAiControlled": true,
+        "tyreStints": [
+          {
+            "endLap": 12,
+            "visualCompound": "Medium",
+            "actualCompound": "C3"
+          },
+          {
+            "endLap": 29,
+            "visualCompound": "Hard",
+            "actualCompound": "C2"
+          }
+        ]
+      },
+      {
+        "carIndex": 16,
+        "isPlayer": false,
+        "position": 17,
+        "gridPosition": 17,
+        "numLaps": 29,
+        "points": 0,
+        "numPitStops": 1,
+        "numPenalties": 0,
+        "resultStatus": "Finished",
+        "bestLapTimeMs": 83426,
+        "totalRaceTimeMs": 2560480,
+        "penaltiesTimeMs": 0,
+        "driverName": "AI DRIVER 17",
+        "gameDriverId": 16,
+        "teamId": 8,
+        "raceNumber": 26,
+        "isAiControlled": true,
+        "tyreStints": [
+          {
+            "endLap": 13,
+            "visualCompound": "Soft",
+            "actualCompound": "C4"
+          },
+          {
+            "endLap": 29,
+            "visualCompound": "Hard",
+            "actualCompound": "C2"
+          }
+        ]
+      },
+      {
+        "carIndex": 17,
+        "isPlayer": false,
+        "position": 18,
+        "gridPosition": 18,
+        "numLaps": 29,
+        "points": 0,
+        "numPitStops": 1,
+        "numPenalties": 0,
+        "resultStatus": "Finished",
+        "bestLapTimeMs": 83563,
+        "totalRaceTimeMs": 2564690,
+        "penaltiesTimeMs": 0,
+        "driverName": "AI DRIVER 18",
+        "gameDriverId": 17,
+        "teamId": 8,
+        "raceNumber": 27,
+        "isAiControlled": true,
+        "tyreStints": [
+          {
+            "endLap": 14,
+            "visualCompound": "Hard",
+            "actualCompound": "C2"
+          },
+          {
+            "endLap": 29,
+            "visualCompound": "Medium",
+            "actualCompound": "C3"
+          }
+        ]
+      },
+      {
+        "carIndex": 18,
+        "isPlayer": false,
+        "position": 19,
+        "gridPosition": 19,
+        "numLaps": 29,
+        "points": 0,
+        "numPitStops": 1,
+        "numPenalties": 0,
+        "resultStatus": "Finished",
+        "bestLapTimeMs": 83700,
+        "totalRaceTimeMs": 2568900,
+        "penaltiesTimeMs": 0,
+        "driverName": "AI DRIVER 19",
+        "gameDriverId": 18,
+        "teamId": 9,
+        "raceNumber": 28,
+        "isAiControlled": true,
+        "tyreStints": [
+          {
+            "endLap": 15,
+            "visualCompound": "Medium",
+            "actualCompound": "C3"
+          },
+          {
+            "endLap": 29,
+            "visualCompound": "Hard",
+            "actualCompound": "C2"
+          }
+        ]
+      },
+      {
+        "carIndex": 19,
+        "isPlayer": false,
+        "position": 20,
+        "gridPosition": 20,
+        "numLaps": 29,
+        "points": 0,
+        "numPitStops": 1,
+        "numPenalties": 0,
+        "resultStatus": "Finished",
+        "bestLapTimeMs": 83837,
+        "totalRaceTimeMs": 2573110,
+        "penaltiesTimeMs": 0,
+        "driverName": "AI DRIVER 20",
+        "gameDriverId": 19,
+        "teamId": 9,
+        "raceNumber": 29,
+        "isAiControlled": true,
+        "tyreStints": [
+          {
+            "endLap": 16,
+            "visualCompound": "Soft",
+            "actualCompound": "C4"
+          },
+          {
+            "endLap": 29,
+            "visualCompound": "Hard",
+            "actualCompound": "C2"
+          }
+        ]
+      },
+      {
+        "carIndex": 20,
+        "isPlayer": false,
+        "position": 21,
+        "gridPosition": 21,
+        "numLaps": 29,
+        "points": 0,
+        "numPitStops": 1,
+        "numPenalties": 0,
+        "resultStatus": "Finished",
+        "bestLapTimeMs": 83974,
+        "totalRaceTimeMs": 2577320,
+        "penaltiesTimeMs": 0,
+        "driverName": "AI DRIVER 21",
+        "gameDriverId": 20,
+        "teamId": 10,
+        "raceNumber": 30,
+        "isAiControlled": true,
+        "tyreStints": [
+          {
+            "endLap": 12,
+            "visualCompound": "Hard",
+            "actualCompound": "C2"
+          },
+          {
+            "endLap": 29,
+            "visualCompound": "Medium",
+            "actualCompound": "C3"
+          }
+        ]
+      },
+      {
+        "carIndex": 21,
+        "isPlayer": false,
+        "position": 22,
+        "gridPosition": 22,
+        "numLaps": 17,
+        "points": 0,
+        "numPitStops": 1,
+        "numPenalties": 0,
+        "resultStatus": "DidNotFinish",
+        "bestLapTimeMs": 84111,
+        "totalRaceTimeMs": 0,
+        "penaltiesTimeMs": 0,
+        "driverName": "AI DRIVER 22",
+        "gameDriverId": 21,
+        "teamId": 10,
+        "raceNumber": 31,
+        "isAiControlled": true,
+        "tyreStints": [
+          {
+            "endLap": 13,
+            "visualCompound": "Medium",
+            "actualCompound": "C3"
+          },
+          {
+            "endLap": 17,
+            "visualCompound": "Hard",
+            "actualCompound": "C2"
+          }
+        ]
+      }
+    ]
+  }
+}

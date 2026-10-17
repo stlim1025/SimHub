@@ -9,9 +9,11 @@ class NavItem {
   final String path;
 }
 
-/// P6 메뉴(docs/11 §7.2).
+/// 메뉴(docs/11 §7.2, P7에서 Seasons·Sessions 추가: docs/12 §8.1).
 const List<NavItem> navItems = [
   NavItem(label: 'Dashboard', icon: Icons.dashboard_outlined, path: '/'),
+  NavItem(label: 'Seasons', icon: Icons.calendar_month_outlined, path: '/seasons'),
+  NavItem(label: 'Sessions', icon: Icons.flag_outlined, path: '/sessions'),
   NavItem(label: 'Laps', icon: Icons.timer_outlined, path: '/laps'),
   NavItem(label: 'Leaderboard', icon: Icons.emoji_events_outlined, path: '/leaderboard'),
   NavItem(label: 'Telemetry App', icon: Icons.sensors, path: '/telemetry-app'),

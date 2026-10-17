@@ -1,9 +1,11 @@
 # 12 · Seasons & Sessions (Phase 7) — 시즌·세션 결과 수집
 
-> Status: **Design (2026-10-17, 리뷰 + 수정본 검증 반영)** · Last Updated: 2026-10-17
+> Status: **Implemented (2026-10-18)** · Last Updated: 2026-10-18 (설계 2026-10-17, 리뷰 + 수정본 검증 반영)
 > F1 25의 커리어·그랑프리 기록을 **시즌 → 그랑프리 주말 → 세션**으로 자동으로 묶고, AI를 포함한 **모든 드라이버의 세션 결과**와
 > **기록된 점수 기준 Standings**를 보여 준다. 목표 화면은 F1Laps의 Seasons(Season · Results · Standings 탭)와 Sessions 목록이다.
 > 결정은 [08](./08-open-decisions.md)에 D-28~D-34로 기록한다. 로드맵 위치는 [11](./11-personal-mode.md) §0. 리뷰 반영 내역은 §13.
+> 구현 중 달라진 점: 읽기 전용 저장소 포트를 쓰기 포트와 분리했고(`ISeasonQueryRepository`·`IGameSessionQueryRepository`), NUL 문자·`raceNumber` 검증·Agent 시간값 보정·빈 순위표 무시 규칙이 추가됐다.
+> 실측 메시지 크기와 Flutter 이름도 설계와 조금 다르다 — §14. 게임으로 확인해야 하는 가정(§3.3)은 아직 **미확인**이다.
 
 ---
 
@@ -108,16 +110,18 @@
 
 ### 3.3 게임에서 확인해야 할 가정
 
-| 가정 | 틀렸을 때 |
-|---|---|
-| Final Classification이 연습·예선 세션 끝에도 온다 | 그 세션이 Sessions·시즌 라운드에 없을 뿐 오류는 없다(필터·칩이 비어 보인다) |
-| 같은 `SessionUID`로 Final Classification이 여러 번 올 수 있다 | Agent가 `SessionRef`당 1회만 보낸다(§5.3) |
-| 세션 재시작·세이브 재개 시 `SessionLinkIdentifier`가 유지된다 | 유지되지 않으면 같은 세션이 Sessions 목록에 두 행으로 남는다(데이터 손실 없음). 시즌 계산은 같은 주말·같은 세션 종류의 최신 1건만 써서 점수가 이중으로 더해지지 않는다(D-31) |
-| 커리어의 다음 해(시즌)는 `SeasonLinkIdentifier`가 바뀐다 | 바뀌지 않으면 여러 해가 한 시즌으로 합쳐진다 — 확인 후 필요하면 "같은 트랙 주말이 다시 나오면 새 시즌" 규칙을 추가한다 |
-| Grand Prix 모드의 링크 값이 주말·챔피언십 단위로 의미가 있다 | 아니면 Grand Prix를 시즌 대상 모드에서 뺀다(`SeasonPolicy` 한 줄) |
-| F1 25의 Grand Prix 모드 값이 라이브러리의 `GrandPrix23`(4)이다(예전 연식 스펙의 3이 아니다) | 매퍼가 원시 값 3도 Grand Prix로 본다(§5.2) — 어느 쪽이어도 동작 |
-| 스프린트 주말에서 스프린트가 `Race`, 본 레이스가 `Race2`다 | 세션 이름 표시만 다르다(§8.4 라벨만 고치면 됨). 본 레이스 판정은 시각 기준이라 영향 없음 |
-| Participants의 레이아웃이 사용자의 게임 버전(2026 시즌팩)과 맞다 | 이름이 깨진다 — D-20의 버전 결정 문제로, 게임 업데이트로 맞춘다 |
+| 가정 | 틀렸을 때 | 확인 결과 |
+|---|---|---|
+| Final Classification이 연습·예선 세션 끝에도 온다 | 그 세션이 Sessions·시즌 라운드에 없을 뿐 오류는 없다(필터·칩이 비어 보인다) | 미확인 |
+| 같은 `SessionUID`로 Final Classification이 여러 번 올 수 있다 | Agent가 `SessionRef`당 1회만 보낸다(§5.3) | 미확인 |
+| 세션 재시작·세이브 재개 시 `SessionLinkIdentifier`가 유지된다 | 유지되지 않으면 같은 세션이 Sessions 목록에 두 행으로 남는다(데이터 손실 없음). 시즌 계산은 같은 주말·같은 세션 종류의 최신 1건만 써서 점수가 이중으로 더해지지 않는다(D-31) | 미확인 |
+| 커리어의 다음 해(시즌)는 `SeasonLinkIdentifier`가 바뀐다 | 바뀌지 않으면 여러 해가 한 시즌으로 합쳐진다 — 확인 후 필요하면 "같은 트랙 주말이 다시 나오면 새 시즌" 규칙을 추가한다 | 미확인 |
+| Grand Prix 모드의 링크 값이 주말·챔피언십 단위로 의미가 있다 | 아니면 Grand Prix를 시즌 대상 모드에서 뺀다(`SeasonPolicy` 한 줄) | 미확인 |
+| F1 25의 Grand Prix 모드 값이 라이브러리의 `GrandPrix23`(4)이다(예전 연식 스펙의 3이 아니다) | 매퍼가 원시 값 3도 Grand Prix로 본다(§5.2) — 어느 쪽이어도 동작 | 미확인 |
+| 스프린트 주말에서 스프린트가 `Race`, 본 레이스가 `Race2`다 | 세션 이름 표시만 다르다(§8.4 라벨만 고치면 됨). 본 레이스 판정은 시각 기준이라 영향 없음 | 미확인 |
+| Participants의 레이아웃이 사용자의 게임 버전(2026 시즌팩)과 맞다 | 이름이 깨진다 — D-20의 버전 결정 문제로, 게임 업데이트로 맞춘다 | 미확인 |
+
+> 확인 절차는 [TESTING-local-e2e.md](./TESTING-local-e2e.md) §10. 확인하면 "확인 결과" 열에 날짜와 결과(가정이 맞았는지, 틀렸다면 무엇이 달랐는지)를 적는다.
 
 ---
 
@@ -250,7 +254,7 @@ User ─┬─ Season (커리어·GP 시즌)            key: (UserId, GameCode, 
 - 게임 세션 하나가 여러 `SessionUID`에 걸칠 수 있다(세이브 후 재개, 재시작). `SessionRef`만 저장하면 P8에서 앞부분의 랩을 세션에 연결할 수 없다.
 - 그래서 Agent의 `LapFinished`에 `gameMode`·`seasonLinkId`·`weekendLinkId`·`sessionLinkId`를 **추가 필드**로 싣고(LapAnalyzer가 이미 가진 Session 맥락),
   백엔드는 `SessionKeys.For(...)`로 계산한 값을 `Lap.SessionKey`(string(80), null 허용 — 기존 행은 null)에 **저장만** 한다.
-  옛 Agent가 보낸 랩(필드 없음)은 `uid:{sessionRef}`가 된다. `sessionRef`가 비었거나 32자를 넘으면 키를 만들지 않고 null로 둔다(열 길이 초과로 랩 저장이 매번 실패하지 않게).
+  옛 Agent가 보낸 랩(필드 없음)은 `uid:{sessionRef}`가 된다. `sessionRef`가 비었거나 32자를 넘거나 NUL(`\0`)을 품으면 키를 만들지 않고 null로 둔다(열 길이 초과·NUL로 랩 저장이 매번 실패하지 않게).
 - P8에서 `(UserId, GameCode, SessionKey)`로 내 랩을 `GameSession`과 연결한다. P7은 이 컬럼을 조회에 쓰지 않는다. 인덱스도 P8에서 만든다.
 
 ### 4.7 마이그레이션 1건: `AddSeasonsAndSessions`
@@ -276,8 +280,11 @@ Agent.Core에도 §4.3과 같은 이름의 enum(`GameMode`, `SessionKind`, `Resu
   StoryMode·StoryModeApxGp→Story, MyTeamCareer25→MyTeamCareer, DriverCareer25→DriverCareer, Career25Online→OnlineCareer,
   ChallengeCareer25→ChallengeCareer, 그 외(SplitScreen·Benchmark·모르는 값)→Other.
 - `MapParticipants`(신규): 배열 전체를 carIndex 순서로 매핑한다. `Driver == NetworkHuman`이면 `GameDriverId = null`.
-- `MapClassification`(신규): 배열 전체를 carIndex로 순회하고 **`ResultStatus`가 Invalid·Inactive이거나 `Position == 0`인 칸은 뺀다**(빈 그리드 칸).
+  UDP 이름은 NUL로 채워진 고정 길이 문자열이라 **첫 NUL에서 잘라** 보낸다(이름이 없으면 빈 문자열 — 백엔드가 null로 바꾼다).
+- `MapClassification`(신규): 배열 전체를 carIndex로 순회하고 **`ResultStatus`가 Invalid·Inactive이거나 `Position == 0`이거나 `Position > 32`(백엔드 검증 상한, `MaxClassifiedPosition`)인 칸은 뺀다**(빈 그리드 칸·쓰레기 순위 — 한 칸 때문에 세션 전체가 Reject되지 않게).
   시간 변환: `TotalRaceTimeMs = round(TotalRaceTime × 1000)`, `PenaltiesTimeMs = PenaltiesTime × 1000`. 스틴트는 `NumTyreStints`개만(최대 8).
+  **깨진 시간값은 보정한다**(백엔드는 음수를 영구 Reject해 세션 전체를 잃으므로): `TotalRaceTime`이 NaN·0 이하이면 0, `int.MaxValue`를 넘으면 `int.MaxValue`,
+  `BestLapTimeInMS`(uint)는 `int.MaxValue`로 자른다.
   컴파운드: Visual F1Soft/Medium/Hard/Inter/Wet → Soft/Medium/Hard/Intermediate/Wet, 그 외 Unknown. Actual F1C0~C6 → `"C0"`~`"C6"`, Inter·Wet → `"Inter"`·`"Wet"`, 그 외 null.
 - `Map(UnionPacket)`에 Participants·FinalClassification 분기를 추가한다. 그 밖의 패킷은 지금처럼 무시한다.
 
@@ -288,6 +295,8 @@ Agent.Core에도 §4.3과 같은 이름의 enum(`GameMode`, `SessionKind`, `Resu
   1. `SessionFrame` — 맥락을 바꾼다. `SessionRef`가 바뀌면 참가자 목록을 비운다.
   2. `ParticipantsFrame` — 맥락과 `SessionRef`가 같을 때만 저장한다.
   3. `ClassificationFrame` — 맥락이 없거나 `SessionRef`가 다르면 무시. 맥락의 `SessionType`이 `TimeTrial`이면 무시(D-30). 이미 보낸 `SessionRef`면 무시.
+     **`Rows`가 비어 있으면(빈 순위표) 무시하고 그 `SessionRef`를 보낸 것으로 기억하지 않는다** — 백엔드는 `results` 1~32개가 아니면 항상 Reject하므로,
+     보내면 영구 Reject가 되고 "세션당 1회" 슬롯만 써 버려 뒤따르는 정상 순위표를 막는다.
      아니면 참가자를 carIndex로 붙여 `SessionClassified` 1건을 만들고 그 `SessionRef`를 기억한다.
      참가자 정보가 없는 차는 `driverName`·`gameDriverId`·`teamId`·`raceNumber`를 null, `isAiControlled`를 false로 보낸다.
 - 같은 세션을 다시 보내는 일(Agent 재시작 등)이 생겨도 백엔드가 같은 키로 병합하므로 결과는 같다.
@@ -323,10 +332,12 @@ Agent.Core에도 §4.3과 같은 이름의 enum(`GameMode`, `SessionKind`, `Resu
 
 - envelope `type = "SessionClassified"`. `TelemetryEventType`·`telemetry_envelope.json` enum에 추가한다. `lap_finished.json`에는 §4.6의 선택 필드 4개를 추가한다.
 - **크기와 한도(§0 실패 원칙):**
-  - 22대 × 스틴트 2~3개 ≈ 10KB. 게임이 보낼 수 있는 최대(24대 × 스틴트 8개, 이름이 모두 비ASCII라 `\uXXXX`로 escape된 경우)도 약 30KB다.
-  - 백엔드는 `TelemetryHub`의 `MaximumReceiveMessageSize`를 **이름 붙은 상수 64KiB**로 명시한다(기본 32KB에 기대지 않는다). 한도를 넘는 메시지는
+  - 22대 × 스틴트 2~3개 ≈ 10KB. 게임이 보낼 수 있는 최대(24대 × 스틴트 8개)도 Agent 쪽 직렬화(UTF-8 바이트) 기준 23.8KB(이름 비ASCII 10자)이고, 이름이 검증 한도(비ASCII 64자)까지 길어도 31.6KB다.
+    **실측(구현 후):** 검증 상한 페이로드(32대 × 8스틴트, 비ASCII 이름 64자)는 SignalR 와이어에서 약 32~34KB다 — SignalR 허브 프로토콜은 비ASCII를 `\uXXXX`로 escape하지 않아 설계 추정(약 44KB, escape를 가정)보다 작다.
+    Agent의 Outbox 직렬화(`System.Text.Json` 기본값)는 비ASCII를 escape하므로 Agent 쪽 수치가 와이어보다 커서, 48KiB 검사는 보수적이다(§14).
+  - 백엔드는 `TelemetryHub`의 `MaximumReceiveMessageSize`를 **이름 붙은 상수 64KiB**(`TelemetryHub.MaxMessageBytes`, `AddHubOptions<TelemetryHub>`)로 명시한다(기본 32KB에 기대지 않는다). 한도를 넘는 메시지는
     Reject가 아니라 연결 종료라 Agent가 같은 항목을 끝없이 재시도하게 되기 때문이다.
-  - Agent는 Outbox에 넣기 전에 직렬화 크기를 잰다(`MaxEnvelopeBytes = 48KiB`). 넘으면 스틴트를 빼고 다시 재고 경고 로그, 그래도 넘으면 버리고 오류 로그를 남긴다.
+  - Agent는 Outbox에 넣기 전에 직렬화 크기(UTF-8 바이트)를 잰다(`OutboxTelemetrySink.MaxEnvelopeBytes = 48KiB`). 넘으면 스틴트를 빼고 다시 재고 경고 로그, 그래도 넘으면 버리고 오류 로그를 남긴다.
 - **배선:** `TelemetryPipeline`이 분석기 목록(`ITelemetryAnalyzer`: `LapAnalyzer`, `SessionResultTracker`)을 차례로 돌린다. 두 분석기는 `SessionFrame`을 함께 보지만
   **상태를 공유하지 않으므로 순서에 의존하지 않는다.** 분석기마다 try/catch로 감싸 한쪽의 예외가 다른 쪽을 막지 않게 한다. Outbox·업로드·재전송은 바뀌지 않는다.
 - **호환:** 옛 백엔드는 모르는 이벤트를 Ack하고 버린다(데이터 손실). **배포 순서는 백엔드 → Agent.** 옛 Agent는 이 이벤트와 랩의 추가 필드를 보내지 않을 뿐이다.
@@ -351,13 +362,15 @@ Agent.Core에도 §4.3과 같은 이름의 enum(`GameMode`, `SessionKind`, `Resu
    대소문자 무시로 해석하고, 모르는 값은 0번 대체값(§4.3)으로 바꾼다 — 게임 업데이트로 새 값이 생겨도 세션당 한 번뿐인 이벤트를 잃지 않는다.
    JSON 구조가 깨졌으면 Reject("SessionClassified payload 파싱 실패"), 비었으면 Reject("SessionClassified payload가 비어 있습니다.").
 2. **검증(영구 무효 → Reject "SessionClassified 검증 실패: {상세}"):** DB 열 제약에 걸릴 수 있는 값은 **모두 여기서** 거른다(저장 시 예외 = 무한 재시도).
-   - `sessionRef`: 비어 있지 않고 32자 이하.
+   - `sessionRef`: 비어 있지 않고 32자 이하이며 **NUL(`\0`)을 품지 않는다**(PostgreSQL 텍스트는 NUL을 저장하지 못하고, `SessionRef`·`SessionKey`·`DriverKey`로 흘러간다).
    - `results`: null 아님, 1~`MaxClassificationEntries`(32)개, null 원소 없음. `isPlayer`는 0~1개.
    - 행마다: `carIndex` 0~31·중복 없음, `position` 1~32, `gridPosition`·`numLaps`·`points`·`numPitStops`·`numPenalties`·`bestLapTimeMs`·`totalRaceTimeMs`·`penaltiesTimeMs` ≥ 0,
-     `driverName` ≤ 64자, `tyreStints`는 null(빈 목록으로 봄) 또는 ≤ `MaxTyreStints`(8)개·null 원소 없음.
+     `driverName` ≤ 64자, `raceNumber`(있다면) ≥ 0(이름 키 `name:{NAME}#{raceNumber}`가 `DriverKey` 열 길이 80자를 넘지 않게),
+     `tyreStints`는 null(빈 목록으로 봄) 또는 ≤ `MaxTyreStints`(8)개·null 원소 없음.
    - 스틴트마다: `endLap` ≥ 0, `actualCompound` ≤ 10자.
    - (한도는 게임이 실제로 보낼 수 있는 값보다 약간 넉넉하게 — F1 25는 최대 24대·8스틴트)
-   - 정규화(거부하지 않음): `driverName`은 앞뒤 공백을 지우고 비면 null.
+   - 정규화(거부하지 않음): `driverName`·`actualCompound`는 **첫 NUL에서 잘라 내고**(UDP 이름은 NUL로 채워진 고정 길이 문자열이 정상 형태) 앞뒤 공백을 지운 뒤 비면 null.
+     길이 검사는 자르기 전의 원본 길이에 한다.
 3. **Time Trial:** `sessionType` 또는 `gameMode`가 TimeTrial이면 **Ignored**(D-30).
 4. **트랙 매핑:** `(gameCode, trackId)` → `Track`. 없으면 Reject(`트랙 매핑 없음(gameCode=…, trackId=…)` — 랩과 같은 문구).
 5. **분류 시각:** `ClassifiedAt = min(occurredAt, now + MaxClockSkew(5분))`. Agent 시계가 앞서 있어도 이후 재분류가 막히지 않게 한다.
@@ -366,7 +379,7 @@ Agent.Core에도 §4.3과 같은 이름의 enum(`GameMode`, `SessionKind`, `Resu
    원래 세션과 중복 제거되는 일을 막는다, D-29).
 7. **늦은 결과:** 찾은 세션이 있고 `ClassifiedAt < 저장된 ClassifiedAt`이면 **Ignored**.
 8. **시즌·주말 업서트:** `SeasonPolicy`가 참이고 6단계의 대체가 없었으면 `Season`을 `(UserId, GameCode, SeasonLinkId)`로 찾거나 만들고(`GameMode`, 첫·마지막 시각),
-   이어서 `RaceWeekend`를 `(SeasonId, WeekendLinkId)`로 찾거나 만든다(트랙, 첫 시각). 이미 있으면 `Touch(classifiedAt, now)`로 첫·마지막 시각만 넓힌다.
+   이어서 `RaceWeekend`를 `(SeasonId, WeekendLinkId)`로 찾거나 만든다(트랙, 첫 시각). 이미 있으면 `Touch(classifiedAt, now)`로 첫·마지막 시각만 넓힌다. **단, 시즌·주말을 건드리기 전에 주말부터 찾아 이미 있는 주말의 `TrackId`가 이 세션의 트랙과 다르면 합류시키지 않는다** — 경고 로그를 남기고 시즌·주말을 `Touch`하지 않은 채 소속 없이(`SeasonId`·`RaceWeekendId` = null, 키는 link 그대로) 저장한다(같은 주말에 다른 트랙 세션이 섞여 Standings가 한 레이스를 버리는 일을 막는다, 6단계와 같은 취지).
 9. **세션 생성·갱신:** 없으면 `GameSession` + 결과 + 스틴트 생성. 있으면 세션 필드(`SessionRef`, `AgentDeviceId`, `ClassifiedAt`, 모드·랩 수·AI 난이도 등, `UpdatedAt`)를
    갱신하고 `ReplaceResults`로 결과를 병합한다(§4.5). 결과 행마다 `DriverKeys.Build`. `UserId = device.UserId`, `AgentDeviceId = device.Id`. → **Stored**.
 
@@ -450,6 +463,9 @@ Agent.Core에도 §4.3과 같은 이름의 enum(`GameMode`, `SessionKind`, `Resu
   - 시즌 상세: 그 시즌의 모든 세션 행(주말 7세션 × 22대 × 24라운드 ≈ 3.7천 행, 한 번의 쿼리). Season 탭의 세션 칩은 전체 행을, Standings는 아래 "대상 행"만 쓴다.
   - 시즌 목록: 페이지의 시즌들(최대 20)에서 **대상 행(레이스 세션이거나 점수가 있는 행)만** 한 번의 쿼리로(시즌마다 따로 읽지 않는다 — N+1 금지).
   - 별도 집계 테이블은 두지 않는다(D-24의 "쿼리 온디맨드"와 같은 방식).
+  - **포트 분리(CQRS 식):** 읽기는 `ISeasonQueryRepository`·`IGameSessionQueryRepository`(Application, 모두 no tracking) ←
+    `SeasonQueryRepository`·`GameSessionQueryRepository`(Infrastructure)가 맡고, 인입용 `ISeasonRepository`·`IGameSessionRepository`(tracked)는 쓰기 경로 전용이다.
+    조회 서비스(`SeasonQueryService`·`SessionQueryService`)는 읽기 포트만 쓴다.
 - **`SeasonSessionSelector`:** (1) 같은 `(WeekendId, SessionKind)`(Unknown 제외)에서 `ClassifiedAt`이 가장 늦은 세션만 남긴다(D-31 이중 집계 방지).
   (2) 주말별 본 레이스 = 남은 세션 중 `SessionType.Race`이고 `ClassifiedAt`이 가장 늦은 것. 아래 두 계산기가 이 결과를 공유한다.
 - **`StandingsCalculator`:** 대상 행에서 드라이버별 점수 합 → D-31 순서로 정렬, `wins`(본 레이스 1위 수), `podiums`(본 레이스 3위 이내 수).
@@ -480,6 +496,8 @@ Agent.Core에도 §4.3과 같은 이름의 enum(`GameMode`, `SessionKind`, `Resu
 | `/sessions?type=all\|race\|qualifying\|practice` | 세션 목록 | `GET /me/sessions?sessionType=&pageSize=15` |
 | `/sessions/:sessionId` | 세션 결과 | `GET /me/sessions/{id}` |
 
+- **뒤로 가기(`/sessions/:id?from=season`):** 시즌 칩이 붙이는 표시다. 세션 화면의 뒤로 가기는 `from=season`이고 불러온 세션에 `seasonId`가 있으면 `context.go('/seasons/{seasonId}?tab=season')`,
+  그 밖(`from` 없음·모르는 값·시즌 없는 세션·로딩 중)에는 `context.go('/sessions')`다. 라우터 스택에 기대지 않으므로(`push`/`pop` 사용 안 함) 새로고침·딥링크에서도 같은 결과다. 헤더의 `R{n}` 링크는 그대로 둔다.
 - **쿼리 규칙:** 모르는 `tab` → `season`, 모르는 `type` → `all`. 탭·필터를 바꿀 때는 `Router.neglect`로 감싼 `context.go`로 쿼리만 바꾼다(브라우저 기록에 탭 클릭마다 항목이 쌓이지 않게).
 - **페이지 번호는 URL이 아니라 화면 상태**로 둔다(기존 Laps와 같다). 필터를 바꾸면 1페이지로 돌아간다.
 
@@ -490,6 +508,8 @@ Agent.Core에도 §4.3과 같은 이름의 enum(`GameMode`, `SessionKind`, `Resu
   `PaginationBar(page, pageSize, total, onPageChanged)`로 옮기고 Laps도 이것을 쓴다. 팀 색 hex 파서는 `core/util/hex_color.dart`의
   `Color parseHexColor(String? hex, {required Color fallback})`(잘못된 값이면 `fallback` — 팀 색은 `AppColors.textMuted`를 넘긴다).
   404 상태 위젯 `NotFoundState`도 Seasons·Sessions가 함께 쓰므로 `core/widgets/not_found_state.dart`에 둔다.
+  구현하면서 두 기능이 함께 쓰는 위젯이 더 나와 같은 폴더(`app/lib/core/widgets`)에 두었다: `Stat`, `TeamColorBar`, `AiBadge`, `EmptyStateCard`(§14).
+- **목록 모델·화면 이름:** 페이지 응답 모델은 `SessionSummaryPage`·`SeasonSummaryPage`, 화면 위젯은 `SessionsPage`·`SeasonsPage`다(§14).
 
 ### 8.3 화면
 
@@ -498,7 +518,7 @@ Agent.Core에도 §4.3과 같은 이름의 enum(`GameMode`, `SessionKind`, `Resu
 빈 상태: "커리어나 그랑프리 모드에서 세션을 결과 화면까지 마치면 시즌이 기록됩니다." + Telemetry App 링크.
 
 **시즌 상세 (`/seasons/:id`)** — 헤더(모드, 기간, 내 순위·점수) + 탭 3개.
-- **Season:** 라운드 목록. 행 = `R{n} · {트랙} · {날짜}` + 우승자 + 내 주말 점수 + 세션 칩(§8.4 라벨, 칩마다 내 순위). 칩 → `/sessions/:id`.
+- **Season:** 라운드 목록. 행 = `R{n} · {트랙} · {날짜}` + 우승자 + 내 주말 점수 + 세션 칩(§8.4 라벨, 칩마다 내 순위). 칩 → `context.go('/sessions/:id?from=season')`(`push`가 아니다 — 웹에서 주소창이 그 세션을 가리켜야 새로고침·공유가 같은 화면을 연다).
 - **Results:** 드라이버 × 라운드 표. **이름 열은 고정**하고 나머지는 가로 스크롤한다(이름 `Column`과 스크롤되는 본문 `Column`을 같은 행 높이 상수로 맞춘다 — 새 패키지 없음).
   칸 = 순위(1·2·3위 금·은·동, DNF·DSQ·NC·RET는 `textMuted` 글자, 기록 없음 `-`), 마지막 열 = 점수. 내 행 강조, 이름 왼쪽에 팀 색 막대.
 - **Standings:** Drivers 표(Pos · Driver(AI 배지) · Team · Wins · Podiums · Pts)와 Constructors 표(Pos · Team · Wins · Pts).
@@ -544,9 +564,11 @@ Pos · Driver(팀 색 막대, AI 배지, 내 행 강조) · Team · Grid · Laps
 |---|---|
 | `SessionClassified` JSON 구조 오류·빈 페이로드·검증 실패 | `IngestResult.Reject(사유)` → Agent는 Outbox에서 지운다(영구 무효, 기존 규칙) |
 | 모르는 enum 문자열(게임 업데이트) | 0번 대체값으로 저장(Reject하지 않음) |
+| `sessionRef`에 NUL 문자 · `raceNumber` 음수 | Reject(검증 실패). `driverName`·`actualCompound`의 NUL은 Reject하지 않고 첫 NUL에서 잘라 저장 |
 | 트랙 매핑 없음 | Reject(랩과 같은 문구 형식) |
 | Time Trial 순위표 · 늦게 도착한 옛 결과 | 변경 없이 Ack + 멱등 기록(Ignored) |
 | 같은 키인데 트랙·세션 종류가 다름 | `uid:` 키로 따로 저장 + 경고 로그 |
+| 같은 (시즌, 주말) 링크인데 이미 있는 주말과 트랙이 다른 새 세션 | 시즌·주말에 넣지 않고(소속 null, 시즌·주말 `Touch` 없음) 따로 저장 + 경고 로그 |
 | 해제된 장치 | 기존 Reject("연결이 해제된 장치입니다.") — 유형 분기 전에 걸러진다 |
 | 동시 업서트 unique 위반 | 허브 오류 → Agent 재시도(일시 장애, §6.3) |
 | Agent: 직렬화 크기 48KiB 초과 | 스틴트를 빼고 재시도 + 경고, 그래도 크면 버림 + 오류 로그 |
@@ -567,18 +589,18 @@ Pos · Driver(팀 색 막대, AI 배지, 내 행 강조) · Team · Grid · Laps
 - `LapAnalyzer`: `LapFinished`에 모드·링크 3개가 실린다. 기존 테스트는 수정 없이 통과(기본값 매개변수).
 
 **Agent — Infrastructure.Tests**
-- `F1PacketMapper`·`F1EnumMaps`: 세션 신규 필드·`GameMode` 매핑 표, 참가자(`NetworkHuman` → null), 순위표(빈 칸 제외, 시간 단위 변환, 스틴트 개수, 컴파운드 매핑).
+- `F1PacketMapper`·`F1EnumMaps`: 세션 신규 필드·`GameMode` 매핑 표, 참가자(`NetworkHuman` → null), 순위표(빈 칸·`Position` 33 이상 제외, 시간 단위 변환, 스틴트 개수, 컴파운드 매핑).
 - 파이프라인: 분석기 하나가 예외를 던져도 다른 분석기의 이벤트는 Outbox에 들어간다. DI가 두 분석기를 등록한다.
 - 직렬화·크기: `SessionClassified` wire JSON(camelCase, enum 문자열), 게임 최대 페이로드(24대 × 8스틴트, 비ASCII 이름 10자 = UTF-8 30바이트) ≤ 48KiB,
   48KiB를 넘는 가짜 페이로드는 스틴트 없이 들어가고, 그래도 넘으면 적재되지 않는다.
 
 **Backend — Domain.Tests**
-- `SeasonPolicy`(모드별·링크 0), `SessionKeys.For`(시즌 대상 + 링크 → link, 시즌 대상 아님 → uid, 세션 링크 0 → uid), `DriverKeys`(player·driver·name·car, 이름 정규화),
+- `SeasonPolicy`(모드별·링크 0), `SessionKeys.For`(시즌 대상 + 링크 → link, 시즌 대상 아님 → uid, 세션 링크 0 → uid), `DriverKeys`(player·driver·name·car, 이름 정규화), 키는 현재 문화권과 무관하게 ASCII 숫자·`-`(sv-SE 음수 부호 회귀),
   `ReplaceResults`(같은 carIndex 제자리 갱신·스틴트 교체, 없는 차 soft delete, 새 차 추가, 이미 삭제된 행 무시), `Season`·`RaceWeekend.Touch`, 새 엔티티 기본값.
 
 **Backend — Application.Tests**
 - 인입: 신규 생성(시즌·주말·세션·결과·스틴트), 시즌 대상 아님 → 세션만·uid 키, 같은 키 재분류 → 병합, 옛 결과 → Ignored(시즌 시각도 불변),
-  Time Trial → Ignored, 트랙·종류 불일치 → uid 키로 새 세션, 미래 시각 → 서버 시각 + 5분으로 자름, 모르는 enum → 대체값,
+  Time Trial → Ignored, 트랙·종류 불일치 → uid 키로 새 세션, 같은 주말에 트랙이 다른 새 세션 링크 → 소속 없는 별도 세션(시즌·주말 불변), 미래 시각 → 서버 시각 + 5분으로 자름, 모르는 enum → 대체값,
   구조 오류·검증 실패 → Reject(아무것도 추적 안 됨), 트랙 없음 → Reject, `ProcessedEvent`와 한 번에 커밋, `LapFinished`가 `SessionKey` 저장(옛 페이로드 → uid).
 - `SeasonSessionSelector`: 같은 주말·종류 중복 → 최신 1건, Unknown은 중복 제거 안 함, 본 레이스 = 가장 늦은 레이스.
 - `StandingsCalculator`: 점수 합, 중복 세션 이중 집계 없음, soft delete된 행 미포함(입력에 없음), 카운트백(본 레이스만, 스프린트 우승 제외), 이름 정렬,
@@ -591,15 +613,15 @@ Pos · Driver(팀 색 막대, AI 배지, 내 행 강조) · Team · Grid · Laps
 **Backend — Api.IntegrationTests (PostgreSQL)**
 - 연결 → 허브로 `SessionClassified` 22대(2라운드 × 예선·레이스) 전송 → `/me/seasons`·`/me/seasons/{id}`·`/me/sessions`·`/me/sessions/{id}` 확인.
 - 같은 세션 키 재전송(차 수를 줄임, 다른 eventId) → 활성 행 수 = 새 차 수, `game_sessions` 1개 유지.
-- 검증 상한 페이로드(32대 × 8스틴트, 비ASCII 이름 64자 — 약 44KB, 기본 32KB 한도를 넘는 크기)가 허브를 통과한다(명시한 64KiB 한도 회귀).
-  같은 키·주말에 트랙이 다른 순위표 → 시즌 없는 별도 세션. 병합 경로에서 새 행이 INSERT된다(`ValueGeneratedNever` 회귀). `LapFinished`의 `session_key` 저장.
+- 검증 상한 페이로드(32대 × 8스틴트, 비ASCII 이름 64자 — 와이어 실측 약 32~34KB, 기본 32KB 한도를 넘고 64KiB 이하임을 단언)가 허브를 통과한다(명시한 64KiB 한도 회귀).
+  같은 키·주말에 트랙이 다른 순위표 → 시즌 없는 별도 세션. 같은 시즌·주말 링크 + 새 세션 링크 + 다른 트랙 → 소속 null, 시즌·주말 불변. 병합 경로에서 새 행이 INSERT된다(`ValueGeneratedNever` 회귀). `LapFinished`의 `session_key` 저장.
 - 새 사용자 빈 페이지, 다른 사용자 토큰 → 404, GUID 아님 → 404, 토큰 없음 → 401, `sessionType=TimeTrial`·`4`·오타 → 400 표준 형식.
 
 **App (flutter test)**
 - 모델 `fromJson`, 표시 규칙(§8.4의 모든 경우: 라벨 전체, 상태 7종, 시간 1시간 경계, gap 60초 경계·음수·랩 차이·기준 행 DNF·null 시간, 예선 기준 없음, Pen 3종), `parseHexColor` 대체값.
 - 저장소: 필터 → `sessionType` 매핑, `pageSize=15`(기존 `devices_repository_test` 방식).
 - 화면: Seasons 빈 상태·목록·페이지, 시즌 상세 탭 쿼리(모르는 값 → season), Results 고정 열 + 좁은 폭에서 넘침 없음, Standings 안내 문구,
-  Sessions 필터(1페이지로 초기화)·필터 결과 없음 문구·플레이어 없음 `-`, 세션 결과 좁은 화면 열 숨김, 404 상태, 다시 시도, 라우터 경로·메뉴 순서·상세 경로에서 메뉴 선택, Laps가 공용 `PaginationBar`로 동작.
+  Sessions 필터(1페이지로 초기화)·필터 결과 없음 문구·플레이어 없음 `-`, 세션 결과 좁은 화면 열 숨김, 404 상태, 다시 시도, 세션 화면 뒤로 가기(`from=season`이면 그 시즌 Season 탭으로, `from` 없음·모르는 값·시즌 없는 세션이면 목록으로), 칩이 `?from=season` 주소로 이동, `/sessions/abc?from=season` 라우트, 라우터 경로·메뉴 순서·상세 경로에서 메뉴 선택, Laps가 공용 `PaginationBar`로 동작.
 
 ---
 
@@ -655,5 +677,29 @@ Pos · Driver(팀 색 막대, AI 배지, 내 행 강조) · Team · Grid · Laps
 | 열 길이·null 원소 등 DB에서만 걸리는 값이 검증에 빠짐 | §6.2-2 필드별 규칙 전부 나열, 이름 공백 → null 정규화, §4.6 긴 `sessionRef`는 키 없음 |
 | 트랙이 달라 `uid:`로 저장한 세션이 원래 주말에 섞임 | §6.2-6·8 대체된 세션은 시즌·주말에 넣지 않음 |
 | 목록 카드와 상세의 Standings 대상이 달라 순위가 어긋날 수 있음, 이름이 같을 때 최종 기준 없음 | D-31 대상 행을 한 가지로 정의, `DriverKey`·팀 ID 최종 기준 |
-| 허브 한도 회귀 테스트가 기본 32KB 아래 크기라 검증이 안 됨 | §10 약 44KB 페이로드로 시험 |
+| 허브 한도 회귀 테스트가 기본 32KB 아래 크기라 검증이 안 됨 | §10 약 44KB 페이로드로 시험(구현 후 실측은 약 32~34KB — §14) |
 | 그 밖: 숫자 `sessionType` 거부 방식, 분석기 순서 근거, Grand Prix 원시 값 3, 스프린트만 있는 주말, 우승자 이름 출처, `NotFoundState` 위치, 예선 기준 행 규칙 | 각 절에 반영 |
+
+---
+
+## 14. 구현 중 달라진 점 (2026-10-18)
+
+구현하면서 설계와 달라지거나 설계에 없던 것을 모았다. 해당 절에도 같은 내용을 반영했다.
+
+| 항목 | 설계 | 구현 | 이유 |
+|---|---|---|---|
+| 읽기 포트 | 인입 저장소(`ISeasonRepository`·`IGameSessionRepository`)에 조회 메서드 추가 | 읽기 전용 포트를 따로 둔다: `ISeasonQueryRepository`·`IGameSessionQueryRepository`(Application) ← `SeasonQueryRepository`·`GameSessionQueryRepository`(Infrastructure). 쓰기 포트는 인입 전용 | 조회 서비스 태스크가 저장소 구현보다 앞서 끝나므로, 쓰기 포트에 메서드를 더하면 Infrastructure가 컴파일되지 않는다. 읽기(no tracking)와 쓰기(tracked)를 나누는 CQRS 식 분리로 매 단계를 초록으로 유지했다 |
+| NUL 문자 | 언급 없음 | `sessionRef`에 NUL이 있으면 검증 Reject. `driverName`·`actualCompound`는 첫 NUL에서 잘라 저장(자른 뒤 앞뒤 공백 제거, 비면 null). `Lap.SessionKey`는 `sessionRef`가 비었거나 32자 초과이거나 NUL을 품으면 null. Agent 매퍼도 이름을 NUL에서 자른다 | PostgreSQL 텍스트 열은 NUL을 저장하지 못해 저장 시 예외 → 같은 항목 무한 재시도(§0). UDP 이름은 NUL로 채워진 고정 길이 문자열이 정상 형태라 이름은 Reject가 아니라 잘라낸다 |
+| `raceNumber` 검증 | 언급 없음 | `raceNumber`(있다면) ≥ 0 | 음수면 `name:{NAME}#{raceNumber}` 키가 길어져 `DriverKey`(80자)를 넘을 수 있다 |
+| Agent 시간값 보정 | 단위 변환만 | `TotalRaceTime`이 NaN·0 이하이면 0, `int.MaxValue` 이상이면 `int.MaxValue`. `BestLapTimeInMS`(uint)는 `int.MaxValue`로 자른다 | 백엔드는 음수를 영구 Reject하므로 깨진 값 하나로 세션 전체가 사라지지 않게 한다 |
+| 빈 순위표 | §5.3에 없음 | 트래커가 무시하고 `SessionRef`를 보낸 것으로 기억하지 않는다(§5.3 규칙 3) | 백엔드는 `results` 1~32개가 아니면 항상 Reject — 보내면 영구 Reject가 되고 "세션당 1회" 슬롯만 소모한다 |
+| 메시지 크기 실측 | 게임 최대 약 30KB, 검증 상한 페이로드 약 44KB(추정) | Agent 쪽 직렬화(UTF-8 바이트): 24대 × 8스틴트 × 비ASCII 이름 10자 = 23,778 B, 이름 64자 = 31,554 B. 백엔드 통합 테스트의 검증 상한 페이로드(32대 × 8스틴트 × 이름 64자)는 SignalR 와이어에서 약 32~34KB(허브 프로토콜은 비ASCII를 escape하지 않아 설계 추정 약 44KB보다 작다. Agent Outbox 직렬화는 `System.Text.Json` 기본값이라 escape하므로 Agent 쪽 수치가 더 크고 48KiB 검사는 보수적이다). 한도는 그대로: Agent 48KiB, 허브 64KiB | 추정치를 실측으로 교체. 검증 상한 페이로드가 기본 한도(32KB)를 넘으면서 64KiB 아래라 한도 명시 회귀 테스트가 성립한다 |
+| 점수 합계 | 언급 없음 | `StandingsCalculator`가 점수를 `long`으로 합산하고 표시 값만 `int` 상한으로 자른다 | 검증이 점수를 `int.MaxValue`까지 허용해, `int` 합산이면 시즌 조회가 `OverflowException`으로 매번 실패할 수 있다 |
+| 목록 vs 상세 칸 | 같은 대상 행 | 시즌 목록은 대상 행(레이스이거나 점수 있는 행)만 읽고 상세는 전체 행을 읽는다. 순위·점수·우승·포디움·Constructors는 같고, 예선·연습만 있는 주말의 빈 칸(`-`, 0점)만 상세에서만 보인다 | 목록 쿼리 크기를 줄이기 위함(§7.3). 목록은 칸을 쓰지 않아 화면에 영향 없음 |
+| Flutter 모델·위젯 이름 | 구현 계획에서 응답 모델과 화면 위젯이 같은 이름(`SessionsPage`·`SeasonsPage`) | 페이지 응답 모델 `SessionSummaryPage`·`SeasonSummaryPage`, 화면 위젯 `SessionsPage`·`SeasonsPage` | 모델과 위젯 이름 충돌 해소 |
+| Flutter 공용 위젯 | `PaginationBar`·`NotFoundState` | `PaginationBar`·`NotFoundState`에 더해 `Stat`·`TeamColorBar`·`AiBadge`·`EmptyStateCard`도 `app/lib/core/widgets`에 둔다 | Seasons·Sessions·Laps가 같은 조각을 쓰게 되어 |
+
+**남은 사항**
+- §3.3의 가정 8개는 게임으로 확인하지 못했다. 절차: [TESTING-local-e2e.md](./TESTING-local-e2e.md) §10.
+- (최종 리뷰에서 정정) `TelemetryHub.MaxMessageBytes` 주석의 크기 설명을 실측(검증 상한 페이로드 약 32~34KB, SignalR 와이어는 비ASCII를 escape하지 않음)에 맞게 고쳤다. 한도 판단(64KiB)은 그대로다.
+- (최종 리뷰에서 정정) 이미 있는 주말과 트랙이 다른 새 세션은 주말에 합류시키지 않는다(§6.2-8, §9). 세션 키가 같은 경우만 보던 트랙 검사(6단계)가 새 세션 링크 ID에는 닿지 않던 빈틈이다.

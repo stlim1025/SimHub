@@ -124,6 +124,134 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                     b.ToTable("agent_pairing_codes", (string)null);
                 });
 
+            modelBuilder.Entity("SimCenter.Domain.Entities.GameSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AgentDeviceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("agent_device_id");
+
+                    b.Property<int>("AiDifficulty")
+                        .HasColumnType("integer")
+                        .HasColumnName("ai_difficulty");
+
+                    b.Property<DateTime>("ClassifiedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("classified_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("GameCode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("game_code");
+
+                    b.Property<string>("GameMode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("game_mode");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<bool>("IsNetworkGame")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_network_game");
+
+                    b.Property<Guid?>("RaceWeekendId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("race_weekend_id");
+
+                    b.Property<Guid?>("SeasonId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("season_id");
+
+                    b.Property<long>("SeasonLinkId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("season_link_id");
+
+                    b.Property<string>("SessionKey")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("session_key");
+
+                    b.Property<string>("SessionKind")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("session_kind");
+
+                    b.Property<long>("SessionLinkId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("session_link_id");
+
+                    b.Property<string>("SessionRef")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("session_ref");
+
+                    b.Property<string>("SessionType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("session_type");
+
+                    b.Property<int>("TotalLaps")
+                        .HasColumnType("integer")
+                        .HasColumnName("total_laps");
+
+                    b.Property<Guid>("TrackId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("track_id");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<long>("WeekendLinkId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("weekend_link_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_game_sessions");
+
+                    b.HasIndex("AgentDeviceId")
+                        .HasDatabaseName("ix_game_sessions_agent_device_id");
+
+                    b.HasIndex("RaceWeekendId")
+                        .HasDatabaseName("ix_game_sessions_race_weekend_id");
+
+                    b.HasIndex("SeasonId")
+                        .HasDatabaseName("ix_game_sessions_season_id");
+
+                    b.HasIndex("TrackId")
+                        .HasDatabaseName("ix_game_sessions_track_id");
+
+                    b.HasIndex("UserId", "ClassifiedAt")
+                        .HasDatabaseName("ix_game_sessions_user_id_classified_at");
+
+                    b.HasIndex("UserId", "GameCode", "SessionKey")
+                        .IsUnique()
+                        .HasDatabaseName("ix_game_sessions_user_id_game_code_session_key")
+                        .HasFilter("is_deleted = false");
+
+                    b.ToTable("game_sessions", (string)null);
+                });
+
             modelBuilder.Entity("SimCenter.Domain.Entities.Lap", b =>
                 {
                     b.Property<Guid>("Id")
@@ -168,6 +296,11 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                     b.Property<int>("LapTimeMs")
                         .HasColumnType("integer")
                         .HasColumnName("lap_time_ms");
+
+                    b.Property<string>("SessionKey")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("session_key");
 
                     b.Property<string>("SessionType")
                         .IsRequired()
@@ -271,6 +404,277 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                         .HasName("pk_processed_events");
 
                     b.ToTable("processed_events", (string)null);
+                });
+
+            modelBuilder.Entity("SimCenter.Domain.Entities.RaceWeekend", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime>("FirstSessionAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("first_session_at");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<Guid>("SeasonId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("season_id");
+
+                    b.Property<Guid>("TrackId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("track_id");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<long>("WeekendLinkId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("weekend_link_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_race_weekends");
+
+                    b.HasIndex("TrackId")
+                        .HasDatabaseName("ix_race_weekends_track_id");
+
+                    b.HasIndex("SeasonId", "WeekendLinkId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_race_weekends_season_id_weekend_link_id")
+                        .HasFilter("is_deleted = false");
+
+                    b.ToTable("race_weekends", (string)null);
+                });
+
+            modelBuilder.Entity("SimCenter.Domain.Entities.Season", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime>("FirstSessionAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("first_session_at");
+
+                    b.Property<string>("GameCode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("game_code");
+
+                    b.Property<string>("GameMode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("game_mode");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<DateTime>("LastSessionAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_session_at");
+
+                    b.Property<long>("SeasonLinkId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("season_link_id");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_seasons");
+
+                    b.HasIndex("UserId", "LastSessionAt")
+                        .HasDatabaseName("ix_seasons_user_id_last_session_at");
+
+                    b.HasIndex("UserId", "GameCode", "SeasonLinkId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_seasons_user_id_game_code_season_link_id")
+                        .HasFilter("is_deleted = false");
+
+                    b.ToTable("seasons", (string)null);
+                });
+
+            modelBuilder.Entity("SimCenter.Domain.Entities.SessionResult", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("BestLapTimeMs")
+                        .HasColumnType("integer")
+                        .HasColumnName("best_lap_time_ms");
+
+                    b.Property<int>("CarIndex")
+                        .HasColumnType("integer")
+                        .HasColumnName("car_index");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("DriverKey")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("driver_key");
+
+                    b.Property<string>("DriverName")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("driver_name");
+
+                    b.Property<int?>("GameDriverId")
+                        .HasColumnType("integer")
+                        .HasColumnName("game_driver_id");
+
+                    b.Property<Guid>("GameSessionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("game_session_id");
+
+                    b.Property<int>("GridPosition")
+                        .HasColumnType("integer")
+                        .HasColumnName("grid_position");
+
+                    b.Property<bool>("IsAiControlled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_ai_controlled");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<bool>("IsPlayer")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_player");
+
+                    b.Property<int>("NumLaps")
+                        .HasColumnType("integer")
+                        .HasColumnName("num_laps");
+
+                    b.Property<int>("NumPenalties")
+                        .HasColumnType("integer")
+                        .HasColumnName("num_penalties");
+
+                    b.Property<int>("NumPitStops")
+                        .HasColumnType("integer")
+                        .HasColumnName("num_pit_stops");
+
+                    b.Property<int>("PenaltiesTimeMs")
+                        .HasColumnType("integer")
+                        .HasColumnName("penalties_time_ms");
+
+                    b.Property<int>("Points")
+                        .HasColumnType("integer")
+                        .HasColumnName("points");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer")
+                        .HasColumnName("position");
+
+                    b.Property<int?>("RaceNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("race_number");
+
+                    b.Property<string>("ResultStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("result_status");
+
+                    b.Property<int?>("TeamId")
+                        .HasColumnType("integer")
+                        .HasColumnName("team_id");
+
+                    b.Property<int>("TotalRaceTimeMs")
+                        .HasColumnType("integer")
+                        .HasColumnName("total_race_time_ms");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_session_results");
+
+                    b.HasIndex("GameSessionId", "CarIndex")
+                        .IsUnique()
+                        .HasDatabaseName("ix_session_results_game_session_id_car_index")
+                        .HasFilter("is_deleted = false");
+
+                    b.HasIndex("GameSessionId", "DriverKey")
+                        .HasDatabaseName("ix_session_results_game_session_id_driver_key");
+
+                    b.ToTable("session_results", (string)null);
+                });
+
+            modelBuilder.Entity("SimCenter.Domain.Entities.SessionResultTyreStint", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ActualCompound")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("actual_compound");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<int>("EndLap")
+                        .HasColumnType("integer")
+                        .HasColumnName("end_lap");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<Guid>("SessionResultId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("session_result_id");
+
+                    b.Property<int>("StintNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("stint_number");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("VisualCompound")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("visual_compound");
+
+                    b.HasKey("Id")
+                        .HasName("pk_session_result_tyre_stints");
+
+                    b.HasIndex("SessionResultId")
+                        .HasDatabaseName("ix_session_result_tyre_stints_session_result_id");
+
+                    b.ToTable("session_result_tyre_stints", (string)null);
                 });
 
             modelBuilder.Entity("SimCenter.Domain.Entities.Track", b =>
@@ -388,6 +792,44 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("SimCenter.Domain.Entities.GameSession", b =>
+                {
+                    b.HasOne("SimCenter.Domain.Entities.AgentDevice", null)
+                        .WithMany()
+                        .HasForeignKey("AgentDeviceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_game_sessions_agent_devices_agent_device_id");
+
+                    b.HasOne("SimCenter.Domain.Entities.RaceWeekend", null)
+                        .WithMany()
+                        .HasForeignKey("RaceWeekendId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_game_sessions_race_weekends_race_weekend_id");
+
+                    b.HasOne("SimCenter.Domain.Entities.Season", null)
+                        .WithMany()
+                        .HasForeignKey("SeasonId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_game_sessions_seasons_season_id");
+
+                    b.HasOne("SimCenter.Domain.Entities.Track", "Track")
+                        .WithMany()
+                        .HasForeignKey("TrackId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_game_sessions_tracks_track_id");
+
+                    b.HasOne("SimCenter.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_game_sessions_users_user_id");
+
+                    b.Navigation("Track");
+                });
+
             modelBuilder.Entity("SimCenter.Domain.Entities.Lap", b =>
                 {
                     b.HasOne("SimCenter.Domain.Entities.AgentDevice", "AgentDevice")
@@ -428,9 +870,75 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                     b.Navigation("Lap");
                 });
 
+            modelBuilder.Entity("SimCenter.Domain.Entities.RaceWeekend", b =>
+                {
+                    b.HasOne("SimCenter.Domain.Entities.Season", "Season")
+                        .WithMany("Weekends")
+                        .HasForeignKey("SeasonId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_race_weekends_seasons_season_id");
+
+                    b.HasOne("SimCenter.Domain.Entities.Track", "Track")
+                        .WithMany()
+                        .HasForeignKey("TrackId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_race_weekends_tracks_track_id");
+
+                    b.Navigation("Season");
+
+                    b.Navigation("Track");
+                });
+
+            modelBuilder.Entity("SimCenter.Domain.Entities.Season", b =>
+                {
+                    b.HasOne("SimCenter.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_seasons_users_user_id");
+                });
+
+            modelBuilder.Entity("SimCenter.Domain.Entities.SessionResult", b =>
+                {
+                    b.HasOne("SimCenter.Domain.Entities.GameSession", null)
+                        .WithMany("Results")
+                        .HasForeignKey("GameSessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_session_results_game_sessions_game_session_id");
+                });
+
+            modelBuilder.Entity("SimCenter.Domain.Entities.SessionResultTyreStint", b =>
+                {
+                    b.HasOne("SimCenter.Domain.Entities.SessionResult", null)
+                        .WithMany("TyreStints")
+                        .HasForeignKey("SessionResultId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_session_result_tyre_stints_session_results_session_result_id");
+                });
+
+            modelBuilder.Entity("SimCenter.Domain.Entities.GameSession", b =>
+                {
+                    b.Navigation("Results");
+                });
+
             modelBuilder.Entity("SimCenter.Domain.Entities.Lap", b =>
                 {
                     b.Navigation("Sectors");
+                });
+
+            modelBuilder.Entity("SimCenter.Domain.Entities.Season", b =>
+                {
+                    b.Navigation("Weekends");
+                });
+
+            modelBuilder.Entity("SimCenter.Domain.Entities.SessionResult", b =>
+                {
+                    b.Navigation("TyreStints");
                 });
 
             modelBuilder.Entity("SimCenter.Domain.Entities.User", b =>

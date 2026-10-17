@@ -1,6 +1,6 @@
 # 07 · Roadmap
 
-> Status: **Design (미승인)** · Last Updated: 2026-10-17 (P6 개인 모드 반영)
+> Status: **Design (미승인)** · Last Updated: 2026-10-18 (P7 완료 반영, 앞서 P6 개인 모드 반영)
 > 헌장 Roadmap을 구체화한다. **설계 → 리뷰 → 구현 → 리뷰 → 다음 단계** 순서를 각 Phase에 적용한다.
 > P0~P5(MVP)는 카페 모델(매장·좌석·체크인)로 구현·완료되었고, **P6에서 개인 모드로 전환**했다(D-25). P6 이후는 §3 및 [11](./11-personal-mode.md) §0.
 
@@ -65,8 +65,8 @@
 | Phase | 범위 | 상태 |
 |---|---|---|
 | **P6** | 개인 모드 전환(`AgentDevice`·연결 코드·장치 키) + 사이드바 웹 셸(Dashboard · Laps · Leaderboard · Telemetry App) | ✅ 완료 (2026-10-17) |
-| P7 | **시즌·세션 수집** — `SeasonLinkIdentifier`/`WeekendLinkIdentifier`/`SessionLinkIdentifier`로 시즌 → 그랑프리 → 세션을 묶고, `FinalClassification`·`Participants`로 전 드라이버 결과·Standings 저장 | ⬜ **다음** |
-| P8 | 세션 상세 — 랩별 랩타임, 타이어 스틴트별 마모·랩타임, 패널티 | ⬜ |
+| P7 | **시즌·세션 수집** — `SeasonLinkIdentifier`/`WeekendLinkIdentifier`/`SessionLinkIdentifier`로 시즌 → 그랑프리 → 세션을 묶고, `FinalClassification`·`Participants`로 전 드라이버 결과·Standings 저장 ([12](./12-seasons-sessions.md)) | ✅ 완료 (2026-10-18) — 게임 확인(12 §3.3 가정)은 미완 |
+| P8 | 세션 상세 — 랩별 랩타임, 타이어 스틴트별 마모·랩타임, 패널티 | ⬜ **다음** |
 | P9 | 랩 상세 + 텔레메트리 트레이스([09](./09-lap-telemetry-trace.md)), 섹터 비교 | ⬜ |
 | P10 | Analytics (트랙별 AI 난이도 등) | ⬜ |
 | P11 | Agent 배포 — 설치 파일, 자동 업데이트, 다운로드 링크 | ⬜ |
@@ -93,6 +93,6 @@
 
 ## 5. 다음 액션
 
-1. ✅ P0~P5 MVP 완료, ✅ P6 개인 모드 완료 ([PROGRESS.md](./PROGRESS.md))
-2. 다음 = **P7 시즌·세션 수집**: 설계 → 리뷰 → 계획 → 구현 → 리뷰 순서로 착수
+1. ✅ P0~P5 MVP 완료, ✅ P6 개인 모드 완료, ✅ P7 시즌·세션 수집 완료 ([PROGRESS.md](./PROGRESS.md))
+2. 다음 = **P8 세션 상세**: 설계 → 리뷰 → 계획 → 구현 → 리뷰 순서로 착수
 3. 이후 Phase마다 설계 → 리뷰 → 구현 → 리뷰 반복

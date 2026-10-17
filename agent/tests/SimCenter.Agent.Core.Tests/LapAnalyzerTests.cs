@@ -152,4 +152,70 @@ public class LapAnalyzerTests
         var events = _sut.Process(Lap(1, 0));
         Assert.Empty(events);
     }
+
+    [Fact]
+    public void LapFinished_CarriesSessionModeAndLinks()
+    {
+        _sut.Process(CareerSession(GameMode.DriverCareer, season: 11, weekend: 22, session: 33));
+        var finished = FinishFirstLap();
+
+        Assert.Equal(GameMode.DriverCareer, finished.GameMode);
+        Assert.Equal(11u, finished.SeasonLinkId);
+        Assert.Equal(22u, finished.WeekendLinkId);
+        Assert.Equal(33u, finished.SessionLinkId);
+    }
+
+    [Fact]
+    public void LapFinished_WithPlainSessionFrame_DefaultsToOtherAndZeroLinks()
+    {
+        _sut.Process(new SessionFrame(S1, 7, SessionType.TimeTrial, 2025));
+        var finished = FinishFirstLap();
+
+        Assert.Equal(GameMode.Other, finished.GameMode);
+        Assert.Equal(0u, finished.SeasonLinkId);
+        Assert.Equal(0u, finished.WeekendLinkId);
+        Assert.Equal(0u, finished.SessionLinkId);
+    }
+
+    [Fact]
+    public void RepeatedSessionFrame_UpdatesModeAndLinksForLaterLaps()
+    {
+        _sut.Process(CareerSession(GameMode.Other, season: 0, weekend: 0, session: 0));
+        _sut.Process(CareerSession(GameMode.GrandPrix, season: 5, weekend: 6, session: 7)); // 같은 세션의 뒤 프레임
+
+        var finished = FinishFirstLap();
+
+        Assert.Equal(GameMode.GrandPrix, finished.GameMode);
+        Assert.Equal(5u, finished.SeasonLinkId);
+        Assert.Equal(6u, finished.WeekendLinkId);
+        Assert.Equal(7u, finished.SessionLinkId);
+    }
+
+    [Fact]
+    public void NewSession_ReplacesModeAndLinks()
+    {
+        _sut.Process(CareerSession(GameMode.DriverCareer, season: 11, weekend: 22, session: 33));
+        _sut.Process(new SessionFrame("2002", 10, SessionType.TimeTrial, 2025)); // 맥락 없는 새 세션
+
+        _sut.Process(new LapFrame("2002", 1, 0, 0, 0, 0, false, false));
+        var events = _sut.Process(new LapFrame("2002", 2, 0, 0, 0, 83452, false, false));
+
+        var finished = Assert.IsType<LapFinished>(events[0]);
+        Assert.Equal(GameMode.Other, finished.GameMode);
+        Assert.Equal(0u, finished.SeasonLinkId);
+        Assert.Equal(0u, finished.WeekendLinkId);
+        Assert.Equal(0u, finished.SessionLinkId);
+    }
+
+    private static SessionFrame CareerSession(GameMode mode, uint season, uint weekend, uint session)
+        => new(S1, 7, SessionType.Race, 2025, SessionKind.Race, mode, season, weekend, session);
+
+    private LapFinished FinishFirstLap()
+    {
+        _sut.Process(Lap(1, 0));
+        _sut.Process(Lap(1, 1, s1: 27010));
+        _sut.Process(Lap(1, 2, s1: 27010, s2: 30110));
+        var events = _sut.Process(Lap(2, 0, last: 83452));
+        return Assert.IsType<LapFinished>(events[0]);
+    }
 }

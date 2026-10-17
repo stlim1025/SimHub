@@ -1,13 +1,14 @@
 # 02 · Domain Design — Bounded Context
 
-> Status: **Design (미승인)** · Last Updated: 2026-10-17 (P6 개인 모드 반영)
+> Status: **Design (미승인)** · Last Updated: 2026-10-18 (P7 시즌·세션 반영, 앞서 P6 개인 모드 반영)
 > P6에서 매장(Store)·좌석(SimRig)·주행 세션(DrivingSession)을 제거하고 **Agent 장치(AgentDevice)** 로 랩을 귀속한다(D-25). 상세: [11](./11-personal-mode.md)
+> P7에서 시즌 → 그랑프리 주말 → 게임 세션 → 드라이버별 결과 계층을 추가했다(D-28~34, §3.5). 상세: [12](./12-seasons-sessions.md)
 
 ---
 
 ## 1. 목적
 
-플랫폼 전체의 **Bounded Context 지도**를 그리고, 그중 **현재 구현 범위(MVP + P6) 도메인**을 상세화한다.
+플랫폼 전체의 **Bounded Context 지도**를 그리고, 그중 **현재 구현 범위(MVP + P6 + P7) 도메인**을 상세화한다.
 장기 확장을 고려해 경계를 미리 나누되, 소수 컨텍스트만 구현한다. (설계는 확장 대비, 구현은 YAGNI)
 
 ---
@@ -48,7 +49,7 @@
 | **Catalog** | 게임/트랙 카탈로그(Track) | ✅ (최소) |
 | **Telemetry** | 랩(Lap), 섹터(Sector) 기록. 랩은 장치 주인에게 귀속 | ✅ |
 | **Ranking** | 랩 기록의 조회 모델(TOP10, 개인 기록) — 읽기 전용 투영 | ✅ (조회) |
-| Season / Session | 시즌 → 그랑프리 → 세션, 전 드라이버 결과·Standings (P7), 세션 상세(P8) | ❌ P7·P8 ([11](./11-personal-mode.md)) |
+| **Season / Session** | 시즌 → 그랑프리 주말 → 세션, 전 드라이버 결과·Standings (P7), 세션 상세(P8) | ✅ P7 ([12](./12-seasons-sessions.md)) · ❌ 세션 상세 P8 |
 | Competition | 대회/리그 | ❌ Future |
 | Community | 게시글, 피드 | ❌ Future |
 | Membership | 등급, XP, Badge, Achievement | ❌ Future |
@@ -99,7 +100,8 @@
   - **무효 랩도 보존**한다(D-15). 랭킹에서만 제외하고 개별 조회는 허용.
 - `LapSector` — 랩을 구간으로 나눈 기록. **게임별 섹터 수가 다를 수 있어 가변 자식 엔티티**로 둔다(D-7).
 
-> 주행 세션(`DrivingSession`)·체크인은 제거되었다. 게임 세션 단위의 묶음(시즌 → 그랑프리 → 세션)은 P7에서 게임이 주는 링크 식별자로 새로 도입한다([11](./11-personal-mode.md) §0).
+> 주행 세션(`DrivingSession`)·체크인은 제거되었다. 게임 세션 단위의 묶음(시즌 → 그랑프리 → 세션)은 P7에서 게임이 주는 링크 식별자로 도입했다(§3.5, [12](./12-seasons-sessions.md)).
+> `Lap`에는 그 세션과 이어 줄 `SessionKey`(P7은 저장만)가 추가됐다.
 
 **랩-사용자 귀속 흐름 (D-25 · D-26)**
 
@@ -134,6 +136,33 @@
 
 > MVP는 실시간 쿼리로 충분. 성능 이슈 시 캐시/materialized view/Redis 도입은 Future(헌장 성능 규칙 준수).
 
+### 3.5 Season / Session (P7 · D-28~34)
+
+F1 25의 커리어·그랑프리 기록을 **시즌 → 그랑프리 주말 → 세션**으로 자동으로 묶고, AI를 포함한 **모든 드라이버의 세션 결과**와 **기록된 점수 기준 Standings**를 보여 준다.
+상세 설계: [12](./12-seasons-sessions.md).
+
+**핵심 개념**
+
+- `Season` — 커리어·GP 시즌. 키 `(UserId, GameCode, SeasonLinkId)`. 게임이 주는 `SeasonLinkIdentifier`로 묶는다(D-29).
+- `RaceWeekend` — 시즌 안의 그랑프리 주말. 키 `(SeasonId, WeekendLinkId)`. **라운드 번호는 저장하지 않고** 조회 시 `FirstSessionAt` 순서로 계산한다(기록된 주말 순서라 게임의 라운드와 다를 수 있다).
+- `GameSession` — 최종 순위가 확정된 게임 세션 1건(연습·예선·레이스 등). 키 `(UserId, GameCode, SessionKey)`. 시즌 대상이 아닌 세션(온라인 로비, 스토리 등)은 시즌 없이 존재한다.
+- `SessionResult` — 차 1대(드라이버 1명)의 최종 결과. 키 `(GameSessionId, CarIndex)`. `SessionResultTyreStint`(스틴트)를 가진다.
+
+**규칙(순수 도메인 로직)**
+
+- **시즌 대상(`SeasonPolicy`):** 게임 모드가 커리어 4종 또는 Grand Prix이고 시즌·주말 링크가 모두 0이 아닐 때만 시즌에 속한다.
+- **세션 키(`SessionKeys`):** 시즌 대상이고 세션 링크가 0이 아니면 `link:{season}:{weekend}:{session}`, 그 밖에는 `uid:{SessionRef}`.
+- **드라이버 키(`DriverKeys`, D-32):** `player` → `driver:{게임 드라이버 ID}` → `name:{이름}#{차 번호}` → (참가자 정보 없음) `car:{SessionRef}:{carIndex}`.
+- **재분류 병합(`GameSession.ReplaceResults`):** 같은 세션 키로 다시 분류되면 최신 결과로 carIndex별 제자리 갱신하고, 새 순위표에 없는 차는 soft delete한다.
+
+**불변식**
+
+- 최종 순위표를 받은 세션만 `GameSession`이 된다(D-30). Time Trial은 저장하지 않는다(Laps·Leaderboard가 담당).
+- 시즌 Standings는 **기록된 세션의 `Points` 합**이다. 같은 주말·같은 세션 종류는 가장 늦게 분류된 1건만 계산하고, 우승·포디움·카운트백은 본 레이스만 센다(D-31).
+- 시즌·세션 조회는 항상 내 것만 대상이다. 남의 ID는 없는 ID와 같다(D-34).
+
+> 팀 이름·색은 저장하지 않고 백엔드의 게임별 정적 카탈로그(`TeamCatalog`)에서 풀어 API에 싣는다(D-33).
+
 ---
 
 ## 4. 컨텍스트 간 관계
@@ -149,6 +178,16 @@ Identity(User) ──owns──► AgentDevice ◄── pairs ── AgentPairi
                     Ranking (Lap 투영 · TimeTrial·기간별)
 ```
 
+P7 시즌·세션 계층(User와 Track을 참조하고, `Lap`과는 `SessionKey` 값으로만 이어진다 — 연결 조회는 P8):
+
+```
+User ─┬─ Season ──► RaceWeekend ──┐
+      │                           ▼  (시즌 대상일 때만 SeasonId·RaceWeekendId)
+      └──────────────────────► GameSession ──► SessionResult ──► SessionResultTyreStint
+                                    │
+                                    └─► Track (catalog)
+```
+
 ---
 
 ## 5. 도메인 이벤트 (Domain Events)
@@ -162,6 +201,7 @@ Telemetry 컨텍스트에서 발생하는 도메인 이벤트 (Agent가 생성 �
 | `SectorCompleted` | 섹터 통과 | ✅ (선택 전송) |
 | `LapFinished` | 랩 완주 (랩타임·섹터·유효성 확정) — **핵심** | ✅ |
 | `SessionEnded` | 게임 세션 종료 | ✅ |
+| `SessionClassified` | 게임 세션의 **최종 순위표 1건**(전 드라이버 결과 + 세션 맥락, D-28). 세션당 한 번만 보낸다 | ✅ (P7) |
 
 Backend 내부 도메인 이벤트(영속화 후 발생, App 브로드캐스트 트리거):
 
@@ -179,6 +219,13 @@ Backend 내부 도메인 이벤트(영속화 후 발생, App 브로드캐스트 
 
 - **D-25 ✅** 개인 모드: 랩 귀속 = 계정에 연결된 Agent 장치의 주인 (~~D-1 멀티스토어, D-2 체크인 세션~~ 대체)
 - **D-26 ✅** Agent 계정 연결 = 1회용 연결 코드 → 장치별 키
+- **D-28 ✅** 세션 결과 수집 = 세션당 최종 순위표 1건(`SessionClassified`)
+- **D-29 ✅** 시즌·주말·세션 식별 = 게임 링크 식별자(시즌 대상 모드만), 세션 키 `link:`/`uid:`
+- **D-30 ✅** Sessions = 최종 순위가 확정된 세션만, Time Trial 제외
+- **D-31 ✅** Standings = 기록된 세션 점수 합, 우승·카운트백은 본 레이스만
+- **D-32 ✅** 시즌 안의 드라이버 식별 = `player` → `driver:{id}` → `name:{이름}#{번호}`
+- **D-33 ✅** 팀 이름·색 = 백엔드 정적 카탈로그
+- **D-34 ✅** 남의 시즌·세션 조회 = 404
 - **D-5 ✅** Car/차량 개념 MVP 제외 (Track 단위 랭킹)
 - **D-7 ✅** 섹터 = 가변 `LapSector`
 - **D-8 ✅** 랭킹 = 일/월/연 기간 (경계 타임존 = D-27 서버 설정)

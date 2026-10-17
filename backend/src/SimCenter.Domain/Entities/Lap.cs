@@ -53,5 +53,12 @@ public class Lap : BaseEntity
     /// <summary>랩 완주 시각(UTC).</summary>
     public DateTime SetAt { get; set; }
 
+    /// <summary>
+    /// 이 랩이 속한 게임 세션의 키(P7, 12 §4.6). <c>SessionKeys.For</c> 규칙(D-29)으로 인입 시 계산해 저장만 한다 — P8이
+    /// <c>(UserId, GameCode, SessionKey)</c>로 <see cref="GameSession"/>과 잇는다. 옛 행과 <c>sessionRef</c>가 비었거나 너무 길어
+    /// 키를 만들지 못한 랩은 null이다.
+    /// </summary>
+    public string? SessionKey { get; set; }
+
     public ICollection<LapSector> Sectors { get; set; } = new List<LapSector>();
 }

@@ -21,7 +21,7 @@
     },
     "type": {
       "type": "string",
-      "enum": ["SessionStarted", "LapStarted", "SectorCompleted", "LapFinished", "SessionEnded"],
+      "enum": ["SessionStarted", "LapStarted", "SectorCompleted", "LapFinished", "SessionEnded", "SessionClassified"],
       "description": "이벤트 타입"
     },
     "payload": {

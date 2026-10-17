@@ -47,8 +47,12 @@ public static class DependencyInjection
             return new AgentIdentity(options.GameCode);
         });
 
-        // LapAnalyzer는 상태 저장 — 단일 인스턴스로 파이프라인이 순차 소비.
+        // 분석기는 상태 저장 — 각각 단일 인스턴스로 파이프라인이 순차 소비한다(P7: 분석기 목록, 순서 무관).
+        // 목록의 LapAnalyzer·SessionResultTracker는 위 구체 타입과 같은 인스턴스다.
         services.AddSingleton<LapAnalyzer>();
+        services.AddSingleton<SessionResultTracker>();
+        services.AddSingleton<ITelemetryAnalyzer>(sp => sp.GetRequiredService<LapAnalyzer>());
+        services.AddSingleton<ITelemetryAnalyzer>(sp => sp.GetRequiredService<SessionResultTracker>());
         services.AddSingleton<DomainEventFactory>();
 
         // P6: 계정 연결 시 발급된 장치 키는 Windows DPAPI로 암호화해 보관한다(Windows 전용).

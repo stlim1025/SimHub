@@ -1,9 +1,16 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Http.Connections;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.AspNetCore.SignalR.Protocol;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace SimCenter.Api.IntegrationTests;
 
-/// <summary>통합 테스트 공통 헬퍼: 회원가입·로그인과 Agent 장치 연결 흐름.</summary>
+/// <summary>통합 테스트 공통 헬퍼: 회원가입·로그인, Agent 장치 연결 흐름, 장치 키로 TelemetryHub 접속.</summary>
 internal static class TestApi
 {
     private const string Password = "P@ssw0rd!";
@@ -68,4 +75,47 @@ internal static class TestApi
     /// <summary>사설 대역의 무작위 IPv4 주소(테스트 간 요청 제한 격리용).</summary>
     public static string RandomRemoteIp()
         => $"10.{Random.Shared.Next(0, 256)}.{Random.Shared.Next(0, 256)}.{Random.Shared.Next(1, 255)}";
+
+    /// <summary>
+    /// TestServer WebSocket으로 TelemetryHub에 장치 키(<c>X-Agent-Key</c>)로 접속하는 연결을 만든다(시작은 호출자가 한다).
+    /// LongPolling은 요청마다 인증을 다시 하므로, "해제 후 이미 열린 연결로 전송" 같은 경로를 검증하려면 WebSocket이 필요하다.
+    /// JSON 규약은 서버와 같다(camelCase + enum 문자열).
+    /// </summary>
+    public static HubConnection BuildTelemetryConnection(ApiFactory factory, string deviceKey)
+    {
+        return new HubConnectionBuilder()
+            .WithUrl(new Uri(factory.Server.BaseAddress, "hubs/telemetry"), options =>
+            {
+                options.Transports = HttpTransportType.WebSockets;
+                options.SkipNegotiation = true;
+                options.WebSocketFactory = async (context, cancellationToken) =>
+                {
+                    var webSocketClient = factory.Server.CreateWebSocketClient();
+                    webSocketClient.ConfigureRequest = request => request.Headers["X-Agent-Key"] = deviceKey;
+                    return await webSocketClient.ConnectAsync(context.Uri, cancellationToken);
+                };
+            })
+            .AddJsonProtocol(ConfigureJsonProtocol)
+            .Build();
+    }
+
+    /// <summary>
+    /// <c>SubmitEvent</c> 호출 한 건이 와이어에서 차지하는 바이트 수. <see cref="BuildTelemetryConnection"/>과 같은 설정으로 직렬화하므로
+    /// 허브 수신 한도(<c>MaximumReceiveMessageSize</c>)에 실제로 걸리는 크기다.
+    /// </summary>
+    public static int MeasureInvocationBytes(object envelope)
+    {
+        var options = new JsonHubProtocolOptions();
+        ConfigureJsonProtocol(options);
+        var protocol = new JsonHubProtocol(Options.Create(options));
+        return protocol.GetMessageBytes(new InvocationMessage("SubmitEvent", [envelope])).Length;
+    }
+
+    /// <summary>테스트 클라이언트의 허브 JSON 규약(서버와 같다: camelCase + enum 문자열).</summary>
+    private static void ConfigureJsonProtocol(JsonHubProtocolOptions json)
+    {
+        json.PayloadSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+        json.PayloadSerializerOptions.PropertyNameCaseInsensitive = true;
+        json.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    }
 }

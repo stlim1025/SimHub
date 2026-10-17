@@ -1,0 +1,84 @@
+using SimCenter.Domain.Constants;
+
+namespace SimCenter.Application.Seasons.Queries;
+
+/// <summary>팀의 표시 이름과 색(<c>#RRGGBB</c>).</summary>
+public sealed record TeamInfo(string Name, string Color);
+
+/// <summary>
+/// 게임별 팀 이름·색 정적 카탈로그(D-33, 12 §7.4). 불변 상수 표라 헌장의 "Global Static 금지"(가변 전역 상태)에 해당하지 않는다.
+/// 지금은 <see cref="GameCodes.F1_25"/>만 등록한다 — 2025 팀 10개, 2024 차량 10개(ID 185~), 2026 시즌팩 팀 9개(ID 476~) + Audi·Cadillac,
+/// F1 Generic(41), My Team(104). 없는 ID는 <c>Team {id}</c> + 중립 회색, 팀이 없으면 <c>Unknown Team</c> + 중립 회색.
+/// </summary>
+public static class TeamCatalog
+{
+    /// <summary>등록되지 않은 팀·팀 정보 없음의 중립 회색.</summary>
+    public const string FallbackColor = "#9CA3AF";
+
+    public const string UnknownTeamName = "Unknown Team";
+
+    private const int Season2024FirstTeamId = 185;
+    private const int Season2026FirstTeamId = 476;
+    private const int Season2026TeamCount = 9;
+    private const int AudiTeamId = 485;
+    private const int CadillacTeamId = 486;
+    private const int F1GenericTeamId = 41;
+    private const int MyTeamId = 104;
+
+    // 2025 팀 순서 = 게임 팀 ID 0~9. 2024 차량(185~194)과 2026 팀(476~484)은 같은 이름·색을 앞쪽부터 따라 쓴다.
+    private static readonly TeamInfo[] BaseTeams =
+    [
+        new("Mercedes", "#27F4D2"),
+        new("Ferrari", "#E8002D"),
+        new("Red Bull Racing", "#3671C6"),
+        new("Williams", "#64C4FF"),
+        new("Aston Martin", "#229971"),
+        new("Alpine", "#0093CC"),
+        new("Racing Bulls", "#6692FF"),
+        new("Haas", "#B6BABD"),
+        new("McLaren", "#FF8000"),
+        new("Sauber", "#52E252"),
+    ];
+
+    private static readonly TeamInfo UnknownTeam = new(UnknownTeamName, FallbackColor);
+
+    private static readonly IReadOnlyDictionary<int, TeamInfo> F125Teams = BuildF125Teams();
+
+    /// <summary>(게임 코드, 팀 ID) → 표시 이름·색. 팀 ID가 null이면 <c>Unknown Team</c>.</summary>
+    public static TeamInfo Resolve(string gameCode, int? teamId)
+    {
+        if (teamId is not { } id)
+        {
+            return UnknownTeam;
+        }
+
+        if (gameCode == GameCodes.F1_25 && F125Teams.TryGetValue(id, out var team))
+        {
+            return team;
+        }
+
+        return new TeamInfo($"Team {id}", FallbackColor);
+    }
+
+    private static Dictionary<int, TeamInfo> BuildF125Teams()
+    {
+        var teams = new Dictionary<int, TeamInfo>();
+
+        for (var i = 0; i < BaseTeams.Length; i++)
+        {
+            teams[i] = BaseTeams[i];
+            teams[Season2024FirstTeamId + i] = BaseTeams[i];
+        }
+
+        for (var i = 0; i < Season2026TeamCount; i++)
+        {
+            teams[Season2026FirstTeamId + i] = BaseTeams[i];
+        }
+
+        teams[AudiTeamId] = new TeamInfo("Audi", "#BB0A30");
+        teams[CadillacTeamId] = new TeamInfo("Cadillac", "#B5B5B5");
+        teams[F1GenericTeamId] = new TeamInfo("F1 Generic", FallbackColor);
+        teams[MyTeamId] = new TeamInfo("My Team", "#6366F1");
+        return teams;
+    }
+}

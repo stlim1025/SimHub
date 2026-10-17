@@ -9,7 +9,7 @@ namespace SimCenter.Agent.Core.Analysis;
 /// (docs/06 §3). 고주파 반복 프레임에는 이벤트를 만들지 않는다. 순수·결정론적(네트워크/시간 무의존).
 /// 단일 세션·단일 플레이어 상태를 갖는 <b>상태 저장</b> 클래스이므로 스레드 안전하지 않다(파이프라인이 순차 처리).
 /// </summary>
-public sealed class LapAnalyzer
+public sealed class LapAnalyzer : ITelemetryAnalyzer
 {
     private const int SectorFirst = 0;
     private const int SectorSecond = 1;
@@ -18,6 +18,10 @@ public sealed class LapAnalyzer
     private string? _sessionRef;
     private SessionType _sessionType;
     private int _trackId;
+    private GameMode _gameMode;
+    private uint _seasonLinkId;
+    private uint _weekendLinkId;
+    private uint _sessionLinkId;
 
     // 랩 상태
     private int _lastLapNumber;         // 0 = 아직 없음
@@ -44,8 +48,7 @@ public sealed class LapAnalyzer
         if (_sessionRef == sf.SessionRef)
         {
             // 같은 세션의 반복 Session 패킷 — 최신 값만 갱신, 이벤트 없음.
-            _sessionType = sf.SessionType;
-            _trackId = sf.TrackId;
+            UpdateSessionContext(sf);
             return Array.Empty<TelemetryEvent>();
         }
 
@@ -57,8 +60,7 @@ public sealed class LapAnalyzer
         }
 
         _sessionRef = sf.SessionRef;
-        _sessionType = sf.SessionType;
-        _trackId = sf.TrackId;
+        UpdateSessionContext(sf);
         ResetLapState();
         events.Add(new SessionStarted(sf.SessionRef, sf.TrackId, sf.SessionType));
         return events;
@@ -151,7 +153,22 @@ public sealed class LapAnalyzer
             IsValid: !_lapInvalidAccum,
             IsOutOrInLap: _outOrInLapAccum,
             TrackId: _trackId,
-            SessionType: _sessionType);
+            SessionType: _sessionType,
+            GameMode: _gameMode,
+            SeasonLinkId: _seasonLinkId,
+            WeekendLinkId: _weekendLinkId,
+            SessionLinkId: _sessionLinkId);
+    }
+
+    /// <summary>Session 프레임이 알려 주는 세션 맥락(트랙·종류·모드·링크 식별자)을 최신 값으로 보관한다.</summary>
+    private void UpdateSessionContext(SessionFrame sf)
+    {
+        _sessionType = sf.SessionType;
+        _trackId = sf.TrackId;
+        _gameMode = sf.GameMode;
+        _seasonLinkId = sf.SeasonLinkId;
+        _weekendLinkId = sf.WeekendLinkId;
+        _sessionLinkId = sf.SessionLinkId;
     }
 
     private void AccumulateLapFlags(LapFrame lf)
@@ -187,6 +204,10 @@ public sealed class LapAnalyzer
         _sessionRef = null;
         _sessionType = SessionType.Unknown;
         _trackId = 0;
+        _gameMode = GameMode.Other;
+        _seasonLinkId = 0;
+        _weekendLinkId = 0;
+        _sessionLinkId = 0;
         ResetLapState();
     }
 }

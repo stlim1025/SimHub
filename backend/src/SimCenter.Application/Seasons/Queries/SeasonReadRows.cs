@@ -1,0 +1,46 @@
+using SimCenter.Domain.Enums;
+
+namespace SimCenter.Application.Seasons.Queries;
+
+/// <summary>
+/// 시즌 조회용 읽기 행(12 §7.3) — 결과 1건(드라이버 1명 × 세션 1건)의 프로젝션. 저장소 → 순수 계산기 전달용이다.
+/// 활성(삭제되지 않은) 행만 담는다.
+/// </summary>
+public sealed record SeasonResultRow(
+    Guid SeasonId,
+    Guid WeekendId,
+    Guid SessionId,
+    SessionType SessionType,
+    SessionKind SessionKind,
+    DateTime ClassifiedAt,
+    string DriverKey,
+    string? DriverName,
+    int CarIndex,
+    int? TeamId,
+    bool IsPlayer,
+    bool IsAiControlled,
+    int Position,
+    ResultStatus ResultStatus,
+    int Points);
+
+/// <summary>그랑프리 주말 행(라운드 번호 계산·트랙 이름 표시용).</summary>
+public sealed record WeekendRow(Guid WeekendId, Guid SeasonId, string TrackName, DateTime FirstSessionAt);
+
+/// <summary>
+/// 세션 목록 한 줄(12 §7.2). <c>My*</c>는 내 차 결과(<c>IsPlayer</c> 행)에서 읽고, 없으면 null이다.
+/// <see cref="MyBestLapTimeMs"/>는 저장 값 그대로(0 = 기록 없음)이며, null 변환은 서비스가 한다.
+/// </summary>
+public sealed record SessionSummaryRow(
+    Guid SessionId,
+    DateTime ClassifiedAt,
+    string TrackName,
+    SessionType SessionType,
+    SessionKind SessionKind,
+    GameMode GameMode,
+    Guid? SeasonId,
+    int CarCount,
+    int? MyPosition,
+    int? MyGridPosition,
+    ResultStatus? MyResultStatus,
+    int? MyBestLapTimeMs,
+    int? MyPoints);
