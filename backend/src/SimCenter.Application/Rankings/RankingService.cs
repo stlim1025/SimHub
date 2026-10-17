@@ -8,7 +8,7 @@ namespace SimCenter.Application.Rankings;
 
 /// <summary>
 /// 랭킹/트랙/내 랩 조회 유스케이스. Domain·포트에만 의존(프레임워크 무의존).
-/// 랭킹은 쿼리 온디맨드(materialized 테이블 없음) — 기간 경계는 매장 로컬 타임존으로 계산한다(D-8).
+/// 랭킹은 쿼리 온디맨드(materialized 테이블 없음) — 기간 경계는 서버 설정 타임존(Ranking:TimeZoneId)으로 계산한다(D-8, D-27).
 /// </summary>
 public sealed class RankingService : IRankingService
 {
@@ -18,14 +18,14 @@ public sealed class RankingService : IRankingService
 
     private readonly ILapRepository _laps;
     private readonly ITrackRepository _tracks;
-    private readonly IStoreRepository _stores;
+    private readonly IRankingTimeZoneProvider _timeZone;
     private readonly IClock _clock;
 
-    public RankingService(ILapRepository laps, ITrackRepository tracks, IStoreRepository stores, IClock clock)
+    public RankingService(ILapRepository laps, ITrackRepository tracks, IRankingTimeZoneProvider timeZone, IClock clock)
     {
         _laps = laps;
         _tracks = tracks;
-        _stores = stores;
+        _timeZone = timeZone;
         _clock = clock;
     }
 
@@ -39,7 +39,7 @@ public sealed class RankingService : IRankingService
         var track = await _tracks.GetByIdAsync(trackId, cancellationToken)
             ?? throw new NotFoundException("트랙을 찾을 수 없습니다.");
 
-        var timeZoneId = await _stores.GetPrimaryTimeZoneIdAsync(cancellationToken);
+        var timeZoneId = _timeZone.TimeZoneId;
         var localDate = date ?? RankingPeriodRange.LocalToday(timeZoneId, _clock.UtcNow);
         var range = RankingPeriodRange.For(period, localDate, timeZoneId);
 

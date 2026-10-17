@@ -15,14 +15,16 @@ public class RankingServiceTests
 
     private readonly FakeLapRepository _laps = new();
     private readonly FakeTrackRepository _tracks = new();
-    private readonly FakeStoreRepository _stores = new();
     private readonly RankingService _sut;
 
     public RankingServiceTests()
     {
         _tracks.Items.Add(new Track { Id = TrackId, GameCode = GameCode, GameTrackId = 7, Name = "Silverstone" });
-        _sut = new RankingService(_laps, _tracks, _stores, new FakeClock(Now));
+        _sut = CreateSut("Asia/Seoul", Now);
     }
+
+    private RankingService CreateSut(string timeZoneId, DateTime now)
+        => new(_laps, _tracks, new FakeTimeZoneProvider(timeZoneId), new FakeClock(now));
 
     [Fact]
     public async Task GetRankingAsync_AssignsSequentialRanks_AndMapsSnapshot()
@@ -46,6 +48,21 @@ public class RankingServiceTests
         // Time Trial·랭킹적격 필터가 리포지토리로 전달됐는지.
         Assert.Equal(SessionType.TimeTrial, _laps.LastSessionType);
         Assert.Equal(10, _laps.LastTop);
+    }
+
+    [Fact]
+    public async Task GetRankingAsync_UsesConfiguredTimeZone()
+    {
+        // Now = 2026-07-31T16:00:00Z: 서울(UTC+9)은 이미 8월 1일, UTC는 아직 7월 31일.
+        var boundaryNow = new DateTime(2026, 7, 31, 16, 0, 0, DateTimeKind.Utc);
+
+        var seoul = await CreateSut("Asia/Seoul", boundaryNow)
+            .GetRankingAsync(TrackId, GameCode, RankingPeriod.Monthly, date: null);
+        var utc = await CreateSut("UTC", boundaryNow)
+            .GetRankingAsync(TrackId, GameCode, RankingPeriod.Monthly, date: null);
+
+        Assert.Equal("2026-08", seoul.PeriodKey);
+        Assert.Equal("2026-07", utc.PeriodKey);
     }
 
     [Fact]
@@ -140,10 +157,11 @@ public class RankingServiceTests
             => Task.FromResult<IReadOnlyList<Track>>(Items.ToList());
     }
 
-    private sealed class FakeStoreRepository : IStoreRepository
+    private sealed class FakeTimeZoneProvider : IRankingTimeZoneProvider
     {
-        public Task<string> GetPrimaryTimeZoneIdAsync(CancellationToken ct = default)
-            => Task.FromResult("Asia/Seoul");
+        public FakeTimeZoneProvider(string timeZoneId) => TimeZoneId = timeZoneId;
+
+        public string TimeZoneId { get; }
     }
 
     private sealed class FakeClock : IClock

@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using SimCenter.Application.Common.Interfaces;
 using SimCenter.Infrastructure.Common;
+using SimCenter.Infrastructure.Configuration;
 using SimCenter.Infrastructure.Identity;
 using SimCenter.Infrastructure.Persistence;
 using SimCenter.Infrastructure.Persistence.Repositories;
@@ -34,7 +35,6 @@ public static class DependencyInjection
         services.AddScoped<IDrivingSessionRepository, DrivingSessionRepository>();
         services.AddScoped<ITrackRepository, TrackRepository>();
         services.AddScoped<ILapRepository, LapRepository>();
-        services.AddScoped<IStoreRepository, StoreRepository>();
         services.AddScoped<IProcessedEventRepository, ProcessedEventRepository>();
         services.AddScoped<DbSeeder>();
 
@@ -45,6 +45,15 @@ public static class DependencyInjection
         services.AddSingleton<IApiKeyHasher, Sha256ApiKeyHasher>();
         services.AddSingleton<IRandomSource, CryptoRandomSource>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
+
+        // ── 랭킹 설정(기간 경계 타임존, D-27) ──
+        services.AddOptions<RankingOptions>()
+            .Bind(configuration.GetSection(RankingOptions.SectionName))
+            .Validate(
+                o => !string.IsNullOrWhiteSpace(o.TimeZoneId) && TimeZoneInfo.TryFindSystemTimeZoneById(o.TimeZoneId, out _),
+                "Ranking:TimeZoneId가 유효한 IANA 타임존이 아닙니다.")
+            .ValidateOnStart();
+        services.AddSingleton<IRankingTimeZoneProvider, ConfiguredRankingTimeZoneProvider>();
 
         // ── 인증(JWT Bearer) ──
         services.AddOptions<JwtOptions>()
