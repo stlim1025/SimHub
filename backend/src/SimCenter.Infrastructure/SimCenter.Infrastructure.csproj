@@ -18,6 +18,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- EF Core Design 10.0.0 → Microsoft.Build.Tasks.Core가 끌어오는 9.0.0(NU1903 높음)을 패치 버전으로 고정한다.
+         Design을 올리면 이 프로젝트만 EF Core 10.0.13으로 컴파일되고 Api는 10.0.1로 실행돼 어셈블리 버전이 어긋난다.
+         Design과 함께 디자인 타임 전용이라 PrivateAssets=all. Design을 올려 이 경로가 사라지면 제거한다. -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" PrivateAssets="all" />
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.13" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\SimCenter.Domain\SimCenter.Domain.csproj" />
     <ProjectReference Include="..\SimCenter.Application\SimCenter.Application.csproj" />
   </ItemGroup>

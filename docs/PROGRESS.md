@@ -12,8 +12,8 @@
 **Phase 6(개인 모드 전환 + 웹 셸) 완료 — 카페 모델(매장·좌석·체크인)을 개인 모델로 전환. 웹에서 1회용 연결 코드를 받아
 Agent가 `pair`(장치별 키, DPAPI 저장)로 내 계정에 연결하고, 랩은 장치 주인에게 귀속된다. 앱은 사이드바 셸
 (Dashboard · Laps · Leaderboard · Telemetry App). 테스트: Backend 95(Domain 3 + Application 76 + 통합 16) ·
-Agent 94(Core 19 + Infrastructure 75) · App 127 전부 통과, `flutter analyze` 이슈 0, 컴파일러 경고 0
-(NuGet 취약성 권고 NU1902/NU1903만 — P6 이전부터 있던 타 패키지(SignalR.Common·SQLitePCLRaw·Cryptography.Xml/Pkcs) 대상).
+Agent 95(Core 19 + Infrastructure 76) · App 127 전부 통과, `flutter analyze` 이슈 0, 빌드 경고 0
+(NuGet 취약성 권고 NU1902/NU1903도 해소 — SignalR.Client·Data.Sqlite 10.0.13, Cryptography.Xml/Pkcs 10.0.13 고정).
 헤드리스 통합 확인(가입→코드 발급→`pair`→허브 연결→장치 목록→해제→Agent 401 중단) 통과, 랩 단계만 F1 25 없어 보류. 다음 = P7 시즌·세션 수집.**
 
 (이전) Phase 5(Flutter MVP 앱) 완료 — MVP 스코프 달성. 앱: Splash→Login→Home→Today's Ranking(실시간)
