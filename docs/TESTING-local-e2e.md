@@ -14,7 +14,7 @@ F1 25 (UDP 20777) ──► Agent(Cli) ──SignalR──► Backend(:5284) ─
 
 ## 0. 사전 준비 (최초 1회)
 
-- **.NET 9 SDK**, **PostgreSQL**(실행 중), **F1 25** 설치.
+- **.NET 10 SDK**, **PostgreSQL**(실행 중), **F1 25** 설치.
 - 시크릿은 리포에 없다 → **이 PC에서 직접 주입**해야 한다(연결 문자열/JWT 키):
   ```bash
   cd backend
@@ -69,9 +69,11 @@ Swagger(<http://localhost:5284/swagger>)에서 순서대로:
 
 실행(콘솔 로그가 보이는 **Cli** 권장):
 ```bash
-cd agent
-dotnet run --project src/SimCenter.Agent.Cli
+cd agent/src/SimCenter.Agent.Cli
+dotnet run
 ```
+> ⚠️ **반드시 Cli 프로젝트 폴더에서 실행**한다. `Host.CreateApplicationBuilder`는 현재 폴더를 content root로 삼아 `appsettings.json`을 읽으므로,
+> `agent/`에서 `dotnet run --project src/SimCenter.Agent.Cli`로 띄우면 설정이 비어 `BackendUrl 미설정` 상태가 된다.
 - 정상 시 로그: `UDP 텔레메트리 수신 시작 (포트 20777)`, `TelemetryHub 연결됨: http://localhost:5284/hubs/telemetry`
 - (Tray 앱으로도 되지만 콘솔이 없어 이벤트 로그가 안 보인다. 연결 상태 신호등만 확인용.)
 
@@ -118,12 +120,14 @@ FROM laps ORDER BY created_at DESC LIMIT 5;
 
 | 증상 | 원인 / 해결 |
 |---|---|
-| Agent가 `BackendUrl 미설정` 로그 후 조용함 | `BackendUrl`이 비어 있음 → §3처럼 채운다 |
+| Agent가 `BackendUrl 미설정` 로그 후 조용함 | `BackendUrl`이 비어 있음 → §3처럼 채운다. 채웠는데도 뜨면 실행 위치가 `agent/src/SimCenter.Agent.Cli`가 아님(로그의 `Content root path` 확인) → §3 |
 | 백엔드 로그에 `활성 체크인 세션 없음 — 랩 드롭` | 체크인을 안 했거나 `RigCode` 불일치 → §2 체크인 + 좌석 코드 확인 |
 | 랩은 저장되는데 `eligible=False` | Time Trial이 아니거나 무효 랩(정상 동작). 랭킹용은 Time Trial 유효 랩 |
 | Agent 연결 실패(무한 재시도 로그) | 백엔드가 안 떠 있거나 URL/포트 틀림. http 프로파일인지 확인 |
 | 신호등이 계속 🟡/🔴 (Tray) | F1 UDP 설정 누락 or 포트/포맷 불일치 → §4 |
 | 백엔드 시작 실패(연결 문자열/JWT) | user-secrets 미주입 → §0 |
+| `dotnet test`/`dotnet run`이 `You must install or update .NET`로 실패 | 사용자 환경 변수 `DOTNET_ROOT`가 .NET 10 런타임이 없는 폴더(예: `%USERPROFILE%\.dotnet`)를 가리킴 → `C:\Program Files\dotnet`으로 바꾸고 터미널 재시작 |
+| `flutter test`가 진행 없이 멈춤(`-v` 로그에 `Could not prepare isolate`) | Windows 사용자 이름에 한글 등 비ASCII 문자가 있어 임시 폴더 경로를 못 읽음 → 사용자 `TEMP`/`TMP`를 영문 경로(예: `C:\Temp`)로 바꾸고 터미널 재시작 |
 
 ---
 
