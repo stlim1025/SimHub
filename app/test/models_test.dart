@@ -61,6 +61,37 @@ void main() {
     expect(m.laps.single.isRankingEligible, true);
   });
 
+  test('MyTrack.fromJson (bestValidLapTimeMs 허용 + lastSetAt 파싱)', () {
+    final t = MyTrack.fromJson({
+      'trackId': 't1',
+      'trackName': 'Silverstone',
+      'gameCode': 'F1_25',
+      'lapCount': 12,
+      'bestValidLapTimeMs': 83452,
+      'lastSetAt': '2026-10-12T09:03:21Z',
+    });
+    expect(t.trackId, 't1');
+    expect(t.trackName, 'Silverstone');
+    expect(t.gameCode, 'F1_25');
+    expect(t.lapCount, 12);
+    expect(t.bestValidLapTimeMs, 83452);
+    expect(t.lastSetAt, DateTime.utc(2026, 10, 12, 9, 3, 21));
+    expect(t.lastSetAt.isUtc, true);
+  });
+
+  test('MyTrack.fromJson (유효 랩이 없으면 bestValidLapTimeMs가 null)', () {
+    final t = MyTrack.fromJson({
+      'trackId': 't2',
+      'trackName': 'Monaco',
+      'gameCode': 'F1_25',
+      'lapCount': 1,
+      'bestValidLapTimeMs': null,
+      'lastSetAt': '2026-10-13T00:00:00Z',
+    });
+    expect(t.bestValidLapTimeMs, isNull);
+    expect(t.lapCount, 1);
+  });
+
   test('Track.fromJson', () {
     final t = Track.fromJson({'trackId': 't1', 'gameCode': 'F1_25', 'name': 'Monaco'});
     expect(t.name, 'Monaco');

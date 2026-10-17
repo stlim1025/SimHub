@@ -6,7 +6,8 @@ import '../../features/auth/application/auth_controller.dart';
 import '../../features/auth/presentation/login_page.dart';
 import '../../features/auth/presentation/splash_page.dart';
 import '../../features/dashboard/presentation/dashboard_page.dart';
-import '../../features/laps/presentation/my_laps_page.dart';
+import '../../features/laps/presentation/laps_page.dart';
+import '../../features/laps/presentation/track_laps_page.dart';
 import '../../features/ranking/presentation/leaderboard_page.dart';
 import '../shell/app_shell.dart';
 
@@ -58,12 +59,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, state, child) => AppShell(location: state.uri.path, child: child),
         routes: [
           GoRoute(path: '/', builder: (_, _) => const DashboardPage()),
+          GoRoute(path: '/laps', builder: (_, _) => const LapsPage()),
           GoRoute(
-            path: '/laps',
-            builder: (_, state) => MyLapsPage(
-              trackId: state.uri.queryParameters['trackId'],
-              trackName: state.uri.queryParameters['trackName'],
-            ),
+            path: '/laps/tracks/:trackId',
+            builder: (_, state) => TrackLapsPage(trackId: state.pathParameters['trackId']!),
           ),
           GoRoute(
             path: '/leaderboard',

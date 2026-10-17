@@ -119,30 +119,65 @@ Map<String, dynamic> hubPayload(String trackId, List<RankingEntry> entries, {Str
       ],
     };
 
-/// 최근 랩 목록을 돌려주는 랩 저장소.
+/// 요청을 기록하고 미리 정한 랩·트랙을 돌려주는 랩 저장소.
+/// `sort=fastest`면 랩타임 오름차순으로 정렬하고, 요청한 page/pageSize만큼 잘라 돌려준다(서버 계약 흉내).
 class FakeLapsRepository implements LapsRepository {
-  FakeLapsRepository({this.laps = const []});
+  FakeLapsRepository({this.laps = const [], this.tracks = const []});
 
   final List<Lap> laps;
-  final pageSizes = <int>[];
+  final List<MyTrack> tracks;
+  final requests = <({String? trackId, String sort, int page, int pageSize})>[];
+
+  List<int> get pageSizes => [for (final r in requests) r.pageSize];
 
   @override
-  Future<MyLaps> getMyLaps({String? trackId, String? sessionType, int page = 1, int pageSize = 20}) async {
-    pageSizes.add(pageSize);
-    return MyLaps(personalBest: null, page: page, pageSize: pageSize, total: laps.length, laps: laps);
+  Future<MyLaps> getMyLaps({
+    String? trackId,
+    String? sessionType,
+    String sort = kLapSortRecent,
+    int page = 1,
+    int pageSize = 20,
+  }) async {
+    requests.add((trackId: trackId, sort: sort, page: page, pageSize: pageSize));
+    final ordered = sort == kLapSortFastest
+        ? ([...laps]..sort((a, b) => a.lapTimeMs.compareTo(b.lapTimeMs)))
+        : laps;
+    final start = (page - 1) * pageSize;
+    final items = ordered.skip(start).take(pageSize).toList();
+    return MyLaps(personalBest: null, page: page, pageSize: pageSize, total: laps.length, laps: items);
   }
+
+  @override
+  Future<List<MyTrack>> getMyTracks() async => tracks;
 }
 
-Lap lapOf(String id, String trackName, int ms, {bool isValid = true}) => Lap(
+Lap lapOf(
+  String id,
+  String trackName,
+  int ms, {
+  bool isValid = true,
+  String sessionType = 'TimeTrial',
+  List<LapSector> sectors = const [],
+}) =>
+    Lap(
       lapId: id,
       trackName: trackName,
       gameCode: 'F1_25',
-      sessionType: 'TimeTrial',
+      sessionType: sessionType,
       lapTimeMs: ms,
-      sectors: const [],
+      sectors: sectors,
       isValid: isValid,
       isRankingEligible: isValid,
       setAt: DateTime.utc(2026, 10, 12, 9),
+    );
+
+MyTrack trackOf(String id, String name, {int lapCount = 3, int? bestMs = 83452}) => MyTrack(
+      trackId: id,
+      trackName: name,
+      gameCode: 'F1_25',
+      lapCount: lapCount,
+      bestValidLapTimeMs: bestMs,
+      lastSetAt: DateTime.utc(2026, 10, 12, 9),
     );
 
 /// 논리 픽셀 = 물리 픽셀(1:1)로 뷰 크기를 고정한다.

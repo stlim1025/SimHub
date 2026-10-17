@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/auth/application/auth_controller.dart';
+import '../layout/layout_constants.dart';
 import '../realtime/ranking_hub_client.dart';
 import '../theme/app_colors.dart';
 import 'nav_items.dart';
@@ -12,12 +13,6 @@ const double kSidebarBreakpoint = 900;
 
 /// 사이드바 폭.
 const double kSidebarWidth = 220;
-
-/// 본문 최대 폭. 넓은 화면에서 줄이 지나치게 길어지는 것을 막는다.
-const double kContentMaxWidth = 1100;
-
-/// 셸 안 화면들의 공통 바깥 여백.
-const EdgeInsets kPagePadding = EdgeInsets.all(20);
 
 const double _sidebarPadding = 12;
 const double _selectedTileAlpha = 0.14;

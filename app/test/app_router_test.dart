@@ -81,4 +81,15 @@ void main() {
     expect(_location(router), '/laps');
     expect(find.text('Dashboard'), findsOneWidget);
   });
+
+  testWidgets('/laps/tracks/:trackId도 셸 안에서 열린다', (t) async {
+    final router = await _pumpApp(t);
+
+    router.go('/laps/tracks/t1');
+    await t.pumpAndSettle();
+
+    expect(_location(router), '/laps/tracks/t1');
+    expect(find.text('Dashboard'), findsOneWidget); // 사이드바가 그대로 있다.
+    expect(find.byTooltip('트랙 목록'), findsOneWidget);
+  });
 }

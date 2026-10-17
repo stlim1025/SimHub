@@ -1,3 +1,7 @@
+/// 내 랩 목록 정렬(서버 `sort` 값, docs/11 §8). 기본은 최신순.
+const String kLapSortRecent = 'recent';
+const String kLapSortFastest = 'fastest';
+
 /// 가변 섹터(D-7).
 class LapSector {
   const LapSector({required this.sectorNumber, required this.sectorTimeMs});
@@ -62,6 +66,35 @@ class PersonalBest {
         trackId: json['trackId'] as String,
         lapTimeMs: json['lapTimeMs'] as int,
         setAt: DateTime.parse(json['setAt'] as String),
+      );
+}
+
+/// 내 랩이 1개 이상 있는 트랙 한 건(`GET /me/tracks`, docs/11 §8).
+/// [bestValidLapTimeMs]는 유효 랩 중 최소 랩타임이며, 유효 랩이 없으면 null.
+class MyTrack {
+  const MyTrack({
+    required this.trackId,
+    required this.trackName,
+    required this.gameCode,
+    required this.lapCount,
+    required this.bestValidLapTimeMs,
+    required this.lastSetAt,
+  });
+
+  final String trackId;
+  final String trackName;
+  final String gameCode;
+  final int lapCount;
+  final int? bestValidLapTimeMs;
+  final DateTime lastSetAt;
+
+  factory MyTrack.fromJson(Map<String, dynamic> json) => MyTrack(
+        trackId: json['trackId'] as String,
+        trackName: json['trackName'] as String,
+        gameCode: json['gameCode'] as String,
+        lapCount: json['lapCount'] as int,
+        bestValidLapTimeMs: json['bestValidLapTimeMs'] as int?,
+        lastSetAt: DateTime.parse(json['lastSetAt'] as String),
       );
 }
 
