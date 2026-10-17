@@ -196,7 +196,9 @@ class FakeDevicesRepository implements DevicesRepository {
 
   /// 다음 [issuePairingCode] 호출이 돌려줄 코드. 호출 순번(1부터)을 받아 만든다.
   final PairingCode Function(int callNumber)? issuedCode;
-  final Object? issueError;
+
+  /// null이 아니면 [issuePairingCode]가 이 오류로 실패한다. 테스트 도중에 바꿀 수 있다.
+  Object? issueError;
   final Object? revokeError;
 
   int issueCalls = 0;

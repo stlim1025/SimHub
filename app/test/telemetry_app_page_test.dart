@@ -187,6 +187,39 @@ void main() {
       expect(find.text('연결 코드 발급'), findsOneWidget);
     });
 
+    testWidgets('만료 후 다시 발급이 429로 실패하면 만료된 코드 대신 오류를 보인다', (t) async {
+      final env = await _pumpPage(t);
+      await _issueCode(t);
+      env.now = env.now.add(_codeLifetime);
+      await t.pump(const Duration(seconds: 1));
+      expect(find.text('만료됨'), findsOneWidget);
+      env.repo.issueError = _tooManyRequests;
+
+      await _issueCode(t, label: '다시 발급');
+
+      expect(env.repo.issueCalls, 2);
+      expect(find.text(_tooManyRequests.message), findsOneWidget);
+      expect(find.text(_firstCode), findsNothing);
+      expect(find.text('만료됨'), findsNothing);
+      expect(find.text('연결 코드 발급'), findsOneWidget);
+    });
+
+    testWidgets('실패 뒤 다시 발급이 성공하면 오류가 사라지고 새 코드를 보인다', (t) async {
+      final env = await _pumpPage(t);
+      await _issueCode(t);
+      env.now = env.now.add(_codeLifetime);
+      await t.pump(const Duration(seconds: 1));
+      env.repo.issueError = _tooManyRequests;
+      await _issueCode(t, label: '다시 발급');
+      env.repo.issueError = null;
+
+      await _issueCode(t);
+
+      expect(find.text(_tooManyRequests.message), findsNothing);
+      expect(find.text(_secondCode), findsOneWidget);
+      expect(find.text('10:00'), findsOneWidget);
+    });
+
     testWidgets('예상 밖 오류는 일반 안내 문구로 보인다', (t) async {
       await _pumpPage(t, issueError: StateError('boom'));
 

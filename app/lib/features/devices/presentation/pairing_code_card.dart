@@ -34,6 +34,9 @@ class PairingCodeCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(pairingCodeControllerProvider);
     final controller = ref.read(pairingCodeControllerProvider.notifier);
+    // 발급이 실패한 AsyncError는 직전 값(만료된 코드)을 그대로 들고 있다.
+    // 오류가 있으면 그 코드를 다시 보여주지 않고 오류와 발급 버튼만 보인다.
+    final code = state.hasError ? null : state.valueOrNull;
 
     return SectionCard(
       title: '연결 코드',
@@ -58,7 +61,7 @@ class PairingCodeCard extends ConsumerWidget {
                 ),
               ),
             )
-          else if (state.valueOrNull case final code?)
+          else if (code != null)
             _IssuedCode(key: ValueKey(code.code), code: code, onReissue: controller.issue)
           else ...[
             if (state.hasError) _IssueError(error: state.error!),

@@ -11,7 +11,9 @@ final agentDevicesProvider = FutureProvider.autoDispose<List<AgentDevice>>(
   (ref) => ref.watch(devicesRepositoryProvider).getDevices(),
 );
 
-/// 발급한 연결 코드(null=아직 발급 전). 오류는 [AsyncError]로 남아 화면이 메시지를 보여준다.
+/// 발급한 연결 코드(null=아직 발급 전). 발급이 실패하면 [AsyncError]가 되며, Riverpod은 이때
+/// 직전 값(예: 만료된 코드)을 `valueOrNull`에 그대로 남긴다. 그래서 화면은 `value`보다 먼저
+/// `hasError`를 확인해 오류를 보여줘야 한다(그렇지 않으면 실패가 만료된 코드 뒤에 가려진다).
 /// 화면을 오가도 코드는 유지되지만, 사용자가 바뀌면(로그아웃·다른 계정) 지운다.
 class PairingCodeController extends AsyncNotifier<PairingCode?> {
   @override
