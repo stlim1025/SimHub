@@ -1,10 +1,11 @@
+using System.Globalization;
 using SimCenter.Domain.Enums;
 
 namespace SimCenter.Domain.Seasons;
 
 /// <summary>
 /// 세션 키 생성 규칙(D-29). 같은 게임 세션의 결과가 다시 오면 같은 키가 나와야 재분류로 합쳐진다.
-/// 순수 함수 — 상태 없음.
+/// 순수 함수 — 상태 없음. 저장되는 키라 숫자는 항상 <see cref="CultureInfo.InvariantCulture"/>로 쓴다(현재 문화권의 음수 부호 등에 기대지 않는다).
 /// </summary>
 public static class SessionKeys
 {
@@ -17,7 +18,7 @@ public static class SessionKeys
     /// </summary>
     public static string For(GameMode mode, long seasonLinkId, long weekendLinkId, long sessionLinkId, string sessionRef) =>
         SeasonPolicy.BelongsToSeason(mode, seasonLinkId, weekendLinkId) && sessionLinkId != 0
-            ? $"{LinkPrefix}{seasonLinkId}:{weekendLinkId}:{sessionLinkId}"
+            ? string.Create(CultureInfo.InvariantCulture, $"{LinkPrefix}{seasonLinkId}:{weekendLinkId}:{sessionLinkId}")
             : Uid(sessionRef);
 
     /// <summary>게임 세션 UID 기반 키. 트랙·종류가 어긋난 세션의 대체 키로도 쓴다.</summary>

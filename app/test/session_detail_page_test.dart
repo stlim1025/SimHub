@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -68,10 +70,11 @@ Future<GoRouter> _pumpPage(
   WidgetTester tester,
   SessionsRepository repo, {
   String sessionId = 'd1',
+  String? initialLocation,
   Size size = const Size(1000, 2400),
 }) async {
   setViewSize(tester, size);
-  final router = GoRouter(initialLocation: '/sessions/$sessionId', routes: [
+  final router = GoRouter(initialLocation: initialLocation ?? '/sessions/$sessionId', routes: [
     GoRoute(path: '/sessions', builder: (_, _) => const Text('sessions-list')),
     GoRoute(
       path: '/seasons/:seasonId',
@@ -277,7 +280,7 @@ void main() {
       expect(find.text('찾을 수 없는 세션입니다.'), findsNothing);
     });
 
-    testWidgets('SessionDetail_Back_ReturnsToSessionList', (t) async {
+    testWidgets('SessionDetail_Back_WithoutOpener_GoesToSessionList', (t) async {
       final repo = FakeSessionsRepository(details: {'d1': detailOf('d1', results: _raceResults())});
       final router = await _pumpPage(t, repo);
 
@@ -285,6 +288,23 @@ void main() {
       await t.pumpAndSettle();
 
       expect(_location(router), '/sessions');
+    });
+
+    testWidgets('SessionDetail_Back_WhenOpenedFromSeason_ReturnsToOpener', (t) async {
+      final repo = FakeSessionsRepository(details: {'d1': detailOf('d1', results: _raceResults())});
+      final router = await _pumpPage(t, repo, initialLocation: '/seasons/season-1?tab=results');
+
+      // 시즌 화면의 세션 칩이 하는 것처럼 세션을 위에 쌓는다.
+      unawaited(router.push('/sessions/d1'));
+      await t.pumpAndSettle();
+      expect(find.text('NORRIS'), findsOneWidget);
+
+      await t.tap(find.byTooltip('세션 목록'));
+      await t.pumpAndSettle();
+
+      expect(_location(router), '/seasons/season-1?tab=results');
+      expect(find.text('season:season-1:results'), findsOneWidget);
+      expect(find.text('sessions-list'), findsNothing);
     });
 
     testWidgets('SessionDetail_Narrow_HidesGridTyresPitsPen', (t) async {

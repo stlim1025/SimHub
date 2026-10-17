@@ -145,7 +145,7 @@ class TyreStintView {
   /// 화면에 보이는 컴파운드(`Soft`·`Medium`·`Hard`·`Intermediate`·`Wet`·`Unknown`).
   final String visualCompound;
 
-  /// 실제 컴파운드(`C0`~`C6`·`Intermediate`·`Wet`). 모르면 null.
+  /// 실제 컴파운드 라벨(`C0`~`C6`·`Inter`·`Wet`). 모르면 null.
   final String? actualCompound;
 
   factory TyreStintView.fromJson(Map<String, dynamic> json) => TyreStintView(

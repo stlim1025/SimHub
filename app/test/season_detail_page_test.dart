@@ -179,7 +179,7 @@ void main() {
   group('SeasonDetailPage - Season 탭', () {
     testWidgets('SeasonDetail_DefaultTab_IsSeason_ShowsRoundsAndSessionChips', (t) async {
       final repo = FakeSeasonsRepository(details: {'se1': _detail()});
-      final router = await _pumpPage(t, repo);
+      await _pumpPage(t, repo);
 
       expect(repo.detailRequests, ['se1']);
       expect(_selectedTab(t), 0);
@@ -205,8 +205,25 @@ void main() {
       await t.tap(find.widgetWithText(ActionChip, 'Q1'));
       await t.pumpAndSettle();
 
-      expect(_location(router), '/sessions/q1');
       expect(find.text('session:q1'), findsOneWidget);
+    });
+
+    testWidgets('SeasonDetail_SessionChip_PushesSession_SoBackReturnsToSameTab', (t) async {
+      final repo = FakeSeasonsRepository(details: {'se1': _detail()});
+      final router = await _pumpPage(t, repo, initialLocation: '/seasons/se1?tab=season');
+
+      await t.tap(find.widgetWithText(ActionChip, 'Q1'));
+      await t.pumpAndSettle();
+
+      // go가 아니라 push라서 시즌 화면이 스택에 남는다 — 세션 화면의 뒤로 가기가 pop으로 돌아올 수 있다.
+      expect(router.canPop(), isTrue);
+
+      router.pop();
+      await t.pumpAndSettle();
+
+      expect(find.text('R1 · Bahrain'), findsOneWidget);
+      expect(_selectedTab(t), 0);
+      expect(find.text('session:q1'), findsNothing);
     });
 
     testWidgets('SeasonDetail_Season_NoWinnerNoPoints_ShowDash', (t) async {

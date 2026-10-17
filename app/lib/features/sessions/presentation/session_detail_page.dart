@@ -39,7 +39,7 @@ class SessionDetailPage extends ConsumerWidget {
       children: [
         _Header(
           title: detail.valueOrNull?.header.trackName ?? _fallbackTitle,
-          onBack: () => context.go(_sessionsPath),
+          onBack: () => _goBack(context),
         ),
         const SizedBox(height: 16),
         detail.when(
@@ -72,6 +72,16 @@ class SessionDetailPage extends ConsumerWidget {
   }
 
   static bool _isNotFound(Object error) => error is ApiException && error.statusCode == _httpNotFound;
+
+  /// 화면 안의 뒤로 가기. 시즌 화면의 세션 칩처럼 위에 쌓여 열렸으면 연 화면으로 돌아가고,
+  /// 직접 열렸거나(딥링크·새로고침) 쌓인 화면이 없으면 세션 목록으로 간다.
+  static void _goBack(BuildContext context) {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(_sessionsPath);
+    }
+  }
 }
 
 class _Header extends StatelessWidget {

@@ -294,6 +294,24 @@ public class F1PacketMapperTests
     }
 
     [Fact]
+    public void MapClassification_PositionAboveBackendMaximum_IsTreatedAsEmptySlot()
+    {
+        // 백엔드는 position 1~32만 받는다. 쓰레기 값(33 이상) 한 칸 때문에 세션 전체가 Reject되지 않도록 빈 칸으로 본다.
+        var cars = Slots(
+            CarSlotCount,
+            (0, FinishedCar(position: 32)),
+            (1, FinishedCar(position: 33)),
+            (2, FinishedCar(position: 255)));
+        var packet = new FinalClassificationDataPacket { Header = Header(), ClassificationData = cars };
+
+        var frame = _sut.MapClassification(packet);
+
+        var row = Assert.Single(frame.Rows);
+        Assert.Equal(0, row.CarIndex);
+        Assert.Equal(32, row.Position);
+    }
+
+    [Fact]
     public void MapClassification_KeepsCarIndexOrder()
     {
         var cars = Slots(

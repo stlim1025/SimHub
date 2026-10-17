@@ -369,6 +369,47 @@ public class SessionClassificationIngestorTests
     }
 
     [Fact]
+    public async Task Apply_NewSessionLinkAtDifferentTrackInExistingWeekend_StoresWithoutMembership_AndTouchesNothing()
+    {
+        // 같은 (시즌, 주말)인데 트랙이 다른 새 세션 링크 — 주말에 합류시키면 Standings가 한 레이스를 조용히 버린다.
+        await ApplyStored(Envelope(BasePayload()));
+        var season = Assert.Single(_seasons.Seasons);
+        var weekend = Assert.Single(_seasons.Weekends);
+        var firstSession = Assert.Single(_sessions.Items);
+        var otherTrackRace = BasePayload() with { SessionRef = "888", SessionLinkId = 34, TrackId = OtherGameTrackId };
+        var laterAt = Now.AddMinutes(1);
+
+        var outcome = await Apply(Envelope(otherTrackRace, laterAt), Now.AddHours(1));
+
+        Assert.Equal(new ClassificationOutcome.Stored("link:11:22:34", IsNew: true), outcome);
+        Assert.Equal(2, _sessions.Items.Count);
+        var stored = _sessions.Items.Single(s => s.SessionLinkId == 34);
+        Assert.Equal(_otherTrackId, stored.TrackId);
+        Assert.Null(stored.SeasonId);
+        Assert.Null(stored.RaceWeekendId);
+        Assert.Equal(laterAt, stored.ClassifiedAt);
+        Assert.Equal(2, stored.Results.Count);
+
+        // 시즌·주말·기존 세션은 그대로(Touch도 하지 않는다).
+        Assert.Equal((1, 1), (_seasons.SeasonAddCalls, _seasons.WeekendAddCalls));
+        Assert.Equal((OccurredAt, OccurredAt), (season.FirstSessionAt, season.LastSessionAt));
+        Assert.Null(season.UpdatedAt);
+        Assert.Equal(OccurredAt, weekend.FirstSessionAt);
+        Assert.Null(weekend.UpdatedAt);
+        Assert.Equal(_trackId, weekend.TrackId);
+        Assert.Equal((season.Id, weekend.Id), (firstSession.SeasonId, firstSession.RaceWeekendId));
+        Assert.Null(firstSession.UpdatedAt);
+
+        // 같은 입력을 다시 보내도 같은 세션(link 키)에 병합되고 멤버십은 여전히 없다.
+        var resend = await Apply(Envelope(otherTrackRace, laterAt.AddMinutes(1)), Now.AddHours(2));
+        Assert.Equal(new ClassificationOutcome.Stored("link:11:22:34", IsNew: false), resend);
+        Assert.Equal(2, _sessions.Items.Count);
+        Assert.Null(stored.SeasonId);
+        Assert.Null(stored.RaceWeekendId);
+        Assert.Null(season.UpdatedAt);
+    }
+
+    [Fact]
     public async Task Apply_ConflictingUidKeyAlsoMismatched_IsIgnored()
     {
         // uid 키가 이미 다른 트랙의 세션이면 더 내려갈 대체 키가 없다 — 덮어쓰지 않고 무시한다.

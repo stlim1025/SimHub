@@ -133,7 +133,7 @@ Idle ──SessionStart──► InSession ──lapNum 증가──► LapInPro
 
 - 참가자 정보가 없는 차는 `driverName`·`gameDriverId`·`teamId`·`raceNumber`를 null, `isAiControlled`를 false로 보낸다.
 - 세션 도중에 Agent를 시작해 맥락 없는 순위표를 받으면 보내지 않는다(그 세션 1건 손실).
-- 매퍼(`F1PacketMapper`, Agent.Infrastructure)는 Final Classification에서 `ResultStatus`가 Invalid·Inactive이거나 `Position == 0`인 칸(빈 그리드)을 빼고,
+- 매퍼(`F1PacketMapper`, Agent.Infrastructure)는 Final Classification에서 `ResultStatus`가 Invalid·Inactive이거나 `Position == 0` 또는 `Position > 32`(백엔드 검증 상한)인 칸(빈 그리드·쓰레기 순위)을 빼고,
   시간을 ms로 바꾼다(`TotalRaceTime`은 초 → ms 반올림). NaN·0 이하·범위 밖의 깨진 값은 0 또는 `int.MaxValue`로 보정한다. UDP 이름은 첫 NUL에서 자른다.
   게임 모드·세션 종류·컴파운드 매핑은 [12](./12-seasons-sessions.md) §5.2.
 

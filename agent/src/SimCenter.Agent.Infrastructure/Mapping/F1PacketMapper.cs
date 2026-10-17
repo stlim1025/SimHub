@@ -20,6 +20,12 @@ public sealed class F1PacketMapper
     /// <summary>F1 25가 한 차에 기록하는 타이어 스틴트 최대 수(<c>Array8</c>의 칸 수, 12 §5.2).</summary>
     private const int MaxTyreStints = 8;
 
+    /// <summary>
+    /// 순위표 행으로 보내는 <c>Position</c>의 상한. 백엔드 <c>SessionClassificationValidator.MaxClassificationEntries</c>(32)와 같다 —
+    /// 이를 넘는 값이 한 칸이라도 실리면 백엔드가 세션 전체를 Reject하므로 그런 칸은 보내지 않는다.
+    /// </summary>
+    private const int MaxClassifiedPosition = 32;
+
     private static readonly IReadOnlyList<ITelemetryFrame> Empty = Array.Empty<ITelemetryFrame>();
 
     private readonly int _expectedPacketFormat;
@@ -138,8 +144,11 @@ public sealed class F1PacketMapper
         return new ClassificationFrame(packet.Header.SessionUID.ToString(), packet.Header.PlayerCarIndex, rows);
     }
 
+    /// <summary>Invalid·Inactive 칸, 순위 0, 또는 백엔드가 받는 상한(<see cref="MaxClassifiedPosition"/>)을 넘는 쓰레기 순위는 빈 칸이다.</summary>
     private static bool IsEmptySlot(FinalClassificationData slot) =>
-        slot.ResultStatus is F1Enums.ResultStatus.Invalid or F1Enums.ResultStatus.Inactive || slot.Position == 0;
+        slot.ResultStatus is F1Enums.ResultStatus.Invalid or F1Enums.ResultStatus.Inactive
+        || slot.Position == 0
+        || slot.Position > MaxClassifiedPosition;
 
     private static ClassificationRow MapClassificationRow(int carIndex, FinalClassificationData slot) => new(
         CarIndex: carIndex,

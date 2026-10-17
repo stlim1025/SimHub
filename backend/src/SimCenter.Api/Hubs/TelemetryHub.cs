@@ -14,8 +14,9 @@ public sealed class TelemetryHub : Hub
 {
     /// <summary>
     /// 허브가 받는 메시지 하나의 최대 크기(64KiB). 한도를 넘는 메시지는 Reject가 아니라 <b>연결 종료</b>라 Agent가 같은 Outbox 항목을
-    /// 끝없이 재시도하게 되므로(12 §0), 기본값(32KB)에 기대지 않고 명시한다. 가장 큰 <c>SessionClassified</c>(24대 × 스틴트 8개,
-    /// 비ASCII 이름이 <c>\uXXXX</c>로 escape된 경우)도 약 30KB라 여유가 있고, Agent는 전송 전에 48KiB로 제한한다(12 §5.5).
+    /// 끝없이 재시도하게 되므로(12 §0) 한도를 명시한다. 가장 큰 <c>SessionClassified</c>(검증 상한: 32대 × 스틴트 8개,
+    /// 비ASCII 이름 64자)는 SignalR 와이어에서 약 32~34KB다 — 허브 프로토콜은 비ASCII를 <c>\uXXXX</c>로 escape하지 않는다.
+    /// 기본 한도(32KB)를 넘기 때문에 64KiB를 명시해야 하며, Agent는 전송 전에 48KiB로 제한한다(12 §5.5).
     /// </summary>
     public const long MaxMessageBytes = 64 * 1024;
 

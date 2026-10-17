@@ -1,8 +1,10 @@
+using System.Globalization;
+
 namespace SimCenter.Domain.Seasons;
 
 /// <summary>
 /// 시즌 안의 드라이버 식별 키(D-32): 플레이어 → 게임 드라이버 ID → 이름+차 번호 → 세션 한정 차 키.
-/// 순수 함수 — 상태 없음.
+/// 순수 함수 — 상태 없음. 저장되는 키라 숫자는 항상 <see cref="CultureInfo.InvariantCulture"/>로 쓴다(현재 문화권의 음수 부호 등에 기대지 않는다).
 /// </summary>
 public static class DriverKeys
 {
@@ -27,15 +29,15 @@ public static class DriverKeys
 
         if (gameDriverId is { } driverId)
         {
-            return $"{DriverPrefix}{driverId}";
+            return string.Create(CultureInfo.InvariantCulture, $"{DriverPrefix}{driverId}");
         }
 
         var normalizedName = name?.Trim().ToUpperInvariant();
         if (!string.IsNullOrEmpty(normalizedName))
         {
-            return $"{NamePrefix}{normalizedName}{RaceNumberSeparator}{raceNumber}";
+            return string.Create(CultureInfo.InvariantCulture, $"{NamePrefix}{normalizedName}{RaceNumberSeparator}{raceNumber}");
         }
 
-        return $"{CarPrefix}{sessionRef}:{carIndex}";
+        return string.Create(CultureInfo.InvariantCulture, $"{CarPrefix}{sessionRef}:{carIndex}");
     }
 }

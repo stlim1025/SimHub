@@ -1,3 +1,4 @@
+using System.Globalization;
 using SimCenter.Domain.Enums;
 using SimCenter.Domain.Seasons;
 
@@ -35,4 +36,21 @@ public class SessionKeysTests
     [Fact]
     public void Uid_PrefixesSessionRef() =>
         Assert.Equal("uid:999", SessionKeys.Uid(SessionRef));
+
+    [Fact]
+    public void For_NegativeLinkIds_UsesAsciiMinusUnderNonInvariantCulture()
+    {
+        // sv-SE의 음수 부호는 U+2212(−)다. 저장되는 키가 문화권에 따라 달라지면 같은 세션이 다른 키로 갈라진다.
+        var previous = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = new CultureInfo("sv-SE");
+        try
+        {
+            Assert.Equal("link:-11:-22:-33",
+                SessionKeys.For(GameMode.DriverCareer, -SeasonLinkId, -WeekendLinkId, -SessionLinkId, SessionRef));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
+    }
 }

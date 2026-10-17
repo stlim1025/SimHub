@@ -33,7 +33,7 @@
                                        1. 멱등: ProcessedEvent(eventId) 있으면 Ack
                                        2. 장치 확인: deviceId로 AgentDevice 재조회 — 없거나 해제됐으면 Reject("연결이 해제된 장치입니다.")
                                        3. LastSeenAt 갱신(null이거나 1분 이상 지났을 때만, 모든 이벤트 유형)
-                                       4. LapFinished만 저장(그 외 Ack)
+                                       4. LapFinished·SessionClassified만 저장(그 외 Ack) — 아래 5~8은 LapFinished 경로, SessionClassified는 12 §6.2
                                        5. 페이로드 파싱 실패 → Reject
                                        6. Track 매핑((gameCode,trackId)→Track; 없으면 Reject)
                                        7. 랭킹적격 = IsValid && !OutOrIn && TimeTrial

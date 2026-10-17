@@ -107,7 +107,7 @@ public sealed class SessionClassificationIngestor : ISessionClassificationIngest
         }
 
         // 이 아래부터 변경을 추적한다. Reject는 더 이상 나오지 않는다.
-        // 8. 시즌·주말 업서트.
+        // 8. 시즌·주말 업서트. 이미 있는 주말의 트랙이 다르면 소속 없이(null) 저장한다.
         var membership = target.JoinsSeason ? await UpsertSeasonAndWeekendAsync(request, cancellationToken) : null;
 
         // 9. 세션 생성·갱신.
@@ -235,51 +235,76 @@ public sealed class SessionClassificationIngestor : ISessionClassificationIngest
     /// <summary>
     /// 시즌을 <c>(UserId, GameCode, SeasonLinkId)</c>로, 주말을 <c>(SeasonId, WeekendLinkId)</c>로 찾거나 만든다.
     /// 새로 만들 때는 첫·마지막 시각을 분류 시각으로 직접 채운다 — <c>Touch</c>는 이미 채워진 범위만 넓힌다.
+    /// <para>
+    /// 시즌·주말을 건드리기 전에 주말부터 찾는다. 이미 있는 주말의 트랙이 이 세션의 트랙과 다르면 합류시키지 않고
+    /// 경고를 남긴 뒤 <c>null</c>(소속 없음)을 돌려준다 — 이때 시즌·주말은 <c>Touch</c>하지 않는다(12 §6.2-8).
+    /// </para>
     /// </summary>
-    private async Task<SeasonMembership> UpsertSeasonAndWeekendAsync(StoreRequest request, CancellationToken cancellationToken)
+    private async Task<SeasonMembership?> UpsertSeasonAndWeekendAsync(StoreRequest request, CancellationToken cancellationToken)
     {
         var payload = request.Payload;
         var season = await _seasons.GetByLinkAsync(request.Device.UserId, request.GameCode, payload.SeasonLinkId, cancellationToken);
-        if (season is null)
+        var weekend = season is null
+            ? null
+            : await _seasons.GetWeekendAsync(season.Id, payload.WeekendLinkId, cancellationToken);
+
+        if (weekend is not null && weekend.TrackId != request.Track.Id)
         {
-            season = new Season
-            {
-                Id = _idGenerator.NewId(),
-                UserId = request.Device.UserId,
-                GameCode = request.GameCode,
-                SeasonLinkId = payload.SeasonLinkId,
-                GameMode = request.Classification.GameMode,
-                FirstSessionAt = request.ClassifiedAt,
-                LastSessionAt = request.ClassifiedAt,
-                CreatedAt = request.Now,
-            };
-            await _seasons.AddAsync(season, cancellationToken);
+            _logger.LogWarning(
+                "주말의 트랙과 다른 세션 → 시즌·주말에 넣지 않고 따로 저장 seasonLinkId={SeasonLinkId} weekendLinkId={WeekendLinkId} " +
+                "weekendTrack={WeekendTrack} track={Track} sessionRef={SessionRef}",
+                payload.SeasonLinkId, payload.WeekendLinkId, weekend.TrackId, request.Track.Id, payload.SessionRef);
+            return null;
         }
-        else
+
+        season = await UpsertSeasonAsync(season, request, cancellationToken);
+        weekend = await UpsertWeekendAsync(season, weekend, request, cancellationToken);
+        return new SeasonMembership(season.Id, weekend.Id);
+    }
+
+    private async Task<Season> UpsertSeasonAsync(Season? season, StoreRequest request, CancellationToken cancellationToken)
+    {
+        if (season is not null)
         {
             season.Touch(request.ClassifiedAt, request.Now);
+            return season;
         }
 
-        var weekend = await _seasons.GetWeekendAsync(season.Id, payload.WeekendLinkId, cancellationToken);
-        if (weekend is null)
+        var created = new Season
         {
-            weekend = new RaceWeekend
-            {
-                Id = _idGenerator.NewId(),
-                SeasonId = season.Id,
-                WeekendLinkId = payload.WeekendLinkId,
-                TrackId = request.Track.Id,
-                FirstSessionAt = request.ClassifiedAt,
-                CreatedAt = request.Now,
-            };
-            await _seasons.AddWeekendAsync(weekend, cancellationToken);
-        }
-        else
+            Id = _idGenerator.NewId(),
+            UserId = request.Device.UserId,
+            GameCode = request.GameCode,
+            SeasonLinkId = request.Payload.SeasonLinkId,
+            GameMode = request.Classification.GameMode,
+            FirstSessionAt = request.ClassifiedAt,
+            LastSessionAt = request.ClassifiedAt,
+            CreatedAt = request.Now,
+        };
+        await _seasons.AddAsync(created, cancellationToken);
+        return created;
+    }
+
+    private async Task<RaceWeekend> UpsertWeekendAsync(
+        Season season, RaceWeekend? weekend, StoreRequest request, CancellationToken cancellationToken)
+    {
+        if (weekend is not null)
         {
             weekend.Touch(request.ClassifiedAt, request.Now);
+            return weekend;
         }
 
-        return new SeasonMembership(season.Id, weekend.Id);
+        var created = new RaceWeekend
+        {
+            Id = _idGenerator.NewId(),
+            SeasonId = season.Id,
+            WeekendLinkId = request.Payload.WeekendLinkId,
+            TrackId = request.Track.Id,
+            FirstSessionAt = request.ClassifiedAt,
+            CreatedAt = request.Now,
+        };
+        await _seasons.AddWeekendAsync(created, cancellationToken);
+        return created;
     }
 
     private async Task CreateSessionAsync(

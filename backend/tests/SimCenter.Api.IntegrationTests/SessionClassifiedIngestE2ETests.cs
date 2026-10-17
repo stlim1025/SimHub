@@ -152,6 +152,43 @@ public sealed class SessionClassifiedIngestE2ETests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task NewSessionLinkAtDifferentTrackInSameWeekend_StoredWithoutSeasonOrWeekend()
+    {
+        var (userId, _, deviceKey) = await RegisterWithDeviceAsync();
+        await using var connection = await ConnectAsync(deviceKey);
+        Assert.True((await SendAsync(connection, Payload(GridSize, StintsPerCar), FirstOccurredAt)).Acknowledged);
+        var before = await LoadAsync(userId);
+        var season = Assert.Single(before.Seasons);
+        var weekend = Assert.Single(before.Weekends);
+
+        // 같은 (시즌, 주말) 링크인데 새 세션 링크 + 다른 트랙 → 주말에 합류시키지 않고 소속 없이 저장한다.
+        var otherTrack = SessionClassifiedPayloads.Build(
+            GridSize, StintsPerCar, SeasonLink, WeekendLink, SessionLink + 1, trackId: SessionClassifiedPayloads.OtherSeedTrackId);
+        var ack = await SendAsync(connection, otherTrack, FirstOccurredAt.AddMinutes(1));
+
+        Assert.True(ack.Acknowledged, ack.RejectReason);
+        var data = await LoadAsync(userId);
+        Assert.Equal(2, data.Sessions.Count);
+        var linked = Assert.Single(data.Sessions, s => s.SessionKey == LinkSessionKey);
+        var detached = Assert.Single(data.Sessions, s => s.SessionKey == $"link:{SeasonLink}:{WeekendLink}:{SessionLink + 1}");
+        Assert.Equal(season.Id, linked.SeasonId);
+        Assert.Equal(weekend.Id, linked.RaceWeekendId);
+        Assert.Null(detached.SeasonId);
+        Assert.Null(detached.RaceWeekendId);
+        Assert.NotEqual(linked.TrackId, detached.TrackId);
+        Assert.Equal(GridSize * 2, data.ActiveResults.Count);
+
+        // 시즌·주말은 그대로(새로 만들지도, 범위를 넓히지도 않는다).
+        var seasonAfter = Assert.Single(data.Seasons);
+        var weekendAfter = Assert.Single(data.Weekends);
+        Assert.Equal((season.FirstSessionAt, season.LastSessionAt), (seasonAfter.FirstSessionAt, seasonAfter.LastSessionAt));
+        Assert.Equal(season.UpdatedAt, seasonAfter.UpdatedAt);
+        Assert.Equal(weekend.TrackId, weekendAfter.TrackId);
+        Assert.Equal(weekend.FirstSessionAt, weekendAfter.FirstSessionAt);
+        Assert.Equal(weekend.UpdatedAt, weekendAfter.UpdatedAt);
+    }
+
+    [Fact]
     public async Task LapFinished_PersistsSessionKey()
     {
         var (userId, _, deviceKey) = await RegisterWithDeviceAsync();

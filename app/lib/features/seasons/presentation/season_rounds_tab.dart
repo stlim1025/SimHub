@@ -94,7 +94,8 @@ class _SessionChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final result = sessionChipResult(session.myPosition, session.myResultStatus);
     return ActionChip(
-      onPressed: () => context.go('$_sessionsPath/${session.sessionId}'),
+      // push로 쌓아 세션 화면의 뒤로 가기가 이 시즌(탭 포함)으로 돌아오게 한다.
+      onPressed: () => context.push('$_sessionsPath/${session.sessionId}'),
       label: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
