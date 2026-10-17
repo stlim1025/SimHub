@@ -24,7 +24,6 @@ public sealed class OutboxTelemetrySink : ITelemetrySink
     {
         var wire = new WireEnvelope(
             envelope.EventId,
-            envelope.RigCode,
             envelope.GameCode,
             envelope.OccurredAt,
             envelope.Type.ToString(),
@@ -34,10 +33,9 @@ public sealed class OutboxTelemetrySink : ITelemetrySink
         await _outbox.EnqueueAsync(envelope.EventId, envelope.OccurredAt, json, cancellationToken);
     }
 
-    /// <summary>전송용 봉투. Type은 문자열, Payload는 object(런타임 타입 직렬화).</summary>
+    /// <summary>전송용 봉투. Type은 문자열, Payload는 object(런타임 타입 직렬화). 장치 식별은 담지 않는다(D-26).</summary>
     private sealed record WireEnvelope(
         Guid EventId,
-        string RigCode,
         string GameCode,
         DateTime OccurredAt,
         string Type,

@@ -13,8 +13,8 @@ public sealed class LoggingTelemetrySink : ITelemetrySink
     public Task EmitAsync(TelemetryEnvelope envelope, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation(
-            "이벤트 {Type} rig={Rig} session={Session} eventId={EventId} payload={Payload}",
-            envelope.Type, envelope.RigCode, envelope.Payload.SessionRef, envelope.EventId, envelope.Payload);
+            "이벤트 {Type} game={Game} session={Session} eventId={EventId} payload={Payload}",
+            envelope.Type, envelope.GameCode, envelope.Payload.SessionRef, envelope.EventId, envelope.Payload);
         return Task.CompletedTask;
     }
 }

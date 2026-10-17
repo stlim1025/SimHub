@@ -111,10 +111,11 @@ public sealed class TelemetryOutbox : IAsyncDisposable
         }
 
         var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync(cancellationToken);
-
-        await using (var command = connection.CreateCommand())
+        try
         {
+            await connection.OpenAsync(cancellationToken);
+
+            await using var command = connection.CreateCommand();
             command.CommandText =
                 """
                 CREATE TABLE IF NOT EXISTS outbox(
@@ -125,6 +126,12 @@ public sealed class TelemetryOutbox : IAsyncDisposable
                 );
                 """;
             await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        catch
+        {
+            // 초기화 도중 실패·취소(종료)되면 열린 연결이 남아 파일 핸들이 새지 않도록 닫는다.
+            await connection.DisposeAsync();
+            throw;
         }
 
         _connection = connection;

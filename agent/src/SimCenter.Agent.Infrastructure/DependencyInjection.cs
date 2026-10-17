@@ -43,7 +43,7 @@ public static class DependencyInjection
         services.AddSingleton(sp =>
         {
             var options = sp.GetRequiredService<IOptions<AgentOptions>>().Value;
-            return new AgentIdentity(options.RigCode, options.GameCode);
+            return new AgentIdentity(options.GameCode);
         });
 
         // LapAnalyzer는 상태 저장 — 단일 인스턴스로 파이프라인이 순차 소비.
@@ -63,8 +63,11 @@ public static class DependencyInjection
         });
 
         // P3: 봉투를 Outbox(SQLite)에 적재하고, 업로더가 TelemetryHub로 배수한다(전송 실패에도 무손실).
+        // P6: 업로더는 저장된 장치 키로 연결하고, 상태(미연결·401 등)를 UploadStatusTracker로 알린다.
         services.AddSingleton<TelemetryOutbox>();
         services.AddSingleton<ITelemetrySink, OutboxTelemetrySink>();
+        services.AddSingleton<UploadStatusTracker>();
+        services.AddSingleton<ITelemetryHubSessionFactory, SignalRTelemetryHubSessionFactory>();
         services.AddHostedService<TelemetryUploadService>();
 
         services.AddSingleton(sp =>

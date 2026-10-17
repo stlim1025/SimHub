@@ -11,6 +11,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- 업로더 테스트가 폴링·키 재확인 주기를 짧게 주입하는 internal 생성자를 쓴다. -->
+    <InternalsVisibleTo Include="SimCenter.Agent.Infrastructure.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="F1Game.UDP" Version="26.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.0" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.0" />

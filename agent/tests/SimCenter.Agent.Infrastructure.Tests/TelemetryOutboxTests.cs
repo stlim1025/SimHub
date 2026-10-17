@@ -76,7 +76,7 @@ public class TelemetryOutboxTests
             SessionType: SessionType.TimeTrial);
 
         var envelope = new TelemetryEnvelope(
-            Guid.NewGuid(), "A-01", "F1_25",
+            Guid.NewGuid(), "F1_25",
             new DateTime(2026, 7, 7, 9, 3, 21, DateTimeKind.Utc),
             TelemetryEventType.LapFinished, payload);
 
@@ -86,8 +86,9 @@ public class TelemetryOutboxTests
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
 
-        // 봉투: camelCase, type은 문자열.
-        Assert.Equal("A-01", root.GetProperty("rigCode").GetString());
+        // 봉투: camelCase, type은 문자열. 보낸 장치는 연결의 장치 키로 정해지므로 rigCode는 없다(D-26).
+        Assert.False(root.TryGetProperty("rigCode", out _));
+        Assert.Equal("F1_25", root.GetProperty("gameCode").GetString());
         Assert.Equal("LapFinished", root.GetProperty("type").GetString());
 
         // payload: 런타임 타입(LapFinished)의 모든 필드 + enum 문자열.

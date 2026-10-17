@@ -15,14 +15,13 @@ public class DomainEventFactoryTests
         var factory = new DomainEventFactory(
             new FakeClock(occurredAt),
             new FixedIdGenerator(eventId),
-            new AgentIdentity("A-01", "F1_25"));
+            new AgentIdentity("F1_25"));
 
         var payload = new LapStarted("1001", 3);
 
         var envelope = factory.Wrap(payload);
 
         Assert.Equal(eventId, envelope.EventId);
-        Assert.Equal("A-01", envelope.RigCode);
         Assert.Equal("F1_25", envelope.GameCode);
         Assert.Equal(occurredAt, envelope.OccurredAt);
         Assert.Equal(TelemetryEventType.LapStarted, envelope.Type);
