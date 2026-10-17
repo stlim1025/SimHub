@@ -85,6 +85,17 @@ void main() {
     expect(find.text('Dashboard'), findsOneWidget);
   });
 
+  testWidgets('예전 /rankings/:trackId는 /leaderboard?trackId=로 리다이렉트된다', (t) async {
+    final router = await _pumpApp(t);
+
+    router.go('/rankings/t1');
+    await t.pumpAndSettle();
+
+    expect(_location(router), '/leaderboard?trackId=t1');
+    expect(find.text('Dashboard'), findsOneWidget); // 셸 안의 Leaderboard로 열린다.
+    expect(find.text('Monaco'), findsOneWidget);
+  });
+
   testWidgets('/telemetry-app은 셸 안에서 Telemetry App 화면을 연다', (t) async {
     final router = await _pumpApp(t);
 

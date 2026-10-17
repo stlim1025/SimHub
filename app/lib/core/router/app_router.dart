@@ -56,6 +56,14 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(path: '/splash', builder: (_, _) => const SplashPage()),
       GoRoute(path: '/login', builder: (_, _) => const LoginPage()),
+      // 예전 랭킹 경로(P5)는 셸 안의 Leaderboard로 보낸다(11 §7.4).
+      GoRoute(
+        path: '/rankings/:trackId',
+        redirect: (_, state) => Uri(
+          path: '/leaderboard',
+          queryParameters: {'trackId': state.pathParameters['trackId']!},
+        ).toString(),
+      ),
       ShellRoute(
         builder: (_, state, child) => AppShell(location: state.uri.path, child: child),
         routes: [
