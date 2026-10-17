@@ -39,10 +39,10 @@ SimCenter/
 │   ├── telemetry/            # F1 UDP 패킷 사양 요약, 이벤트 정의
 │   └── samples/              # 샘플 payload (테스트/문서용 고정 데이터)
 │
-├── backend/                  # ASP.NET Core 8 — 서버 (Clean Architecture)
+├── backend/                  # ASP.NET Core 10 — 서버 (Clean Architecture)
 │   └── (상세: 01-architecture.md)
 │
-├── agent/                    # .NET 8 — Windows Telemetry Agent
+├── agent/                    # .NET 10 — Windows Telemetry Agent
 │   └── (상세: 01-architecture.md)
 │
 ├── app/                      # Flutter — 모바일/웹 앱 (Feature First)
@@ -76,7 +76,7 @@ SimCenter/
 
 | 항목 | 내용 |
 |---|---|
-| 런타임 | .NET 9 / C# / Windows |
+| 런타임 | .NET 10 / C# / Windows |
 | 입력 | F1 게임 UDP Telemetry (기본 20777) |
 | 처리 | Packet Parse → Lap/Sector Analyze → 의미 있는 **도메인 이벤트** 생성 |
 | 출력 | SignalR로 Backend에 이벤트 전송 (Raw 패킷 전송 금지) |
@@ -87,7 +87,7 @@ SimCenter/
 
 | 항목 | 내용 |
 |---|---|
-| 런타임 | ASP.NET Core 8 |
+| 런타임 | ASP.NET Core 10 |
 | 아키텍처 | Clean Architecture + Repository Pattern |
 | DB | PostgreSQL (EF Core, Code First, Migration) |
 | 제공 | REST API(조회/명령) + SignalR Hub(실시간 이벤트) + JWT 인증 |

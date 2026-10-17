@@ -11,7 +11,7 @@
 
 ---
 
-## 2. Backend — ASP.NET Core 8 (Clean Architecture)
+## 2. Backend — ASP.NET Core 10 (Clean Architecture)
 
 ### 2.1 Solution 구조
 
@@ -88,7 +88,7 @@ SimCenter.Application/
 
 ---
 
-## 3. Agent — .NET 8 Windows Telemetry Agent
+## 3. Agent — .NET 10 Windows Telemetry Agent
 
 ### 3.1 Solution 구조
 

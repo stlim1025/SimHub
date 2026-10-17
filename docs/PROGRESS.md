@@ -34,10 +34,10 @@
   ```
   CLAUDE.md                        # 프로젝트 헌장(압축본, 71줄)
   docs/00~09 + PROGRESS.md         # 설계 문서 + 진행 상황
-  global.json                      # .NET 9 SDK 버전 고정
+  global.json                      # .NET 10 SDK 버전 고정
   shared/                          # 계약(Contract) — OpenAPI, JSON Schema, Telemetry Spec, Samples
-  backend/                         # ASP.NET Core 9 Clean Architecture (빌드 ✅)
-  agent/                           # .NET 9 Agent — WPF Tray + Core + Infrastructure (빌드 ✅)
+  backend/                         # ASP.NET Core 10 Clean Architecture (빌드 ✅)
+  agent/                           # .NET 10 Agent — WPF Tray + Core + Infrastructure (빌드 ✅)
   app/                             # Flutter Feature-First (pub get ✅)
   ```
 - Git: 초기화 완료. `main` 브랜치.
@@ -217,14 +217,14 @@
 ## 6. 다른 환경에서 재개하는 방법
 
 1. 리포지토리를 clone: `git clone https://github.com/stlim1025/SimHub.git`
-2. .NET 9 SDK 설치: `dotnet-install.ps1 -Channel 9.0` 또는 공식 인스톨러.
+2. .NET 10 SDK 설치: `dotnet-install.ps1 -Channel 10.0` 또는 공식 인스톨러.
 3. Flutter SDK 설치 (Android/iOS/Web 타겟).
 4. 새 세션에서 읽는 순서: **이 `PROGRESS.md` → `CLAUDE.md` → `docs/08`(결정) → 필요한 설계 문서.**
 5. 진행 지점: **§4 "다음 할 일" = Phase 1 상세 설계 착수.** 코드 착수 전 설계안 리뷰부터.
 6. 작업 규칙(헌장): 설계 → 리뷰 → 구현 → 리뷰. 추측 금지, 불확실하면 질문. 구조 임의 변경 금지.
 
 ### 개발 환경 전제(참고)
-- Backend/Agent: **.NET 9 SDK** 필요. (`global.json`에 9.0.315 고정)
+- Backend/Agent: **.NET 10 SDK** 필요. (`global.json`에 10.0.301 고정)
 - Backend DB: **PostgreSQL** (EF Core Code First + Migration).
 - App: **Flutter SDK** (Android/iOS/Web).
 - Agent: Windows + F1 25(UDP Telemetry 활성, 기본 포트 20777). **WPF** 기반 트레이 앱.

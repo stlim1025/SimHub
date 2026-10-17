@@ -19,8 +19,8 @@ UDP Telemetry 수신 → 랩 종료 감지 → 랩 저장 → 랭킹(TOP10) → 
 |---|---|---|
 | `docs/` | 설계 문서 | Markdown |
 | `shared/` | 계약(OpenAPI·JSON Schema·Telemetry Spec) — 코드 아닌 Contract | — |
-| `agent/` | Windows Telemetry Agent (UDP 파싱·Lap 분석·SignalR·SQLite 캐시·Tray) | .NET 8 / C# |
-| `backend/` | REST·SignalR·Auth·Ranking·Telemetry (Clean Architecture) | ASP.NET Core 8 / EF Core / PostgreSQL |
+| `agent/` | Windows Telemetry Agent (UDP 파싱·Lap 분석·SignalR·SQLite 캐시·Tray) | .NET 10 / C# |
+| `backend/` | REST·SignalR·Auth·Ranking·Telemetry (Clean Architecture) | ASP.NET Core 10 / EF Core / PostgreSQL |
 | `app/` | 모바일/웹 앱 (Feature First) | Flutter / Riverpod / GoRouter / Material3 |
 
 **Dependency 방향:** `agent → backend → app` (단방향). 모두 `shared`만 의존, `shared`는 무의존.
