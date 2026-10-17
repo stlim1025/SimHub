@@ -25,11 +25,14 @@
   "type": "https://simcenter/errors/validation",
   "title": "Validation failed",
   "status": 400,
-  "detail": "유효하지 않거나 만료된 코드입니다.",
+  "detail": "Validation failed.",
   "traceId": "00-abc...-01",
   "errors": { "code": ["유효하지 않거나 만료된 코드입니다."] }
 }
 ```
+
+> 검증 실패(400)의 `detail`은 항상 `"Validation failed."`이고, 필드별 메시지는 `errors.<필드>[0]`에 담긴다
+> (위 예: `POST /agent/pair`의 잘못된 연결 코드 → `errors.code[0]`).
 
 | 코드 | 사용 |
 |---|---|

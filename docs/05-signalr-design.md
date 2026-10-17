@@ -77,10 +77,14 @@ D-23 정련: `SubmitEvent`는 별도 S→C 메서드 대신 **반환값 `IngestR
 | 응답 | 용도 |
 |---|---|
 | Ack | 수신·처리 확인 → Agent가 Outbox에서 flush |
-| Reject(reason) | 영구 무효(파싱 실패·트랙 매핑 없음·**연결이 해제된 장치**). Agent는 Outbox에서 폐기, 서버는 로깅 |
+| Reject(reason) | 영구 무효(파싱 실패·트랙 매핑 없음). Agent는 Outbox에서 폐기, 서버는 로깅 |
+| Reject("연결이 해제된 장치입니다.") | **예외:** 이벤트가 아니라 장치 키가 무효. Agent는 그 항목을 **Outbox에 남기고** 업로드를 멈춘 뒤 `다시 연결 필요`로 바뀐다(401과 같은 처리) |
 
 > **멱등성:** Backend는 `eventId`로 중복을 걸러낸다(재전송 안전). Agent는 응답을 받을 때까지 Outbox 보관(무응답만 재전송).
 > **해제된 장치:** 이미 열린 연결로 이벤트를 보내도 인입 시 장치를 다시 확인해 Reject("연결이 해제된 장치입니다.")한다.
+> Agent는 이 사유 문구를 **정확히 비교해** 일반 Reject와 구분한다(서버 `TelemetryIngestService.RevokedDeviceReason` =
+> Agent `TelemetryUploadService.RevokedDeviceRejectReason`, 바꿀 때 함께 바꾼다). 세션을 닫고 다른 키가 저장될 때까지 기다리며,
+> 같은 키로 새로 연결하면 401이다. 새 코드로 다시 연결하면 남겨 둔 항목부터 올라간다([11](./11-personal-mode.md) §6.4).
 > `AgentDevice.LastSeenAt`은 모든 이벤트 유형에서 갱신하되 1분에 한 번만 쓴다.
 
 ---

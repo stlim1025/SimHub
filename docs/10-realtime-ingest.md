@@ -43,6 +43,7 @@
 
 - **응답 규약(D-23 정련):** `SubmitEvent`는 `IngestResult{acknowledged, rejectReason}`를 **반환**(요청/응답).
   Ack·Reject 모두 Agent는 Outbox flush. **무응답(네트워크 장애)만** 보관·재전송(at-least-once + 멱등 = effectively-once).
+  **예외:** Reject("연결이 해제된 장치입니다.")는 장치 키가 무효라는 뜻이라 Agent가 그 항목을 남기고 `다시 연결 필요`로 멈춘다(401과 같은 처리, [11](./11-personal-mode.md) §6.4).
 - **삭제(D-25):** 활성 체크인 세션 조회와 "활성 세션 없음 → Drop+Ack"(D-22). 랩은 항상 장치 주인에게 귀속된다.
 
 ---

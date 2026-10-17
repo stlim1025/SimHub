@@ -210,8 +210,12 @@ F1Laps와 비슷한 구성(Dashboard · Seasons · Sessions · Laps · Analytics
 ### 6.4 업로드 (`TelemetryUploadService`)
 
 - 키가 없으면 업로드 루프는 대기하고, `Changed` 이벤트가 오면 다시 시작한다.
-- 허브 연결이 **401**로 실패하면 무한 재시도를 멈추고 상태를 `다시 연결 필요`로 바꾼다. 새 키가 저장될 때까지 업로드하지 않는다.
-  (현재 코드는 401도 일반 오류처럼 계속 재시도한다.)
+- 허브 연결이 **401**로 실패하면 무한 재시도를 멈추고 상태를 `다시 연결 필요`로 바꾼다. 새 키가 저장될 때까지 업로드하지 않는다(Outbox는 그대로 둔다).
+- **연결이 열려 있는 동안 웹에서 이 PC를 해제하면** 다음 이벤트를 서버가 Reject("연결이 해제된 장치입니다.")한다(§5).
+  Agent는 이 Reject를 401과 똑같이 다룬다 — 그 항목을 Outbox에서 **지우지 않고**, 세션을 닫고 `다시 연결 필요`로 바꾼 뒤 다른 키를 기다린다.
+  이후 같은 키로 새로 연결하면 401이다. 이 문구는 서버 `TelemetryIngestService.RevokedDeviceReason`과
+  Agent `TelemetryUploadService.RevokedDeviceRejectReason`이 **정확히 같아야** 한다(바꿀 때 함께 바꾼다).
+  그 밖의 Reject(파싱 실패·트랙 매핑 없음 등 영구 무효)는 지금처럼 Outbox에서 지운다.
 - 그 밖의 네트워크 오류는 지금처럼 지수 백오프(최대 30초)로 재시도한다.
 - **연결 전에 쌓인 이벤트**는 연결 후 업로드되어 연결한 계정에 귀속된다(그 PC 주인의 기록으로 본다).
 
@@ -227,7 +231,7 @@ F1Laps와 비슷한 구성(Dashboard · Seasons · Sessions · Laps · Analytics
 ### 7.1 원칙
 
 - 기술 스택 유지: Flutter · Riverpod · GoRouter · Material3(헌장). 한 코드베이스로 웹과 모바일을 지원한다.
-- 테마: 어두운 남색 배경 + 보라(인디고) 강조색. F1Laps 스크린샷의 분위기를 따른다. 색은 `app_theme.dart`의 토큰으로만 정의한다.
+- 테마: 어두운 남색 배경 + 보라(인디고) 강조색. F1Laps 스크린샷의 분위기를 따른다. 색은 `app/lib/core/theme/app_colors.dart`의 토큰(`AppColors`)으로만 정의하고, `app_theme.dart`는 그 토큰으로 테마를 조립한다.
 
 ### 7.2 셸
 
@@ -287,13 +291,18 @@ F1Laps와 비슷한 구성(Dashboard · Seasons · Sessions · Laps · Analytics
 | `POST /agent/pair` 분당 10회 초과(IP) | 429 |
 | `deviceName` 50자 초과 | 400(Validation) |
 | 연결 해제된 장치로 허브 연결 | 401 → Agent는 `다시 연결 필요`로 멈춤 |
-| 연결 해제된 장치가 열린 연결로 이벤트 전송 | `IngestResult.Reject("연결이 해제된 장치입니다.")` |
+| 연결 해제된 장치가 열린 연결로 이벤트 전송 | `IngestResult.Reject("연결이 해제된 장치입니다.")` → Agent는 그 항목을 Outbox에 남기고 `다시 연결 필요`로 멈춤(§6.4) |
 | 남의 장치 해제 시도 | 403. 없는 장치는 404 |
 | `Ranking:TimeZoneId`가 잘못됨 | 서버 시작 실패(options `ValidateOnStart`) |
 | Agent의 DPAPI 복호화 실패 | 미연결로 처리 + 오류 로그 |
 | Agent 연결 중 네트워크 오류 | Cli: 오류 메시지 + 종료 코드 1. Tray: 상태 영역에 오류 표시 |
 
 모든 오류는 Serilog로 기록한다. 연결 코드·장치 키 원문은 **로그에 남기지 않는다.**
+
+> **배포 메모(P11 전제, 현재 코드에는 없음):** 리버스 프록시(nginx·IIS·클라우드 LB 등) 뒤에서 운영하면
+> `UseForwardedHeaders`를 **신뢰할 프록시(`KnownProxies`/`KnownNetworks`)를 지정해** 켜야 한다.
+> 그러지 않으면 `RemoteIpAddress`가 프록시 주소가 되어 모든 클라이언트가 `POST /agent/pair`의 IP당 요청 제한 버킷 하나를 같이 쓴다
+> (한 사용자의 실패가 모두를 429로 막는다). 신뢰할 프록시를 지정하지 않고 헤더만 믿으면 `X-Forwarded-For` 위조로 제한을 우회할 수 있다.
 
 ---
 
@@ -315,7 +324,7 @@ F1Laps와 비슷한 구성(Dashboard · Seasons · Sessions · Laps · Analytics
 **Agent (Core.Tests · Infrastructure.Tests)**
 - `IDeviceCredentialStore`: DPAPI 저장·복원 왕복, 파일 없음 → null, 손상 파일 → null + 로그, `Clear()`.
 - `pair` 명령: 성공 시 키 저장·종료 코드 0, 400·네트워크 오류 시 종료 코드 1.
-- 업로드: 키 없음 → 대기, 키 저장 → 시작, 401 → 중단·상태 전환.
+- 업로드: 키 없음 → 대기, 키 저장 → 시작, 401 → 중단·상태 전환, 연결 해제 Reject → 항목 보관·중단(다른 키로 재개), 일반 Reject → 삭제.
 - 봉투·wire JSON에 `rigCode`가 없음(기존 테스트 기대값 수정).
 
 **App (flutter test)**
