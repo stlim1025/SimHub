@@ -20,4 +20,19 @@ class AppColors {
 
   /// 오류·무효 표시.
   static const Color danger = Color(0xFFF87171);
+
+  /// 시상대 1·2·3위(docs/12 §8.5).
+  static const Color podiumGold = Color(0xFFF5C542);
+  static const Color podiumSilver = Color(0xFFC0C7D1);
+  static const Color podiumBronze = Color(0xFFCD7F32);
+
+  /// 세션 최고 랩. `accent` 인디고와 뚜렷이 구분되는 자홍색.
+  static const Color fastestLap = Color(0xFFD946EF);
+
+  /// 타이어 컴파운드(visualCompound).
+  static const Color tyreSoft = Color(0xFFEF4444);
+  static const Color tyreMedium = Color(0xFFFACC15);
+  static const Color tyreHard = Color(0xFFF3F4F6);
+  static const Color tyreIntermediate = Color(0xFF22C55E);
+  static const Color tyreWet = Color(0xFF3B82F6);
 }

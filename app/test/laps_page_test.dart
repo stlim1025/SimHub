@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:simcenter_app/core/widgets/pagination_bar.dart';
 import 'package:simcenter_app/features/laps/data/laps_repository.dart';
 import 'package:simcenter_app/features/laps/domain/lap_models.dart';
 import 'package:simcenter_app/features/laps/presentation/laps_page.dart';
@@ -208,6 +209,7 @@ void main() {
       final repo = FakeLapsRepository(laps: _manyLaps(20));
       await _pump(t, repo, initialLocation: trackPath);
 
+      expect(find.byType(PaginationBar), findsOneWidget); // 공용 페이지 바를 쓴다.
       expect(find.text('Showing 1 to 15 of 20'), findsOneWidget);
       expect(_button(t, '이전').onPressed, isNull);
       expect(_button(t, '다음').onPressed, isNotNull);
@@ -249,6 +251,7 @@ void main() {
       await _pump(t, FakeLapsRepository(), initialLocation: trackPath);
 
       expect(find.text(_emptyText), findsOneWidget);
+      expect(find.byType(PaginationBar), findsNothing);
       expect(find.textContaining('Showing'), findsNothing);
     });
 

@@ -10,6 +10,8 @@ import '../../features/devices/presentation/telemetry_app_page.dart';
 import '../../features/laps/presentation/laps_page.dart';
 import '../../features/laps/presentation/track_laps_page.dart';
 import '../../features/ranking/presentation/leaderboard_page.dart';
+import '../../features/sessions/presentation/session_detail_page.dart';
+import '../../features/sessions/presentation/sessions_page.dart';
 import '../shell/app_shell.dart';
 
 /// 인증 화면(로그인 상태에서는 들어갈 수 없는 경로).
@@ -68,6 +70,15 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, state, child) => AppShell(location: state.uri.path, child: child),
         routes: [
           GoRoute(path: '/', builder: (_, _) => const DashboardPage()),
+          // 세션 목록의 필터는 `?type=`(모르는 값은 all, docs/12 §8.1).
+          GoRoute(
+            path: '/sessions',
+            builder: (_, state) => SessionsPage(filter: state.uri.queryParameters['type']),
+          ),
+          GoRoute(
+            path: '/sessions/:sessionId',
+            builder: (_, state) => SessionDetailPage(sessionId: state.pathParameters['sessionId']!),
+          ),
           GoRoute(path: '/laps', builder: (_, _) => const LapsPage()),
           GoRoute(
             path: '/laps/tracks/:trackId',

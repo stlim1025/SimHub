@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:simcenter_app/core/config/app_config.dart';
+import 'package:simcenter_app/core/network/api_exception.dart';
 import 'package:simcenter_app/core/realtime/ranking_hub_client.dart';
 import 'package:simcenter_app/features/auth/application/auth_controller.dart';
 import 'package:simcenter_app/features/auth/domain/auth_models.dart';
@@ -13,6 +14,9 @@ import 'package:simcenter_app/features/laps/data/laps_repository.dart';
 import 'package:simcenter_app/features/laps/domain/lap_models.dart';
 import 'package:simcenter_app/features/ranking/data/ranking_repository.dart';
 import 'package:simcenter_app/features/ranking/domain/ranking_models.dart';
+import 'package:simcenter_app/features/sessions/data/sessions_repository.dart';
+import 'package:simcenter_app/features/sessions/domain/session_display.dart';
+import 'package:simcenter_app/features/sessions/domain/session_models.dart';
 
 /// 테스트용 사용자.
 const testUser = AppUser(userId: 'u1', displayName: '홍길동');
@@ -238,6 +242,154 @@ AgentDevice deviceOf(String id, String name, {DateTime? lastSeenAt, DateTime? cr
       name: name,
       lastSeenAt: lastSeenAt,
       createdAt: createdAt ?? DateTime.utc(2026, 10, 1, 9),
+    );
+
+/// 요청을 기록하고 미리 정한 세션을 돌려주는 세션 저장소.
+/// [sessionType]이 있으면 그 유형만 거르고, page/pageSize만큼 잘라 돌려준다(서버 계약 흉내).
+/// [details]에 없는 Id의 상세 조회는 404 [ApiException]으로 실패한다.
+class FakeSessionsRepository implements SessionsRepository {
+  FakeSessionsRepository({this.sessions = const [], this.details = const {}});
+
+  final List<SessionSummary> sessions;
+  final Map<String, SessionDetail> details;
+  final requests = <({String? sessionType, int page, int pageSize})>[];
+  final detailRequests = <String>[];
+
+  @override
+  Future<SessionsPage> getMySessions({
+    String? sessionType,
+    int page = 1,
+    int pageSize = kSessionsPageSize,
+  }) async {
+    requests.add((sessionType: sessionType, page: page, pageSize: pageSize));
+    final matching = [
+      for (final s in sessions)
+        if (sessionType == null || s.sessionType == sessionType) s,
+    ];
+    final items = matching.skip((page - 1) * pageSize).take(pageSize).toList();
+    return SessionsPage(page: page, pageSize: pageSize, total: matching.length, items: items);
+  }
+
+  @override
+  Future<SessionDetail> getMySession(String sessionId) async {
+    detailRequests.add(sessionId);
+    final detail = details[sessionId];
+    if (detail == null) {
+      throw ApiException('대상을 찾을 수 없어요.', statusCode: 404);
+    }
+    return detail;
+  }
+}
+
+SessionSummary sessionOf(
+  String id, {
+  String trackName = 'Spa',
+  String sessionType = 'Race',
+  String sessionKind = 'Race',
+  String gameMode = 'DriverCareer',
+  String? seasonId,
+  int carCount = 22,
+  int? myPosition = 4,
+  int? myGridPosition = 6,
+  String? myResultStatus = 'Finished',
+  int? myBestLapTimeMs = 105321,
+  int? myPoints = 12,
+  DateTime? classifiedAt,
+}) =>
+    SessionSummary(
+      sessionId: id,
+      classifiedAt: classifiedAt ?? DateTime.utc(2026, 10, 12, 9),
+      trackName: trackName,
+      sessionType: sessionType,
+      sessionKind: sessionKind,
+      gameMode: gameMode,
+      seasonId: seasonId,
+      carCount: carCount,
+      myPosition: myPosition,
+      myGridPosition: myGridPosition,
+      myResultStatus: myResultStatus,
+      myBestLapTimeMs: myBestLapTimeMs,
+      myPoints: myPoints,
+    );
+
+/// 결과 한 줄. [carIndex]를 생략하면 순위 - 1이다(행마다 달라야 기준 행 비교가 맞는다).
+SessionResult resultOf(
+  int position, {
+  int? carIndex,
+  String? name,
+  String teamName = 'McLaren',
+  String teamColor = '#FF8000',
+  bool isAiControlled = true,
+  bool isPlayer = false,
+  int? gridPosition,
+  int numLaps = 15,
+  int? bestLapTimeMs,
+  bool isFastestLap = false,
+  int? totalRaceTimeMs,
+  int penaltiesTimeMs = 0,
+  int numPenalties = 0,
+  int numPitStops = 1,
+  int points = 0,
+  String resultStatus = 'Finished',
+  List<TyreStintView> tyreStints = const [],
+}) =>
+    SessionResult(
+      position: position,
+      carIndex: carIndex ?? position - 1,
+      name: name ?? 'DRIVER $position',
+      teamId: 8,
+      teamName: teamName,
+      teamColor: teamColor,
+      raceNumber: position,
+      isAiControlled: isAiControlled,
+      isPlayer: isPlayer,
+      gridPosition: gridPosition ?? position,
+      numLaps: numLaps,
+      bestLapTimeMs: bestLapTimeMs,
+      isFastestLap: isFastestLap,
+      totalRaceTimeMs: totalRaceTimeMs,
+      penaltiesTimeMs: penaltiesTimeMs,
+      numPenalties: numPenalties,
+      numPitStops: numPitStops,
+      points: points,
+      resultStatus: resultStatus,
+      tyreStints: tyreStints,
+    );
+
+SessionDetail detailOf(
+  String id, {
+  List<SessionResult> results = const [],
+  String trackName = 'Spa',
+  String sessionType = 'Race',
+  String sessionKind = 'Race',
+  String gameMode = 'DriverCareer',
+  String? seasonId,
+  int? round,
+  int totalLaps = 15,
+  int aiDifficulty = 85,
+  bool isNetworkGame = false,
+}) =>
+    SessionDetail(
+      header: SessionDetailHeader(
+        sessionId: id,
+        classifiedAt: DateTime.utc(2026, 10, 12, 9),
+        trackName: trackName,
+        sessionType: sessionType,
+        sessionKind: sessionKind,
+        gameMode: gameMode,
+        seasonId: seasonId,
+        carCount: results.length,
+        myPosition: null,
+        myGridPosition: null,
+        myResultStatus: null,
+        myBestLapTimeMs: null,
+        myPoints: null,
+        totalLaps: totalLaps,
+        aiDifficulty: aiDifficulty,
+        isNetworkGame: isNetworkGame,
+        round: round,
+      ),
+      results: results,
     );
 
 /// 논리 픽셀 = 물리 픽셀(1:1)로 뷰 크기를 고정한다.

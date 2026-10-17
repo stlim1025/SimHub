@@ -10,14 +10,22 @@ import 'package:simcenter_app/features/devices/presentation/telemetry_app_page.d
 import 'package:simcenter_app/features/laps/data/laps_repository.dart';
 import 'package:simcenter_app/features/ranking/data/ranking_repository.dart';
 import 'package:simcenter_app/features/ranking/domain/ranking_models.dart';
+import 'package:simcenter_app/features/sessions/data/sessions_repository.dart';
+import 'package:simcenter_app/features/sessions/presentation/session_detail_page.dart';
+import 'package:simcenter_app/features/sessions/presentation/sessions_page.dart';
 
 import 'support/fakes.dart';
 
-Future<GoRouter> _pumpApp(WidgetTester tester, {AppUser? user = testUser}) async {
+Future<GoRouter> _pumpApp(
+  WidgetTester tester, {
+  AppUser? user = testUser,
+  FakeSessionsRepository? sessionsRepo,
+}) async {
   setViewSize(tester, const Size(1000, 800));
   final container = ProviderContainer(overrides: [
     fakeAuth(user),
     lapsRepositoryProvider.overrideWithValue(FakeLapsRepository()),
+    sessionsRepositoryProvider.overrideWithValue(sessionsRepo ?? FakeSessionsRepository()),
     devicesRepositoryProvider.overrideWithValue(FakeDevicesRepository()),
     rankingRepositoryProvider.overrideWithValue(FakeRankingRepository(
       tracks: const [Track(trackId: 't1', gameCode: 'F1_25', name: 'Monaco')],
@@ -115,6 +123,50 @@ void main() {
 
     expect(_location(router), '/telemetry-app');
     expect(find.byType(TelemetryAppPage), findsOneWidget);
+  });
+
+  testWidgets('/sessions는 셸 안에서 Sessions 화면을 열고 type 쿼리를 필터로 넘긴다', (t) async {
+    final repo = FakeSessionsRepository(sessions: [sessionOf('s1', trackName: 'Spa')]);
+    final router = await _pumpApp(t, sessionsRepo: repo);
+
+    router.go('/sessions');
+    await t.pumpAndSettle();
+    expect(_location(router), '/sessions');
+    expect(find.byType(SessionsPage), findsOneWidget);
+    expect(find.text('Spa'), findsOneWidget);
+    expect(find.text('Dashboard'), findsOneWidget); // 사이드바가 그대로 있다.
+    expect(repo.requests.last.sessionType, isNull);
+
+    router.go('/sessions?type=qualifying');
+    await t.pumpAndSettle();
+    expect(repo.requests.last.sessionType, 'Qualifying');
+  });
+
+  testWidgets('/sessions/:sessionId는 셸 안에서 세션 결과 화면을 연다', (t) async {
+    final repo = FakeSessionsRepository(details: {
+      'abc': detailOf('abc', trackName: 'Monza', results: [resultOf(1, name: 'NORRIS')]),
+    });
+    final router = await _pumpApp(t, sessionsRepo: repo);
+
+    router.go('/sessions/abc');
+    await t.pumpAndSettle();
+
+    expect(_location(router), '/sessions/abc');
+    expect(find.byType(SessionDetailPage), findsOneWidget);
+    expect(repo.detailRequests, ['abc']);
+    expect(find.text('Monza'), findsOneWidget);
+    expect(find.text('NORRIS'), findsOneWidget);
+    expect(find.text('Dashboard'), findsOneWidget); // 사이드바가 그대로 있다.
+  });
+
+  testWidgets('사이드바의 Sessions 메뉴로 이동한다', (t) async {
+    final router = await _pumpApp(t);
+
+    await t.tap(find.widgetWithText(ListTile, 'Sessions'));
+    await t.pumpAndSettle();
+
+    expect(_location(router), '/sessions');
+    expect(find.byType(SessionsPage), findsOneWidget);
   });
 
   testWidgets('/laps/tracks/:trackId도 셸 안에서 열린다', (t) async {
