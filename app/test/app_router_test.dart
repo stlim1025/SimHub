@@ -164,6 +164,23 @@ void main() {
     expect(find.text('Dashboard'), findsOneWidget); // 사이드바가 그대로 있다.
   });
 
+  testWidgets('/sessions/:sessionId?from=season은 세션 결과 화면을 열고 from을 넘긴다', (t) async {
+    final repo = FakeSessionsRepository(details: {
+      'abc': detailOf('abc', trackName: 'Monza', results: [resultOf(1, name: 'NORRIS')], seasonId: 'se1', round: 2),
+    });
+    final router = await _pumpApp(t, sessionsRepo: repo);
+
+    router.go('/sessions/abc?from=season');
+    await t.pumpAndSettle();
+
+    expect(_location(router), '/sessions/abc?from=season');
+    final page = t.widget<SessionDetailPage>(find.byType(SessionDetailPage));
+    expect(page.sessionId, 'abc');
+    expect(page.from, 'season');
+    expect(find.text('Monza'), findsOneWidget);
+    expect(find.text('NORRIS'), findsOneWidget);
+  });
+
   testWidgets('사이드바의 Sessions 메뉴로 이동한다', (t) async {
     final router = await _pumpApp(t);
 

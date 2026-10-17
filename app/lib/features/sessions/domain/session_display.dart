@@ -47,6 +47,15 @@ String normalizeSessionFilter(String? value) =>
 /// 필터에 해당하는 API `sessionType`. `all`·모르는 값은 null(전체).
 String? sessionTypeForFilter(String filter) => _sessionTypeByFilter[filter];
 
+// -- 세션 상세 주소 (`/sessions/:id?from=`) -----------------------------------
+
+/// 세션 상세 주소의 `from` 쿼리 값: 시즌 화면의 세션 칩에서 열었다는 표시. 뒤로 가기가 그 시즌으로 돌아간다(docs/12 §8.1).
+const String kSessionFromSeason = 'season';
+
+/// 세션 상세 주소. [fromSeason]이면 `?from=season`을 붙인다. 주소가 곧 화면이라 새로고침·공유도 같은 세션을 연다.
+String sessionLocation(String sessionId, {bool fromSeason = false}) =>
+    fromSeason ? '/sessions/$sessionId?from=$kSessionFromSeason' : '/sessions/$sessionId';
+
 // -- 라벨 --------------------------------------------------------------------
 
 const Map<String, String> _sessionKindLabels = {

@@ -7,8 +7,6 @@ import '../../sessions/domain/session_display.dart';
 import '../domain/season_display.dart';
 import '../domain/season_models.dart';
 
-const String _sessionsPath = '/sessions';
-
 const double _cardGap = 12;
 const double _statSpacing = 32;
 const double _chipSpacing = 8;
@@ -84,7 +82,7 @@ class _RoundCard extends StatelessWidget {
   }
 }
 
-/// 세션 칩: 세션 라벨(`Q1`, `R` …) + 내 결과(`P4`, `DNF`). 누르면 `/sessions/:id`.
+/// 세션 칩: 세션 라벨(`Q1`, `R` …) + 내 결과(`P4`, `DNF`). 누르면 `/sessions/:id?from=season`(뒤로 가기가 이 시즌으로 돌아온다).
 class _SessionChip extends StatelessWidget {
   const _SessionChip({required this.session});
 
@@ -94,8 +92,8 @@ class _SessionChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final result = sessionChipResult(session.myPosition, session.myResultStatus);
     return ActionChip(
-      // push로 쌓아 세션 화면의 뒤로 가기가 이 시즌(탭 포함)으로 돌아오게 한다.
-      onPressed: () => context.push('$_sessionsPath/${session.sessionId}'),
+      // go + `from=season`: 주소가 곧 화면이고, 세션 화면의 뒤로 가기가 이 시즌으로 돌아온다.
+      onPressed: () => context.go(sessionLocation(session.sessionId, fromSeason: true)),
       label: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

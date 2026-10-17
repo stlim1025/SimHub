@@ -496,6 +496,8 @@ Agent.Core에도 §4.3과 같은 이름의 enum(`GameMode`, `SessionKind`, `Resu
 | `/sessions?type=all\|race\|qualifying\|practice` | 세션 목록 | `GET /me/sessions?sessionType=&pageSize=15` |
 | `/sessions/:sessionId` | 세션 결과 | `GET /me/sessions/{id}` |
 
+- **뒤로 가기(`/sessions/:id?from=season`):** 시즌 칩이 붙이는 표시다. 세션 화면의 뒤로 가기는 `from=season`이고 불러온 세션에 `seasonId`가 있으면 `context.go('/seasons/{seasonId}?tab=season')`,
+  그 밖(`from` 없음·모르는 값·시즌 없는 세션·로딩 중)에는 `context.go('/sessions')`다. 라우터 스택에 기대지 않으므로(`push`/`pop` 사용 안 함) 새로고침·딥링크에서도 같은 결과다. 헤더의 `R{n}` 링크는 그대로 둔다.
 - **쿼리 규칙:** 모르는 `tab` → `season`, 모르는 `type` → `all`. 탭·필터를 바꿀 때는 `Router.neglect`로 감싼 `context.go`로 쿼리만 바꾼다(브라우저 기록에 탭 클릭마다 항목이 쌓이지 않게).
 - **페이지 번호는 URL이 아니라 화면 상태**로 둔다(기존 Laps와 같다). 필터를 바꾸면 1페이지로 돌아간다.
 
@@ -516,7 +518,7 @@ Agent.Core에도 §4.3과 같은 이름의 enum(`GameMode`, `SessionKind`, `Resu
 빈 상태: "커리어나 그랑프리 모드에서 세션을 결과 화면까지 마치면 시즌이 기록됩니다." + Telemetry App 링크.
 
 **시즌 상세 (`/seasons/:id`)** — 헤더(모드, 기간, 내 순위·점수) + 탭 3개.
-- **Season:** 라운드 목록. 행 = `R{n} · {트랙} · {날짜}` + 우승자 + 내 주말 점수 + 세션 칩(§8.4 라벨, 칩마다 내 순위). 칩 → `/sessions/:id`(`push`로 쌓는다 — 세션 화면의 뒤로 가기는 쌓인 화면이 있으면 `pop`으로 이 시즌 탭에 돌아오고, 직접 열렸으면 `/sessions`로 간다).
+- **Season:** 라운드 목록. 행 = `R{n} · {트랙} · {날짜}` + 우승자 + 내 주말 점수 + 세션 칩(§8.4 라벨, 칩마다 내 순위). 칩 → `context.go('/sessions/:id?from=season')`(`push`가 아니다 — 웹에서 주소창이 그 세션을 가리켜야 새로고침·공유가 같은 화면을 연다).
 - **Results:** 드라이버 × 라운드 표. **이름 열은 고정**하고 나머지는 가로 스크롤한다(이름 `Column`과 스크롤되는 본문 `Column`을 같은 행 높이 상수로 맞춘다 — 새 패키지 없음).
   칸 = 순위(1·2·3위 금·은·동, DNF·DSQ·NC·RET는 `textMuted` 글자, 기록 없음 `-`), 마지막 열 = 점수. 내 행 강조, 이름 왼쪽에 팀 색 막대.
 - **Standings:** Drivers 표(Pos · Driver(AI 배지) · Team · Wins · Podiums · Pts)와 Constructors 표(Pos · Team · Wins · Pts).
@@ -619,7 +621,7 @@ Pos · Driver(팀 색 막대, AI 배지, 내 행 강조) · Team · Grid · Laps
 - 모델 `fromJson`, 표시 규칙(§8.4의 모든 경우: 라벨 전체, 상태 7종, 시간 1시간 경계, gap 60초 경계·음수·랩 차이·기준 행 DNF·null 시간, 예선 기준 없음, Pen 3종), `parseHexColor` 대체값.
 - 저장소: 필터 → `sessionType` 매핑, `pageSize=15`(기존 `devices_repository_test` 방식).
 - 화면: Seasons 빈 상태·목록·페이지, 시즌 상세 탭 쿼리(모르는 값 → season), Results 고정 열 + 좁은 폭에서 넘침 없음, Standings 안내 문구,
-  Sessions 필터(1페이지로 초기화)·필터 결과 없음 문구·플레이어 없음 `-`, 세션 결과 좁은 화면 열 숨김, 404 상태, 다시 시도, 세션 화면 뒤로 가기(시즌 칩으로 열면 그 시즌으로, 직접 열면 목록으로), 라우터 경로·메뉴 순서·상세 경로에서 메뉴 선택, Laps가 공용 `PaginationBar`로 동작.
+  Sessions 필터(1페이지로 초기화)·필터 결과 없음 문구·플레이어 없음 `-`, 세션 결과 좁은 화면 열 숨김, 404 상태, 다시 시도, 세션 화면 뒤로 가기(`from=season`이면 그 시즌 Season 탭으로, `from` 없음·모르는 값·시즌 없는 세션이면 목록으로), 칩이 `?from=season` 주소로 이동, `/sessions/abc?from=season` 라우트, 라우터 경로·메뉴 순서·상세 경로에서 메뉴 선택, Laps가 공용 `PaginationBar`로 동작.
 
 ---
 

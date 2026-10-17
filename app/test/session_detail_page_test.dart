@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -82,7 +80,12 @@ Future<GoRouter> _pumpPage(
     ),
     GoRoute(
       path: '/sessions/:sessionId',
-      builder: (_, state) => Scaffold(body: SessionDetailPage(sessionId: state.pathParameters['sessionId']!)),
+      builder: (_, state) => Scaffold(
+        body: SessionDetailPage(
+          sessionId: state.pathParameters['sessionId']!,
+          from: state.uri.queryParameters['from'],
+        ),
+      ),
     ),
   ]);
 
@@ -280,9 +283,37 @@ void main() {
       expect(find.text('찾을 수 없는 세션입니다.'), findsNothing);
     });
 
-    testWidgets('SessionDetail_Back_WithoutOpener_GoesToSessionList', (t) async {
-      final repo = FakeSessionsRepository(details: {'d1': detailOf('d1', results: _raceResults())});
+    testWidgets('SessionDetail_Back_WithoutFrom_GoesToSessionList', (t) async {
+      // 시즌 소속 세션이어도 from이 없으면 목록으로 간다(직접 열기·새로고침·목록 행).
+      final repo = FakeSessionsRepository(details: {
+        'd1': detailOf('d1', results: _raceResults(), seasonId: 'season-1', round: 3),
+      });
       final router = await _pumpPage(t, repo);
+
+      await t.tap(find.byTooltip('세션 목록'));
+      await t.pumpAndSettle();
+
+      expect(_location(router), '/sessions');
+      expect(find.text('sessions-list'), findsOneWidget);
+    });
+
+    testWidgets('SessionDetail_Back_FromSeason_GoesToThatSeasonsSeasonTab', (t) async {
+      final repo = FakeSessionsRepository(details: {
+        'd1': detailOf('d1', results: _raceResults(), seasonId: 'season-1', round: 3),
+      });
+      final router = await _pumpPage(t, repo, initialLocation: '/sessions/d1?from=season');
+
+      expect(_location(router), '/sessions/d1?from=season');
+      await t.tap(find.byTooltip('시즌으로'));
+      await t.pumpAndSettle();
+
+      expect(_location(router), '/seasons/season-1?tab=season');
+      expect(find.text('season:season-1:season'), findsOneWidget);
+    });
+
+    testWidgets('SessionDetail_Back_FromSeasonButSessionHasNoSeason_GoesToSessionList', (t) async {
+      final repo = FakeSessionsRepository(details: {'d1': detailOf('d1', results: _raceResults(), gameMode: 'Online')});
+      final router = await _pumpPage(t, repo, initialLocation: '/sessions/d1?from=season');
 
       await t.tap(find.byTooltip('세션 목록'));
       await t.pumpAndSettle();
@@ -290,21 +321,16 @@ void main() {
       expect(_location(router), '/sessions');
     });
 
-    testWidgets('SessionDetail_Back_WhenOpenedFromSeason_ReturnsToOpener', (t) async {
-      final repo = FakeSessionsRepository(details: {'d1': detailOf('d1', results: _raceResults())});
-      final router = await _pumpPage(t, repo, initialLocation: '/seasons/season-1?tab=results');
-
-      // 시즌 화면의 세션 칩이 하는 것처럼 세션을 위에 쌓는다.
-      unawaited(router.push('/sessions/d1'));
-      await t.pumpAndSettle();
-      expect(find.text('NORRIS'), findsOneWidget);
+    testWidgets('SessionDetail_Back_UnknownFrom_GoesToSessionList', (t) async {
+      final repo = FakeSessionsRepository(details: {
+        'd1': detailOf('d1', results: _raceResults(), seasonId: 'season-1', round: 3),
+      });
+      final router = await _pumpPage(t, repo, initialLocation: '/sessions/d1?from=bogus');
 
       await t.tap(find.byTooltip('세션 목록'));
       await t.pumpAndSettle();
 
-      expect(_location(router), '/seasons/season-1?tab=results');
-      expect(find.text('season:season-1:results'), findsOneWidget);
-      expect(find.text('sessions-list'), findsNothing);
+      expect(_location(router), '/sessions');
     });
 
     testWidgets('SessionDetail_Narrow_HidesGridTyresPitsPen', (t) async {

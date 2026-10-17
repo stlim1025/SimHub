@@ -15,6 +15,8 @@ import '../domain/session_models.dart';
 import 'session_results_table.dart';
 
 const String _sessionsPath = '/sessions';
+const String _backToSessionsTooltip = '세션 목록';
+const String _backToSeasonTooltip = '시즌으로';
 const String _notFoundMessage = '찾을 수 없는 세션입니다.';
 const String _notFoundBackLabel = 'Sessions';
 
@@ -25,21 +27,27 @@ const int _httpNotFound = 404;
 const double _statSpacing = 32;
 
 /// 세션 결과 화면(docs/12 §8.3): 헤더 + 결과 표. 남의 것이거나 없는 세션이면 404 상태를 보여 준다.
+///
+/// [from]은 주소의 `?from=` 값이다. `season`(시즌 화면의 세션 칩)이고 불러온 세션이 시즌에 속하면
+/// 뒤로 가기가 그 시즌으로 돌아가고, 그 밖(없음·모르는 값·시즌 없는 세션·아직 로딩)은 세션 목록으로 간다.
 class SessionDetailPage extends ConsumerWidget {
-  const SessionDetailPage({super.key, required this.sessionId});
+  const SessionDetailPage({super.key, required this.sessionId, this.from});
 
   final String sessionId;
+  final String? from;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final detail = ref.watch(sessionDetailProvider(sessionId));
+    final backSeasonId = from == kSessionFromSeason ? detail.valueOrNull?.header.seasonId : null;
 
     return ListView(
       padding: kPagePadding,
       children: [
         _Header(
           title: detail.valueOrNull?.header.trackName ?? _fallbackTitle,
-          onBack: () => _goBack(context),
+          backTooltip: backSeasonId == null ? _backToSessionsTooltip : _backToSeasonTooltip,
+          onBack: () => context.go(backSeasonId == null ? _sessionsPath : seasonLocation(backSeasonId)),
         ),
         const SizedBox(height: 16),
         detail.when(
@@ -72,22 +80,13 @@ class SessionDetailPage extends ConsumerWidget {
   }
 
   static bool _isNotFound(Object error) => error is ApiException && error.statusCode == _httpNotFound;
-
-  /// 화면 안의 뒤로 가기. 시즌 화면의 세션 칩처럼 위에 쌓여 열렸으면 연 화면으로 돌아가고,
-  /// 직접 열렸거나(딥링크·새로고침) 쌓인 화면이 없으면 세션 목록으로 간다.
-  static void _goBack(BuildContext context) {
-    if (context.canPop()) {
-      context.pop();
-    } else {
-      context.go(_sessionsPath);
-    }
-  }
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.title, required this.onBack});
+  const _Header({required this.title, required this.backTooltip, required this.onBack});
 
   final String title;
+  final String backTooltip;
   final VoidCallback onBack;
 
   @override
@@ -95,7 +94,7 @@ class _Header extends StatelessWidget {
     return Row(
       children: [
         IconButton(
-          tooltip: '세션 목록',
+          tooltip: backTooltip,
           icon: const Icon(Icons.arrow_back),
           onPressed: onBack,
         ),

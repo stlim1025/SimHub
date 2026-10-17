@@ -86,9 +86,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/sessions',
             builder: (_, state) => SessionsPage(filter: state.uri.queryParameters['type']),
           ),
+          // 세션 상세의 `?from=season`은 시즌 칩에서 열었다는 표시다(뒤로 가기가 그 시즌으로, docs/12 §8.1).
           GoRoute(
             path: '/sessions/:sessionId',
-            builder: (_, state) => SessionDetailPage(sessionId: state.pathParameters['sessionId']!),
+            builder: (_, state) => SessionDetailPage(
+              sessionId: state.pathParameters['sessionId']!,
+              from: state.uri.queryParameters['from'],
+            ),
           ),
           GoRoute(path: '/laps', builder: (_, _) => const LapsPage()),
           GoRoute(
