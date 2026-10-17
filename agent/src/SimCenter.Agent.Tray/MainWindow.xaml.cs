@@ -212,6 +212,11 @@ public partial class MainWindow : Window
         }
 
         AccountStatusText.Text = UploadStateText.Describe(state, DeviceName);
+
+        var issues = UploadStateText.DescribeIssues(_uploadStatus.DeferredCount, _uploadStatus.DeadLetterCount);
+        UploadIssueText.Text = issues ?? string.Empty;
+        UploadIssueText.Visibility = issues is null ? Visibility.Collapsed : Visibility.Visible;
+
         PairingCodeBox.IsEnabled = !_isPairing;
         PairButton.IsEnabled = !_isPairing;
         PairButton.Content = _isPairing ? "연결 중…" : "연결";

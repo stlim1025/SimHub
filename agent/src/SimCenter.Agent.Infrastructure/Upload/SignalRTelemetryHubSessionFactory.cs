@@ -43,11 +43,12 @@ public sealed class SignalRTelemetryHubSessionFactory : ITelemetryHubSessionFact
         public Task StartAsync(CancellationToken ct)
             => connection.State == HubConnectionState.Disconnected ? connection.StartAsync(ct) : Task.CompletedTask;
 
-        public async Task<SubmitResult> SubmitAsync(JsonElement envelope, CancellationToken ct)
-        {
-            var result = await connection.InvokeAsync<SubmitResult?>(SubmitEventMethod, envelope, ct);
-            return result ?? throw new InvalidOperationException("TelemetryHub가 빈 응답을 반환했습니다.");
-        }
+        // 서버 오류(허브 메서드 예외·빈 응답·응답 시간 초과)는 TelemetryHubServerException으로, 연결 문제는 그대로 올린다(docs/13 §3.1).
+        public Task<SubmitResult> SubmitAsync(JsonElement envelope, CancellationToken ct)
+            => HubSubmitInvoker.InvokeAsync(
+                token => connection.InvokeAsync<SubmitResult?>(SubmitEventMethod, envelope, token),
+                HubSubmitInvoker.SubmitTimeout,
+                ct);
 
         public ValueTask DisposeAsync() => connection.DisposeAsync();
     }

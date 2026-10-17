@@ -110,6 +110,9 @@
                     <TextBlock Text="계정 연결" Style="{StaticResource Label}" />
                     <TextBlock x:Name="AccountStatusText" Style="{StaticResource Value}" Text="—" />
                 </Grid>
+                <!-- 올리지 못한 기록(미뤄 둔 항목·dead-letter) 안내 — 0건이면 숨김(docs/13 §3.5) -->
+                <TextBlock x:Name="UploadIssueText" Foreground="#FFD666" FontSize="12" TextWrapping="Wrap"
+                           Margin="0,8,0,0" Visibility="Collapsed" />
                 <TextBlock Style="{StaticResource Label}" FontSize="11" Margin="0,10,0,6" TextWrapping="Wrap"
                            Text="웹에서 발급한 연결 코드를 입력하세요 (예: K7F2-9QXM)" />
                 <Grid>

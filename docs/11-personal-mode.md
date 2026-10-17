@@ -217,6 +217,7 @@ F1Laps와 비슷한 구성(Dashboard · Seasons · Sessions · Laps · Analytics
   Agent `TelemetryUploadService.RevokedDeviceRejectReason`이 **정확히 같아야** 한다(바꿀 때 함께 바꾼다).
   그 밖의 Reject(파싱 실패·트랙 매핑 없음 등 영구 무효)는 지금처럼 Outbox에서 지운다.
 - 그 밖의 네트워크 오류는 지금처럼 지수 백오프(최대 30초)로 재시도한다.
+- 서버가 같은 항목에 오류를 되풀이하면 그 항목만 미루고, 읽을 수 없는 payload는 dead-letter로 옮긴다([13](./13-outbox-dead-letter.md), D-35~D-38).
 - **연결 전에 쌓인 이벤트**는 연결 후 업로드되어 연결한 계정에 귀속된다(그 PC 주인의 기록으로 본다).
 
 ### 6.5 이벤트 봉투

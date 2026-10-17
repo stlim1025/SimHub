@@ -16,7 +16,10 @@ public interface ITelemetryHubSession : IAsyncDisposable
     /// </summary>
     Task StartAsync(CancellationToken ct);
 
-    /// <summary>봉투 하나를 보내고 서버 응답(Ack/Reject)을 받는다. 응답이 없으면(장애) 예외.</summary>
+    /// <summary>
+    /// 봉투 하나를 보내고 서버 응답(Ack/Reject)을 받는다. 서버가 받고도 처리하지 못하면(허브 메서드 예외·빈 응답·응답 시간 초과)
+    /// <see cref="TelemetryHubServerException"/>, 연결 문제(끊김·연결 안 됨)면 그 밖의 예외를 던진다(docs/13 §3.1).
+    /// </summary>
     Task<SubmitResult> SubmitAsync(JsonElement envelope, CancellationToken ct);
 }
 

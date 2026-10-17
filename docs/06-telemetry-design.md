@@ -164,6 +164,7 @@ DomainEvent ──► [SQLite Outbox: status=Pending] ──► SignalR 전송 �
 - **모든 이벤트는 전송 전에 Outbox에 먼저 기록**된다. (전원/네트워크 장애 시 유실 방지)
 - 앱 재시작·네트워크 복구 시 `Pending` 이벤트를 `occurredAt` 순서로 재전송.
 - Backend `Ack(eventId)` 수신 후에만 Outbox에서 정리. (at-least-once + 멱등 = effectively-once)
+- 서버가 같은 항목에 오류를 되풀이하면 그 항목만 미루고 뒤 항목을 먼저 보낸다. 읽을 수 없는 payload는 `outbox_dead_letter`로 옮긴다([13](./13-outbox-dead-letter.md), D-35~D-38).
 
 ---
 
@@ -188,6 +189,7 @@ DomainEvent ──► [SQLite Outbox: status=Pending] ──► SignalR 전송 �
 - 키가 없으면 업로드를 멈추되 UDP 수신과 Outbox 적재는 계속한다. 키가 저장되면(10초마다 파일 재확인 + 변경 이벤트) 바로 시작한다.
 - 허브 연결이 **401**이면 재시도를 멈추고 `다시 연결 필요`가 된다(Outbox 항목은 보존). 새 키가 저장될 때까지 업로드하지 않는다.
 - 그 밖의 네트워크 오류는 지수 백오프(최대 30초)로 재시도한다.
+- 서버 오류(허브 메서드 예외 등)가 같은 항목에 5번 나면 그 항목만 30초~최대 5분 간격으로 미룬다. 연결 끊김은 세지 않는다([13](./13-outbox-dead-letter.md)).
 - 연결 전에 쌓인 이벤트는 연결 후 업로드되어 그 계정에 귀속된다.
 
 ---
