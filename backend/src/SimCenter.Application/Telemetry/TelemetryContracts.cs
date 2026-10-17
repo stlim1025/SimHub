@@ -15,7 +15,10 @@ public sealed record TelemetryEnvelopeDto(
     string Type,
     JsonElement Payload);
 
-/// <summary>LapFinished payload(05/06 계약). 랭킹 적격 판정에 필요한 근거만 담는다.</summary>
+/// <summary>
+/// LapFinished payload(05/06 계약). 랭킹 적격 판정에 필요한 근거와, 세션 연결 키(<c>Lap.SessionKey</c>, 12 §4.6)를 만드는 선택 필드를 담는다.
+/// 마지막 4개는 옛 Agent가 보내지 않는 선택 필드다(누락 시 기본값). <see cref="GameMode"/>는 문자열로 받아 모르는 값을 거부하지 않는다.
+/// </summary>
 public sealed record LapFinishedPayloadDto(
     string SessionRef,
     int LapNumber,
@@ -24,7 +27,11 @@ public sealed record LapFinishedPayloadDto(
     bool IsValid,
     bool IsOutOrInLap,
     int TrackId,
-    SessionType SessionType);
+    SessionType SessionType,
+    string? GameMode = null,
+    long SeasonLinkId = 0,
+    long WeekendLinkId = 0,
+    long SessionLinkId = 0);
 
 /// <summary>단일 섹터(가변 섹터, D-7).</summary>
 public sealed record SectorDto(int SectorNumber, int SectorTimeMs);

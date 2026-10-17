@@ -36,6 +36,8 @@ public static class DependencyInjection
         services.AddScoped<IProcessedEventRepository, ProcessedEventRepository>();
         services.AddScoped<IAgentDeviceRepository, AgentDeviceRepository>();
         services.AddScoped<IAgentPairingCodeRepository, AgentPairingCodeRepository>();
+        services.AddScoped<ISeasonRepository, SeasonRepository>();
+        services.AddScoped<IGameSessionRepository, GameSessionRepository>();
         services.AddScoped<DbSeeder>();
 
         // ── 어댑터 ──

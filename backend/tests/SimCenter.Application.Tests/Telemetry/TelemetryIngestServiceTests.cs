@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using SimCenter.Application.Common.Interfaces;
 using SimCenter.Application.Rankings;
 using SimCenter.Application.Rankings.Notifications;
+using SimCenter.Application.Seasons.Ingest;
 using SimCenter.Application.Telemetry;
 using SimCenter.Domain.Entities;
 using SimCenter.Domain.Enums;
@@ -24,6 +25,7 @@ public class TelemetryIngestServiceTests
     private readonly FakeAgentDeviceRepository _devices = new();
     private readonly FakeTrackRepository _tracks = new();
     private readonly FakeLapRepository _laps = new();
+    private readonly FakeClassificationIngestor _classification = new();
     private readonly FakeUnitOfWork _uow = new();
     private readonly FakeRankingService _ranking = new();
     private readonly FakeRankingNotifier _notifier = new();
@@ -42,7 +44,7 @@ public class TelemetryIngestServiceTests
         _tracks.Items.Add(new Track { Id = _trackId, GameCode = GameCode, GameTrackId = GameTrackId, Name = "Silverstone" });
 
         _sut = new TelemetryIngestService(
-            _processed, _devices, _tracks, _laps, _uow,
+            _processed, _devices, _tracks, _laps, _classification, _uow,
             new SequentialIdGenerator(), new FakeClock(Now), _ranking, _notifier,
             NullLogger<TelemetryIngestService>.Instance);
     }
@@ -73,6 +75,37 @@ public class TelemetryIngestServiceTests
 
         return new TelemetryEnvelopeDto(eventId ?? Guid.NewGuid(), GameCode, Now, "LapFinished", payload);
     }
+
+    /// <summary>랩 이벤트. <paramref name="context"/>가 null이면 옛 Agent처럼 모드·링크 필드를 아예 싣지 않는다.</summary>
+    private static TelemetryEnvelopeDto LapFinishedWith(string sessionRef, (string GameMode, long Season, long Weekend, long Session)? context)
+    {
+        var payload = new Dictionary<string, object?>
+        {
+            ["sessionRef"] = sessionRef,
+            ["lapNumber"] = 4,
+            ["lapTimeMs"] = 83452,
+            ["sectors"] = new[] { new { sectorNumber = 1, sectorTimeMs = 83452 } },
+            ["isValid"] = true,
+            ["isOutOrInLap"] = false,
+            ["trackId"] = GameTrackId,
+            ["sessionType"] = nameof(SessionType.Race),
+        };
+
+        if (context is { } c)
+        {
+            payload["gameMode"] = c.GameMode;
+            payload["seasonLinkId"] = c.Season;
+            payload["weekendLinkId"] = c.Weekend;
+            payload["sessionLinkId"] = c.Session;
+        }
+
+        return new TelemetryEnvelopeDto(
+            Guid.NewGuid(), GameCode, Now, "LapFinished", JsonSerializer.SerializeToElement(payload, WireOptions));
+    }
+
+    private static TelemetryEnvelopeDto SessionClassifiedEvent() => new(
+        Guid.NewGuid(), GameCode, Now, "SessionClassified",
+        JsonSerializer.SerializeToElement(new { sessionRef = "s" }, WireOptions));
 
     private static TelemetryEnvelopeDto NonLapEvent(string type) => new(
         Guid.NewGuid(), GameCode, Now, type,
@@ -300,6 +333,153 @@ public class TelemetryIngestServiceTests
         Assert.Empty(_laps.Items);
     }
 
+    // ── SessionClassified 배선 ──
+
+    [Fact]
+    public async Task SessionClassified_Stored_RecordsProcessedEventAndSavesOnce()
+    {
+        _classification.Outcome = new ClassificationOutcome.Stored("link:11:22:33", IsNew: true);
+        var envelope = SessionClassifiedEvent();
+
+        var result = await _sut.IngestAsync(envelope, _deviceId);
+
+        Assert.True(result.Acknowledged);
+        var processed = Assert.Single(_processed.Items);
+        Assert.Equal(envelope.EventId, processed.EventId);
+        Assert.Equal("SessionClassified", processed.EventType);
+        Assert.Equal(Now, processed.ProcessedAt);
+        Assert.Equal(1, _uow.SaveCount); // 결과 저장(추적 변경) + 멱등 기록 + LastSeenAt이 한 커밋.
+        Assert.Equal(Now, _device.LastSeenAt);
+        Assert.Equal(1, _classification.CallCount);
+        Assert.Empty(_laps.Items);
+    }
+
+    [Fact]
+    public async Task SessionClassified_Ignored_StillRecordsProcessedEvent()
+    {
+        _classification.Outcome = new ClassificationOutcome.Ignored("Time Trial");
+
+        var result = await _sut.IngestAsync(SessionClassifiedEvent(), _deviceId);
+
+        Assert.True(result.Acknowledged);
+        var processed = Assert.Single(_processed.Items);
+        Assert.Equal("SessionClassified", processed.EventType);
+        Assert.Equal(1, _uow.SaveCount);
+    }
+
+    [Fact]
+    public async Task SessionClassified_Rejected_SavesOnlyLastSeen()
+    {
+        _classification.Outcome = new ClassificationOutcome.Rejected("x");
+
+        // LastSeenAt이 바뀌지 않으면(1분 이내) 저장하지 않는다.
+        _device.LastSeenAt = Now.AddSeconds(-10);
+        var recent = await _sut.IngestAsync(SessionClassifiedEvent(), _deviceId);
+        Assert.False(recent.Acknowledged);
+        Assert.Equal("x", recent.RejectReason);
+        Assert.Equal(0, _uow.SaveCount);
+
+        // LastSeenAt이 바뀐 경우에만 한 번 저장한다.
+        _device.LastSeenAt = null;
+        var stale = await _sut.IngestAsync(SessionClassifiedEvent(), _deviceId);
+        Assert.False(stale.Acknowledged);
+        Assert.Equal("x", stale.RejectReason);
+        Assert.Equal(1, _uow.SaveCount);
+        Assert.Equal(Now, _device.LastSeenAt);
+
+        Assert.Empty(_processed.Items); // Reject는 멱등 기록을 남기지 않는다.
+        Assert.Equal(2, _classification.CallCount);
+    }
+
+    [Fact]
+    public async Task SessionClassified_FromRevokedDevice_RejectsBeforeIngestor()
+    {
+        _device.IsDeleted = true;
+
+        var result = await _sut.IngestAsync(SessionClassifiedEvent(), _deviceId);
+
+        Assert.False(result.Acknowledged);
+        Assert.Equal(RevokedDeviceReason, result.RejectReason);
+        Assert.Equal(0, _classification.CallCount);
+        Assert.Empty(_processed.Items);
+        Assert.Equal(0, _uow.SaveCount);
+    }
+
+    [Fact]
+    public async Task SessionClassified_PassesDeviceAndServerTimeToIngestor()
+    {
+        await _sut.IngestAsync(SessionClassifiedEvent(), _deviceId);
+
+        Assert.Same(_device, _classification.LastDevice);
+        Assert.Equal(Now, _classification.LastNow);
+    }
+
+    // ── Lap.SessionKey ──
+
+    [Fact]
+    public async Task LapFinished_WithCareerContext_StoresLinkSessionKey()
+    {
+        await _sut.IngestAsync(LapFinishedWith("0xSESSION", ("DriverCareer", 11, 22, 33)), _deviceId);
+
+        Assert.Equal("link:11:22:33", Assert.Single(_laps.Items).SessionKey);
+    }
+
+    [Fact]
+    public async Task LapFinished_WithoutContext_StoresUidKey()
+    {
+        await _sut.IngestAsync(LapFinished(), _deviceId); // 기존 페이로드(모드·링크 필드 없음)
+
+        Assert.Equal("uid:0xSESSION", Assert.Single(_laps.Items).SessionKey);
+    }
+
+    [Fact]
+    public async Task LapFinished_UnknownGameModeString_StoresUidKey()
+    {
+        await _sut.IngestAsync(LapFinishedWith("0xSESSION", ("SomeFutureMode", 11, 22, 33)), _deviceId);
+
+        Assert.Equal("uid:0xSESSION", Assert.Single(_laps.Items).SessionKey);
+    }
+
+    [Fact]
+    public async Task LapFinished_OverlongSessionRef_StoresNullKey()
+    {
+        var tooLong = new string('1', 33);
+
+        var result = await _sut.IngestAsync(LapFinishedWith(tooLong, null), _deviceId);
+
+        Assert.True(result.Acknowledged); // 키를 못 만들어도 랩은 저장된다.
+        var lap = Assert.Single(_laps.Items);
+        Assert.Null(lap.SessionKey);
+    }
+
+    [Fact]
+    public async Task LapFinished_MaxLengthSessionRef_StoresUidKey()
+    {
+        var maxLength = new string('1', 32);
+
+        await _sut.IngestAsync(LapFinishedWith(maxLength, null), _deviceId);
+
+        Assert.Equal($"uid:{maxLength}", Assert.Single(_laps.Items).SessionKey);
+    }
+
+    [Fact]
+    public async Task LapFinished_SessionRefWithNul_StoresNullKey()
+    {
+        // PostgreSQL 텍스트 열은 NUL을 저장하지 못한다 → 키를 만들지 않아야 랩 저장이 매번 실패하지 않는다.
+        var result = await _sut.IngestAsync(LapFinishedWith("12\u000034", null), _deviceId);
+
+        Assert.True(result.Acknowledged);
+        Assert.Null(Assert.Single(_laps.Items).SessionKey);
+    }
+
+    [Fact]
+    public async Task LapFinished_EmptySessionRef_StoresNullKey()
+    {
+        await _sut.IngestAsync(LapFinishedWith(string.Empty, null), _deviceId);
+
+        Assert.Null(Assert.Single(_laps.Items).SessionKey);
+    }
+
     // ── Fakes ──
 
     private sealed class FakeProcessedEventRepository : IProcessedEventRepository
@@ -378,6 +558,23 @@ public class TelemetryIngestServiceTests
                 .Where(l => l.UserId == userId && l.TrackId == trackId && l.GameCode == gameCode && l.IsRankingEligible)
                 .OrderBy(l => l.LapTimeMs)
                 .FirstOrDefault());
+    }
+
+    private sealed class FakeClassificationIngestor : ISessionClassificationIngestor
+    {
+        public ClassificationOutcome Outcome { get; set; } = new ClassificationOutcome.Stored("uid:s", IsNew: true);
+        public int CallCount { get; private set; }
+        public AgentDevice? LastDevice { get; private set; }
+        public DateTime? LastNow { get; private set; }
+
+        public Task<ClassificationOutcome> ApplyAsync(
+            TelemetryEnvelopeDto envelope, AgentDevice device, DateTime now, CancellationToken ct = default)
+        {
+            CallCount++;
+            LastDevice = device;
+            LastNow = now;
+            return Task.FromResult(Outcome);
+        }
     }
 
     private sealed class FakeRankingService : IRankingService

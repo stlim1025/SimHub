@@ -12,6 +12,13 @@ namespace SimCenter.Api.Hubs;
 [Authorize(AuthenticationSchemes = AgentApiKeyDefaults.Scheme)]
 public sealed class TelemetryHub : Hub
 {
+    /// <summary>
+    /// 허브가 받는 메시지 하나의 최대 크기(64KiB). 한도를 넘는 메시지는 Reject가 아니라 <b>연결 종료</b>라 Agent가 같은 Outbox 항목을
+    /// 끝없이 재시도하게 되므로(12 §0), 기본값(32KB)에 기대지 않고 명시한다. 가장 큰 <c>SessionClassified</c>(24대 × 스틴트 8개,
+    /// 비ASCII 이름이 <c>\uXXXX</c>로 escape된 경우)도 약 30KB라 여유가 있고, Agent는 전송 전에 48KiB로 제한한다(12 §5.5).
+    /// </summary>
+    public const long MaxMessageBytes = 64 * 1024;
+
     /// <summary>연결에 유효한 <c>deviceId</c> 클레임이 없을 때의 Reject 사유.</summary>
     private const string MissingDeviceReason = "인증된 장치 정보가 없습니다.";
 

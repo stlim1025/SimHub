@@ -1,8 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using System.Text.Json.Serialization;
-using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -184,28 +182,7 @@ public sealed class TelemetryIngestE2ETests : IClassFixture<ApiFactory>
     /// TestServer WebSocket으로 Hub에 접속한다. LongPolling은 요청마다 인증을 다시 하므로
     /// "해제 후 이미 열린 연결로 전송" 경로(인입 서비스의 장치 재확인)를 검증하려면 WebSocket이 필요하다.
     /// </summary>
-    private HubConnection BuildConnection(string deviceKey)
-    {
-        return new HubConnectionBuilder()
-            .WithUrl(new Uri(_factory.Server.BaseAddress, "hubs/telemetry"), options =>
-            {
-                options.Transports = HttpTransportType.WebSockets;
-                options.SkipNegotiation = true;
-                options.WebSocketFactory = async (context, cancellationToken) =>
-                {
-                    var webSocketClient = _factory.Server.CreateWebSocketClient();
-                    webSocketClient.ConfigureRequest = request => request.Headers["X-Agent-Key"] = deviceKey;
-                    return await webSocketClient.ConnectAsync(context.Uri, cancellationToken);
-                };
-            })
-            .AddJsonProtocol(json =>
-            {
-                json.PayloadSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
-                json.PayloadSerializerOptions.PropertyNameCaseInsensitive = true;
-                json.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter());
-            })
-            .Build();
-    }
+    private HubConnection BuildConnection(string deviceKey) => TestApi.BuildTelemetryConnection(_factory, deviceKey);
 
     private sealed record SubmitAck(bool Acknowledged, string? RejectReason);
 }

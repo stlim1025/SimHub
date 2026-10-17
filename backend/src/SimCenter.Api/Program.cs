@@ -51,7 +51,9 @@ builder.Services.AddSignalR()
         options.PayloadSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
         options.PayloadSerializerOptions.PropertyNameCaseInsensitive = true;
         options.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter());
-    });
+    })
+    // 인입 메시지 한도는 기본값(32KB)에 기대지 않고 명시한다(12 §5.5). 넘으면 연결이 끊겨 Agent가 같은 항목을 재시도하게 된다.
+    .AddHubOptions<TelemetryHub>(options => options.MaximumReceiveMessageSize = TelemetryHub.MaxMessageBytes);
 
 // ── Swagger(JWT Bearer 지원) ──
 builder.Services.AddEndpointsApiExplorer();
