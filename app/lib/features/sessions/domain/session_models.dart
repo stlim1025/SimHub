@@ -56,9 +56,8 @@ class SessionSummary {
 }
 
 /// 세션 목록 한 페이지(`PagedResult<SessionSummaryDto>`).
-/// 화면 위젯 `SessionsPage`와 이름이 같으므로, 둘을 함께 쓰는 파일은 한쪽을 `hide`하거나 접두사로 가져온다.
-class SessionsPage {
-  const SessionsPage({
+class SessionSummaryPage {
+  const SessionSummaryPage({
     required this.page,
     required this.pageSize,
     required this.total,
@@ -70,7 +69,7 @@ class SessionsPage {
   final int total;
   final List<SessionSummary> items;
 
-  factory SessionsPage.fromJson(Map<String, dynamic> json) => SessionsPage(
+  factory SessionSummaryPage.fromJson(Map<String, dynamic> json) => SessionSummaryPage(
         page: json['page'] as int,
         pageSize: json['pageSize'] as int,
         total: json['total'] as int,

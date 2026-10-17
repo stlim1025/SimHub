@@ -74,6 +74,10 @@ Future<GoRouter> _pumpPage(
   final router = GoRouter(initialLocation: '/sessions/$sessionId', routes: [
     GoRoute(path: '/sessions', builder: (_, _) => const Text('sessions-list')),
     GoRoute(
+      path: '/seasons/:seasonId',
+      builder: (_, state) => Text('season:${state.pathParameters['seasonId']}:${state.uri.queryParameters['tab']}'),
+    ),
+    GoRoute(
       path: '/sessions/:sessionId',
       builder: (_, state) => Scaffold(body: SessionDetailPage(sessionId: state.pathParameters['sessionId']!)),
     ),
@@ -137,7 +141,7 @@ void main() {
       expect([for (final r in rows) r.color?.resolve({}) != null], [false, true, false, false]);
     });
 
-    testWidgets('SessionDetail_Header_ShowsTrackLabelModeDateAiAndRoundAsText', (t) async {
+    testWidgets('SessionDetail_Header_ShowsTrackLabelModeDateAiAndRound', (t) async {
       final repo = FakeSessionsRepository(details: {
         'd1': detailOf(
           'd1',
@@ -158,9 +162,22 @@ void main() {
       expect(find.text('My Team'), findsOneWidget);
       expect(find.text(DateFormat('yyyy-MM-dd HH:mm').format(DateTime.utc(2026, 10, 12, 9).toLocal())), findsOneWidget);
       expect(find.text('85'), findsOneWidget);
-      // 시즌 라운드는 이 태스크에서는 글자일 뿐 링크가 아니다.
       expect(find.text('R7'), findsOneWidget);
-      expect(find.ancestor(of: find.text('R7'), matching: find.byType(InkWell)), findsNothing);
+    });
+
+    testWidgets('SessionDetail_SeasonRound_LinksToSeasonTab', (t) async {
+      final repo = FakeSessionsRepository(details: {
+        'd1': detailOf('d1', results: _raceResults(), seasonId: 'season-1', round: 7),
+      });
+      final router = await _pumpPage(t, repo);
+
+      expect(find.ancestor(of: find.text('R7'), matching: find.byType(InkWell)), findsOneWidget);
+
+      await t.tap(find.text('R7'));
+      await t.pumpAndSettle();
+
+      expect(_location(router), '/seasons/season-1?tab=season');
+      expect(find.text('season:season-1:season'), findsOneWidget);
     });
 
     testWidgets('SessionDetail_NoSeasonNoAi_OmitsRoundAndAiDifficulty', (t) async {
@@ -222,13 +239,8 @@ void main() {
       });
       await _pumpPage(t, repo);
 
-      Color? barColor(int carIndex) {
-        final bar = t.widget<Container>(find.byKey(ValueKey('team-color-bar-$carIndex')));
-        return (bar.decoration as BoxDecoration).color;
-      }
-
-      expect(barColor(0), const Color(0xFFFF8000));
-      expect(barColor(1), AppColors.textMuted);
+      expect(teamBarColor(t, const ValueKey('team-color-bar-0')), const Color(0xFFFF8000));
+      expect(teamBarColor(t, const ValueKey('team-color-bar-1')), AppColors.textMuted);
     });
 
     testWidgets('SessionDetail_NotFound_ShowsNotFoundState', (t) async {

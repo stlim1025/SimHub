@@ -14,6 +14,9 @@ import 'package:simcenter_app/features/laps/data/laps_repository.dart';
 import 'package:simcenter_app/features/laps/domain/lap_models.dart';
 import 'package:simcenter_app/features/ranking/data/ranking_repository.dart';
 import 'package:simcenter_app/features/ranking/domain/ranking_models.dart';
+import 'package:simcenter_app/features/seasons/data/seasons_repository.dart';
+import 'package:simcenter_app/features/seasons/domain/season_display.dart';
+import 'package:simcenter_app/features/seasons/domain/season_models.dart';
 import 'package:simcenter_app/features/sessions/data/sessions_repository.dart';
 import 'package:simcenter_app/features/sessions/domain/session_display.dart';
 import 'package:simcenter_app/features/sessions/domain/session_models.dart';
@@ -256,7 +259,7 @@ class FakeSessionsRepository implements SessionsRepository {
   final detailRequests = <String>[];
 
   @override
-  Future<SessionsPage> getMySessions({
+  Future<SessionSummaryPage> getMySessions({
     String? sessionType,
     int page = 1,
     int pageSize = kSessionsPageSize,
@@ -267,7 +270,7 @@ class FakeSessionsRepository implements SessionsRepository {
         if (sessionType == null || s.sessionType == sessionType) s,
     ];
     final items = matching.skip((page - 1) * pageSize).take(pageSize).toList();
-    return SessionsPage(page: page, pageSize: pageSize, total: matching.length, items: items);
+    return SessionSummaryPage(page: page, pageSize: pageSize, total: matching.length, items: items);
   }
 
   @override
@@ -391,6 +394,160 @@ SessionDetail detailOf(
       ),
       results: results,
     );
+
+/// 요청을 기록하고 미리 정한 시즌을 돌려주는 시즌 저장소.
+/// page/pageSize만큼 잘라 돌려준다(서버 계약 흉내). [details]에 없는 Id의 상세 조회는 404 [ApiException]으로 실패한다.
+class FakeSeasonsRepository implements SeasonsRepository {
+  FakeSeasonsRepository({this.seasons = const [], this.details = const {}});
+
+  final List<SeasonSummary> seasons;
+  final Map<String, SeasonDetail> details;
+  final requests = <({int page, int pageSize})>[];
+  final detailRequests = <String>[];
+
+  @override
+  Future<SeasonSummaryPage> getMySeasons({int page = 1, int pageSize = kSeasonsPageSize}) async {
+    requests.add((page: page, pageSize: pageSize));
+    final items = seasons.skip((page - 1) * pageSize).take(pageSize).toList();
+    return SeasonSummaryPage(page: page, pageSize: pageSize, total: seasons.length, items: items);
+  }
+
+  @override
+  Future<SeasonDetail> getMySeason(String seasonId) async {
+    detailRequests.add(seasonId);
+    final detail = details[seasonId];
+    if (detail == null) {
+      throw ApiException('대상을 찾을 수 없어요.', statusCode: 404);
+    }
+    return detail;
+  }
+}
+
+/// 시즌 요약. 시각은 로컬 시간대로 만들어 날짜 표기가 PC의 시간대에 흔들리지 않게 한다.
+SeasonSummary seasonOf(
+  String id, {
+  String gameMode = 'DriverCareer',
+  int roundCount = 6,
+  int? myPosition = 3,
+  int? myPoints = 87,
+  String? leaderName = 'VERSTAPPEN',
+  int? leaderPoints = 120,
+  DateTime? firstSessionAt,
+  DateTime? lastSessionAt,
+}) =>
+    SeasonSummary(
+      seasonId: id,
+      gameCode: 'F1_25',
+      gameMode: gameMode,
+      firstSessionAt: firstSessionAt ?? DateTime(2026, 10, 17, 12),
+      lastSessionAt: lastSessionAt ?? DateTime(2026, 10, 24, 12),
+      roundCount: roundCount,
+      myPosition: myPosition,
+      myPoints: myPoints,
+      leaderName: leaderName,
+      leaderPoints: leaderPoints,
+    );
+
+SeasonRoundSession seasonSessionOf(
+  String id, {
+  String sessionType = 'Race',
+  String sessionKind = 'Race',
+  int? myPosition = 4,
+  String? myResultStatus = 'Finished',
+}) =>
+    SeasonRoundSession(
+      sessionId: id,
+      sessionType: sessionType,
+      sessionKind: sessionKind,
+      myPosition: myPosition,
+      myResultStatus: myResultStatus,
+    );
+
+SeasonRound seasonRoundOf(
+  int round, {
+  String? trackName,
+  String? winnerName,
+  int? myPoints,
+  List<SeasonRoundSession> sessions = const [],
+  DateTime? firstSessionAt,
+}) =>
+    SeasonRound(
+      round: round,
+      weekendId: 'w$round',
+      trackName: trackName ?? 'Track $round',
+      firstSessionAt: firstSessionAt ?? DateTime(2026, 10, 16 + round, 12),
+      winnerName: winnerName,
+      myPoints: myPoints,
+      sessions: sessions,
+    );
+
+StandingCell standingCellOf(int round, {int? position, String? resultStatus, int points = 0}) =>
+    StandingCell(round: round, position: position, resultStatus: resultStatus, points: points);
+
+DriverStanding driverStandingOf(
+  int position, {
+  String? driverKey,
+  String? name,
+  String teamName = 'McLaren',
+  String teamColor = '#FF8000',
+  bool isPlayer = false,
+  bool isAiControlled = true,
+  int points = 0,
+  int wins = 0,
+  int podiums = 0,
+  List<StandingCell> cells = const [],
+}) =>
+    DriverStanding(
+      position: position,
+      driverKey: driverKey ?? 'driver:$position',
+      name: name ?? 'DRIVER $position',
+      teamName: teamName,
+      teamColor: teamColor,
+      isPlayer: isPlayer,
+      isAiControlled: isAiControlled,
+      points: points,
+      wins: wins,
+      podiums: podiums,
+      cells: cells,
+    );
+
+ConstructorStanding constructorStandingOf(
+  int position, {
+  int? teamId,
+  String? teamName,
+  String teamColor = '#3671C6',
+  int points = 0,
+  int wins = 0,
+}) =>
+    ConstructorStanding(
+      position: position,
+      teamId: teamId ?? position,
+      teamName: teamName ?? 'Team $position',
+      teamColor: teamColor,
+      points: points,
+      wins: wins,
+    );
+
+SeasonDetail seasonDetailOf(
+  String id, {
+  SeasonSummary? season,
+  List<SeasonRound> rounds = const [],
+  List<DriverStanding> drivers = const [],
+  List<ConstructorStanding> constructors = const [],
+}) =>
+    SeasonDetail(
+      season: season ?? seasonOf(id),
+      rounds: rounds,
+      standings: SeasonStandings(drivers: drivers, constructors: constructors),
+    );
+
+/// 팀 색 막대([key]가 붙은 `TeamColorBar`)가 칠한 색.
+Color? teamBarColor(WidgetTester tester, Key key) {
+  final bar = tester.widget<Container>(
+    find.descendant(of: find.byKey(key), matching: find.byType(Container)),
+  );
+  return (bar.decoration as BoxDecoration).color;
+}
 
 /// 논리 픽셀 = 물리 픽셀(1:1)로 뷰 크기를 고정한다.
 void setViewSize(WidgetTester tester, Size size) {

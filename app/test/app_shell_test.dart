@@ -39,6 +39,11 @@ GoRouter _router({String initialLocation = '/'}) => GoRouter(
           builder: (context, state, child) => AppShell(location: state.uri.path, child: child),
           routes: [
             GoRoute(path: '/', builder: (_, _) => const Text('body:dashboard')),
+            GoRoute(path: '/seasons', builder: (_, _) => const Text('body:seasons')),
+            GoRoute(
+              path: '/seasons/:seasonId',
+              builder: (_, state) => Text('body:season:${state.pathParameters['seasonId']}'),
+            ),
             GoRoute(path: '/sessions', builder: (_, _) => const Text('body:sessions')),
             GoRoute(
               path: '/sessions/:sessionId',
@@ -87,6 +92,7 @@ void main() {
     await _pumpShell(t, _wide);
 
     expect(find.text('Dashboard'), findsOneWidget);
+    expect(find.text('Seasons'), findsOneWidget);
     expect(find.text('Sessions'), findsOneWidget);
     expect(find.text('Laps'), findsOneWidget);
     expect(find.text('Leaderboard'), findsOneWidget);
@@ -95,10 +101,32 @@ void main() {
     expect(find.text('body:dashboard'), findsOneWidget);
   });
 
-  testWidgets('메뉴 순서는 Dashboard · Sessions · Laps · Leaderboard · Telemetry App', (t) async {
+  testWidgets('메뉴 순서는 Dashboard · Seasons · Sessions · Laps · Leaderboard · Telemetry App', (t) async {
     await _pumpShell(t, _wide);
 
-    expect(_menuLabels(t), ['Dashboard', 'Sessions', 'Laps', 'Leaderboard', 'Telemetry App']);
+    expect(_menuLabels(t), ['Dashboard', 'Seasons', 'Sessions', 'Laps', 'Leaderboard', 'Telemetry App']);
+  });
+
+  testWidgets('Seasons 메뉴를 누르면 /seasons로 이동하고 선택 상태가 된다', (t) async {
+    await _pumpShell(t, _wide);
+
+    await t.tap(find.widgetWithText(ListTile, 'Seasons'));
+    await t.pumpAndSettle();
+
+    expect(find.text('body:seasons'), findsOneWidget);
+    expect(_isSelected(t, 'Seasons'), isTrue);
+    expect(_isSelected(t, 'Dashboard'), isFalse);
+    expect(_isSelected(t, 'Sessions'), isFalse);
+  });
+
+  testWidgets('/seasons/abc에서 Seasons 메뉴가 선택되어 있다', (t) async {
+    await _pumpShell(t, _wide, initialLocation: '/seasons/abc');
+
+    expect(find.text('body:season:abc'), findsOneWidget);
+    expect(_isSelected(t, 'Seasons'), isTrue);
+    for (final other in ['Dashboard', 'Sessions', 'Laps', 'Leaderboard', 'Telemetry App']) {
+      expect(_isSelected(t, other), isFalse, reason: other);
+    }
   });
 
   testWidgets('Sessions 메뉴를 누르면 /sessions로 이동하고, 세션 상세 경로에서도 선택 상태다', (t) async {
@@ -116,7 +144,7 @@ void main() {
 
     expect(find.text('body:session:abc'), findsOneWidget);
     expect(_isSelected(t, 'Sessions'), isTrue);
-    for (final other in ['Dashboard', 'Laps', 'Leaderboard', 'Telemetry App']) {
+    for (final other in ['Dashboard', 'Seasons', 'Laps', 'Leaderboard', 'Telemetry App']) {
       expect(_isSelected(t, other), isFalse, reason: other);
     }
   });
@@ -213,10 +241,19 @@ void main() {
     final dashboard = navItems.firstWhere((i) => i.path == '/');
     final laps = navItems.firstWhere((i) => i.path == '/laps');
     final sessions = navItems.firstWhere((i) => i.path == '/sessions');
+    final seasons = navItems.firstWhere((i) => i.path == '/seasons');
 
     test('루트 경로는 Dashboard만 선택한다', () {
       expect(isNavItemSelected(dashboard, '/'), isTrue);
       expect(isNavItemSelected(laps, '/'), isFalse);
+    });
+
+    test('시즌 상세 경로는 Seasons를 선택한다', () {
+      expect(isNavItemSelected(seasons, '/seasons'), isTrue);
+      expect(isNavItemSelected(seasons, '/seasons/abc'), isTrue);
+      expect(isNavItemSelected(seasons, '/seasonsfoo'), isFalse);
+      expect(isNavItemSelected(seasons, '/sessions/abc'), isFalse);
+      expect(isNavItemSelected(sessions, '/seasons/abc'), isFalse);
     });
 
     test('세션 상세 경로는 Sessions를 선택한다', () {

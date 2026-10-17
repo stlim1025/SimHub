@@ -10,6 +10,9 @@ import 'package:simcenter_app/features/devices/presentation/telemetry_app_page.d
 import 'package:simcenter_app/features/laps/data/laps_repository.dart';
 import 'package:simcenter_app/features/ranking/data/ranking_repository.dart';
 import 'package:simcenter_app/features/ranking/domain/ranking_models.dart';
+import 'package:simcenter_app/features/seasons/data/seasons_repository.dart';
+import 'package:simcenter_app/features/seasons/presentation/season_detail_page.dart';
+import 'package:simcenter_app/features/seasons/presentation/seasons_page.dart';
 import 'package:simcenter_app/features/sessions/data/sessions_repository.dart';
 import 'package:simcenter_app/features/sessions/presentation/session_detail_page.dart';
 import 'package:simcenter_app/features/sessions/presentation/sessions_page.dart';
@@ -20,11 +23,13 @@ Future<GoRouter> _pumpApp(
   WidgetTester tester, {
   AppUser? user = testUser,
   FakeSessionsRepository? sessionsRepo,
+  FakeSeasonsRepository? seasonsRepo,
 }) async {
   setViewSize(tester, const Size(1000, 800));
   final container = ProviderContainer(overrides: [
     fakeAuth(user),
     lapsRepositoryProvider.overrideWithValue(FakeLapsRepository()),
+    seasonsRepositoryProvider.overrideWithValue(seasonsRepo ?? FakeSeasonsRepository()),
     sessionsRepositoryProvider.overrideWithValue(sessionsRepo ?? FakeSessionsRepository()),
     devicesRepositoryProvider.overrideWithValue(FakeDevicesRepository()),
     rankingRepositoryProvider.overrideWithValue(FakeRankingRepository(
@@ -167,6 +172,47 @@ void main() {
 
     expect(_location(router), '/sessions');
     expect(find.byType(SessionsPage), findsOneWidget);
+  });
+
+  testWidgets('/seasons는 셸 안에서 Seasons 화면을 연다', (t) async {
+    final repo = FakeSeasonsRepository(seasons: [seasonOf('se1', gameMode: 'GrandPrix')]);
+    final router = await _pumpApp(t, seasonsRepo: repo);
+
+    router.go('/seasons');
+    await t.pumpAndSettle();
+
+    expect(_location(router), '/seasons');
+    expect(find.byType(SeasonsPage), findsOneWidget);
+    expect(repo.requests, [(page: 1, pageSize: 20)]);
+    expect(find.textContaining('Grand Prix'), findsWidgets);
+    expect(find.text('Dashboard'), findsOneWidget); // 사이드바가 그대로 있다.
+  });
+
+  testWidgets('/seasons/:seasonId?tab=standings는 셸 안에서 시즌 상세의 Standings 탭을 연다', (t) async {
+    final repo = FakeSeasonsRepository(details: {
+      'abc': seasonDetailOf('abc', drivers: [driverStandingOf(1, name: 'NORRIS')]),
+    });
+    final router = await _pumpApp(t, seasonsRepo: repo);
+
+    router.go('/seasons/abc?tab=standings');
+    await t.pumpAndSettle();
+
+    expect(_location(router), '/seasons/abc?tab=standings');
+    expect(find.byType(SeasonDetailPage), findsOneWidget);
+    expect(repo.detailRequests, ['abc']);
+    expect(find.text('NORRIS'), findsOneWidget);
+    expect(find.textContaining('기록된 세션 기준입니다.'), findsOneWidget);
+    expect(find.text('Dashboard'), findsOneWidget); // 사이드바가 그대로 있다.
+  });
+
+  testWidgets('사이드바의 Seasons 메뉴로 이동한다', (t) async {
+    final router = await _pumpApp(t);
+
+    await t.tap(find.widgetWithText(ListTile, 'Seasons'));
+    await t.pumpAndSettle();
+
+    expect(_location(router), '/seasons');
+    expect(find.byType(SeasonsPage), findsOneWidget);
   });
 
   testWidgets('/laps/tracks/:trackId도 셸 안에서 열린다', (t) async {

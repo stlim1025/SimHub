@@ -102,9 +102,9 @@ void main() {
     });
   });
 
-  group('SessionsPage.fromJson', () {
+  group('SessionSummaryPage.fromJson', () {
     test('page·pageSize·total·items를 읽는다', () {
-      final page = SessionsPage.fromJson({
+      final page = SessionSummaryPage.fromJson({
         'page': 2,
         'pageSize': 15,
         'total': 16,
@@ -118,7 +118,7 @@ void main() {
     });
 
     test('빈 목록도 읽는다', () {
-      final page = SessionsPage.fromJson({'page': 1, 'pageSize': 15, 'total': 0, 'items': <dynamic>[]});
+      final page = SessionSummaryPage.fromJson({'page': 1, 'pageSize': 15, 'total': 0, 'items': <dynamic>[]});
 
       expect(page.items, isEmpty);
       expect(page.total, 0);

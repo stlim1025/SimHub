@@ -6,15 +6,16 @@ import 'package:intl/intl.dart';
 import '../../../core/layout/layout_constants.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/util/lap_time.dart';
+import '../../../core/widgets/empty_state_card.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/pagination_bar.dart';
 import '../application/sessions_providers.dart';
 import '../domain/session_display.dart';
-// 같은 이름의 모델 `SessionsPage`(목록 한 페이지)와 이 파일의 화면 위젯이 겹치므로 모델은 가져오지 않고 필요한 것만 쓴다.
-import '../domain/session_models.dart' show SessionSummary;
+import '../domain/session_models.dart';
 
 const String _sessionsPath = '/sessions';
 const String _telemetryAppPath = '/telemetry-app';
+const String _telemetryAppLabel = 'Telemetry App';
 
 const String _guideText = '결과 화면까지 마친 세션이 여기에 기록됩니다.';
 const String _noMatchText = '이 조건에 맞는 세션이 없습니다.';
@@ -95,7 +96,7 @@ class _SessionsPageState extends ConsumerState<SessionsPage> {
             onRetry: () => ref.invalidate(sessionsProvider(_query)),
           ),
           data: (data) => data.total == 0
-              ? _EmptySessionsCard(filtered: _filter != kSessionFilterAll)
+              ? _EmptySessions(filtered: _filter != kSessionFilterAll)
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -139,37 +140,20 @@ class _FilterChips extends StatelessWidget {
 }
 
 /// 세션이 하나도 없을 때: 필터가 없으면 안내 + Telemetry App 링크, 필터가 있으면 조건 불일치 문구.
-class _EmptySessionsCard extends StatelessWidget {
-  const _EmptySessionsCard({required this.filtered});
+class _EmptySessions extends StatelessWidget {
+  const _EmptySessions({required this.filtered});
 
   final bool filtered;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                filtered ? _noMatchText : _guideText,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: AppColors.textMuted),
-              ),
-              if (!filtered) ...[
-                const SizedBox(height: 12),
-                TextButton(
-                  onPressed: () => context.go(_telemetryAppPath),
-                  child: const Text('Telemetry App'),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
+    return filtered
+        ? const EmptyStateCard(message: _noMatchText)
+        : const EmptyStateCard(
+            message: _guideText,
+            actionLabel: _telemetryAppLabel,
+            actionPath: _telemetryAppPath,
+          );
   }
 }
 

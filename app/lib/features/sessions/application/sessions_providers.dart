@@ -28,7 +28,7 @@ class SessionsQuery {
 }
 
 /// 세션 목록 한 페이지([kSessionsPageSize]개씩).
-final sessionsProvider = FutureProvider.autoDispose.family<SessionsPage, SessionsQuery>(
+final sessionsProvider = FutureProvider.autoDispose.family<SessionSummaryPage, SessionsQuery>(
   (ref, query) => ref.watch(sessionsRepositoryProvider).getMySessions(
         sessionType: sessionTypeForFilter(query.filter),
         page: query.page,

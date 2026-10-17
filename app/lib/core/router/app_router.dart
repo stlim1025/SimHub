@@ -10,6 +10,8 @@ import '../../features/devices/presentation/telemetry_app_page.dart';
 import '../../features/laps/presentation/laps_page.dart';
 import '../../features/laps/presentation/track_laps_page.dart';
 import '../../features/ranking/presentation/leaderboard_page.dart';
+import '../../features/seasons/presentation/season_detail_page.dart';
+import '../../features/seasons/presentation/seasons_page.dart';
 import '../../features/sessions/presentation/session_detail_page.dart';
 import '../../features/sessions/presentation/sessions_page.dart';
 import '../shell/app_shell.dart';
@@ -70,6 +72,15 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, state, child) => AppShell(location: state.uri.path, child: child),
         routes: [
           GoRoute(path: '/', builder: (_, _) => const DashboardPage()),
+          GoRoute(path: '/seasons', builder: (_, _) => const SeasonsPage()),
+          // 시즌 상세의 탭은 `?tab=season|results|standings`(모르는 값은 season, docs/12 §8.1).
+          GoRoute(
+            path: '/seasons/:seasonId',
+            builder: (_, state) => SeasonDetailPage(
+              seasonId: state.pathParameters['seasonId']!,
+              tab: state.uri.queryParameters['tab'],
+            ),
+          ),
           // 세션 목록의 필터는 `?type=`(모르는 값은 all, docs/12 §8.1).
           GoRoute(
             path: '/sessions',

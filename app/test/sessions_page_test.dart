@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:simcenter_app/core/widgets/pagination_bar.dart';
 import 'package:simcenter_app/features/sessions/data/sessions_repository.dart';
-import 'package:simcenter_app/features/sessions/domain/session_models.dart' as models;
+import 'package:simcenter_app/features/sessions/domain/session_models.dart';
 import 'package:simcenter_app/features/sessions/presentation/sessions_page.dart';
 
 import 'support/fakes.dart';
@@ -21,7 +21,7 @@ class _FlakySessionsRepository extends FakeSessionsRepository {
   int failuresLeft = 1;
 
   @override
-  Future<models.SessionsPage> getMySessions({
+  Future<SessionSummaryPage> getMySessions({
     String? sessionType,
     int page = 1,
     int pageSize = _pageSize,
@@ -60,7 +60,7 @@ Future<GoRouter> _pump(
 
 String _location(GoRouter router) => router.routeInformationProvider.value.uri.toString();
 
-List<models.SessionSummary> _races(int count) => [
+List<SessionSummary> _races(int count) => [
       for (var i = 0; i < count; i++)
         sessionOf('s$i', trackName: 'Track $i', myPosition: i + 1, classifiedAt: DateTime.utc(2026, 10, 12, 9, i)),
     ];

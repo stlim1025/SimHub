@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
-import '../../../core/util/hex_color.dart';
 import '../../../core/util/lap_time.dart';
+import '../../../core/widgets/ai_badge.dart';
+import '../../../core/widgets/team_color_bar.dart';
 import '../domain/session_display.dart';
 import '../domain/session_models.dart';
 import 'tyre_stints_view.dart';
@@ -10,10 +11,7 @@ import 'tyre_stints_view.dart';
 const double _rowHeight = 44;
 const double _columnSpacing = 20;
 const double _horizontalMargin = 16;
-const double _teamBarWidth = 4;
-const double _teamBarHeight = 24;
 const double _driverMaxWidth = 220;
-const double _myRowAlpha = 0.14;
 
 const _timeStyle = TextStyle(fontFeatures: [FontFeature.tabularFigures()]);
 
@@ -103,9 +101,7 @@ class SessionResultsTable extends StatelessWidget {
                 rows: [
                   for (final row in results)
                     DataRow(
-                      color: row.isPlayer
-                          ? WidgetStatePropertyAll(AppColors.accent.withValues(alpha: _myRowAlpha))
-                          : null,
+                      color: row.isPlayer ? const WidgetStatePropertyAll(AppColors.playerRow) : null,
                       cells: [
                         for (final column in columns)
                           DataCell(column.cell(_CellData(row: row, reference: reference, isRace: isRace))),
@@ -134,15 +130,7 @@ class _DriverCell extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            key: ValueKey('team-color-bar-${row.carIndex}'),
-            width: _teamBarWidth,
-            height: _teamBarHeight,
-            decoration: BoxDecoration(
-              color: parseHexColor(row.teamColor, fallback: AppColors.textMuted),
-              borderRadius: BorderRadius.circular(_teamBarWidth / 2),
-            ),
-          ),
+          TeamColorBar(key: ValueKey('team-color-bar-${row.carIndex}'), colorHex: row.teamColor),
           const SizedBox(width: 8),
           Flexible(
             child: Text(
@@ -154,28 +142,9 @@ class _DriverCell extends StatelessWidget {
           ),
           if (row.isAiControlled) ...[
             const SizedBox(width: 6),
-            const _AiBadge(),
+            const AiBadge(),
           ],
         ],
-      ),
-    );
-  }
-}
-
-class _AiBadge extends StatelessWidget {
-  const _AiBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-      decoration: BoxDecoration(
-        border: Border.all(color: AppColors.border),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: const Text(
-        'AI',
-        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.textMuted),
       ),
     );
   }

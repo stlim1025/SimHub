@@ -13,7 +13,7 @@ class SessionsRepository {
   final Dio _dio;
 
   /// 내 세션 목록(분류 시각 내림차순). [sessionType]은 `Race`·`Qualifying`·`Practice`, null이면 전체.
-  Future<SessionsPage> getMySessions({
+  Future<SessionSummaryPage> getMySessions({
     String? sessionType,
     int page = 1,
     int pageSize = kSessionsPageSize,
@@ -27,7 +27,7 @@ class SessionsRepository {
           'pageSize': pageSize,
         },
       );
-      return SessionsPage.fromJson(res.data!);
+      return SessionSummaryPage.fromJson(res.data!);
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }

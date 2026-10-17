@@ -5,9 +5,10 @@ import 'package:intl/intl.dart';
 
 import '../../../core/layout/layout_constants.dart';
 import '../../../core/network/api_exception.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/not_found_state.dart';
+import '../../../core/widgets/stat.dart';
+import '../../seasons/domain/season_display.dart';
 import '../application/sessions_providers.dart';
 import '../domain/session_display.dart';
 import '../domain/session_models.dart';
@@ -100,7 +101,7 @@ class _Header extends StatelessWidget {
   }
 }
 
-/// 세션 라벨 · 모드 · 날짜 · AI 난이도 · (시즌이면) 라운드. 라운드는 Seasons 화면(Task 9) 전까지 글자만 보인다.
+/// 세션 라벨 · 모드 · 날짜 · AI 난이도 · (시즌이면) 라운드. 라운드(`R7`)는 그 시즌의 Season 탭으로 가는 링크다.
 class _HeaderStats extends StatelessWidget {
   const _HeaderStats({required this.header});
 
@@ -110,37 +111,22 @@ class _HeaderStats extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final seasonId = header.seasonId;
     final round = header.round;
     return Wrap(
       spacing: _statSpacing,
       runSpacing: 8,
       children: [
-        _Stat(label: '세션', value: sessionKindLabel(header.sessionKind)),
-        _Stat(label: '모드', value: gameModeLabel(header.gameMode)),
-        _Stat(label: '날짜', value: _dateFormat.format(header.classifiedAt.toLocal())),
-        if (header.aiDifficulty > 0) _Stat(label: 'AI 난이도', value: '${header.aiDifficulty}'),
-        if (header.seasonId != null && round != null) _Stat(label: '시즌', value: 'R$round'),
-      ],
-    );
-  }
-}
-
-class _Stat extends StatelessWidget {
-  const _Stat({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(label, style: theme.textTheme.bodySmall?.copyWith(color: AppColors.textMuted)),
-        const SizedBox(height: 2),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
+        Stat(label: '세션', value: sessionKindLabel(header.sessionKind)),
+        Stat(label: '모드', value: gameModeLabel(header.gameMode)),
+        Stat(label: '날짜', value: _dateFormat.format(header.classifiedAt.toLocal())),
+        if (header.aiDifficulty > 0) Stat(label: 'AI 난이도', value: '${header.aiDifficulty}'),
+        if (seasonId != null && round != null)
+          Stat(
+            label: '시즌',
+            value: 'R$round',
+            onTap: () => context.go(seasonLocation(seasonId)),
+          ),
       ],
     );
   }

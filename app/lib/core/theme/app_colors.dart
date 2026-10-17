@@ -26,6 +26,9 @@ class AppColors {
   static const Color podiumSilver = Color(0xFFC0C7D1);
   static const Color podiumBronze = Color(0xFFCD7F32);
 
+  /// 결과·순위 표에서 내 행의 배경(`accent`를 약 14% 투명도로).
+  static const Color playerRow = Color(0x246366F1);
+
   /// 세션 최고 랩. `accent` 인디고와 뚜렷이 구분되는 자홍색.
   static const Color fastestLap = Color(0xFFD946EF);
 

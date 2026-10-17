@@ -7,6 +7,7 @@ import '../../../core/layout/layout_constants.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/util/lap_time.dart';
 import '../../../core/widgets/error_retry.dart';
+import '../../../core/widgets/stat.dart';
 import '../application/laps_providers.dart';
 import '../domain/lap_models.dart';
 import 'empty_laps_card.dart';
@@ -102,44 +103,17 @@ class _TrackRow extends StatelessWidget {
               spacing: _statSpacing,
               runSpacing: 8,
               children: [
-                _Stat(
+                Stat(
                   label: '최고 유효 랩',
                   value: bestLapMs == null ? _noBestLapText : formatLapTime(bestLapMs),
                 ),
-                _Stat(label: '랩 수', value: '${track.lapCount}'),
-                _Stat(label: '마지막 주행', value: _dateFormat.format(track.lastSetAt.toLocal())),
+                Stat(label: '랩 수', value: '${track.lapCount}'),
+                Stat(label: '마지막 주행', value: _dateFormat.format(track.lastSetAt.toLocal())),
               ],
             ),
           ],
         ),
       ),
-    );
-  }
-}
-
-class _Stat extends StatelessWidget {
-  const _Stat({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(label, style: theme.textTheme.bodySmall?.copyWith(color: AppColors.textMuted)),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: const TextStyle(
-            fontWeight: FontWeight.w600,
-            fontFeatures: [FontFeature.tabularFigures()],
-          ),
-        ),
-      ],
     );
   }
 }

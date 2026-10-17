@@ -72,7 +72,7 @@ void main() {
     expect(adapter.requests.single.queryParameters, {'page': 1, 'pageSize': 15});
   });
 
-  test('getMySessions는 응답을 SessionsPage로 파싱한다', () async {
+  test('getMySessions는 응답을 SessionSummaryPage로 파싱한다', () async {
     final (repo, _) = _repoReturning(200, '''
 {"page":1,"pageSize":15,"total":1,"items":[
   {"sessionId":"s1","classifiedAt":"2026-10-17T12:10:00Z","trackName":"Spa","sessionType":"Race",
