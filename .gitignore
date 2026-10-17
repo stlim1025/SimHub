@@ -50,3 +50,7 @@ logs/
 # ── Local .NET SDK (dotnet-install.ps1 로컬 설치) ───────
 .dotnet/
 global.json
+
+# ── 에이전트 작업 공간 (git worktree · SDD 원장) ──────────
+.claude/worktrees/
+.superpowers/
