@@ -83,7 +83,7 @@ public class RankingServiceTests
         };
         _laps.MyLaps = ([_laps.PersonalBest], 1);
 
-        var result = await _sut.GetMyLapsAsync(UserId, TrackId, sessionType: null, page: 1, pageSize: 20);
+        var result = await _sut.GetMyLapsAsync(UserId, TrackId, sessionType: null, MyLapsSort.Recent, page: 1, pageSize: 20);
 
         Assert.NotNull(result.PersonalBest);
         Assert.Equal(83452, result.PersonalBest!.LapTimeMs);
@@ -97,9 +97,64 @@ public class RankingServiceTests
     {
         _laps.MyLaps = ([], 0);
 
-        var result = await _sut.GetMyLapsAsync(UserId, trackId: null, sessionType: null, page: 1, pageSize: 20);
+        var result = await _sut.GetMyLapsAsync(UserId, trackId: null, sessionType: null, MyLapsSort.Recent, page: 1, pageSize: 20);
 
         Assert.Null(result.PersonalBest);
+    }
+
+    [Fact]
+    public async Task GetMyLaps_PassesSortToRepository()
+    {
+        _laps.MyLaps = ([], 0);
+
+        await _sut.GetMyLapsAsync(UserId, TrackId, sessionType: null, MyLapsSort.Fastest, page: 1, pageSize: 20);
+
+        Assert.Equal(MyLapsSort.Fastest, _laps.LastSort);
+    }
+
+    [Fact]
+    public async Task GetMyTracks_MapsRowsInRepositoryOrder()
+    {
+        var otherTrackId = Guid.NewGuid();
+        var newer = new DateTime(2026, 7, 14, 10, 0, 0, DateTimeKind.Utc);
+        var older = new DateTime(2026, 7, 10, 10, 0, 0, DateTimeKind.Utc);
+        _laps.TrackSummaries =
+        [
+            new MyTrackSummaryRow(TrackId, "Silverstone", GameCode, 5, 83452, newer),
+            new MyTrackSummaryRow(otherTrackId, "Suzuka", GameCode, 2, null, older),
+        ];
+
+        var result = await _sut.GetMyTracksAsync(UserId);
+
+        Assert.Equal(UserId, _laps.LastSummaryUserId);
+        Assert.Collection(result.Items,
+            t =>
+            {
+                Assert.Equal(TrackId, t.TrackId);
+                Assert.Equal("Silverstone", t.TrackName);
+                Assert.Equal(GameCode, t.GameCode);
+                Assert.Equal(5, t.LapCount);
+                Assert.Equal(83452, t.BestValidLapTimeMs);
+                Assert.Equal(newer, t.LastSetAt);
+            },
+            t =>
+            {
+                Assert.Equal(otherTrackId, t.TrackId);
+                Assert.Equal("Suzuka", t.TrackName);
+                Assert.Equal(2, t.LapCount);
+                Assert.Null(t.BestValidLapTimeMs);
+                Assert.Equal(older, t.LastSetAt);
+            });
+    }
+
+    [Fact]
+    public async Task GetMyTracks_NoLaps_ReturnsEmpty()
+    {
+        _laps.TrackSummaries = [];
+
+        var result = await _sut.GetMyTracksAsync(UserId);
+
+        Assert.Empty(result.Items);
     }
 
     [Theory]
@@ -109,7 +164,7 @@ public class RankingServiceTests
     {
         _laps.MyLaps = ([], 0);
 
-        var result = await _sut.GetMyLapsAsync(UserId, null, null, page, pageSize);
+        var result = await _sut.GetMyLapsAsync(UserId, null, null, MyLapsSort.Recent, page, pageSize);
 
         Assert.True(result.Laps.Page >= 1);
         Assert.True(result.Laps.PageSize is >= 1 and <= 100);
@@ -122,8 +177,11 @@ public class RankingServiceTests
         public IReadOnlyList<RankingLapRow> RankingRows { get; set; } = new List<RankingLapRow>();
         public (IReadOnlyList<Lap> Items, int Total) MyLaps { get; set; } = (new List<Lap>(), 0);
         public Lap? PersonalBest { get; set; }
+        public IReadOnlyList<MyTrackSummaryRow> TrackSummaries { get; set; } = new List<MyTrackSummaryRow>();
         public SessionType LastSessionType { get; private set; }
         public int LastTop { get; private set; }
+        public MyLapsSort LastSort { get; private set; }
+        public Guid LastSummaryUserId { get; private set; }
 
         public Task AddAsync(Lap lap, CancellationToken ct = default) => Task.CompletedTask;
 
@@ -136,8 +194,17 @@ public class RankingServiceTests
         }
 
         public Task<(IReadOnlyList<Lap> Items, int Total)> GetMyLapsAsync(
-            Guid userId, Guid? trackId, SessionType? sessionType, int skip, int take, CancellationToken ct = default)
-            => Task.FromResult(MyLaps);
+            Guid userId, Guid? trackId, SessionType? sessionType, MyLapsSort sort, int skip, int take, CancellationToken ct = default)
+        {
+            LastSort = sort;
+            return Task.FromResult(MyLaps);
+        }
+
+        public Task<IReadOnlyList<MyTrackSummaryRow>> GetMyTrackSummariesAsync(Guid userId, CancellationToken ct = default)
+        {
+            LastSummaryUserId = userId;
+            return Task.FromResult(TrackSummaries);
+        }
 
         public Task<Lap?> GetPersonalBestLapAsync(Guid userId, Guid trackId, string gameCode, CancellationToken ct = default)
             => Task.FromResult(PersonalBest);

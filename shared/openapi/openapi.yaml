@@ -158,6 +158,16 @@ paths:
           schema:
             type: string
           description: 필터링할 세션 타입 (예: TimeTrial)
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [recent, fastest]
+            default: recent
+          description: |
+            정렬 기준 (대소문자 무시).
+            `recent` = 최근 세운 순, `fastest` = 유효 랩 우선 · 빠른 랩타임 순 (무효 랩은 맨 뒤).
         - name: page
           in: query
           required: false
@@ -183,6 +193,25 @@ paths:
                 $ref: '#/components/schemas/MyLapRecordResponse'
         '400':
           $ref: '#/components/responses/400ValidationError'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '500':
+          $ref: '#/components/responses/500ServerError'
+
+  /me/tracks:
+    get:
+      summary: 내 트랙별 요약 조회
+      description: |
+        내가 랩을 세운 트랙별로 랩 수(무효 랩 포함), 유효 랩 최고 기록, 마지막으로 랩을 세운 시각을 돌려준다.
+        마지막으로 랩을 세운 트랙이 먼저 온다. 랩이 없으면 빈 목록.
+      operationId: getMyTracks
+      responses:
+        '200':
+          description: 내 트랙 요약 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyTracksResponse'
         '401':
           $ref: '#/components/responses/401Unauthorized'
         '500':
@@ -609,6 +638,50 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/LapRecord'
+
+    MyTrackSummary:
+      type: object
+      required:
+        - trackId
+        - trackName
+        - gameCode
+        - lapCount
+        - lastSetAt
+      properties:
+        trackId:
+          type: string
+          format: uuid
+          example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        trackName:
+          type: string
+          example: "Silverstone"
+        gameCode:
+          type: string
+          example: "F1_25"
+        lapCount:
+          type: integer
+          description: 무효 랩을 포함한 랩 수
+          example: 12
+        bestValidLapTimeMs:
+          type: integer
+          nullable: true
+          description: 유효 랩 중 최고 랩타임(ms). 유효 랩이 없으면 null
+          example: 83452
+        lastSetAt:
+          type: string
+          format: date-time
+          description: 이 트랙에서 마지막으로 랩을 세운 시각(UTC)
+          example: "2026-07-06T09:15:32Z"
+
+    MyTracksResponse:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MyTrackSummary'
 
     PersonalBestInfo:
       type: object

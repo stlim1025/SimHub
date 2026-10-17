@@ -68,7 +68,71 @@ public sealed class TelemetryIngestE2ETests : IClassFixture<ApiFactory>
         var rejected = await connection.InvokeAsync<SubmitAck>("SubmitEvent", LapFinishedEnvelope(Guid.NewGuid()));
         Assert.False(rejected.Acknowledged);
         Assert.Equal(RevokedDeviceReason, rejected.RejectReason);
+
+        // 8. 해제된 장치 키로는 새 연결 자체가 맺어지지 않는다(인증 핸들러가 해제 장치를 거부 → 401).
+        await using var reconnect = BuildConnection(deviceKey);
+        var failure = await Assert.ThrowsAnyAsync<Exception>(() => reconnect.StartAsync());
+        Assert.Contains("401", failure.Message);
     }
+
+    [Fact]
+    public async Task MyLaps_SortAndTrackSummary_ReflectSentLaps()
+    {
+        var client = _factory.CreateClient();
+        await TestApi.RegisterAndLoginAsync(client);
+        var (_, deviceKey) = await TestApi.PairDeviceAsync(client, "E2E-SORT-PC");
+
+        await using var connection = BuildConnection(deviceKey);
+        await connection.StartAsync();
+
+        // 같은 트랙에 (85000 유효, t1) (80000 무효, t2) (83000 유효, t3) 순으로 전송한다.
+        var t1 = new DateTime(2026, 7, 7, 9, 0, 0, DateTimeKind.Utc);
+        var t2 = t1.AddMinutes(5);
+        var t3 = t1.AddMinutes(10);
+        await SendLapAsync(connection, lapNumber: 1, lapTimeMs: 85000, isValid: true, occurredAt: t1);
+        await SendLapAsync(connection, lapNumber: 2, lapTimeMs: 80000, isValid: false, occurredAt: t2);
+        await SendLapAsync(connection, lapNumber: 3, lapTimeMs: 83000, isValid: true, occurredAt: t3);
+
+        // sort=fastest: 유효 랩 우선 + 빠른 순 → 무효 랩은 맨 뒤.
+        var fastest = await client.GetFromJsonAsync<JsonElement>("/api/v1/me/laps?sort=fastest");
+        Assert.Equal(new[] { 83000, 85000, 80000 }, LapTimes(fastest));
+
+        // sort=recent(및 미지정): SetAt 내림차순.
+        var recent = await client.GetFromJsonAsync<JsonElement>("/api/v1/me/laps?sort=recent");
+        Assert.Equal(new[] { 83000, 80000, 85000 }, LapTimes(recent));
+        var byDefault = await client.GetFromJsonAsync<JsonElement>("/api/v1/me/laps");
+        Assert.Equal(new[] { 83000, 80000, 85000 }, LapTimes(byDefault));
+
+        // 쿼리 값은 대소문자를 구분하지 않는다.
+        var upper = await client.GetFromJsonAsync<JsonElement>("/api/v1/me/laps?sort=FASTEST");
+        Assert.Equal(new[] { 83000, 85000, 80000 }, LapTimes(upper));
+
+        // 알 수 없는 정렬 값은 400.
+        var invalid = await client.GetAsync("/api/v1/me/laps?sort=bogus");
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+
+        // /me/tracks: 랩 3개, 유효 랩 최고 83000, 마지막 세운 시각 t3.
+        var tracks = await client.GetFromJsonAsync<JsonElement>("/api/v1/me/tracks");
+        var item = Assert.Single(tracks.GetProperty("items").EnumerateArray());
+        Assert.Equal("Silverstone", item.GetProperty("trackName").GetString());
+        Assert.Equal("F1_25", item.GetProperty("gameCode").GetString());
+        Assert.Equal(3, item.GetProperty("lapCount").GetInt32());
+        Assert.Equal(83000, item.GetProperty("bestValidLapTimeMs").GetInt32());
+        Assert.Equal(t3, item.GetProperty("lastSetAt").GetDateTime().ToUniversalTime());
+    }
+
+    private static async Task SendLapAsync(
+        HubConnection connection, int lapNumber, int lapTimeMs, bool isValid, DateTime occurredAt)
+    {
+        var ack = await connection.InvokeAsync<SubmitAck>(
+            "SubmitEvent", LapFinishedEnvelope(Guid.NewGuid(), lapNumber, lapTimeMs, isValid, occurredAt));
+        Assert.True(ack.Acknowledged, ack.RejectReason);
+    }
+
+    private static int[] LapTimes(JsonElement myLaps)
+        => myLaps.GetProperty("laps").GetProperty("items").EnumerateArray()
+            .Select(it => it.GetProperty("lapTimeMs").GetInt32())
+            .ToArray();
 
     /// <summary>사용자의 랩이 정확히 1개이고 연결한 장치로 귀속됐는지 확인한다. (트랙 ID, 섹터 수)를 돌려준다.</summary>
     private async Task<(Guid TrackId, int SectorCount)> AssertLapAttributedAsync(Guid userId, Guid deviceId)
@@ -87,24 +151,29 @@ public sealed class TelemetryIngestE2ETests : IClassFixture<ApiFactory>
         return (lap.TrackId, lap.Sectors.Count);
     }
 
-    private static object LapFinishedEnvelope(Guid eventId) => new
+    private static object LapFinishedEnvelope(
+        Guid eventId,
+        int lapNumber = 4,
+        int lapTimeMs = LapTimeMs,
+        bool isValid = true,
+        DateTime? occurredAt = null) => new
     {
         eventId,
         gameCode = "F1_25",
-        occurredAt = OccurredAt,
+        occurredAt = occurredAt ?? OccurredAt,
         type = "LapFinished",
         payload = new
         {
             sessionRef = "0xSESSION",
-            lapNumber = 4,
-            lapTimeMs = LapTimeMs,
+            lapNumber,
+            lapTimeMs,
             sectors = new[]
             {
                 new { sectorNumber = 1, sectorTimeMs = 27010 },
                 new { sectorNumber = 2, sectorTimeMs = 30110 },
                 new { sectorNumber = 3, sectorTimeMs = 26332 },
             },
-            isValid = true,
+            isValid,
             isOutOrInLap = false,
             trackId = 7, // Silverstone
             sessionType = "TimeTrial",

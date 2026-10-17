@@ -24,6 +24,18 @@ public sealed record TrackListResponse(IReadOnlyList<TrackDto> Items);
 /// <summary>내 랩 기록 응답(04 §3.9).</summary>
 public sealed record MyLapsResponse(PersonalBestDto? PersonalBest, PagedResult<LapDto> Laps);
 
+/// <summary>내 트랙별 요약 한 줄(11 §8). 최고 기록은 유효 랩 기준이며 유효 랩이 없으면 null.</summary>
+public sealed record MyTrackDto(
+    Guid TrackId,
+    string TrackName,
+    string GameCode,
+    int LapCount,
+    int? BestValidLapTimeMs,
+    DateTime LastSetAt);
+
+/// <summary>내 트랙 요약 응답(마지막으로 랩을 세운 트랙 우선).</summary>
+public sealed record MyTracksResponse(IReadOnlyList<MyTrackDto> Items);
+
 /// <summary>개인 최고 기록(랭킹 적격 기준).</summary>
 public sealed record PersonalBestDto(Guid TrackId, int LapTimeMs, DateTime SetAt);
 

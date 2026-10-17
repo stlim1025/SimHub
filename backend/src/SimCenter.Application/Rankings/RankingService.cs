@@ -69,6 +69,7 @@ public sealed class RankingService : IRankingService
         Guid userId,
         Guid? trackId,
         SessionType? sessionType,
+        MyLapsSort sort,
         int page,
         int pageSize,
         CancellationToken cancellationToken = default)
@@ -82,7 +83,7 @@ public sealed class RankingService : IRankingService
         };
 
         var (laps, total) = await _laps.GetMyLapsAsync(
-            userId, trackId, sessionType, (page - 1) * pageSize, pageSize, cancellationToken);
+            userId, trackId, sessionType, sort, (page - 1) * pageSize, pageSize, cancellationToken);
 
         var items = laps.Select(ToLapDto).ToList();
 
@@ -98,6 +99,18 @@ public sealed class RankingService : IRankingService
         }
 
         return new MyLapsResponse(personalBest, new PagedResult<LapDto>(page, pageSize, total, items));
+    }
+
+    public async Task<MyTracksResponse> GetMyTracksAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        var rows = await _laps.GetMyTrackSummariesAsync(userId, cancellationToken);
+
+        // 순서(마지막 세운 시각 내림차순)는 리포지토리가 보장한다 — 그대로 매핑한다.
+        var items = rows
+            .Select(r => new MyTrackDto(r.TrackId, r.TrackName, r.GameCode, r.LapCount, r.BestValidLapTimeMs, r.LastSetAt))
+            .ToList();
+
+        return new MyTracksResponse(items);
     }
 
     private static LapDto ToLapDto(Lap lap) => new(

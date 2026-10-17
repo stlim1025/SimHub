@@ -367,8 +367,11 @@ public class TelemetryIngestServiceTests
             => Task.FromResult<IReadOnlyList<RankingLapRow>>(new List<RankingLapRow>());
 
         public Task<(IReadOnlyList<Lap> Items, int Total)> GetMyLapsAsync(
-            Guid userId, Guid? trackId, SessionType? sessionType, int skip, int take, CancellationToken ct = default)
+            Guid userId, Guid? trackId, SessionType? sessionType, MyLapsSort sort, int skip, int take, CancellationToken ct = default)
             => Task.FromResult(((IReadOnlyList<Lap>)Items, Items.Count));
+
+        public Task<IReadOnlyList<MyTrackSummaryRow>> GetMyTrackSummariesAsync(Guid userId, CancellationToken ct = default)
+            => throw new NotImplementedException();
 
         public Task<Lap?> GetPersonalBestLapAsync(Guid userId, Guid trackId, string gameCode, CancellationToken ct = default)
             => Task.FromResult(Items
@@ -394,7 +397,10 @@ public class TelemetryIngestServiceTests
             => throw new NotImplementedException();
 
         public Task<MyLapsResponse> GetMyLapsAsync(
-            Guid userId, Guid? trackId, SessionType? sessionType, int page, int pageSize, CancellationToken ct = default)
+            Guid userId, Guid? trackId, SessionType? sessionType, MyLapsSort sort, int page, int pageSize, CancellationToken ct = default)
+            => throw new NotImplementedException();
+
+        public Task<MyTracksResponse> GetMyTracksAsync(Guid userId, CancellationToken ct = default)
             => throw new NotImplementedException();
     }
 
