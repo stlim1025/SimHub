@@ -16,6 +16,11 @@ public sealed class TelemetryUploadServiceTests : IAsyncLifetime
 {
     private const string ServerBaseUrl = "http://localhost:5284";
     private const int RecheckRounds = 3;
+
+    // 서버 계약(TelemetryIngestService.RevokedDeviceReason)과 같은 문구를 일부러 리터럴로 고정한다.
+    private const string RevokedDeviceReason = "연결이 해제된 장치입니다.";
+
+    private static readonly SubmitResult Acked = new(true, null);
     private static readonly Uri HubUri = new("http://localhost:5284/hubs/telemetry");
     private static readonly DateTime OccurredAt = new(2026, 10, 17, 9, 0, 0, DateTimeKind.Utc);
 
@@ -109,13 +114,45 @@ public sealed class TelemetryUploadServiceTests : IAsyncLifetime
     {
         var eventId = await EnqueueAsync();
         _credentials.SetSilently("k");
-        _factory.SubmitResponse = new SubmitResult(false, "Duplicate");
+        _factory.SubmitResponse = _ => new SubmitResult(false, "Duplicate");
 
         await RunAsync(NewService(), async () =>
         {
             await WaitUntilAsync(async () => await _outbox.CountAsync() == 0, "Reject 후 Outbox 항목 삭제");
 
             Assert.Contains(eventId, Assert.Single(_factory.Sessions).Submitted);
+            Assert.Equal(UploadState.Connected, _status.State); // 일반 Reject는 연결 상태를 바꾸지 않는다.
+        });
+    }
+
+    [Fact]
+    public async Task RevokedReject_KeepsItem_AndBecomesUnauthorized()
+    {
+        var first = await EnqueueAsync();
+        var second = await EnqueueAsync();
+        _credentials.SetSilently("revoked");
+        _factory.SubmitResponse = key => key == "revoked" ? new SubmitResult(false, RevokedDeviceReason) : Acked;
+
+        await RunAsync(NewService(), async () =>
+        {
+            await WaitForStateAsync(UploadState.Unauthorized);
+
+            // 키 재확인이 여러 번 돌아도 해제된 장치의 키로는 더 보내지 않는다.
+            await WaitForMoreLoadsAsync(RecheckRounds);
+            var revoked = Assert.Single(_factory.Sessions);
+            Assert.True(revoked.IsDisposed);
+            Assert.Equal(new[] { first }, revoked.Submitted); // 첫 Reject에서 멈춰 두 번째 항목은 보내지 않는다.
+            Assert.Equal(2, await _outbox.CountAsync()); // Reject된 항목도 Outbox에 남는다.
+            Assert.Equal(UploadState.Unauthorized, _status.State);
+
+            // 다른 키가 저장되면 다시 연결해 보관된 항목을 모두 보낸다.
+            _credentials.Save("fresh");
+            await WaitUntilAsync(async () => await _outbox.CountAsync() == 0, "새 키로 업로드");
+
+            Assert.Equal(UploadState.Connected, _status.State);
+            Assert.Equal(2, _factory.Sessions.Count);
+            Assert.Equal("fresh", _factory.Sessions[1].DeviceKey);
+            Assert.Equal(new[] { first, second }, _factory.Sessions[1].Submitted);
         });
     }
 
@@ -343,7 +380,8 @@ public sealed class TelemetryUploadServiceTests : IAsyncLifetime
         /// <summary>장치 키별 StartAsync 실패(예외). null이면 연결 성공.</summary>
         public Func<string, Exception?> StartFailure { get; set; } = _ => null;
 
-        public SubmitResult SubmitResponse { get; set; } = new(true, null);
+        /// <summary>장치 키별 SubmitAsync 응답. 기본은 Ack.</summary>
+        public Func<string, SubmitResult> SubmitResponse { get; set; } = _ => Acked;
 
         public IReadOnlyList<FakeSession> Sessions => _sessions.ToArray();
 
@@ -390,7 +428,7 @@ public sealed class TelemetryUploadServiceTests : IAsyncLifetime
         public Task<SubmitResult> SubmitAsync(JsonElement envelope, CancellationToken ct)
         {
             _submitted.Enqueue(envelope.GetProperty("eventId").GetGuid());
-            return Task.FromResult(factory.SubmitResponse);
+            return Task.FromResult(factory.SubmitResponse(DeviceKey));
         }
 
         public ValueTask DisposeAsync()

@@ -13,9 +13,22 @@ namespace SimCenter.Agent.Infrastructure.Upload;
 /// 연결된 장치 키로 업로드하고, 키가 없으면(미연결) 기다린다. 서버가 키를 거부(401)하면 무한 재시도를 멈추고
 /// 다른 키가 저장될 때까지 업로드하지 않는다(Outbox는 그대로). 그 밖의 오류는 지수 백오프(최대 30초)로 재시도한다.
 /// 서버가 응답(Ack/Reject)하면 Outbox에서 제거하고, 응답 없음(장애)이면 보관 후 재시도한다.
+/// 단, 열린 연결 중에 장치가 해제돼 받은 Reject(<see cref="RevokedDeviceRejectReason"/>)는 401과 같이 다룬다 —
+/// 그 항목을 지우지 않고 업로드를 멈춘 뒤 다른 키를 기다린다(Ruling R9).
 /// </summary>
 public sealed class TelemetryUploadService : BackgroundService
 {
+    /// <summary>
+    /// 서버가 "연결 해제된 장치"로 Reject할 때의 사유 문구. 백엔드 <c>TelemetryIngestService.RevokedDeviceReason</c>
+    /// (계획 Global Constraints의 고정 문구)와 <b>정확히 같아야 한다</b>. 서버 문구가 바뀌면 이 Reject가 일반 Reject로
+    /// 취급되어 항목이 지워지므로, 바꿀 때는 양쪽을 함께 바꾼다.
+    /// </summary>
+    internal const string RevokedDeviceRejectReason = "연결이 해제된 장치입니다.";
+
+    // RejectKeyAsync 로그에 남기는 거부 원인(키 원문은 남기지 않는다).
+    private const string UnauthorizedCause = "401";
+    private const string RevokedDeviceCause = "연결 해제 Reject";
+
     private static readonly TimeSpan DefaultPollInterval = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan MaxBackoff = TimeSpan.FromSeconds(30);
 
@@ -146,10 +159,14 @@ public sealed class TelemetryUploadService : BackgroundService
             try
             {
                 var session = await EnsureConnectedAsync(hubUri, key, ct);
-                var sentAny = await DrainAsync(session, ct);
+                var outcome = await DrainAsync(session, ct);
                 backoff = _pollInterval;
 
-                if (!sentAny)
+                if (outcome == DrainOutcome.DeviceRevoked)
+                {
+                    await RejectKeyAsync(key, RevokedDeviceCause);
+                }
+                else if (outcome == DrainOutcome.Idle)
                 {
                     await Task.Delay(_pollInterval, ct);
                 }
@@ -160,7 +177,7 @@ public sealed class TelemetryUploadService : BackgroundService
             }
             catch (Exception ex) when (UnauthorizedDetector.IsUnauthorized(ex))
             {
-                await RejectKeyAsync(key);
+                await RejectKeyAsync(key, UnauthorizedCause);
             }
             catch (Exception ex)
             {
@@ -235,21 +252,30 @@ public sealed class TelemetryUploadService : BackgroundService
         return _session;
     }
 
-    /// <returns>하나 이상 전송하면 true(연속 배수 유도).</returns>
-    private async Task<bool> DrainAsync(ITelemetryHubSession session, CancellationToken ct)
+    /// <summary>
+    /// Outbox 항목을 한 묶음 보낸다. 서버 응답(반환값)이 오면 Ack/Reject 무관하게 Outbox에서 제거하고,
+    /// 예외(장애)면 보관되어 재시도한다. 연결 해제 Reject는 그 항목을 남기고 즉시 멈춘다.
+    /// </summary>
+    private async Task<DrainOutcome> DrainAsync(ITelemetryHubSession session, CancellationToken ct)
     {
         var pending = await _outbox.GetPendingAsync(BatchSize, ct);
         if (pending.Count == 0)
         {
-            return false;
+            return DrainOutcome.Idle;
         }
 
         foreach (var item in pending)
         {
             using var document = JsonDocument.Parse(item.PayloadJson);
 
-            // 서버 응답(반환값)이 오면 Ack/Reject 무관하게 Outbox에서 제거. 예외(장애)면 보관되어 재시도.
             var result = await session.SubmitAsync(document.RootElement.Clone(), ct);
+            if (IsDeviceRevoked(result))
+            {
+                // 장치 키가 더는 유효하지 않다 — 이 항목과 남은 항목은 다른 키로 다시 연결한 뒤 보낸다.
+                _logger.LogWarning("서버가 연결 해제된 장치로 Reject했습니다 eventId={EventId} — Outbox에 보관합니다.", item.EventId);
+                return DrainOutcome.DeviceRevoked;
+            }
+
             await _outbox.DeleteAsync(item.EventId, ct);
 
             if (!result.Acknowledged)
@@ -258,13 +284,22 @@ public sealed class TelemetryUploadService : BackgroundService
             }
         }
 
-        return true;
+        return DrainOutcome.Sent;
     }
 
-    /// <summary>401 — 세션을 버리고 이 키로는 다시 시도하지 않는다. Outbox는 건드리지 않는다.</summary>
-    private async Task RejectKeyAsync(string key)
+    private static bool IsDeviceRevoked(SubmitResult result)
+        => !result.Acknowledged && string.Equals(result.RejectReason, RevokedDeviceRejectReason, StringComparison.Ordinal);
+
+    /// <summary>
+    /// 401 또는 연결 해제 Reject — 세션을 버리고 이 키로는 다시 시도하지 않는다. Outbox는 건드리지 않는다.
+    /// </summary>
+    /// <param name="key">거부된 장치 키(로그에 남기지 않는다).</param>
+    /// <param name="cause">로그용 거부 원인.</param>
+    private async Task RejectKeyAsync(string key, string cause)
     {
-        _logger.LogWarning("TelemetryHub가 장치 키를 거부했습니다(401) — 다시 연결이 필요합니다. 새 키가 저장될 때까지 업로드를 멈춥니다.");
+        _logger.LogWarning(
+            "TelemetryHub가 장치 키를 거부했습니다({Cause:l}) — 다시 연결이 필요합니다. 새 키가 저장될 때까지 업로드를 멈춥니다.",
+            cause);
         await DisposeSessionAsync();
         _rejectedKey = key;
         _status.Set(UploadState.Unauthorized);
@@ -310,4 +345,17 @@ public sealed class TelemetryUploadService : BackgroundService
 
     private static TimeSpan NextBackoff(TimeSpan current)
         => TimeSpan.FromTicks(Math.Min(MaxBackoff.Ticks, current.Ticks * BackoffMultiplier));
+
+    /// <summary>한 번의 배수 결과.</summary>
+    private enum DrainOutcome
+    {
+        /// <summary>보낼 항목이 없었다(폴링 주기만큼 쉰다).</summary>
+        Idle,
+
+        /// <summary>하나 이상 보냈다(바로 다음 묶음을 시도한다).</summary>
+        Sent,
+
+        /// <summary>서버가 연결 해제된 장치로 Reject했다(키 거부로 전환한다).</summary>
+        DeviceRevoked,
+    }
 }
