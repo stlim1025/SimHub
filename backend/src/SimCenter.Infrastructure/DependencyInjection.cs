@@ -28,6 +28,7 @@ public static class DependencyInjection
             options.UseNpgsql(connectionString).UseSnakeCaseNamingConvention());
 
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<AppDbContext>());
+        services.AddScoped<ITransactionRunner>(sp => sp.GetRequiredService<AppDbContext>());
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<ISimRigRepository, SimRigRepository>();
         services.AddScoped<IDrivingSessionRepository, DrivingSessionRepository>();
@@ -42,6 +43,7 @@ public static class DependencyInjection
         services.AddSingleton<IIdGenerator, UuidV7Generator>();
         services.AddSingleton<IPasswordHasher, BCryptPasswordHasher>();
         services.AddSingleton<IApiKeyHasher, Sha256ApiKeyHasher>();
+        services.AddSingleton<IRandomSource, CryptoRandomSource>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
 
         // ── 인증(JWT Bearer) ──

@@ -11,7 +11,7 @@ namespace SimCenter.Infrastructure.Persistence;
 /// EF Core DbContext(Code First, PostgreSQL). 공통 규약(03-entity-design §1)을 일괄 적용한다:
 /// Soft Delete 전역 쿼리 필터, 모든 시각 UTC 저장/조회. snake_case 매핑은 DI에서 설정한다.
 /// </summary>
-public sealed class AppDbContext : DbContext, IUnitOfWork
+public sealed class AppDbContext : DbContext, IUnitOfWork, ITransactionRunner
 {
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
     {
@@ -81,4 +81,16 @@ public sealed class AppDbContext : DbContext, IUnitOfWork
     }
 
     // IUnitOfWork.SaveChangesAsync는 DbContext.SaveChangesAsync(CancellationToken)가 그대로 만족한다.
+
+    /// <summary>
+    /// ITransactionRunner: 작업 전체를 하나의 DB 트랜잭션으로 실행한다. 작업이 예외 없이 끝나면 커밋하고,
+    /// 예외가 나면 커밋 없이 트랜잭션을 dispose해 롤백한다(작업 안의 SaveChanges·ExecuteUpdate가 모두 같은 트랜잭션).
+    /// </summary>
+    public async Task<T> RunAsync<T>(Func<CancellationToken, Task<T>> work, CancellationToken cancellationToken = default)
+    {
+        await using var transaction = await Database.BeginTransactionAsync(cancellationToken);
+        var result = await work(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return result;
+    }
 }
