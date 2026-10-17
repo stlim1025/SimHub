@@ -83,8 +83,10 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseMiddleware<ExceptionHandlingMiddleware>();
+// 요청 로깅이 예외 매핑을 감싸야(바깥) 처리된 4xx(ProblemDetails)가 실제 상태 코드로 기록된다.
+// 반대 순서면 요청 로깅이 매핑 전의 예외를 먼저 보고 400·403·404도 "responded 500"(Error)으로 남긴다.
 app.UseSerilogRequestLogging();
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 // 운영은 HTTPS 강제. 개발은 앱(웹/에뮬레이터) cleartext 접속을 위해 리다이렉트를 생략한다.
 if (!app.Environment.IsDevelopment())
