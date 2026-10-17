@@ -41,7 +41,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       } else {
         await controller.login(_email.text.trim(), _password.text);
       }
-      // 성공 시 라우터 redirect가 /home으로 이동시킨다.
+      // 성공 시 라우터 redirect가 Dashboard(/)로 이동시킨다.
     } on ApiException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// 세션 복원 중 표시되는 스플래시. 라우터 redirect가 복원 완료 후 login/home으로 보낸다.
+/// 세션 복원 중 표시되는 스플래시. 라우터 redirect가 복원 완료 후 login 또는 Dashboard(/)로 보낸다.
 class SplashPage extends StatelessWidget {
   const SplashPage({super.key});
 

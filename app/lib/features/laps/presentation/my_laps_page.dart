@@ -2,11 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
-import '../../../core/network/api_exception.dart';
 import '../../../core/realtime/ranking_hub_client.dart';
+import '../../../core/shell/app_shell.dart';
 import '../../../core/util/lap_time.dart';
+import '../../../core/widgets/error_retry.dart';
 import '../application/laps_providers.dart';
 import '../domain/lap_models.dart';
 
@@ -50,34 +50,33 @@ class _MyLapsPageState extends ConsumerState<MyLapsPage> {
   Widget build(BuildContext context) {
     final myLaps = ref.watch(myLapsProvider(widget.trackId));
 
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => context.go('/home')),
-        title: Text(widget.trackName == null ? '내 기록' : '내 기록 · ${widget.trackName}'),
-      ),
-      body: myLaps.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(e is ApiException ? e.message : '기록을 불러오지 못했어요.'),
-                const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: () => ref.invalidate(myLapsProvider(widget.trackId)),
-                  child: const Text('다시 시도'),
-                ),
-              ],
+    // 앱 셸 안에 놓이므로 자체 Scaffold/AppBar 없이 제목 + 본문만 그린다.
+    // (Task 11에서 트랙 목록 + 트랙별 랩 화면으로 교체될 임시 화면)
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: kPagePadding.copyWith(bottom: 0),
+          child: Text(
+            widget.trackName == null ? '내 기록' : '내 기록 · ${widget.trackName}',
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+          ),
+        ),
+        Expanded(
+          child: myLaps.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, _) => ErrorRetry(
+              error: e,
+              fallbackMessage: '기록을 불러오지 못했어요.',
+              onRetry: () => ref.invalidate(myLapsProvider(widget.trackId)),
+            ),
+            data: (data) => RefreshIndicator(
+              onRefresh: () async => ref.invalidate(myLapsProvider(widget.trackId)),
+              child: _LapsView(data: data),
             ),
           ),
         ),
-        data: (data) => RefreshIndicator(
-          onRefresh: () async => ref.invalidate(myLapsProvider(widget.trackId)),
-          child: _LapsView(data: data),
-        ),
-      ),
+      ],
     );
   }
 }
