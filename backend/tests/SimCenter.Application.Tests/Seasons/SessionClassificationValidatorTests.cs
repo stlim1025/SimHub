@@ -236,6 +236,33 @@ public class SessionClassificationValidatorTests
         Assert.Contains("sessionRef", detail);
     }
 
+    [Theory]
+    [InlineData("1844\0")]
+    [InlineData("\0")]
+    [InlineData("\01844")]
+    public void Validate_SessionRefWithNul_Fails(string sessionRef)
+    {
+        // PostgreSQL 텍스트 열은 NUL을 저장하지 못해 SaveChanges가 매번 실패한다 — 검증에서 거른다.
+        var detail = SessionClassificationValidator.Validate(ValidPayload() with { SessionRef = sessionRef });
+
+        Assert.NotNull(detail);
+        Assert.Contains("sessionRef", detail);
+    }
+
+    [Fact]
+    public void Validate_NulPaddedDriverNameAndCompound_PassWithRawLengthChecked()
+    {
+        // 게임 UDP의 고정 길이 문자열은 NUL로 패딩되는 것이 정상 형태라 거부하지 않는다(정규화에서 잘라 낸다).
+        var stints = new List<TyreStintDto> { new(EndLap: 10, VisualCompound: "Soft", ActualCompound: "C3\0") };
+
+        var padded = SessionClassificationValidator.Validate(WithRow(Car(1) with { DriverName = "ABC\0\0", TyreStints = stints }));
+        var tooLong = SessionClassificationValidator.Validate(
+            WithRow(Car(1) with { DriverName = "A" + new string('\0', SessionClassificationValidator.MaxDriverNameLength) }));
+
+        Assert.Null(padded);
+        Assert.NotNull(tooLong); // 원본 길이(65) 검사는 그대로.
+    }
+
     [Fact]
     public void Validate_TwoPlayers_Fails()
     {

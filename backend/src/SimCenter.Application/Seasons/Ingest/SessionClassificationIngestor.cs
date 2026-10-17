@@ -24,7 +24,8 @@ public sealed class SessionClassificationIngestor : ISessionClassificationIngest
     /// <summary>Agent 시계가 서버보다 앞서 있어도 이후 재분류가 막히지 않도록, 분류 시각의 상한을 서버 시각보다 이만큼만 허용한다.</summary>
     public static readonly TimeSpan MaxClockSkew = TimeSpan.FromMinutes(5);
 
-    private const string ParseFailedReason = "SessionClassified payload 파싱 실패";
+    private const char NulCharacter = '\0';
+    private const string ParseFailedReason ="SessionClassified payload 파싱 실패";
     private const string EmptyPayloadReason = "SessionClassified payload가 비어 있습니다.";
     private const string ValidationFailedPrefix = "SessionClassified 검증 실패: ";
     private const string TimeTrialIgnoredReason = "Time Trial 세션은 저장하지 않습니다(D-30).";
@@ -408,8 +409,21 @@ public sealed class SessionClassificationIngestor : ISessionClassificationIngest
         return built;
     }
 
-    /// <summary>앞뒤 공백을 지우고, 비면 null(드라이버 이름이 비면 표시는 <c>Car {carIndex + 1}</c>).</summary>
-    private static string? NormalizeText(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    /// <summary>
+    /// 첫 NUL(<c>\0</c>)부터 잘라 내고(UDP 고정 길이 문자열의 NUL 패딩이 정상 형태이고, PostgreSQL 텍스트는 NUL을 저장하지 못한다)
+    /// 앞뒤 공백을 지운다. 비면 null(드라이버 이름이 비면 표시는 <c>Car {carIndex + 1}</c>).
+    /// </summary>
+    private static string? NormalizeText(string? value)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        var nulIndex = value.IndexOf(NulCharacter);
+        var trimmed = (nulIndex >= 0 ? value[..nulIndex] : value).Trim();
+        return trimmed.Length == 0 ? null : trimmed;
+    }
 
     /// <summary>문자열로 받은 enum 필드의 해석 결과.</summary>
     private readonly record struct ClassificationKinds(SessionType SessionType, SessionKind SessionKind, GameMode GameMode);

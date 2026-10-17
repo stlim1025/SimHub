@@ -13,6 +13,7 @@ public static class SessionClassificationValidator
     public const int MaxSessionRefLength = 32;
     public const int MaxActualCompoundLength = 10;
 
+    private const char Nul = '\0';
     private const int MaxPlayers = 1;
     private const int MinPosition = 1;
     private const int MaxCarIndex = MaxClassificationEntries - 1;
@@ -25,6 +26,12 @@ public static class SessionClassificationValidator
         if (string.IsNullOrWhiteSpace(payload.SessionRef) || payload.SessionRef.Length > MaxSessionRefLength)
         {
             return $"sessionRef: 1~{MaxSessionRefLength}자여야 합니다";
+        }
+
+        // PostgreSQL 텍스트 열은 NUL(0x00)을 저장하지 못한다(22021) — SessionRef·SessionKey·DriverKey로 흘러가므로 여기서 거른다.
+        if (payload.SessionRef.Contains(Nul))
+        {
+            return "sessionRef: NUL 문자를 포함할 수 없습니다";
         }
 
         var results = payload.Results;

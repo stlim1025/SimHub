@@ -411,6 +411,101 @@ public class SessionClassificationIngestorTests
         Assert.Equal("name:MAX POWER#9", row.DriverKey);
     }
 
+    [Fact]
+    public async Task Apply_NulPaddedDriverName_IsCutAtNulAndKeyedByCleanName()
+    {
+        var payload = BasePayload() with
+        {
+            Results = new List<ClassifiedResultDto> { PlayerCar(), AiCar(carIndex: 1, gameDriverId: null, name: "ABC\0\0") },
+        };
+
+        await ApplyStored(Envelope(payload));
+
+        var row = Assert.Single(_sessions.Items).Results.Single(r => r.CarIndex == 1);
+        Assert.Equal("ABC", row.DriverName);
+        Assert.Equal("name:ABC#9", row.DriverKey);
+    }
+
+    [Theory]
+    [InlineData("\0\0\0")]
+    [InlineData(" \0ABC")]
+    public async Task Apply_NameEmptyBeforeNul_IsStoredAsNullWithCarKey(string name)
+    {
+        var payload = BasePayload() with
+        {
+            Results = new List<ClassifiedResultDto> { PlayerCar(), AiCar(carIndex: 1, gameDriverId: null, name: name) },
+        };
+
+        await ApplyStored(Envelope(payload));
+
+        var row = Assert.Single(_sessions.Items).Results.Single(r => r.CarIndex == 1);
+        Assert.Null(row.DriverName);
+        Assert.Equal($"car:{SessionRef}:1", row.DriverKey);
+    }
+
+    [Fact]
+    public async Task Apply_NulPaddedActualCompound_IsCutAtNul()
+    {
+        var stints = new List<TyreStintDto> { new(EndLap: 29, VisualCompound: "Hard", ActualCompound: "C3\0") };
+        var payload = BasePayload() with { Results = new List<ClassifiedResultDto> { PlayerCar() with { TyreStints = stints } } };
+
+        await ApplyStored(Envelope(payload));
+
+        var stint = Assert.Single(Assert.Single(Assert.Single(_sessions.Items).Results).TyreStints);
+        Assert.Equal("C3", stint.ActualCompound);
+    }
+
+    [Fact]
+    public async Task Apply_NulPaddedStrings_NeverReachStoredEntities()
+    {
+        // PostgreSQL 텍스트는 NUL을 저장하지 못한다 — 어떤 엔티티 문자열에도 '\0'이 남으면 안 된다.
+        var stints = new List<TyreStintDto>
+        {
+            new(EndLap: 14, VisualCompound: "Medium", ActualCompound: "C3\0\0"),
+            new(EndLap: 29, VisualCompound: "Hard", ActualCompound: "\0"),
+        };
+        var payload = BasePayload() with
+        {
+            Results = new List<ClassifiedResultDto>
+            {
+                PlayerCar() with { DriverName = "S. LIM\0\0\0", TyreStints = stints },
+                AiCar(carIndex: 1, gameDriverId: null, name: "Driver Nine\0\0") with { TyreStints = stints },
+                AiCar(carIndex: 2, gameDriverId: null, name: "\0\0\0") with { TyreStints = stints },
+            },
+        };
+
+        await ApplyStored(Envelope(payload));
+
+        var session = Assert.Single(_sessions.Items);
+        var entities = new List<object> { session, Assert.Single(_seasons.Seasons), Assert.Single(_seasons.Weekends) };
+        entities.AddRange(session.Results);
+        entities.AddRange(session.Results.SelectMany(r => r.TyreStints));
+        var strings = entities.SelectMany(StringValues).ToList();
+        Assert.NotEmpty(strings);
+        Assert.DoesNotContain(strings, s => s.Contains('\0'));
+        Assert.Equal("name:DRIVER NINE#9", session.Results.Single(r => r.CarIndex == 1).DriverKey);
+        Assert.Equal($"car:{SessionRef}:2", session.Results.Single(r => r.CarIndex == 2).DriverKey);
+        Assert.Null(session.Results.Single(r => r.CarIndex == 2).DriverName);
+        Assert.Equal(new string?[] { "C3", null }, session.Results.Single(r => r.CarIndex == 0).TyreStints.OrderBy(s => s.StintNumber).Select(s => s.ActualCompound));
+    }
+
+    [Fact]
+    public async Task Apply_SessionRefWithNul_RejectsAndAddsNothing()
+    {
+        var outcome = await Apply(Envelope(BasePayload() with { SessionRef = "1844\0" }));
+
+        var rejected = Assert.IsType<ClassificationOutcome.Rejected>(outcome);
+        Assert.StartsWith("SessionClassified 검증 실패: ", rejected.Reason);
+        Assert.Equal(0, _tracks.LookupCalls);
+        AssertNothingAdded();
+    }
+
+    private static IEnumerable<string> StringValues(object entity)
+        => entity.GetType().GetProperties()
+            .Where(p => p.PropertyType == typeof(string) && p.GetIndexParameters().Length == 0)
+            .Select(p => (string?)p.GetValue(entity))
+            .OfType<string>();
+
     [Theory]
     [InlineData("TimeTrial", "DriverCareer")]
     [InlineData("Race", "TimeTrial")]
