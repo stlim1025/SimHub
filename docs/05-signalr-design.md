@@ -129,7 +129,7 @@ Reject 사유(고정 문구): `"SessionClassified payload 파싱 실패"`, `"Ses
   한도를 넘는 메시지는 Reject가 아니라 **연결 종료**라 Agent가 같은 Outbox 항목을 끝없이 재시도하게 되므로, 서버가 한도를 정하고 Agent가 먼저 지킨다.
 - Agent는 Outbox에 넣기 전에 직렬화 크기(UTF-8 바이트)를 재서 **48KiB**(`OutboxTelemetrySink.MaxEnvelopeBytes`)를 넘으면 `SessionClassified`의 타이어 스틴트를 빼고 다시 잰다(경고 로그).
   그래도 넘거나 다른 유형이면 적재하지 않고 오류 로그를 남긴다.
-- 실측: 검증 상한 `SessionClassified`(32대 × 8스틴트, 비ASCII 이름 64자)는 SignalR 와이어에서 약 32~34KB(기본 JSON 인코더가 비ASCII를 `\uXXXX`로 escape). 게임 최대(24대 × 8스틴트)는 Agent 쪽 직렬화(UTF-8) 기준 약 24KB(이름이 검증 한도인 비ASCII 64자까지 길어도 약 32KB). 22대 × 스틴트 2~3개는 약 10KB로 추정한다(측정하지 않음).
+- 실측: 검증 상한 `SessionClassified`(32대 × 8스틴트, 비ASCII 이름 64자)는 SignalR 와이어에서 약 32~34KB다. SignalR 허브 프로토콜은 비ASCII를 `\uXXXX`로 escape하지 않아 와이어 크기가 설계 추정(약 44KB, escape를 가정)보다 작다. 반면 Agent의 Outbox 직렬화(`System.Text.Json` 기본값)는 비ASCII를 escape하므로 Agent 쪽 수치가 와이어보다 크고, 그래서 48KiB 검사는 보수적이다. 게임 최대(24대 × 8스틴트)는 Agent 쪽 직렬화 기준 약 24KB(이름이 검증 한도인 비ASCII 64자까지 길어도 약 32KB). 22대 × 스틴트 2~3개는 약 10KB로 추정한다(측정하지 않음).
 - 배포 순서: **백엔드 → Agent**. 옛 백엔드는 모르는 이벤트 유형을 Ack하고 버리므로(데이터 손실) 새 Agent를 먼저 배포하면 안 된다.
 
 ---

@@ -333,7 +333,8 @@ Agent.Core에도 §4.3과 같은 이름의 enum(`GameMode`, `SessionKind`, `Resu
 - envelope `type = "SessionClassified"`. `TelemetryEventType`·`telemetry_envelope.json` enum에 추가한다. `lap_finished.json`에는 §4.6의 선택 필드 4개를 추가한다.
 - **크기와 한도(§0 실패 원칙):**
   - 22대 × 스틴트 2~3개 ≈ 10KB. 게임이 보낼 수 있는 최대(24대 × 스틴트 8개)도 Agent 쪽 직렬화(UTF-8 바이트) 기준 23.8KB(이름 비ASCII 10자)이고, 이름이 검증 한도(비ASCII 64자)까지 길어도 31.6KB다.
-    **실측(구현 후):** 검증 상한 페이로드(32대 × 8스틴트, 비ASCII 이름 64자)는 SignalR 와이어에서 약 32~34KB다 — 기본 JSON 인코더가 비ASCII를 `\uXXXX`로 escape하기 때문이다(§14).
+    **실측(구현 후):** 검증 상한 페이로드(32대 × 8스틴트, 비ASCII 이름 64자)는 SignalR 와이어에서 약 32~34KB다 — SignalR 허브 프로토콜은 비ASCII를 `\uXXXX`로 escape하지 않아 설계 추정(약 44KB, escape를 가정)보다 작다.
+    Agent의 Outbox 직렬화(`System.Text.Json` 기본값)는 비ASCII를 escape하므로 Agent 쪽 수치가 와이어보다 커서, 48KiB 검사는 보수적이다(§14).
   - 백엔드는 `TelemetryHub`의 `MaximumReceiveMessageSize`를 **이름 붙은 상수 64KiB**(`TelemetryHub.MaxMessageBytes`, `AddHubOptions<TelemetryHub>`)로 명시한다(기본 32KB에 기대지 않는다). 한도를 넘는 메시지는
     Reject가 아니라 연결 종료라 Agent가 같은 항목을 끝없이 재시도하게 되기 때문이다.
   - Agent는 Outbox에 넣기 전에 직렬화 크기(UTF-8 바이트)를 잰다(`OutboxTelemetrySink.MaxEnvelopeBytes = 48KiB`). 넘으면 스틴트를 빼고 다시 재고 경고 로그, 그래도 넘으면 버리고 오류 로그를 남긴다.
@@ -689,7 +690,7 @@ Pos · Driver(팀 색 막대, AI 배지, 내 행 강조) · Team · Grid · Laps
 | `raceNumber` 검증 | 언급 없음 | `raceNumber`(있다면) ≥ 0 | 음수면 `name:{NAME}#{raceNumber}` 키가 길어져 `DriverKey`(80자)를 넘을 수 있다 |
 | Agent 시간값 보정 | 단위 변환만 | `TotalRaceTime`이 NaN·0 이하이면 0, `int.MaxValue` 이상이면 `int.MaxValue`. `BestLapTimeInMS`(uint)는 `int.MaxValue`로 자른다 | 백엔드는 음수를 영구 Reject하므로 깨진 값 하나로 세션 전체가 사라지지 않게 한다 |
 | 빈 순위표 | §5.3에 없음 | 트래커가 무시하고 `SessionRef`를 보낸 것으로 기억하지 않는다(§5.3 규칙 3) | 백엔드는 `results` 1~32개가 아니면 항상 Reject — 보내면 영구 Reject가 되고 "세션당 1회" 슬롯만 소모한다 |
-| 메시지 크기 실측 | 게임 최대 약 30KB, 검증 상한 페이로드 약 44KB(추정) | Agent 쪽 직렬화(UTF-8 바이트): 24대 × 8스틴트 × 비ASCII 이름 10자 = 23,778 B, 이름 64자 = 31,554 B. 백엔드 통합 테스트의 검증 상한 페이로드(32대 × 8스틴트 × 이름 64자)는 SignalR 와이어에서 약 32~34KB(기본 JSON 인코더가 비ASCII를 `\uXXXX`로 escape). 한도는 그대로: Agent 48KiB, 허브 64KiB | 추정치를 실측으로 교체. 검증 상한 페이로드가 기본 한도(32KB)를 넘으면서 64KiB 아래라 한도 명시 회귀 테스트가 성립한다 |
+| 메시지 크기 실측 | 게임 최대 약 30KB, 검증 상한 페이로드 약 44KB(추정) | Agent 쪽 직렬화(UTF-8 바이트): 24대 × 8스틴트 × 비ASCII 이름 10자 = 23,778 B, 이름 64자 = 31,554 B. 백엔드 통합 테스트의 검증 상한 페이로드(32대 × 8스틴트 × 이름 64자)는 SignalR 와이어에서 약 32~34KB(허브 프로토콜은 비ASCII를 escape하지 않아 설계 추정 약 44KB보다 작다. Agent Outbox 직렬화는 `System.Text.Json` 기본값이라 escape하므로 Agent 쪽 수치가 더 크고 48KiB 검사는 보수적이다). 한도는 그대로: Agent 48KiB, 허브 64KiB | 추정치를 실측으로 교체. 검증 상한 페이로드가 기본 한도(32KB)를 넘으면서 64KiB 아래라 한도 명시 회귀 테스트가 성립한다 |
 | 점수 합계 | 언급 없음 | `StandingsCalculator`가 점수를 `long`으로 합산하고 표시 값만 `int` 상한으로 자른다 | 검증이 점수를 `int.MaxValue`까지 허용해, `int` 합산이면 시즌 조회가 `OverflowException`으로 매번 실패할 수 있다 |
 | 목록 vs 상세 칸 | 같은 대상 행 | 시즌 목록은 대상 행(레이스이거나 점수 있는 행)만 읽고 상세는 전체 행을 읽는다. 순위·점수·우승·포디움·Constructors는 같고, 예선·연습만 있는 주말의 빈 칸(`-`, 0점)만 상세에서만 보인다 | 목록 쿼리 크기를 줄이기 위함(§7.3). 목록은 칸을 쓰지 않아 화면에 영향 없음 |
 | Flutter 모델·위젯 이름 | 구현 계획에서 응답 모델과 화면 위젯이 같은 이름(`SessionsPage`·`SeasonsPage`) | 페이지 응답 모델 `SessionSummaryPage`·`SeasonSummaryPage`, 화면 위젯 `SessionsPage`·`SeasonsPage` | 모델과 위젯 이름 충돌 해소 |
