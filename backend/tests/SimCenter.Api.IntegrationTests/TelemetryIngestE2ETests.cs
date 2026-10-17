@@ -11,7 +11,7 @@ using SimCenter.Infrastructure.Persistence;
 namespace SimCenter.Api.IntegrationTests;
 
 /// <summary>
-/// Agent → TelemetryHub → DB 전체 경로 E2E(11 §10). 실 PostgreSQL(로컬 dev)이 필요하다.
+/// Agent → TelemetryHub → DB 전체 경로 E2E(11 §10). 실 PostgreSQL(로컬, 테스트 DB `simcenter_test`)이 필요하다.
 /// 흐름: 회원가입 → 로그인 → 코드 발급 → 장치 연결 → 장치 키로 Hub 접속 → LapFinished 전송 → 장치 주인 귀속 확인
 /// → 장치 연결 해제 → 이미 열린 연결로 보낸 다음 이벤트는 Reject.
 /// </summary>

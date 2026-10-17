@@ -10,7 +10,7 @@ using SimCenter.Infrastructure.Persistence;
 namespace SimCenter.Api.IntegrationTests;
 
 /// <summary>
-/// Agent 연결 흐름 E2E(11 §4): 코드 발급 → 장치 연결 → 목록 → 해제. 실 PostgreSQL(로컬 dev)이 필요하다.
+/// Agent 연결 흐름 E2E(11 §4): 코드 발급 → 장치 연결 → 목록 → 해제. 실 PostgreSQL(로컬, 테스트 DB `simcenter_test`)이 필요하다.
 /// 요청 제한(429)은 <see cref="AgentPairingRateLimitE2ETests"/>에서 별도 호스트로 검증한다.
 /// </summary>
 [Collection(DatabaseCollection.Name)]
