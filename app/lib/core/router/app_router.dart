@@ -6,6 +6,7 @@ import '../../features/auth/application/auth_controller.dart';
 import '../../features/auth/presentation/login_page.dart';
 import '../../features/auth/presentation/splash_page.dart';
 import '../../features/dashboard/presentation/dashboard_page.dart';
+import '../../features/devices/presentation/telemetry_app_page.dart';
 import '../../features/laps/presentation/laps_page.dart';
 import '../../features/laps/presentation/track_laps_page.dart';
 import '../../features/ranking/presentation/leaderboard_page.dart';
@@ -68,6 +69,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/leaderboard',
             builder: (_, state) => LeaderboardPage(trackId: state.uri.queryParameters['trackId']),
           ),
+          GoRoute(path: '/telemetry-app', builder: (_, _) => const TelemetryAppPage()),
         ],
       ),
     ],

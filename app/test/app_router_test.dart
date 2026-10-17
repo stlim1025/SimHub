@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'package:simcenter_app/core/realtime/ranking_hub_client.dart';
 import 'package:simcenter_app/core/router/app_router.dart';
 import 'package:simcenter_app/features/auth/domain/auth_models.dart';
+import 'package:simcenter_app/features/devices/data/devices_repository.dart';
+import 'package:simcenter_app/features/devices/presentation/telemetry_app_page.dart';
 import 'package:simcenter_app/features/laps/data/laps_repository.dart';
 import 'package:simcenter_app/features/ranking/data/ranking_repository.dart';
 import 'package:simcenter_app/features/ranking/domain/ranking_models.dart';
@@ -16,6 +18,7 @@ Future<GoRouter> _pumpApp(WidgetTester tester, {AppUser? user = testUser}) async
   final container = ProviderContainer(overrides: [
     fakeAuth(user),
     lapsRepositoryProvider.overrideWithValue(FakeLapsRepository()),
+    devicesRepositoryProvider.overrideWithValue(FakeDevicesRepository()),
     rankingRepositoryProvider.overrideWithValue(FakeRankingRepository(
       tracks: const [Track(trackId: 't1', gameCode: 'F1_25', name: 'Monaco')],
     )),
@@ -80,6 +83,27 @@ void main() {
     await t.pumpAndSettle();
     expect(_location(router), '/laps');
     expect(find.text('Dashboard'), findsOneWidget);
+  });
+
+  testWidgets('/telemetry-app은 셸 안에서 Telemetry App 화면을 연다', (t) async {
+    final router = await _pumpApp(t);
+
+    router.go('/telemetry-app');
+    await t.pumpAndSettle();
+
+    expect(_location(router), '/telemetry-app');
+    expect(find.byType(TelemetryAppPage), findsOneWidget);
+    expect(find.text('Dashboard'), findsOneWidget); // 사이드바가 그대로 있다.
+  });
+
+  testWidgets('사이드바의 Telemetry App 메뉴로 이동한다', (t) async {
+    final router = await _pumpApp(t);
+
+    await t.tap(find.text('Telemetry App'));
+    await t.pumpAndSettle();
+
+    expect(_location(router), '/telemetry-app');
+    expect(find.byType(TelemetryAppPage), findsOneWidget);
   });
 
   testWidgets('/laps/tracks/:trackId도 셸 안에서 열린다', (t) async {

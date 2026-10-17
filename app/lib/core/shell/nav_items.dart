@@ -9,11 +9,12 @@ class NavItem {
   final String path;
 }
 
-/// P6 메뉴(docs/11 §7.2). Telemetry App은 해당 화면이 생길 때 추가한다.
+/// P6 메뉴(docs/11 §7.2).
 const List<NavItem> navItems = [
   NavItem(label: 'Dashboard', icon: Icons.dashboard_outlined, path: '/'),
   NavItem(label: 'Laps', icon: Icons.timer_outlined, path: '/laps'),
   NavItem(label: 'Leaderboard', icon: Icons.emoji_events_outlined, path: '/leaderboard'),
+  NavItem(label: 'Telemetry App', icon: Icons.sensors, path: '/telemetry-app'),
 ];
 
 /// [location](쿼리 제외 경로)이 [item] 또는 그 하위 경로이면 선택 상태.

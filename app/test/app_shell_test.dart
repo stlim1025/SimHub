@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,6 +14,23 @@ import 'support/fakes.dart';
 const _wide = Size(1000, 800);
 const _narrow = Size(600, 800);
 
+/// `stop()`이 [stopGate]가 완료될 때까지 끝나지 않는 허브.
+class _SlowStopHub extends FakeRankingHub {
+  final stopGate = Completer<void>();
+
+  @override
+  Future<void> stop() async {
+    stopCalls++;
+    await stopGate.future;
+  }
+}
+
+/// `stop()`이 항상 실패하는 허브.
+class _FailingStopHub extends FakeRankingHub {
+  @override
+  Future<void> stop() async => throw StateError('hub down');
+}
+
 /// 셸 안에 세 메뉴의 자리표시 페이지를 올린 라우터.
 GoRouter _router() => GoRouter(
       initialLocation: '/',
@@ -22,6 +41,7 @@ GoRouter _router() => GoRouter(
             GoRoute(path: '/', builder: (_, _) => const Text('body:dashboard')),
             GoRoute(path: '/laps', builder: (_, _) => const Text('body:laps')),
             GoRoute(path: '/leaderboard', builder: (_, _) => const Text('body:leaderboard')),
+            GoRoute(path: '/telemetry-app', builder: (_, _) => const Text('body:telemetry-app')),
           ],
         ),
       ],
@@ -51,8 +71,20 @@ void main() {
     expect(find.text('Dashboard'), findsOneWidget);
     expect(find.text('Laps'), findsOneWidget);
     expect(find.text('Leaderboard'), findsOneWidget);
+    expect(find.text('Telemetry App'), findsOneWidget);
     expect(find.byTooltip('메뉴 열기'), findsNothing);
     expect(find.text('body:dashboard'), findsOneWidget);
+  });
+
+  testWidgets('Telemetry App 메뉴를 누르면 /telemetry-app으로 이동하고 선택 표시가 된다', (t) async {
+    await _pumpShell(t, _wide);
+
+    await t.tap(find.text('Telemetry App'));
+    await t.pumpAndSettle();
+
+    expect(find.text('body:telemetry-app'), findsOneWidget);
+    final tile = t.widget<ListTile>(find.widgetWithText(ListTile, 'Telemetry App'));
+    expect(tile.selected, isTrue);
   });
 
   testWidgets('900px 미만이면 서랍 메뉴 버튼이 보인다', (t) async {
@@ -78,6 +110,36 @@ void main() {
     await t.pumpAndSettle();
 
     expect(hub.stopCalls, 1);
+    expect(container.read(authControllerProvider).value, isNull);
+  });
+
+  testWidgets('허브 종료를 기다리는 동안 사이드바가 사라져도 로그아웃은 끝까지 수행된다', (t) async {
+    final hub = _SlowStopHub();
+    final container = await _pumpShell(t, _wide, hub: hub);
+
+    await t.tap(find.byTooltip('로그아웃'));
+    await t.pump();
+    expect(hub.stopCalls, 1);
+
+    // 화면이 좁아지면 고정 사이드바가 트리에서 사라진다(서랍은 닫혀 있다).
+    setViewSize(t, _narrow);
+    await t.pumpAndSettle();
+    expect(find.byTooltip('로그아웃'), findsNothing);
+
+    hub.stopGate.complete();
+    await t.pumpAndSettle();
+
+    expect(t.takeException(), isNull);
+    expect(container.read(authControllerProvider).value, isNull);
+  });
+
+  testWidgets('허브 종료가 실패해도 로그아웃은 수행된다', (t) async {
+    final hub = _FailingStopHub();
+    final container = await _pumpShell(t, _wide, hub: hub);
+
+    await t.tap(find.byTooltip('로그아웃'));
+    await t.pumpAndSettle();
+
     expect(container.read(authControllerProvider).value, isNull);
   });
 

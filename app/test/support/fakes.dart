@@ -7,6 +7,8 @@ import 'package:simcenter_app/core/config/app_config.dart';
 import 'package:simcenter_app/core/realtime/ranking_hub_client.dart';
 import 'package:simcenter_app/features/auth/application/auth_controller.dart';
 import 'package:simcenter_app/features/auth/domain/auth_models.dart';
+import 'package:simcenter_app/features/devices/data/devices_repository.dart';
+import 'package:simcenter_app/features/devices/domain/device_models.dart';
 import 'package:simcenter_app/features/laps/data/laps_repository.dart';
 import 'package:simcenter_app/features/laps/domain/lap_models.dart';
 import 'package:simcenter_app/features/ranking/data/ranking_repository.dart';
@@ -178,6 +180,62 @@ MyTrack trackOf(String id, String name, {int lapCount = 3, int? bestMs = 83452})
       lapCount: lapCount,
       bestValidLapTimeMs: bestMs,
       lastSetAt: DateTime.utc(2026, 10, 12, 9),
+    );
+
+/// 장치 목록·연결 코드 발급·연결 해제를 메모리에서 흉내 내는 저장소.
+/// [issueError]나 [revokeError]를 주면 해당 호출이 그 오류로 실패한다.
+class FakeDevicesRepository implements DevicesRepository {
+  FakeDevicesRepository({
+    List<AgentDevice> devices = const [],
+    this.issuedCode,
+    this.issueError,
+    this.revokeError,
+  }) : _devices = [...devices];
+
+  final List<AgentDevice> _devices;
+
+  /// 다음 [issuePairingCode] 호출이 돌려줄 코드. 호출 순번(1부터)을 받아 만든다.
+  final PairingCode Function(int callNumber)? issuedCode;
+  final Object? issueError;
+  final Object? revokeError;
+
+  int issueCalls = 0;
+  int getDevicesCalls = 0;
+  final revoked = <String>[];
+
+  @override
+  Future<PairingCode> issuePairingCode() async {
+    issueCalls++;
+    final error = issueError;
+    if (error != null) {
+      throw error;
+    }
+    return issuedCode!(issueCalls);
+  }
+
+  @override
+  Future<List<AgentDevice>> getDevices() async {
+    getDevicesCalls++;
+    return [..._devices];
+  }
+
+  @override
+  Future<void> revoke(String deviceId) async {
+    revoked.add(deviceId);
+    final error = revokeError;
+    if (error != null) {
+      throw error;
+    }
+    _devices.removeWhere((d) => d.deviceId == deviceId);
+  }
+}
+
+AgentDevice deviceOf(String id, String name, {DateTime? lastSeenAt, DateTime? createdAt}) =>
+    AgentDevice(
+      deviceId: id,
+      name: name,
+      lastSeenAt: lastSeenAt,
+      createdAt: createdAt ?? DateTime.utc(2026, 10, 1, 9),
     );
 
 /// 논리 픽셀 = 물리 픽셀(1:1)로 뷰 크기를 고정한다.

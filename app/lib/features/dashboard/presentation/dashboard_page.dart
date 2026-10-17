@@ -8,6 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/util/lap_time.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../devices/presentation/connection_status_card.dart';
 import '../../laps/domain/lap_models.dart';
 import '../application/dashboard_providers.dart';
 
@@ -28,6 +29,8 @@ class DashboardPage extends ConsumerWidget {
           'Welcome $displayName!',
           style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
         ),
+        const SizedBox(height: 24),
+        const ConnectionStatusCard(),
         const SizedBox(height: 24),
         Row(
           children: [
