@@ -9,6 +9,7 @@ using SimCenter.Agent.Core.Connection;
 using SimCenter.Agent.Core.Telemetry.Events;
 using SimCenter.Agent.Infrastructure.Common;
 using SimCenter.Agent.Infrastructure.Configuration;
+using SimCenter.Agent.Infrastructure.Credentials;
 using SimCenter.Agent.Infrastructure.Mapping;
 using SimCenter.Agent.Infrastructure.Outbox;
 using SimCenter.Agent.Infrastructure.Pipeline;
@@ -48,6 +49,18 @@ public static class DependencyInjection
         // LapAnalyzer는 상태 저장 — 단일 인스턴스로 파이프라인이 순차 소비.
         services.AddSingleton<LapAnalyzer>();
         services.AddSingleton<DomainEventFactory>();
+
+        // P6: 계정 연결 시 발급된 장치 키는 Windows DPAPI로 암호화해 보관한다(Windows 전용).
+        services.AddSingleton<IDeviceCredentialStore>(sp =>
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                throw new PlatformNotSupportedException("장치 키 저장소는 Windows DPAPI가 필요합니다.");
+            }
+
+            var logger = sp.GetRequiredService<ILogger<DpapiDeviceCredentialStore>>();
+            return new DpapiDeviceCredentialStore(DpapiDeviceCredentialStore.DefaultPath, logger);
+        });
 
         // P3: 봉투를 Outbox(SQLite)에 적재하고, 업로더가 TelemetryHub로 배수한다(전송 실패에도 무손실).
         services.AddSingleton<TelemetryOutbox>();
