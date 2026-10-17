@@ -12,6 +12,7 @@ using SimCenter.Agent.Infrastructure.Configuration;
 using SimCenter.Agent.Infrastructure.Credentials;
 using SimCenter.Agent.Infrastructure.Mapping;
 using SimCenter.Agent.Infrastructure.Outbox;
+using SimCenter.Agent.Infrastructure.Pairing;
 using SimCenter.Agent.Infrastructure.Pipeline;
 using SimCenter.Agent.Infrastructure.Sinks;
 using SimCenter.Agent.Infrastructure.Time;
@@ -61,6 +62,14 @@ public static class DependencyInjection
             var logger = sp.GetRequiredService<ILogger<DpapiDeviceCredentialStore>>();
             return new DpapiDeviceCredentialStore(DpapiDeviceCredentialStore.DefaultPath, logger);
         });
+
+        // P6: 계정 연결 클라이언트. 데스크톱 단일 프로세스라 IHttpClientFactory(Microsoft.Extensions.Http) 없이
+        // HttpClient 하나를 프로세스 수명 동안 재사용한다.
+        services.AddSingleton<IAgentPairingClient>(sp => new AgentPairingClient(
+            new HttpClient { Timeout = AgentPairingClient.RequestTimeout },
+            sp.GetRequiredService<IDeviceCredentialStore>(),
+            sp.GetRequiredService<IOptions<AgentOptions>>(),
+            sp.GetRequiredService<ILogger<AgentPairingClient>>()));
 
         // P3: 봉투를 Outbox(SQLite)에 적재하고, 업로더가 TelemetryHub로 배수한다(전송 실패에도 무손실).
         // P6: 업로더는 저장된 장치 키로 연결하고, 상태(미연결·401 등)를 UploadStatusTracker로 알린다.
