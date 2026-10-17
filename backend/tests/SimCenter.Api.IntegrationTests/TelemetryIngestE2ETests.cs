@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -10,133 +11,123 @@ using SimCenter.Infrastructure.Persistence;
 namespace SimCenter.Api.IntegrationTests;
 
 /// <summary>
-/// Agent → TelemetryHub → DB 전체 경로 E2E. 실 PostgreSQL(로컬 dev)이 필요하다.
-/// 흐름: 회원가입 → 로그인 → A-01 체크인 → Hub 접속(dev API Key) → LapFinished 전송 → DB Lap 귀속 확인.
+/// Agent → TelemetryHub → DB 전체 경로 E2E(11 §10). 실 PostgreSQL(로컬 dev)이 필요하다.
+/// 흐름: 회원가입 → 로그인 → 코드 발급 → 장치 연결 → 장치 키로 Hub 접속 → LapFinished 전송 → 장치 주인 귀속 확인
+/// → 장치 연결 해제 → 이미 열린 연결로 보낸 다음 이벤트는 Reject.
 /// </summary>
+[Collection(DatabaseCollection.Name)]
 public sealed class TelemetryIngestE2ETests : IClassFixture<ApiFactory>
 {
-    private const string RigCode = "A-01";
-    private const string DevKey = "dev-agent-key-A-01"; // DbSeeder.DevApiKeyFor("A-01")
+    private const string RevokedDeviceReason = "연결이 해제된 장치입니다.";
+    private const int LapTimeMs = 83452;
 
-    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web)
-    {
-        Converters = { new JsonStringEnumConverter() },
-    };
+    private static readonly DateTime OccurredAt = new(2026, 7, 7, 9, 3, 21, DateTimeKind.Utc);
 
     private readonly ApiFactory _factory;
 
     public TelemetryIngestE2ETests(ApiFactory factory) => _factory = factory;
 
     [Fact]
-    public async Task LapFinished_FromAgent_IsAttributedAndPersisted()
+    public async Task LapFinished_FromPairedDevice_IsAttributedAndPersisted()
     {
         var client = _factory.CreateClient();
-        var email = $"e2e-{Guid.NewGuid():N}@simcenter.test";
 
-        // 0. 재실행 가능성 보장: 이전 실행이 남긴 A-01 활성 세션을 정리한다(타인 점유 409 방지).
-        await ResetRigAsync();
+        // 1. 가입·로그인 → 코드 발급 → 장치 연결(장치 키 1회 수신).
+        var userId = await TestApi.RegisterAndLoginAsync(client);
+        var (deviceId, deviceKey) = await TestApi.PairDeviceAsync(client, "E2E-PC");
 
-        // 1. 회원가입.
-        var register = await client.PostAsJsonAsync("/api/v1/auth/register",
-            new { email, password = "P@ssw0rd!", displayName = "E2E 드라이버" });
-        register.EnsureSuccessStatusCode();
-        var userId = (await register.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("userId").GetGuid();
-
-        // 2. 로그인 → JWT.
-        var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email, password = "P@ssw0rd!" });
-        login.EnsureSuccessStatusCode();
-        var token = (await login.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("accessToken").GetString();
-        client.DefaultRequestHeaders.Authorization = new("Bearer", token);
-
-        // 3. A-01 체크인 → 활성 세션.
-        var checkIn = await client.PostAsJsonAsync("/api/v1/sessions/check-in", new { rigCode = RigCode, gameCode = "F1_25" });
-        checkIn.EnsureSuccessStatusCode();
-
-        // 4. Hub 접속(LongPolling + TestServer 핸들러 + Agent 키).
-        await using var connection = BuildConnection();
+        // 2. 장치 키로 Hub 접속. 실제 Agent처럼 WebSocket 한 연결을 유지한다(해제 후에도 같은 연결로 전송).
+        await using var connection = BuildConnection(deviceKey);
         await connection.StartAsync();
 
-        // 5. LapFinished 전송.
-        var eventId = Guid.NewGuid();
-        var envelope = new
-        {
-            eventId,
-            rigCode = RigCode,
-            gameCode = "F1_25",
-            occurredAt = new DateTime(2026, 7, 7, 9, 3, 21, DateTimeKind.Utc),
-            type = "LapFinished",
-            payload = new
-            {
-                sessionRef = "0xSESSION",
-                lapNumber = 4,
-                lapTimeMs = 83452,
-                sectors = new[]
-                {
-                    new { sectorNumber = 1, sectorTimeMs = 27010 },
-                    new { sectorNumber = 2, sectorTimeMs = 30110 },
-                    new { sectorNumber = 3, sectorTimeMs = 26332 },
-                },
-                isValid = true,
-                isOutOrInLap = false,
-                trackId = 7, // Silverstone
-                sessionType = "TimeTrial",
-            },
-        };
-
-        var ack = await connection.InvokeAsync<SubmitAck>("SubmitEvent", envelope);
+        // 3. LapFinished 전송(봉투에 rigCode 없음).
+        var ack = await connection.InvokeAsync<SubmitAck>("SubmitEvent", LapFinishedEnvelope(Guid.NewGuid()));
         Assert.True(ack.Acknowledged, ack.RejectReason);
 
-        // 6. DB에 Lap이 사용자에게 귀속 저장됐는지 확인.
-        using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var lap = await db.Laps.Include(l => l.Sectors).FirstOrDefaultAsync(l => l.UserId == userId);
+        // 4. DB: 랩이 장치 주인에게, 그 장치로 귀속 저장됐다. 장치 마지막 수신 시각도 기록됐다.
+        var (lapTrackId, sectorCount) = await AssertLapAttributedAsync(userId, deviceId);
+        Assert.Equal(3, sectorCount);
 
-        Assert.NotNull(lap);
-        Assert.Equal(83452, lap!.LapTimeMs);
-        Assert.True(lap.IsRankingEligible);
-        Assert.Equal(3, lap.Sectors.Count);
-
-        // 7. 내 랩 기록(REST): 개인 최고 + 섹터 3개가 조회된다(04 §3.9).
-        var myLaps = await client.GetFromJsonAsync<JsonElement>($"/api/v1/me/laps?trackId={lap.TrackId}");
-        Assert.Equal(83452, myLaps.GetProperty("personalBest").GetProperty("lapTimeMs").GetInt32());
+        // 5. 내 랩 기록(REST): 개인 최고 + 섹터 3개.
+        var myLaps = await client.GetFromJsonAsync<JsonElement>($"/api/v1/me/laps?trackId={lapTrackId}");
+        Assert.Equal(LapTimeMs, myLaps.GetProperty("personalBest").GetProperty("lapTimeMs").GetInt32());
         Assert.Contains(myLaps.GetProperty("laps").GetProperty("items").EnumerateArray(), it =>
-            it.GetProperty("lapTimeMs").GetInt32() == 83452 && it.GetProperty("sectors").GetArrayLength() == 3);
+            it.GetProperty("lapTimeMs").GetInt32() == LapTimeMs && it.GetProperty("sectors").GetArrayLength() == 3);
 
-        // 8. 랭킹 REST(monthly): 적격 랩이 TOP10에 반영된다(occurredAt 2026-07-07 → 서울 7월).
+        // 6. 랭킹 REST(monthly): 적격 랩이 TOP10에 반영된다(occurredAt 2026-07-07 → 서울 7월).
         var rankings = await client.GetFromJsonAsync<JsonElement>(
-            $"/api/v1/rankings?trackId={lap.TrackId}&period=monthly&date=2026-07-07");
+            $"/api/v1/rankings?trackId={lapTrackId}&period=monthly&date=2026-07-07");
         Assert.Equal("2026-07", rankings.GetProperty("periodKey").GetString());
         Assert.Contains(rankings.GetProperty("entries").EnumerateArray(),
-            e => e.GetProperty("bestLapTimeMs").GetInt32() == 83452);
+            e => e.GetProperty("bestLapTimeMs").GetInt32() == LapTimeMs);
+
+        // 7. 장치 연결 해제 → 이미 열린 연결로 보낸 새 이벤트는 Reject.
+        var revoke = await client.DeleteAsync($"/api/v1/me/agent-devices/{deviceId}");
+        Assert.Equal(HttpStatusCode.NoContent, revoke.StatusCode);
+
+        var rejected = await connection.InvokeAsync<SubmitAck>("SubmitEvent", LapFinishedEnvelope(Guid.NewGuid()));
+        Assert.False(rejected.Acknowledged);
+        Assert.Equal(RevokedDeviceReason, rejected.RejectReason);
     }
 
-    /// <summary>시드된 A-01 좌석의 활성 세션을 모두 종료해 체크인이 항상 가능하게 한다.</summary>
-    private async Task ResetRigAsync()
+    /// <summary>사용자의 랩이 정확히 1개이고 연결한 장치로 귀속됐는지 확인한다. (트랙 ID, 섹터 수)를 돌려준다.</summary>
+    private async Task<(Guid TrackId, int SectorCount)> AssertLapAttributedAsync(Guid userId, Guid deviceId)
     {
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var rig = await db.SimRigs.FirstAsync(r => r.RigCode == RigCode);
-        var actives = await db.DrivingSessions
-            .Where(s => s.SimRigId == rig.Id && s.Status == Domain.Enums.SessionStatus.Active)
-            .ToListAsync();
-        foreach (var session in actives)
-        {
-            session.Status = Domain.Enums.SessionStatus.Ended;
-            session.EndedAt = DateTime.UtcNow;
-        }
 
-        await db.SaveChangesAsync();
+        var lap = Assert.Single(await db.Laps.Include(l => l.Sectors).Where(l => l.UserId == userId).ToListAsync());
+        Assert.Equal(deviceId, lap.AgentDeviceId);
+        Assert.Equal(LapTimeMs, lap.LapTimeMs);
+        Assert.True(lap.IsRankingEligible);
+
+        var device = await db.AgentDevices.SingleAsync(d => d.Id == deviceId);
+        Assert.NotNull(device.LastSeenAt);
+
+        return (lap.TrackId, lap.Sectors.Count);
     }
 
-    private HubConnection BuildConnection()
+    private static object LapFinishedEnvelope(Guid eventId) => new
     {
-        var baseAddress = _factory.Server.BaseAddress;
-        return new HubConnectionBuilder()
-            .WithUrl(new Uri(baseAddress, "hubs/telemetry"), options =>
+        eventId,
+        gameCode = "F1_25",
+        occurredAt = OccurredAt,
+        type = "LapFinished",
+        payload = new
+        {
+            sessionRef = "0xSESSION",
+            lapNumber = 4,
+            lapTimeMs = LapTimeMs,
+            sectors = new[]
             {
-                options.Transports = HttpTransportType.LongPolling;
-                options.HttpMessageHandlerFactory = _ => _factory.Server.CreateHandler();
-                options.Headers.Add("X-Agent-Key", DevKey);
+                new { sectorNumber = 1, sectorTimeMs = 27010 },
+                new { sectorNumber = 2, sectorTimeMs = 30110 },
+                new { sectorNumber = 3, sectorTimeMs = 26332 },
+            },
+            isValid = true,
+            isOutOrInLap = false,
+            trackId = 7, // Silverstone
+            sessionType = "TimeTrial",
+        },
+    };
+
+    /// <summary>
+    /// TestServer WebSocket으로 Hub에 접속한다. LongPolling은 요청마다 인증을 다시 하므로
+    /// "해제 후 이미 열린 연결로 전송" 경로(인입 서비스의 장치 재확인)를 검증하려면 WebSocket이 필요하다.
+    /// </summary>
+    private HubConnection BuildConnection(string deviceKey)
+    {
+        return new HubConnectionBuilder()
+            .WithUrl(new Uri(_factory.Server.BaseAddress, "hubs/telemetry"), options =>
+            {
+                options.Transports = HttpTransportType.WebSockets;
+                options.SkipNegotiation = true;
+                options.WebSocketFactory = async (context, cancellationToken) =>
+                {
+                    var webSocketClient = _factory.Server.CreateWebSocketClient();
+                    webSocketClient.ConfigureRequest = request => request.Headers["X-Agent-Key"] = deviceKey;
+                    return await webSocketClient.ConnectAsync(context.Uri, cancellationToken);
+                };
             })
             .AddJsonProtocol(json =>
             {

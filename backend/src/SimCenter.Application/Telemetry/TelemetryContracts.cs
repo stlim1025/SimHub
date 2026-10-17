@@ -6,10 +6,10 @@ namespace SimCenter.Application.Telemetry;
 /// <summary>
 /// TelemetryHub로 인입되는 이벤트 봉투(shared/schema/telemetry_envelope.json, camelCase 계약).
 /// Payload는 type별로 상이하므로 raw JSON으로 받아 type에 따라 해석한다(OCP).
+/// 보낸 장치는 봉투가 아니라 연결의 인증 정보(장치 키)로 정한다(D-26).
 /// </summary>
 public sealed record TelemetryEnvelopeDto(
     Guid EventId,
-    string RigCode,
     string GameCode,
     DateTime OccurredAt,
     string Type,

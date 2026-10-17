@@ -1,8 +1,7 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SimCenter.Api.Common;
 using SimCenter.Application.Auth;
-using SimCenter.Application.Common.Exceptions;
 
 namespace SimCenter.Api.Controllers;
 
@@ -37,22 +36,7 @@ public sealed class AuthController(IAuthService authService) : ControllerBase
     [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<UserDto>> GetMe(CancellationToken cancellationToken)
     {
-        var userId = GetUserId();
-        var result = await authService.GetMeAsync(userId, cancellationToken);
+        var result = await authService.GetMeAsync(User.GetRequiredUserId(), cancellationToken);
         return Ok(result);
-    }
-
-    /// <summary>인증 주체(sub 클레임)에서 사용자 ID를 추출한다.</summary>
-    private Guid GetUserId()
-    {
-        var value = User.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? User.FindFirstValue("sub");
-
-        if (!Guid.TryParse(value, out var userId))
-        {
-            throw new AuthenticationException("유효하지 않은 토큰입니다.");
-        }
-
-        return userId;
     }
 }

@@ -31,8 +31,6 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<AppDbContext>());
         services.AddScoped<ITransactionRunner>(sp => sp.GetRequiredService<AppDbContext>());
         services.AddScoped<IUserRepository, UserRepository>();
-        services.AddScoped<ISimRigRepository, SimRigRepository>();
-        services.AddScoped<IDrivingSessionRepository, DrivingSessionRepository>();
         services.AddScoped<ITrackRepository, TrackRepository>();
         services.AddScoped<ILapRepository, LapRepository>();
         services.AddScoped<IProcessedEventRepository, ProcessedEventRepository>();
@@ -97,7 +95,7 @@ public static class DependencyInjection
                     },
                 };
             })
-            // Agent(TelemetryHub) 전용 API Key 스킴(D-21). 사용자 JWT와 분리.
+            // Agent(TelemetryHub) 전용 장치 키 스킴(D-26). 사용자 JWT와 분리.
             .AddScheme<AuthenticationSchemeOptions, AgentApiKeyAuthenticationHandler>(
                 AgentApiKeyDefaults.Scheme, _ => { });
 

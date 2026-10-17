@@ -12,51 +12,40 @@ namespace SimCenter.Application.Tests.Telemetry;
 
 public class TelemetryIngestServiceTests
 {
-    private const string RigCode = "A-01";
     private const string GameCode = "F1_25";
     private const int GameTrackId = 7;
+    private const string RevokedDeviceReason = "연결이 해제된 장치입니다.";
 
     private static readonly DateTime Now = new(2026, 7, 7, 9, 30, 0, DateTimeKind.Utc);
     private static readonly JsonSerializerOptions WireOptions =
         new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
 
     private readonly FakeProcessedEventRepository _processed = new();
-    private readonly FakeSimRigRepository _rigs = new();
-    private readonly FakeDrivingSessionRepository _sessions = new();
+    private readonly FakeAgentDeviceRepository _devices = new();
     private readonly FakeTrackRepository _tracks = new();
     private readonly FakeLapRepository _laps = new();
     private readonly FakeUnitOfWork _uow = new();
     private readonly FakeRankingService _ranking = new();
     private readonly FakeRankingNotifier _notifier = new();
 
-    private readonly Guid _userId = Guid.Parse("00000000-0000-0000-0000-0000000000a1");
-    private readonly Guid _rigId = Guid.Parse("00000000-0000-0000-0000-0000000000e1");
+    private readonly Guid _ownerId = Guid.Parse("00000000-0000-0000-0000-0000000000a1");
+    private readonly Guid _deviceId = Guid.Parse("00000000-0000-0000-0000-0000000000e1");
     private readonly Guid _trackId = Guid.Parse("00000000-0000-0000-0000-0000000000c7");
-    private readonly Guid _sessionId = Guid.Parse("00000000-0000-0000-0000-0000000000d1");
 
+    private readonly AgentDevice _device;
     private readonly TelemetryIngestService _sut;
 
     public TelemetryIngestServiceTests()
     {
-        _rigs.Items.Add(new SimRig { Id = _rigId, StoreId = Guid.NewGuid(), RigCode = RigCode, DisplayName = "1번" });
+        _device = new AgentDevice { Id = _deviceId, UserId = _ownerId, Name = "SIM-PC", ApiKeyHash = "h:key" };
+        _devices.Items.Add(_device);
         _tracks.Items.Add(new Track { Id = _trackId, GameCode = GameCode, GameTrackId = GameTrackId, Name = "Silverstone" });
 
         _sut = new TelemetryIngestService(
-            _processed, _rigs, _sessions, _tracks, _laps, _uow,
+            _processed, _devices, _tracks, _laps, _uow,
             new SequentialIdGenerator(), new FakeClock(Now), _ranking, _notifier,
             NullLogger<TelemetryIngestService>.Instance);
     }
-
-    private void GiveActiveSession() => _sessions.Items.Add(new DrivingSession
-    {
-        Id = _sessionId,
-        UserId = _userId,
-        SimRigId = _rigId,
-        StoreId = Guid.NewGuid(),
-        GameCode = GameCode,
-        Status = SessionStatus.Active,
-        StartedAt = Now.AddMinutes(-5),
-    });
 
     private TelemetryEnvelopeDto LapFinished(
         Guid? eventId = null,
@@ -82,28 +71,115 @@ public class TelemetryIngestServiceTests
             sessionType = sessionType.ToString(),
         }, WireOptions);
 
-        return new TelemetryEnvelopeDto(
-            eventId ?? Guid.NewGuid(), RigCode, GameCode, Now, "LapFinished", payload);
+        return new TelemetryEnvelopeDto(eventId ?? Guid.NewGuid(), GameCode, Now, "LapFinished", payload);
     }
 
-    [Fact]
-    public async Task LapFinished_WithActiveSession_PersistsLapWithSectors_AndAcks()
-    {
-        GiveActiveSession();
+    private static TelemetryEnvelopeDto NonLapEvent(string type) => new(
+        Guid.NewGuid(), GameCode, Now, type,
+        JsonSerializer.SerializeToElement(new { sessionRef = "s", lapNumber = 2 }, WireOptions));
 
-        var result = await _sut.IngestAsync(LapFinished(), RigCode);
+    [Fact]
+    public async Task LapFinished_FromDevice_AttributesToDeviceOwner()
+    {
+        var result = await _sut.IngestAsync(LapFinished(), _deviceId);
 
         Assert.True(result.Acknowledged);
         var lap = Assert.Single(_laps.Items);
-        Assert.Equal(_userId, lap.UserId);
-        Assert.Equal(_sessionId, lap.DrivingSessionId);
+        Assert.Equal(_ownerId, lap.UserId);
+        Assert.Equal(_deviceId, lap.AgentDeviceId);
         Assert.Equal(_trackId, lap.TrackId);
         Assert.Equal(83452, lap.LapTimeMs);
         Assert.Equal(3, lap.Sectors.Count);
         Assert.True(lap.IsRankingEligible);
         Assert.Equal(Now, lap.SetAt);
+        Assert.Equal(Now, _device.LastSeenAt); // 랩 저장과 같은 커밋에 포함된다.
         Assert.Equal(1, _uow.SaveCount);
         Assert.Single(_processed.Items); // 멱등 기록됨
+    }
+
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("revoked")]
+    public async Task AnyEvent_FromMissingOrRevokedDevice_Rejects(string scenario)
+    {
+        var deviceId = _deviceId;
+        if (scenario == "missing")
+        {
+            deviceId = Guid.NewGuid();
+        }
+        else
+        {
+            _device.IsDeleted = true; // 연결 해제 = soft delete → 전역 필터로 조회되지 않는다.
+        }
+
+        var lapResult = await _sut.IngestAsync(LapFinished(), deviceId);
+        var otherResult = await _sut.IngestAsync(NonLapEvent("SessionStarted"), deviceId);
+
+        Assert.False(lapResult.Acknowledged);
+        Assert.Equal(RevokedDeviceReason, lapResult.RejectReason);
+        Assert.False(otherResult.Acknowledged);
+        Assert.Equal(RevokedDeviceReason, otherResult.RejectReason);
+        Assert.Empty(_laps.Items);
+        Assert.Empty(_processed.Items);
+        Assert.Equal(0, _uow.SaveCount);
+    }
+
+    [Fact]
+    public async Task LastSeenAt_WrittenWhenNull_SkippedWithinOneMinute_WrittenAfter()
+    {
+        // 1) 수신 이력 없음 → 지금 시각으로 기록.
+        await _sut.IngestAsync(NonLapEvent("LapStarted"), _deviceId);
+        Assert.Equal(Now, _device.LastSeenAt);
+        Assert.Equal(1, _uow.SaveCount);
+
+        // 2) 30초 전에 기록됨 → 1분이 안 지났으므로 쓰지 않는다.
+        var recent = Now.AddSeconds(-30);
+        _device.LastSeenAt = recent;
+        await _sut.IngestAsync(NonLapEvent("LapStarted"), _deviceId);
+        Assert.Equal(recent, _device.LastSeenAt);
+        Assert.Equal(1, _uow.SaveCount);
+
+        // 3) 61초 전에 기록됨 → 다시 기록.
+        _device.LastSeenAt = Now.AddSeconds(-61);
+        await _sut.IngestAsync(NonLapEvent("LapStarted"), _deviceId);
+        Assert.Equal(Now, _device.LastSeenAt);
+        Assert.Equal(2, _uow.SaveCount);
+    }
+
+    [Fact]
+    public async Task NonLapEvent_UpdatesLastSeenAt_WithSingleSave()
+    {
+        var result = await _sut.IngestAsync(NonLapEvent("SessionStarted"), _deviceId);
+
+        Assert.True(result.Acknowledged);
+        Assert.Equal(Now, _device.LastSeenAt);
+        Assert.Equal(1, _uow.SaveCount);
+        Assert.Empty(_laps.Items);
+    }
+
+    [Fact]
+    public async Task NonLapEvent_WithRecentLastSeen_AcksWithoutSave()
+    {
+        _device.LastSeenAt = Now.AddSeconds(-10);
+
+        var result = await _sut.IngestAsync(NonLapEvent("LapStarted"), _deviceId);
+
+        Assert.True(result.Acknowledged);
+        Assert.Equal(0, _uow.SaveCount);
+        Assert.Empty(_laps.Items);
+    }
+
+    [Fact]
+    public async Task DuplicateEvent_IsAckedBeforeDeviceCheck()
+    {
+        var eventId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        _processed.Items.Add(new ProcessedEvent { EventId = eventId, EventType = "LapFinished", ProcessedAt = Now });
+
+        var result = await _sut.IngestAsync(LapFinished(eventId: eventId), Guid.NewGuid()); // 없는 장치
+
+        Assert.True(result.Acknowledged);
+        Assert.Empty(_laps.Items);
+        Assert.Equal(0, _uow.SaveCount);
     }
 
     [Theory]
@@ -113,9 +189,7 @@ public class TelemetryIngestServiceTests
     public async Task LapFinished_NotEligibleConditions_SavedButNotRankingEligible(
         bool isValid, bool isOutOrInLap, SessionType sessionType)
     {
-        GiveActiveSession();
-
-        await _sut.IngestAsync(LapFinished(isValid: isValid, isOutOrInLap: isOutOrInLap, sessionType: sessionType), RigCode);
+        await _sut.IngestAsync(LapFinished(isValid: isValid, isOutOrInLap: isOutOrInLap, sessionType: sessionType), _deviceId);
 
         var lap = Assert.Single(_laps.Items);
         Assert.False(lap.IsRankingEligible);
@@ -124,16 +198,15 @@ public class TelemetryIngestServiceTests
     [Fact]
     public async Task EligibleLap_Broadcasts_LapRecorded_PersonalBest_AndRankingUpdated()
     {
-        GiveActiveSession();
-
-        await _sut.IngestAsync(LapFinished(), RigCode);
+        await _sut.IngestAsync(LapFinished(), _deviceId);
 
         var recorded = Assert.Single(_notifier.LapRecords);
-        Assert.Equal(_userId, recorded.UserId);
+        Assert.Equal(_ownerId, recorded.UserId);
         Assert.Equal(_trackId, recorded.TrackId);
         Assert.True(recorded.IsRankingEligible);
 
         var pb = Assert.Single(_notifier.PersonalBests);
+        Assert.Equal(_ownerId, pb.UserId);
         Assert.Equal(83452, pb.LapTimeMs);
         Assert.Null(pb.PreviousBestMs); // 첫 기록이라 이전 최고 없음.
 
@@ -145,13 +218,12 @@ public class TelemetryIngestServiceTests
     [Fact]
     public async Task EligibleLap_SlowerThanExistingBest_NoPersonalBest_ButStillRankingUpdated()
     {
-        GiveActiveSession();
         // 더 빠른 기존 최고(랭킹적격)를 미리 심는다.
         _laps.Items.Add(new Lap
         {
             Id = Guid.NewGuid(),
-            DrivingSessionId = _sessionId,
-            UserId = _userId,
+            AgentDeviceId = _deviceId,
+            UserId = _ownerId,
             TrackId = _trackId,
             GameCode = GameCode,
             SessionType = SessionType.TimeTrial,
@@ -162,7 +234,7 @@ public class TelemetryIngestServiceTests
             SetAt = Now.AddMinutes(-10),
         });
 
-        await _sut.IngestAsync(LapFinished(), RigCode);
+        await _sut.IngestAsync(LapFinished(), _deviceId);
 
         Assert.Empty(_notifier.PersonalBests);          // PB 아님.
         Assert.Single(_notifier.RankingUpdates);         // 랭킹은 여전히 갱신.
@@ -172,10 +244,8 @@ public class TelemetryIngestServiceTests
     [Fact]
     public async Task NonEligibleValidLap_BroadcastsLapRecorded_ButNotRanking()
     {
-        GiveActiveSession();
-
         // Race 세션 = 유효하지만 랭킹 비적격.
-        await _sut.IngestAsync(LapFinished(sessionType: SessionType.Race), RigCode);
+        await _sut.IngestAsync(LapFinished(sessionType: SessionType.Race), _deviceId);
 
         Assert.Single(_notifier.LapRecords);     // 유효 랩이므로 LapRecorded는 발행.
         Assert.Empty(_notifier.RankingUpdates);  // 비적격이라 랭킹 미브로드캐스트.
@@ -186,9 +256,7 @@ public class TelemetryIngestServiceTests
     [Fact]
     public async Task InvalidLap_DoesNotBroadcastLapRecorded()
     {
-        GiveActiveSession();
-
-        await _sut.IngestAsync(LapFinished(isValid: false), RigCode);
+        await _sut.IngestAsync(LapFinished(isValid: false), _deviceId);
 
         Assert.Empty(_notifier.LapRecords);
         Assert.Empty(_notifier.RankingUpdates);
@@ -197,11 +265,10 @@ public class TelemetryIngestServiceTests
     [Fact]
     public async Task DuplicateEventId_IsIdempotent_NoSecondPersist()
     {
-        GiveActiveSession();
         var envelope = LapFinished(eventId: Guid.Parse("11111111-1111-1111-1111-111111111111"));
 
-        await _sut.IngestAsync(envelope, RigCode);
-        var second = await _sut.IngestAsync(envelope, RigCode);
+        await _sut.IngestAsync(envelope, _deviceId);
+        var second = await _sut.IngestAsync(envelope, _deviceId);
 
         Assert.True(second.Acknowledged);
         Assert.Single(_laps.Items);   // 두 번째는 저장 안 됨
@@ -209,47 +276,25 @@ public class TelemetryIngestServiceTests
     }
 
     [Fact]
-    public async Task NoActiveSession_DropsAndAcks_NoLapSaved()
+    public async Task UnknownTrack_Rejects_ButStillRecordsLastSeen()
     {
-        // 세션 미부여.
-        var result = await _sut.IngestAsync(LapFinished(), RigCode);
-
-        Assert.True(result.Acknowledged);
-        Assert.Empty(_laps.Items);
-        Assert.Equal(0, _uow.SaveCount);
-    }
-
-    [Fact]
-    public async Task UnknownTrack_Rejects()
-    {
-        GiveActiveSession();
-
-        var result = await _sut.IngestAsync(LapFinished(trackId: 999), RigCode);
+        var result = await _sut.IngestAsync(LapFinished(trackId: 999), _deviceId);
 
         Assert.False(result.Acknowledged);
         Assert.Empty(_laps.Items);
+        Assert.Empty(_processed.Items);
+        Assert.Equal(Now, _device.LastSeenAt);
+        Assert.Equal(1, _uow.SaveCount);
     }
 
     [Fact]
-    public async Task NonLapFinishedEvent_Acks_WithoutPersist()
+    public async Task MalformedLapPayload_Rejects()
     {
-        GiveActiveSession();
         var envelope = new TelemetryEnvelopeDto(
-            Guid.NewGuid(), RigCode, GameCode, Now, "LapStarted",
-            JsonSerializer.SerializeToElement(new { sessionRef = "s", lapNumber = 2 }, WireOptions));
+            Guid.NewGuid(), GameCode, Now, "LapFinished",
+            JsonSerializer.SerializeToElement(new { lapTimeMs = "not-a-number" }, WireOptions));
 
-        var result = await _sut.IngestAsync(envelope, RigCode);
-
-        Assert.True(result.Acknowledged);
-        Assert.Empty(_laps.Items);
-    }
-
-    [Fact]
-    public async Task UnknownAuthenticatedRig_Rejects()
-    {
-        GiveActiveSession();
-
-        var result = await _sut.IngestAsync(LapFinished(), "Z-99");
+        var result = await _sut.IngestAsync(envelope, _deviceId);
 
         Assert.False(result.Acknowledged);
         Assert.Empty(_laps.Items);
@@ -271,39 +316,26 @@ public class TelemetryIngestServiceTests
         }
     }
 
-    private sealed class FakeSimRigRepository : ISimRigRepository
+    private sealed class FakeAgentDeviceRepository : IAgentDeviceRepository
     {
-        public List<SimRig> Items { get; } = new();
+        public List<AgentDevice> Items { get; } = new();
 
-        public Task<SimRig?> GetByRigCodeAsync(string rigCode, CancellationToken ct = default)
-            => Task.FromResult(Items.FirstOrDefault(x => x.RigCode == rigCode));
-
-        public Task<SimRig?> GetByApiKeyHashAsync(string apiKeyHash, CancellationToken ct = default)
-            => Task.FromResult(Items.FirstOrDefault(x => x.ApiKeyHash == apiKeyHash));
-    }
-
-    private sealed class FakeDrivingSessionRepository : IDrivingSessionRepository
-    {
-        public List<DrivingSession> Items { get; } = new();
-
-        public Task<DrivingSession?> GetByIdAsync(Guid id, CancellationToken ct = default)
-            => Task.FromResult(Items.FirstOrDefault(x => x.Id == id));
-
-        public Task<DrivingSession?> GetActiveByRigAsync(Guid simRigId, CancellationToken ct = default)
-            => Task.FromResult(Items.FirstOrDefault(x => x.SimRigId == simRigId && x.Status == SessionStatus.Active));
-
-        public Task<DrivingSession?> GetActiveByUserAsync(Guid userId, CancellationToken ct = default)
-            => Task.FromResult(Items.FirstOrDefault(x => x.UserId == userId && x.Status == SessionStatus.Active));
-
-        public Task<IReadOnlyList<DrivingSession>> GetActiveSessionsByUserAsync(Guid userId, CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<DrivingSession>>(
-                Items.Where(x => x.UserId == userId && x.Status == SessionStatus.Active).ToList());
-
-        public Task AddAsync(DrivingSession session, CancellationToken ct = default)
+        public Task AddAsync(AgentDevice device, CancellationToken ct = default)
         {
-            Items.Add(session);
+            Items.Add(device);
             return Task.CompletedTask;
         }
+
+        // 전역 soft-delete 필터를 모사: 해제된 장치는 조회되지 않는다.
+        public Task<AgentDevice?> GetByIdAsync(Guid id, CancellationToken ct = default)
+            => Task.FromResult(Items.FirstOrDefault(x => x.Id == id && !x.IsDeleted));
+
+        public Task<AgentDevice?> GetByApiKeyHashAsync(string hash, CancellationToken ct = default)
+            => Task.FromResult(Items.FirstOrDefault(x => x.ApiKeyHash == hash && !x.IsDeleted));
+
+        public Task<IReadOnlyList<AgentDevice>> GetByUserAsync(Guid userId, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<AgentDevice>>(
+                Items.Where(x => x.UserId == userId && !x.IsDeleted).ToList());
     }
 
     private sealed class FakeTrackRepository : ITrackRepository

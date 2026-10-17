@@ -1,3 +1,4 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
@@ -8,7 +9,7 @@ using SimCenter.Application.Common.Interfaces;
 
 namespace SimCenter.Infrastructure.Identity;
 
-/// <summary>Agent API Key 인증 스킴 상수(D-21).</summary>
+/// <summary>Agent 장치 키 인증 스킴 상수(D-26).</summary>
 public static class AgentApiKeyDefaults
 {
     public const string Scheme = "AgentApiKey";
@@ -16,13 +17,13 @@ public static class AgentApiKeyDefaults
     /// <summary>Agent가 키를 실어 보내는 헤더(.NET SignalR 클라이언트가 핸드셰이크에 첨부).</summary>
     public const string HeaderName = "X-Agent-Key";
 
-    /// <summary>인증 성공 시 연결에 귀속되는 좌석 코드 클레임.</summary>
-    public const string RigCodeClaim = "rigCode";
+    /// <summary>인증 성공 시 연결에 귀속되는 장치 ID(<c>AgentDevice.Id</c>) 클레임.</summary>
+    public const string DeviceIdClaim = "deviceId";
 }
 
 /// <summary>
-/// TelemetryHub 전용 인증 핸들러. 요청의 API Key를 SHA-256 해시해 SimRig를 특정하고,
-/// 연결에 RigCode 클레임을 귀속한다. 세션 매칭은 엔벨로프가 아닌 이 값을 신뢰한다(위조 방지).
+/// TelemetryHub 전용 인증 핸들러. 요청의 장치 키를 SHA-256 해시해 연결된 AgentDevice를 특정하고(해제된 장치는 전역 필터로 제외),
+/// 연결에 <c>deviceId</c>·<c>sub</c>(장치 주인 UserId) 클레임을 귀속한다. 랩 귀속은 봉투가 아닌 이 값을 신뢰한다(위조 방지).
 /// </summary>
 public sealed class AgentApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationSchemeOptions>
 {
@@ -43,18 +44,18 @@ public sealed class AgentApiKeyAuthenticationHandler : AuthenticationHandler<Aut
         }
 
         var hasher = Context.RequestServices.GetRequiredService<IApiKeyHasher>();
-        var rigs = Context.RequestServices.GetRequiredService<ISimRigRepository>();
+        var devices = Context.RequestServices.GetRequiredService<IAgentDeviceRepository>();
 
-        var rig = await rigs.GetByApiKeyHashAsync(hasher.Hash(key), Context.RequestAborted);
-        if (rig is null)
+        var device = await devices.GetByApiKeyHashAsync(hasher.Hash(key), Context.RequestAborted);
+        if (device is null)
         {
             return AuthenticateResult.Fail("유효하지 않은 Agent 키입니다.");
         }
 
         var claims = new[]
         {
-            new Claim(AgentApiKeyDefaults.RigCodeClaim, rig.RigCode),
-            new Claim(ClaimTypes.NameIdentifier, rig.Id.ToString()),
+            new Claim(AgentApiKeyDefaults.DeviceIdClaim, device.Id.ToString()),
+            new Claim(JwtRegisteredClaimNames.Sub, device.UserId.ToString()),
         };
         var identity = new ClaimsIdentity(claims, Scheme.Name);
         var ticket = new AuthenticationTicket(new ClaimsPrincipal(identity), Scheme.Name);

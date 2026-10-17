@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: SimCenter API
-  description: SimCenter 레이싱 시뮬레이터 카페 통합 운영 플랫폼 MVP REST API 계약서
+  description: SimCenter 개인 F1 기록·시즌·텔레메트리 플랫폼 REST API 계약서 (개인 모드, D-25)
   version: 1.0.0
 servers:
   - url: /api/v1
@@ -71,88 +71,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserProfile'
-        '401':
-          $ref: '#/components/responses/401Unauthorized'
-        '500':
-          $ref: '#/components/responses/500ServerError'
-
-  /sessions/check-in:
-    post:
-      summary: SimRig 체크인 (세션 시작)
-      operationId: checkInSession
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CheckInRequest'
-      responses:
-        '201':
-          description: 세션 체크인 성공 및 DrivingSession 생성
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DrivingSession'
-        '400':
-          $ref: '#/components/responses/400ValidationError'
-        '401':
-          $ref: '#/components/responses/401Unauthorized'
-        '409':
-          description: 해당 Rig에 이미 다른 사용자의 활성 세션이 존재
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '500':
-          $ref: '#/components/responses/500ServerError'
-
-  /sessions/{id}/check-out:
-    post:
-      summary: 세션 체크아웃 (종료)
-      operationId: checkOutSession
-      parameters:
-        - name: id
-          in: path
-          required: true
-          description: 세션 ID (GUID)
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: 세션 종료 성공
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DrivingSession'
-        '401':
-          $ref: '#/components/responses/401Unauthorized'
-        '403':
-          description: 본인의 세션이 아님
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
-          description: 세션을 찾을 수 없음
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '500':
-          $ref: '#/components/responses/500ServerError'
-
-  /sessions/active:
-    get:
-      summary: 내 활성 세션 조회
-      operationId: getActiveSession
-      responses:
-        '200':
-          description: 활성 세션 조회 성공 (없으면 null 데이터 반환)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DrivingSession'
         '401':
           $ref: '#/components/responses/401Unauthorized'
         '500':
@@ -434,8 +352,8 @@ components:
                 items:
                   type: string
               example:
-                rigCode:
-                  - "rigCode is required."
+                deviceName:
+                  - "장치 이름은 50자 이하여야 합니다."
 
     RegisterRequest:
       type: object
@@ -522,48 +440,6 @@ components:
         displayName:
           type: string
           example: "홍길동"
-
-    CheckInRequest:
-      type: object
-      required:
-        - rigCode
-        - gameCode
-      properties:
-        rigCode:
-          type: string
-          example: "A-01"
-        gameCode:
-          type: string
-          example: "F1_25"
-
-    DrivingSession:
-      type: object
-      required:
-        - sessionId
-        - rigCode
-        - status
-        - startedAt
-      properties:
-        sessionId:
-          type: string
-          format: uuid
-          example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
-        rigCode:
-          type: string
-          example: "A-01"
-        status:
-          type: string
-          enum: [Active, Ended]
-          example: "Active"
-        startedAt:
-          type: string
-          format: date-time
-          example: "2026-07-06T09:00:00Z"
-        endedAt:
-          type: string
-          format: date-time
-          nullable: true
-          example: "2026-07-06T10:30:00Z"
 
     RankingSnapshot:
       type: object

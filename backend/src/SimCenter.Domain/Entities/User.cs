@@ -16,8 +16,6 @@ public class User : BaseEntity
     /// <summary>랭킹 공개명(1~50자).</summary>
     public required string DisplayName { get; set; }
 
-    public ICollection<DrivingSession> Sessions { get; set; } = new List<DrivingSession>();
-
     /// <summary>내 계정에 연결된 Agent 장치(해제된 장치는 전역 필터로 제외).</summary>
     public ICollection<AgentDevice> AgentDevices { get; set; } = new List<AgentDevice>();
 }

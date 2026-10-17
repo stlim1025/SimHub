@@ -1,12 +1,12 @@
 # CLAUDE.md — SimCenter Project Constitution
 
-> Last Updated: 2026-07-06 · 상세 설계는 `docs/00~09` 참조. 헌장과 설계가 충돌하면 헌장이 우선.
+> Last Updated: 2026-10-17 · 상세 설계는 `docs/00~11` 참조. 헌장과 설계가 충돌하면 헌장이 우선.
 
 ## Overview
-SimCenter는 레이싱 시뮬레이터 카페를 위한 통합 운영 플랫폼이다. 예약 앱이 아니라
-실시간 텔레메트리·랩타임·랭킹·회원·예약·대회·커뮤니티까지 아우르는 장기 확장형 플랫폼을 지향한다.
+SimCenter는 **개인용 F1 기록·시즌·텔레메트리 플랫폼**이다(D-25). 사용자가 자기 PC에 Agent를 설치해 계정에 연결하면
+랩타임·시즌·세션·랭킹·상세 텔레메트리가 쌓이는 장기 확장형 플랫폼을 지향한다(F1Laps 참고).
 
-**Core Philosophy:** 목표는 "좋은 코드"가 아니라 "손님이 다시 오고 싶은 경험"이다.
+**Core Philosophy:** 목표는 "좋은 코드"가 아니라 "사용자가 다시 오고 싶은 경험"이다.
 앱은 예약 시스템이 아니라 게임의 연장선이다. 모든 기능은 "재방문을 유도하는가?"로 판단한다.
 기능 추가보다 **일관성·유지보수성·확장성**을 항상 우선한다.
 
@@ -42,6 +42,7 @@ EF Core Code First + Migration. JWT 인증. 실시간은 SignalR, 조회는 REST
 (SessionStarted/LapStarted/SectorCompleted/LapFinished/SessionEnded).
 Raw 패킷 firehose는 서버로 흘리거나 원본 저장하지 않는다.
 오프라인 시 SQLite Outbox 저장 → 복구 시 자동 재전송(멱등키 + Ack). 자동 실행/재접속.
+**계정 연결:** 웹에서 받은 1회용 연결 코드를 장치별 키로 교환해 DPAPI로 저장하고, 허브는 그 키(`X-Agent-Key`)로 인증한다(D-26).
 
 ## Flutter Rules
 Feature First + Riverpod + GoRouter + Material3, 반응형 필수.
@@ -56,14 +57,15 @@ PascalCase(타입) / camelCase(멤버) / Interface는 `I` 접두사.
 Magic Number·Global Static 금지. Null 체크·Exception 처리·Logging(Serilog) 필수. Secrets 하드코딩 금지.
 
 ## Confirmed Decisions (상세: `docs/08`)
-- 멀티스토어 `StoreId` 선반영 · 랩 귀속 = 앱 체크인 세션(Agent 무상태)
+- 개인 모드(매장·좌석·체크인 없음) · **랩 귀속 = 계정에 연결된 Agent 장치**(장치 주인)
 - 대상 게임 = **F1 25**(`F1_25`), 단 도메인은 게임 중립(가변 섹터·SessionType)
 - 섹터 = 가변 `LapSector` 테이블 · 무효 랩 저장하되 랭킹 제외(개별 조회 가능)
-- 랭킹 = Time Trial만, 일/월/연 지원. **실시간 랭킹 기본 기준 = 월별**
+- 랭킹 = Time Trial만, 일/월/연 지원. **실시간 랭킹 기본 기준 = 월별** · 기간 경계 타임존 = 서버 설정 `Ranking:TimeZoneId`
 
-## Roadmap (상세: `docs/07`)
-P0 계약·스캐폴딩 → P1 Backend 코어/인증 → P2 Agent Core → P3 실시간 인입 →
-P4 랭킹·브로드캐스트 → P5 Flutter MVP. 이후(Future): 예약·대회·커뮤니티·멤버십·통계·상세 텔레메트리.
+## Roadmap (상세: `docs/07`, P6~ `docs/11`)
+P0~P5 MVP(계약 → Backend 코어 → Agent Core → 실시간 인입 → 랭킹 → Flutter, 완료) →
+P6 개인 모드 전환·웹 셸 → P7 시즌·세션 → P8 세션 상세 → P9 랩 상세·텔레메트리 → P10 Analytics → P11 Agent 배포.
+이후(Future): 대회·커뮤니티·멤버십.
 
 ## AI Working Rules
 - 한 번에 다 구현하지 않는다. **설계 → 리뷰 → 구현 → 리뷰 → 다음 단계** 순서를 지킨다.

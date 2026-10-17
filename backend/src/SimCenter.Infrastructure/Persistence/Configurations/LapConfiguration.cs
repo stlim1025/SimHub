@@ -16,9 +16,16 @@ public sealed class LapConfiguration : IEntityTypeConfiguration<Lap>
         builder.Property(x => x.LapTimeMs).IsRequired();
         builder.Property(x => x.SetAt).IsRequired();
 
-        builder.HasOne(x => x.DrivingSession)
-            .WithMany(x => x.Laps)
-            .HasForeignKey(x => x.DrivingSessionId)
+        // 랩을 보낸 장치(D-25). 장치 해제는 soft delete라 랩이 남고, 실제 삭제로 랩이 연쇄 삭제되지 않도록 Restrict.
+        builder.HasOne(x => x.AgentDevice)
+            .WithMany()
+            .HasForeignKey(x => x.AgentDeviceId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // 랩 주인(11 §3.2). 내비게이션 없이 FK만 건다.
+        builder.HasOne<User>()
+            .WithMany()
+            .HasForeignKey(x => x.UserId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(x => x.Track)

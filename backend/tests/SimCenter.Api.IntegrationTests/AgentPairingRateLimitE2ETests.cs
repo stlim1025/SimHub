@@ -7,6 +7,7 @@ namespace SimCenter.Api.IntegrationTests;
 /// 연결 API 요청 제한(11 §4.4): <c>POST /agent/pair</c>는 IP당, 코드 발급은 사용자당 고정 창 한도를 넘으면 429.
 /// 한도(분당 10회)를 소진하는 테스트라 전용 호스트(고정 창 상태 분리)에서 실행한다.
 /// </summary>
+[Collection(DatabaseCollection.Name)]
 public sealed class AgentPairingRateLimitE2ETests : IClassFixture<ApiFactory>
 {
     private readonly ApiFactory _factory;

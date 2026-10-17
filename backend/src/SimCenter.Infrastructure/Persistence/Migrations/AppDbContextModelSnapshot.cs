@@ -124,80 +124,6 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                     b.ToTable("agent_pairing_codes", (string)null);
                 });
 
-            modelBuilder.Entity("SimCenter.Domain.Entities.DrivingSession", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<DateTime?>("EndedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("ended_at");
-
-                    b.Property<string>("GameCode")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("game_code");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean")
-                        .HasColumnName("is_deleted");
-
-                    b.Property<string>("SessionType")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("session_type");
-
-                    b.Property<Guid>("SimRigId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("sim_rig_id");
-
-                    b.Property<DateTime>("StartedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("started_at");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("status");
-
-                    b.Property<Guid>("StoreId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("store_id");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("user_id");
-
-                    b.HasKey("Id")
-                        .HasName("pk_driving_sessions");
-
-                    b.HasIndex("SimRigId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_driving_sessions_sim_rig_id")
-                        .HasFilter("status = 'Active'");
-
-                    b.HasIndex("UserId")
-                        .HasDatabaseName("ix_driving_sessions_user_id");
-
-                    b.HasIndex("SimRigId", "Status", "StartedAt")
-                        .HasDatabaseName("ix_driving_sessions_sim_rig_id_status_started_at");
-
-                    b.ToTable("driving_sessions", (string)null);
-                });
-
             modelBuilder.Entity("SimCenter.Domain.Entities.Lap", b =>
                 {
                     b.Property<Guid>("Id")
@@ -205,13 +131,13 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<Guid>("AgentDeviceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("agent_device_id");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
-
-                    b.Property<Guid>("DrivingSessionId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("driving_session_id");
 
                     b.Property<string>("GameCode")
                         .IsRequired()
@@ -268,8 +194,8 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                     b.HasKey("Id")
                         .HasName("pk_laps");
 
-                    b.HasIndex("DrivingSessionId")
-                        .HasDatabaseName("ix_laps_driving_session_id");
+                    b.HasIndex("AgentDeviceId")
+                        .HasDatabaseName("ix_laps_agent_device_id");
 
                     b.HasIndex("TrackId", "LapTimeMs")
                         .HasDatabaseName("ix_laps_track_id_lap_time_ms")
@@ -345,100 +271,6 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                         .HasName("pk_processed_events");
 
                     b.ToTable("processed_events", (string)null);
-                });
-
-            modelBuilder.Entity("SimCenter.Domain.Entities.SimRig", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<string>("ApiKeyHash")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("api_key_hash");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<string>("DisplayName")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("display_name");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean")
-                        .HasColumnName("is_deleted");
-
-                    b.Property<string>("RigCode")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("rig_code");
-
-                    b.Property<Guid>("StoreId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("store_id");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.HasKey("Id")
-                        .HasName("pk_sim_rigs");
-
-                    b.HasIndex("ApiKeyHash")
-                        .IsUnique()
-                        .HasDatabaseName("ix_sim_rigs_api_key_hash");
-
-                    b.HasIndex("RigCode")
-                        .IsUnique()
-                        .HasDatabaseName("ix_sim_rigs_rig_code");
-
-                    b.HasIndex("StoreId")
-                        .HasDatabaseName("ix_sim_rigs_store_id");
-
-                    b.ToTable("sim_rigs", (string)null);
-                });
-
-            modelBuilder.Entity("SimCenter.Domain.Entities.Store", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean")
-                        .HasColumnName("is_deleted");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("name");
-
-                    b.Property<string>("TimeZoneId")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("time_zone_id");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.HasKey("Id")
-                        .HasName("pk_stores");
-
-                    b.ToTable("stores", (string)null);
                 });
 
             modelBuilder.Entity("SimCenter.Domain.Entities.Track", b =>
@@ -556,35 +388,14 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("SimCenter.Domain.Entities.DrivingSession", b =>
-                {
-                    b.HasOne("SimCenter.Domain.Entities.SimRig", "SimRig")
-                        .WithMany()
-                        .HasForeignKey("SimRigId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_driving_sessions_sim_rigs_sim_rig_id");
-
-                    b.HasOne("SimCenter.Domain.Entities.User", "User")
-                        .WithMany("Sessions")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_driving_sessions_users_user_id");
-
-                    b.Navigation("SimRig");
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("SimCenter.Domain.Entities.Lap", b =>
                 {
-                    b.HasOne("SimCenter.Domain.Entities.DrivingSession", "DrivingSession")
-                        .WithMany("Laps")
-                        .HasForeignKey("DrivingSessionId")
+                    b.HasOne("SimCenter.Domain.Entities.AgentDevice", "AgentDevice")
+                        .WithMany()
+                        .HasForeignKey("AgentDeviceId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
-                        .HasConstraintName("fk_laps_driving_sessions_driving_session_id");
+                        .HasConstraintName("fk_laps_agent_devices_agent_device_id");
 
                     b.HasOne("SimCenter.Domain.Entities.Track", "Track")
                         .WithMany()
@@ -593,7 +404,14 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_laps_tracks_track_id");
 
-                    b.Navigation("DrivingSession");
+                    b.HasOne("SimCenter.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_laps_users_user_id");
+
+                    b.Navigation("AgentDevice");
 
                     b.Navigation("Track");
                 });
@@ -610,38 +428,14 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                     b.Navigation("Lap");
                 });
 
-            modelBuilder.Entity("SimCenter.Domain.Entities.SimRig", b =>
-                {
-                    b.HasOne("SimCenter.Domain.Entities.Store", "Store")
-                        .WithMany("Rigs")
-                        .HasForeignKey("StoreId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_sim_rigs_stores_store_id");
-
-                    b.Navigation("Store");
-                });
-
-            modelBuilder.Entity("SimCenter.Domain.Entities.DrivingSession", b =>
-                {
-                    b.Navigation("Laps");
-                });
-
             modelBuilder.Entity("SimCenter.Domain.Entities.Lap", b =>
                 {
                     b.Navigation("Sectors");
                 });
 
-            modelBuilder.Entity("SimCenter.Domain.Entities.Store", b =>
-                {
-                    b.Navigation("Rigs");
-                });
-
             modelBuilder.Entity("SimCenter.Domain.Entities.User", b =>
                 {
                     b.Navigation("AgentDevices");
-
-                    b.Navigation("Sessions");
                 });
 #pragma warning restore 612, 618
         }

@@ -6,12 +6,15 @@ using SimCenter.Infrastructure.Identity;
 namespace SimCenter.Api.Hubs;
 
 /// <summary>
-/// Agent → Backend 텔레메트리 인입 Hub(05-signalr-design §2). Agent API Key 스킴으로만 접속 가능(D-21).
-/// 단일 진입점 <see cref="SubmitEvent"/> + Ack/Reject 응답. 세션 매칭은 인증된 RigCode를 신뢰한다.
+/// Agent → Backend 텔레메트리 인입 Hub(05-signalr-design §2). Agent 장치 키 스킴으로만 접속 가능(D-26).
+/// 단일 진입점 <see cref="SubmitEvent"/> + Ack/Reject 응답. 랩 귀속은 연결에서 인증된 장치(<c>deviceId</c>)를 신뢰한다.
 /// </summary>
 [Authorize(AuthenticationSchemes = AgentApiKeyDefaults.Scheme)]
 public sealed class TelemetryHub : Hub
 {
+    /// <summary>연결에 유효한 <c>deviceId</c> 클레임이 없을 때의 Reject 사유.</summary>
+    private const string MissingDeviceReason = "인증된 장치 정보가 없습니다.";
+
     private readonly ITelemetryIngestService _ingest;
     private readonly ILogger<TelemetryHub> _logger;
 
@@ -27,18 +30,19 @@ public sealed class TelemetryHub : Hub
     /// </summary>
     public async Task<IngestResult> SubmitEvent(TelemetryEnvelopeDto envelope)
     {
-        var rigCode = Context.User?.FindFirst(AgentApiKeyDefaults.RigCodeClaim)?.Value;
-        if (string.IsNullOrEmpty(rigCode))
+        var deviceClaim = Context.User?.FindFirst(AgentApiKeyDefaults.DeviceIdClaim)?.Value;
+        if (!Guid.TryParse(deviceClaim, out var deviceId))
         {
-            return IngestResult.Reject("인증된 좌석 정보가 없습니다.");
+            _logger.LogWarning("장치 클레임 없음 — 이벤트 Reject eventId={EventId}", envelope.EventId);
+            return IngestResult.Reject(MissingDeviceReason);
         }
 
-        var result = await _ingest.IngestAsync(envelope, rigCode, Context.ConnectionAborted);
+        var result = await _ingest.IngestAsync(envelope, deviceId, Context.ConnectionAborted);
 
         if (!result.Acknowledged)
         {
-            _logger.LogWarning("이벤트 Reject rig={Rig} eventId={EventId} reason={Reason}",
-                rigCode, envelope.EventId, result.RejectReason);
+            _logger.LogWarning("이벤트 Reject device={Device} eventId={EventId} reason={Reason}",
+                deviceId, envelope.EventId, result.RejectReason);
         }
 
         return result;

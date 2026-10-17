@@ -9,19 +9,20 @@ namespace SimCenter.Domain.Entities;
 /// </summary>
 public class Lap : BaseEntity
 {
-    public Guid DrivingSessionId { get; set; }
-    public DrivingSession? DrivingSession { get; set; }
+    /// <summary>랩을 보낸 Agent 장치(D-25). 해제된 장치의 랩도 기록으로 남는다.</summary>
+    public Guid AgentDeviceId { get; set; }
+    public AgentDevice? AgentDevice { get; set; }
 
-    /// <summary>세션에서 확정한 사용자(비정규화, 조회 성능).</summary>
+    /// <summary>랩 주인 = 장치 주인(인입 시 확정). 조회·랭킹 성능을 위해 랩에 직접 둔다.</summary>
     public Guid UserId { get; set; }
 
     public Guid TrackId { get; set; }
     public Track? Track { get; set; }
 
-    /// <summary>세션에서 복사(비정규화, 랭킹 필터).</summary>
+    /// <summary>이벤트 봉투의 게임 코드(랭킹 필터).</summary>
     public required string GameCode { get; set; }
 
-    /// <summary>세션에서 복사(비정규화). 랭킹은 TimeTrial만(D-16).</summary>
+    /// <summary>게임 세션 유형. 랭킹은 TimeTrial만(D-16).</summary>
     public SessionType SessionType { get; set; }
 
     /// <summary>세션 내 랩 번호.</summary>

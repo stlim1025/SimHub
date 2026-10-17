@@ -1,6 +1,6 @@
 # 08 · Open Decisions — 승인 필요 결정사항
 
-> Status: **Design** · Last Updated: 2026-07-07
+> Status: **Design** · Last Updated: 2026-10-17 (P6 개인 모드: D-25~27 추가, 대체된 결정 표기)
 > AI 작업 규칙("추측 금지, 필요 시 질문") 준수를 위해, **추측 없이 사용자 승인이 필요한 결정**을 모은다.
 > 각 항목: 배경 / 선택지 / **권장안** / 영향 문서. 승인 시 각 문서에 반영한다.
 
@@ -8,14 +8,16 @@
 
 ## A. 반드시 먼저 확정해야 할 핵심 결정 (구조에 영향)
 
-### D-1. 멀티스토어(Multi-Store) 선반영 여부
+### D-1. 멀티스토어(Multi-Store) 선반영 여부 — → D-25로 대체
+> **→ D-25로 대체 (2026-10-17):** 개인 모드에는 매장이 없다. `Store`·`StoreId`는 마이그레이션 `PersonalMode`로 제거됐다.
 - 배경: 헌장은 "SaaS 수준" 목표, MVP는 단일 매장.
 - 선택지: (a) `StoreId`를 Entity에 지금 반영 / (b) 나중에 마이그레이션으로 추가.
 - **권장:** (a). 지금 넣는 비용은 작고, 나중에 소급 추가는 데이터 마이그레이션 리스크가 큼. (확장성 우선)
 답변 : (a)안으로
 - 영향: [02](./02-domain-design.md), [03](./03-entity-design.md)
 
-### D-2. 랩 ↔ 사용자 귀속(Attribution) 방식 ⭐가장 중요
+### D-2. 랩 ↔ 사용자 귀속(Attribution) 방식 ⭐가장 중요 — → D-25로 대체
+> **→ D-25로 대체 (2026-10-17):** 랩은 계정에 연결된 Agent 장치의 주인에게 귀속한다. 체크인 세션(`DrivingSession`)은 제거됐다.
 - 배경: Agent는 SimRig 단위로 텔레메트리를 받을 뿐 "누가 운전 중인지" 모른다. 랭킹은 사용자별.
 - 선택지:
   - (a) **체크인 세션**: 앱에서 좌석 QR/코드 체크인 → `DrivingSession(UserId↔RigId)` 생성 → 그 시각 Rig 이벤트를 사용자에 귀속.
@@ -66,6 +68,7 @@
 - 배경: TOP10은 "오늘" 기록. 자정 기준 타임존이 애매.
 - 선택지: 매장 로컬 타임존 자정 / UTC 자정 / 영업일(예: 06시 리셋).
 - **권장:** **매장 로컬 타임존 자정** (Store에 타임존 보관). 
+  > 타임존 출처는 D-24 → **D-27**(서버 설정 `Ranking:TimeZoneId`)로 바뀌었다. 일/월/연·자정 리셋 결정은 유지된다.
 - 영향: [03](./03-entity-design.md), [04](./04-api-design.md)
 - ❓ **질문:** 랭킹 리셋 기준 시각(예: 자정/영업 시작)은?
 일별 랭킹, 월별랭킹, 연도별 랭킹을 지원할 예정 일별 랭킹의 리셋 시간은 자정
@@ -77,7 +80,8 @@
 - **권장:** MVP 제외(단순 access token + 재로그인). 보안 요구 커지면 도입.
 - 영향: [04](./04-api-design.md)
 
-### D-10. 사용자 중복 활성 세션 정책
+### D-10. 사용자 중복 활성 세션 정책 — → D-25로 대체
+> **→ D-25로 대체 (2026-10-17):** 체크인 세션이 없어져 중복 세션 정책도 필요 없다.
 - 배경: 한 사용자가 다른 좌석에 이미 체크인된 상태에서 또 체크인.
 - 선택지: 이전 세션 자동 종료 / 신규 거부(409).
 - **권장:** 이전 세션 자동 종료(사용자 편의). 
@@ -90,7 +94,8 @@
 앱에서 직접 가입
 - 영향: [04](./04-api-design.md)
 
-### D-12. Agent(장비) 인증 방식
+### D-12. Agent(장비) 인증 방식 — → D-25로 대체
+> **→ D-25로 대체 (2026-10-17):** 좌석(SimRig)별 키 대신 계정에 연결된 장치별 키를 쓴다(연결 방식은 D-26).
 - 배경: TelemetryHub는 신뢰된 장비만 연결해야 함(사용자 JWT와 분리).
 - 선택지: 장비별 API Key / 사전 발급 장비 토큰 / mTLS.
 - **권장:** MVP는 **장비별 API Key**(SimRig에 연결), 추후 강화.
@@ -127,7 +132,9 @@ invalid 랩도 우선 기록은 해두고 랭킹 집계에서는 사용하지 �
 
 ## F. Phase 3 인입 결정 (2026-07-07 확정)
 
-### D-21. Agent 인증 = 장비별 API Key (D-12 구체화)
+### D-21. Agent 인증 = 장비별 API Key (D-12 구체화) — → D-25로 대체
+> **→ D-25로 대체 (2026-10-17):** `SimRig.ApiKeyHash`·`rigCode` 클레임·개발용 좌석 키 시드는 제거됐다. `X-Agent-Key` 헤더와
+> SHA-256 해시 저장은 그대로 쓰되 키가 `AgentDevice`를 가리키고, 연결에는 `deviceId`·`sub` 클레임이 귀속된다(D-26).
 - 배경: D-12에서 "장비별 API Key"로 방향은 정했으나 저장/전송 방식 미확정.
 - **결정:** `SimRig.ApiKeyHash`에 **SHA-256(원문) hex** 저장(원문 미저장). Agent config `AgentCredential`에 원문 보관,
   접속 시 헤더 `X-Agent-Key`(쿼리 `access_token` 폴백)로 전송. 커스텀 인증 스킴(`AgentApiKey`)이 해시로 SimRig를 특정해
@@ -135,7 +142,9 @@ invalid 랩도 우선 기록은 해두고 랭킹 집계에서는 사용하지 �
   개발용 키는 시더가 `dev-agent-key-{RigCode}`로 결정적 프로비저닝. 운영 키 발급은 범위 밖.
 - 영향: [05](./05-signalr-design.md), [06](./06-telemetry-design.md), backend
 
-### D-22. 활성 세션 없는 랩 = Drop + Ack
+### D-22. 활성 세션 없는 랩 = Drop + Ack — → D-25로 대체
+> **→ D-25로 대체 (2026-10-17):** 랩은 항상 장치 주인에게 귀속되므로 Drop 규칙이 없어졌다. 대신 없거나 연결 해제된 장치의
+> 이벤트는 **Reject**("연결이 해제된 장치입니다.")한다. 영구 무효 = Reject, 무응답만 재전송 규칙은 유지된다.
 - 배경: LapFinished가 왔으나 해당 Rig에 활성 체크인 세션이 없으면(손님이 체크인 없이 주행) 귀속 대상이 없다.
 - **결정:** **저장하지 않고 Ack**(경고 로깅). D-2(Agent 무상태, 귀속=체크인) 원칙에 부합. Agent Outbox는 flush되어 무한 재시도 없음.
   파싱 실패·트랙 매핑 없음 등 영구 무효는 **Reject**(Outbox 폐기). 네트워크 무응답만 Outbox 보관·재전송.
@@ -150,7 +159,9 @@ invalid 랩도 우선 기록은 해두고 랭킹 집계에서는 사용하지 �
 
 ## G. Phase 4 랭킹·브로드캐스트 결정 (2026-07-08 확정)
 
-### D-24. 랭킹 기간 경계 타임존 = `Store.TimeZoneId` (D-8 구체화)
+### D-24. 랭킹 기간 경계 타임존 = `Store.TimeZoneId` (D-8 구체화) — 타임존 출처 → D-27로 대체
+> **타임존 출처 → D-27로 대체 (2026-10-17):** `Store.TimeZoneId`·`IStoreRepository` 대신 서버 설정 `Ranking:TimeZoneId`를 쓴다.
+> 경계 계산(`RankingPeriodRange`), 쿼리 온디맨드, 브로드캐스트 규칙은 유지된다.
 - 배경: D-8이 "일별 경계 = 매장 로컬 자정"으로 방향은 정했으나 타임존 보관 위치 미확정. `Store`에 타임존 필드가 없었다.
 - **결정:** `Store`에 **`TimeZoneId`(IANA, 예 `Asia/Seoul`)** 필드 추가(마이그레이션 `AddStoreTimeZone`, 기존 행 기본값 `""` → 시더 백필).
   기간(일/월/연) 경계는 순수 헬퍼 `RankingPeriodRange`가 이 타임존의 자정 기준으로 계산 후 UTC로 환산한다.
@@ -160,14 +171,42 @@ invalid 랩도 우선 기록은 해두고 랭킹 집계에서는 사용하지 �
   랭킹적격→월별 TOP10 재조회 후 `RankingUpdated`(track 그룹, D-8a). `IRankingNotifier` 포트(Application)를 Api가 `IHubContext<RankingHub>`로 구현.
 - 영향: [03](./03-entity-design.md), [04](./04-api-design.md), [05](./05-signalr-design.md), backend
 
+## H. Phase 6 개인 모드 결정 (2026-10-17 확정, 상세: [11](./11-personal-mode.md))
+
+### D-25. 제품 방향 = 개인 모드로 전환
+- 배경: MVP(P0~P5) 완료 후 제품 방향을 카페 운영 플랫폼에서 **개인용 F1 기록 플랫폼**(F1Laps 참고)으로 바꾼다.
+- **결정:** 카페 운영 모델(매장·좌석·체크인)을 쓰지 않는다. 사용자가 **자기 PC에 Agent를 설치하고 자기 계정에 연결**한다.
+  랩은 연결된 장치(`AgentDevice`)의 주인에게 귀속한다(`Lap.UserId = device.UserId`, `Lap.AgentDeviceId = device.Id`).
+  마이그레이션 `PersonalMode`가 `stores`·`sim_rigs`·`driving_sessions`를 삭제하고, 귀속할 장치가 없는 기존 랩·섹터·멱등 기록
+  (로컬 개발·테스트 데이터)을 지운다(사용자 승인 2026-10-17). 회원·트랙은 유지한다.
+- **대체되는 결정:** D-1(멀티스토어 `StoreId`), D-2(랩 귀속 = 체크인 세션), D-10(중복 세션 정책),
+  D-12·D-21(좌석별 API Key), D-22(활성 세션 없는 랩 Drop), D-24 중 **타임존 출처**(`Store.TimeZoneId`).
+- **유지되는 결정:** D-6(UUID v7), D-7(가변 섹터), D-8·D-8a(일/월/연 랭킹, 기본 월별), D-13, D-14(F1 25),
+  D-15·D-16(무효 랩 저장, 랭킹 = Time Trial만), D-20(F1Game.UDP), D-23(Hub 요청/응답 Ack), D-24 중 경계 규칙과 브로드캐스트 규칙.
+- 영향: [00](./00-overview.md), [02](./02-domain-design.md), [03](./03-entity-design.md), [04](./04-api-design.md),
+  [05](./05-signalr-design.md), [06](./06-telemetry-design.md), [07](./07-roadmap.md), [11](./11-personal-mode.md), backend, agent, app
+
+### D-26. Agent 계정 연결 = 1회용 연결 코드 → 장치별 키
+- **결정:** 웹에서 10분짜리 1회용 코드를 발급하고(`POST /me/agent-pairing-codes`), Agent가 그 코드를 장치별 장기 키로 교환한다
+  (`POST /agent/pair`, 키 원문은 응답에서 한 번만). 이후 인증은 기존 `X-Agent-Key` 메커니즘(SHA-256 해시 저장)을 그대로 쓰되,
+  키가 **AgentDevice**를 가리키고 연결에 `deviceId`·`sub`(장치 주인) 클레임이 귀속된다. 연결 해제 = soft delete이며,
+  이미 열린 연결로 오는 이벤트도 인입 시 장치를 다시 확인해 Reject한다.
+- 검토한 대안: 계정 고정 코드(F1Laps 방식, 노출 시 도용·일괄 재발급 필요), Agent에서 이메일·비밀번호 로그인(Refresh Token 필요, 트레이 앱이 비밀번호를 다룸).
+- 영향: [04](./04-api-design.md), [05](./05-signalr-design.md), [06](./06-telemetry-design.md), [11](./11-personal-mode.md), backend, agent
+
+### D-27. 랭킹 기간 경계 타임존 = 서버 설정 `Ranking:TimeZoneId`
+- **결정:** 기본값 `Asia/Seoul`(IANA). 서버 시작 시 검증하고, 잘못되면 시작을 실패시킨다(fail fast).
+  경계 계산(`RankingPeriodRange`)은 그대로다. 타임존을 어디서 읽는지만 바뀐다(D-24의 `Store.TimeZoneId` 대체).
+- 영향: [03](./03-entity-design.md), [04](./04-api-design.md), [11](./11-personal-mode.md), backend
+
 ---
 
-## 결정 요약 (전체 확정 ✅ · 2026-07-06)
+## 결정 요약 (전체 확정 ✅ · 2026-07-06, 2026-10-17 P6 갱신)
 
 | ID | 결정 | 반영 문서 |
 |---|---|---|
-| D-1 | 멀티스토어 `StoreId` 선반영 | 02, 03 |
-| D-2 | 랩 귀속 = 앱 체크인 세션 | 02, 03, 04 |
+| D-1 | ~~멀티스토어 `StoreId` 선반영~~ → D-25로 대체 | 02, 03 |
+| D-2 | ~~랩 귀속 = 앱 체크인 세션~~ → D-25로 대체 | 02, 03, 04 |
 | D-3 | 유스케이스 = 얇은 Service + 인터페이스 | 01 |
 | D-4 | App = `dio` + `signalr_netcore`(잠정) | 01 |
 | D-5 | Car 개념 MVP 제외 | 02 |
@@ -176,18 +215,21 @@ invalid 랩도 우선 기록은 해두고 랭킹 집계에서는 사용하지 �
 | D-8 | 랭킹 = 일/월/연 지원, 일별 자정 리셋 | 03, 04 |
 | D-8a | **실시간 랭킹 기본 기준 = 월별** | 02, 03, 04, 05 |
 | D-9 | Refresh Token MVP 제외 | 04 |
-| D-10 | 중복 세션 = 이전 자동 종료 | 04 |
+| D-10 | ~~중복 세션 = 이전 자동 종료~~ → D-25로 대체 | 04 |
 | D-11 | 앱 직접 가입(self-signup) | 04 |
-| D-12 | Agent 인증 = 장비 API Key | 05, 06 |
+| D-12 | ~~Agent 인증 = 장비 API Key~~ → D-25로 대체 | 05, 06 |
 | D-13 | 이벤트 순서 = 세션 단위 | 05 |
 | D-14 | 게임 = F1 25(`F1_25`), 게임 중립 설계 | 00, 06 |
 | D-15 | 무효 랩 저장 + 랭킹 제외(개별 조회 가능) | 03, 06 |
 | D-16 | SessionType 구분, 랭킹 = Time Trial만 | 02, 03, 04, 05, 06 |
 | D-20 | F1 UDP 파싱 = **F1Game.UDP(26.0.0)** 채택, Infra에서 게임중립 모델로 매핑(Core 무의존) | 01, 06, agent, shared/telemetry |
-| D-21 | Agent 인증 = SimRig별 API Key(SHA-256 해시 저장, `X-Agent-Key` 전송, 연결에 rigCode 귀속) | 05, 06, backend |
-| D-22 | 활성 세션 없는 랩 = Drop+Ack. 영구 무효 = Reject. 무응답만 재전송 | 06, backend |
+| D-21 | ~~Agent 인증 = SimRig별 API Key(SHA-256 해시 저장, `X-Agent-Key` 전송, 연결에 rigCode 귀속)~~ → D-25로 대체 | 05, 06, backend |
+| D-22 | ~~활성 세션 없는 랩 = Drop+Ack~~ → D-25로 대체. 영구 무효 = Reject. 무응답만 재전송(유지) | 06, backend |
 | D-23 | P3 = 인입·저장·체크인. 브로드캐스트 P4. Hub는 요청/응답(반환값 Ack) | 05, 07 |
-| D-24 | 랭킹 기간 경계 타임존 = `Store.TimeZoneId`(IANA). 랭킹 = 쿼리 온디맨드. 브로드캐스트 = 커밋 후 best-effort(`IRankingNotifier`) | 03, 04, 05, backend |
+| D-24 | 랭킹 기간 경계 타임존 = ~~`Store.TimeZoneId`(IANA)~~ → D-27로 대체. 랭킹 = 쿼리 온디맨드. 브로드캐스트 = 커밋 후 best-effort(`IRankingNotifier`) | 03, 04, 05, backend |
+| D-25 | **개인 모드 전환**: 매장·좌석·체크인 제거, 랩 귀속 = 계정에 연결된 Agent 장치(장치 주인) | 00, 02~07, 11, backend, agent, app |
+| D-26 | Agent 계정 연결 = 1회용 연결 코드(10분) → 장치별 키(`X-Agent-Key`, SHA-256 해시 저장, `deviceId`·`sub` 클레임) | 04, 05, 06, 11, backend, agent |
+| D-27 | 랭킹 기간 경계 타임존 = 서버 설정 `Ranking:TimeZoneId`(기본 `Asia/Seoul`, 시작 시 검증) | 03, 04, 11, backend |
 
 **MVP 관련 결정은 모두 확정되어 각 문서에 반영 완료.** 본 설계 문서 세트 최종 승인 시,
 **Phase 0(계약 & 스캐폴딩)** 상세 설계로 진입합니다.

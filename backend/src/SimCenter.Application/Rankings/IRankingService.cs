@@ -5,7 +5,7 @@ namespace SimCenter.Application.Rankings;
 /// <summary>랭킹/트랙/내 랩 조회 유스케이스(04 §3.7~3.9). 실시간 갱신은 <see cref="Notifications.IRankingNotifier"/>가 담당.</summary>
 public interface IRankingService
 {
-    /// <summary>트랙·기간별 TOP N(Time Trial·랭킹적격만). date 미지정 시 매장 로컬 "오늘" 기준.</summary>
+    /// <summary>트랙·기간별 TOP N(Time Trial·랭킹적격만). date 미지정 시 랭킹 타임존(D-27)의 "오늘" 기준.</summary>
     Task<RankingSnapshotDto> GetRankingAsync(
         Guid trackId,
         string gameCode,

@@ -1,17 +1,14 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "TelemetryEnvelope",
+  "description": "Agent가 TelemetryHub로 보내는 이벤트 봉투. 보낸 장치는 봉투가 아니라 연결의 장치 키 인증으로 정해집니다(D-26).",
   "type": "object",
-  "required": ["eventId", "rigCode", "gameCode", "occurredAt", "type", "payload"],
+  "required": ["eventId", "gameCode", "occurredAt", "type", "payload"],
   "properties": {
     "eventId": {
       "type": "string",
       "format": "uuid",
       "description": "에이전트가 발행한 고유 식별자로, 중복 전송 방지를 위한 멱등키 역할을 합니다."
-    },
-    "rigCode": {
-      "type": "string",
-      "description": "이벤트를 발생시킨 시뮬레이터 좌석(Rig) 식별 코드"
     },
     "gameCode": {
       "type": "string",

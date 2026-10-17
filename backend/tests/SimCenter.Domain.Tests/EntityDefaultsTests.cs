@@ -1,5 +1,4 @@
 using SimCenter.Domain.Entities;
-using SimCenter.Domain.Enums;
 
 namespace SimCenter.Domain.Tests;
 
@@ -12,16 +11,16 @@ public class EntityDefaultsTests
 
         Assert.False(user.IsDeleted);
         Assert.Null(user.UpdatedAt);
-        Assert.Empty(user.Sessions);
+        Assert.Empty(user.AgentDevices);
     }
 
     [Fact]
-    public void DrivingSession_DefaultStatus_IsActive()
+    public void AgentDevice_DefaultsToNeverSeenAndActive()
     {
-        var session = new DrivingSession { GameCode = "F1_25" };
+        var device = new AgentDevice { Name = "SIM-PC", ApiKeyHash = "hash" };
 
-        Assert.Equal(SessionStatus.Active, session.Status);
-        Assert.Null(session.EndedAt);
+        Assert.Null(device.LastSeenAt);
+        Assert.False(device.IsDeleted);
     }
 
     [Fact]
@@ -32,5 +31,6 @@ public class EntityDefaultsTests
         Assert.False(lap.IsRankingEligible);
         Assert.False(lap.IsInvalidatedManually);
         Assert.Empty(lap.Sectors);
+        Assert.Equal(Guid.Empty, lap.AgentDeviceId);
     }
 }

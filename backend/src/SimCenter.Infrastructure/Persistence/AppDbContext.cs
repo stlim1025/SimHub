@@ -18,10 +18,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, ITransactionRunner
     }
 
     public DbSet<User> Users => Set<User>();
-    public DbSet<Store> Stores => Set<Store>();
-    public DbSet<SimRig> SimRigs => Set<SimRig>();
     public DbSet<Track> Tracks => Set<Track>();
-    public DbSet<DrivingSession> DrivingSessions => Set<DrivingSession>();
     public DbSet<Lap> Laps => Set<Lap>();
     public DbSet<LapSector> LapSectors => Set<LapSector>();
     public DbSet<ProcessedEvent> ProcessedEvents => Set<ProcessedEvent>();
