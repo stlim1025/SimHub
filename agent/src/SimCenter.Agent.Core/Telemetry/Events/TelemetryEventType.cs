@@ -8,4 +8,5 @@ public enum TelemetryEventType
     SectorCompleted,
     LapFinished,
     SessionEnded,
+    SessionClassified,
 }
