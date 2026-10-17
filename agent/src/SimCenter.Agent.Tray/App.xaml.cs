@@ -10,7 +10,10 @@ using Serilog;
 using SimCenter.Agent.Core.Connection;
 using SimCenter.Agent.Infrastructure;
 using SimCenter.Agent.Infrastructure.Configuration;
+using SimCenter.Agent.Infrastructure.Credentials;
 using SimCenter.Agent.Infrastructure.Hosting;
+using SimCenter.Agent.Infrastructure.Pairing;
+using SimCenter.Agent.Infrastructure.Upload;
 using Application = System.Windows.Application;
 
 namespace SimCenter.Agent.Tray;
@@ -52,7 +55,12 @@ public partial class App : Application
         BuildStateIcons();
         BuildNotifyIcon();
 
-        _window = new MainWindow(_monitor, options);
+        _window = new MainWindow(
+            _monitor,
+            options,
+            _host.Services.GetRequiredService<IAgentPairingClient>(),
+            _host.Services.GetRequiredService<IDeviceCredentialStore>(),
+            _host.Services.GetRequiredService<UploadStatusTracker>());
         _window.Show();
 
         // 트레이 아이콘/툴팁은 창보다 느리게(1s) 갱신해도 충분.

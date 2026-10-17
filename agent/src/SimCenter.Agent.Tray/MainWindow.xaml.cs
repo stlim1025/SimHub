@@ -2,8 +2,12 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
+using Serilog;
 using SimCenter.Agent.Core.Connection;
 using SimCenter.Agent.Infrastructure.Configuration;
+using SimCenter.Agent.Infrastructure.Credentials;
+using SimCenter.Agent.Infrastructure.Pairing;
+using SimCenter.Agent.Infrastructure.Upload;
 using Brush = System.Windows.Media.Brush;
 using Color = System.Windows.Media.Color;
 using Point = System.Windows.Point;
@@ -13,6 +17,7 @@ namespace SimCenter.Agent.Tray;
 /// <summary>
 /// 게임 연결 상태 창. <see cref="GameConnectionMonitor"/>를 DispatcherTimer로 폴링해 신호등·지표·수신 그래프를 갱신한다.
 /// 닫기는 트레이 최소화(<see cref="AllowExit"/>가 true일 때만 실제 종료).
+/// "계정 연결" 영역은 연결 코드 입력·이 PC 연결 끊기와 업로드 상태 표시를 맡는다(docs/11 §6.3).
 /// </summary>
 public partial class MainWindow : Window
 {
@@ -24,24 +29,43 @@ public partial class MainWindow : Window
     private const int Capacity = 120;          // 500ms × 120 ≈ 최근 60초
     private const double MinScale = 10;        // Y축 최소 상한(pkt/s) — 저트래픽에서도 바닥에 붙게
 
+    private static readonly string DeviceName = Environment.MachineName;
+
     private readonly GameConnectionMonitor _monitor;
     private readonly AgentOptions _options;
+    private readonly IAgentPairingClient _pairingClient;
+    private readonly IDeviceCredentialStore _credentials;
+    private readonly UploadStatusTracker _uploadStatus;
     private readonly DispatcherTimer _timer;
+    private readonly CancellationTokenSource _lifetime = new();
 
     private readonly List<double> _rates = new(Capacity);
     private long _lastTotal;
     private bool _hasLastTotal;
+    private bool _isPairing;
 
     /// <summary>트레이 "종료"에서만 true로 세팅 → 실제 창 종료 허용.</summary>
     public bool AllowExit { get; set; }
 
-    public MainWindow(GameConnectionMonitor monitor, AgentOptions options)
+    public MainWindow(
+        GameConnectionMonitor monitor,
+        AgentOptions options,
+        IAgentPairingClient pairingClient,
+        IDeviceCredentialStore credentials,
+        UploadStatusTracker uploadStatus)
     {
         _monitor = monitor;
         _options = options;
+        _pairingClient = pairingClient;
+        _credentials = credentials;
+        _uploadStatus = uploadStatus;
         InitializeComponent();
 
         PortValue.Text = _options.UdpPort.ToString();
+
+        // 업로더가 아직 Disabled일 수 있으니 현재 상태를 한 번 읽어 그리고, 이후 변화는 이벤트로 받는다.
+        _uploadStatus.StateChanged += OnUploadStateChanged;
+        RenderAccountAreaSafely();
 
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(IntervalMs) };
         _timer.Tick += (_, _) => Refresh();
@@ -148,6 +172,120 @@ public partial class MainWindow : Window
 
     private void ChartArea_SizeChanged(object sender, SizeChangedEventArgs e) => DrawChart();
 
+    /// <summary>
+    /// 업로드 루프 스레드에서 동기 호출된다. 여기서 예외가 새면 업로드 BackgroundService가 죽어 에이전트 전체가 멈추므로
+    /// UI는 건드리지 않고 Dispatcher에 비동기로(BeginInvoke — Invoke는 루프를 UI 스레드에 묶는다) 넘기며 예외를 모두 흡수한다.
+    /// </summary>
+    private void OnUploadStateChanged(object? sender, EventArgs e)
+    {
+        try
+        {
+            Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(RenderAccountAreaSafely));
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "업로드 상태 변경을 UI로 전달하지 못했습니다");
+        }
+    }
+
+    private void RenderAccountAreaSafely()
+    {
+        try
+        {
+            RenderAccountArea();
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "계정 연결 영역을 갱신하지 못했습니다");
+        }
+    }
+
+    private void RenderAccountArea()
+    {
+        var hasKey = _credentials.Load() is not null;
+        var state = _uploadStatus.State;
+
+        // 업로드 루프가 키 삭제를 반영하기 전(전송 중 등)에도 방금 끊은 PC가 "연결됨"으로 남지 않게 키 유무를 함께 본다.
+        if (!hasKey && UploadStateText.IsLinked(state))
+        {
+            state = UploadState.Unpaired;
+        }
+
+        AccountStatusText.Text = UploadStateText.Describe(state, DeviceName);
+        PairingCodeBox.IsEnabled = !_isPairing;
+        PairButton.IsEnabled = !_isPairing;
+        PairButton.Content = _isPairing ? "연결 중…" : "연결";
+        UnlinkButton.IsEnabled = hasKey && !_isPairing;
+    }
+
+    private void SetAccountError(string? message)
+    {
+        AccountErrorText.Text = message ?? string.Empty;
+        AccountErrorText.Visibility = string.IsNullOrEmpty(message) ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    // async void: WPF 이벤트 핸들러라 예외가 새면 앱(=에이전트)이 죽는다. 그래서 모든 경로를 여기서 처리한다.
+    private async void PairButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_isPairing)
+        {
+            return;
+        }
+
+        // 연결 코드는 1회용 비밀 — 화면 입력값만 다듬고, 로그·오류 문구에는 싣지 않는다.
+        var code = PairingCodeBox.Text.Trim();
+
+        SetAccountError(null);
+        _isPairing = true;
+        RenderAccountAreaSafely();
+
+        try
+        {
+            var outcome = await _pairingClient.PairAsync(code, DeviceName, _lifetime.Token);
+            if (outcome.Succeeded)
+            {
+                // 키는 이미 저장됐고 Changed가 업로더를 깨운다. 상태 문구는 StateChanged가 갱신한다.
+                PairingCodeBox.Clear();
+            }
+            else
+            {
+                SetAccountError(outcome.Message);
+            }
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+        {
+            // 창 종료 중 — 정상. 표시할 것이 없다.
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "계정 연결 중 예기치 않은 오류가 발생했습니다");
+            SetAccountError("연결 중 예기치 않은 오류가 발생했습니다. 잠시 후 다시 시도하세요.");
+        }
+        finally
+        {
+            _isPairing = false;
+            RenderAccountAreaSafely();
+        }
+    }
+
+    private void UnlinkButton_Click(object sender, RoutedEventArgs e)
+    {
+        SetAccountError(null);
+
+        try
+        {
+            // 로컬 키만 지운다. 서버 쪽 장치 해제는 웹에서 한다(docs/11 §6.3).
+            _credentials.Clear();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "장치 키를 지우지 못했습니다");
+            SetAccountError("이 PC의 연결 정보를 지우지 못했습니다. 다른 프로그램이 파일을 사용 중이거나 권한이 없을 수 있습니다.");
+        }
+
+        RenderAccountAreaSafely();
+    }
+
     protected override void OnClosing(CancelEventArgs e)
     {
         if (!AllowExit)
@@ -159,7 +297,15 @@ public partial class MainWindow : Window
         }
 
         _timer.Stop();
+        _uploadStatus.StateChanged -= OnUploadStateChanged;
+        _lifetime.Cancel();
         base.OnClosing(e);
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        _lifetime.Dispose();
+        base.OnClosed(e);
     }
 
     private static Brush Freeze(byte r, byte g, byte b)
