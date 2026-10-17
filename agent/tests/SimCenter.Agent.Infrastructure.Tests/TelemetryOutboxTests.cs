@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using SimCenter.Agent.Core.Telemetry;
 using SimCenter.Agent.Core.Telemetry.Events;
@@ -63,7 +64,7 @@ public class TelemetryOutboxTests
     public async Task OutboxSink_SerializesLapFinished_ToServerWireContract()
     {
         await using var outbox = NewOutbox();
-        var sink = new OutboxTelemetrySink(outbox);
+        var sink = new OutboxTelemetrySink(outbox, NullLogger<OutboxTelemetrySink>.Instance);
 
         var payload = new LapFinished(
             SessionRef: "0xSESSION",

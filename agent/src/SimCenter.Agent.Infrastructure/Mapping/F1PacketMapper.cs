@@ -10,11 +10,16 @@ namespace SimCenter.Agent.Infrastructure.Mapping;
 
 /// <summary>
 /// F1Game.UDP 패킷을 Agent.Core의 게임중립 프레임으로 매핑한다(D-20 경계).
-/// MVP 관심 패킷만 처리(Session/LapData/Event), 나머지는 무시(YAGNI, docs/06 §2.2).
+/// 관심 패킷만 처리(Session/LapData/Event, P7: Participants/FinalClassification), 나머지는 무시(YAGNI, docs/06 §2.2).
 /// 개별 Map* 메서드는 구성 가능한 패킷 구조체를 받아 단위테스트가 가능하다.
 /// </summary>
 public sealed class F1PacketMapper
 {
+    private const int MillisecondsPerSecond = 1000;
+
+    /// <summary>F1 25가 한 차에 기록하는 타이어 스틴트 최대 수(<c>Array8</c>의 칸 수, 12 §5.2).</summary>
+    private const int MaxTyreStints = 8;
+
     private static readonly IReadOnlyList<ITelemetryFrame> Empty = Array.Empty<ITelemetryFrame>();
 
     private readonly int _expectedPacketFormat;
@@ -69,6 +74,12 @@ public sealed class F1PacketMapper
                 return marker is null ? Empty : new ITelemetryFrame[] { marker };
             }
 
+            case F1Enums.PacketType.Participants when packet.TryGetParticipantsDataPacket(out var participants):
+                return new ITelemetryFrame[] { MapParticipants(participants) };
+
+            case F1Enums.PacketType.FinalClassification when packet.TryGetFinalClassificationDataPacket(out var classification):
+                return new ITelemetryFrame[] { MapClassification(classification) };
+
             default:
                 return Empty;
         }
@@ -78,7 +89,119 @@ public sealed class F1PacketMapper
         SessionRef: packet.Header.SessionUID.ToString(),
         TrackId: (int)packet.Track,
         SessionType: MapSessionType(packet.SessionType),
-        PacketFormat: packet.Header.PacketFormat);
+        PacketFormat: packet.Header.PacketFormat,
+        SessionKind: F1EnumMaps.ToSessionKind(packet.SessionType),
+        GameMode: F1EnumMaps.ToGameMode(packet.GameMode),
+        SeasonLinkId: packet.SeasonLinkIdentifier,
+        WeekendLinkId: packet.WeekendLinkIdentifier,
+        SessionLinkId: packet.SessionLinkIdentifier,
+        TotalLaps: packet.TotalLaps,
+        AiDifficulty: packet.AIDifficulty,
+        IsNetworkGame: packet.IsNetworkGame);
+
+    /// <summary>참가자 배열 전체를 carIndex 순서로 매핑한다(12 §5.2). 사람(네트워크) 드라이버는 <c>GameDriverId = null</c>.</summary>
+    public ParticipantsFrame MapParticipants(ParticipantsDataPacket packet)
+    {
+        var slots = packet.Participants.AsReadOnlySpan();
+        var participants = new List<ParticipantInfo>(slots.Length);
+        for (var carIndex = 0; carIndex < slots.Length; carIndex++)
+        {
+            var slot = slots[carIndex];
+            participants.Add(new ParticipantInfo(
+                CarIndex: carIndex,
+                Name: CutAtFirstNul(slot.Name),
+                GameDriverId: slot.Driver == F1Enums.Driver.NetworkHuman ? null : (int)slot.Driver,
+                TeamId: (int)slot.Team,
+                RaceNumber: slot.RaceNumber,
+                IsAiControlled: slot.IsAiControlled));
+        }
+
+        return new ParticipantsFrame(packet.Header.SessionUID.ToString(), participants);
+    }
+
+    /// <summary>최종 순위표를 매핑한다. 빈 그리드 칸(Invalid·Inactive 또는 Position 0)은 뺀다(12 §5.2).</summary>
+    public ClassificationFrame MapClassification(FinalClassificationDataPacket packet)
+    {
+        var slots = packet.ClassificationData.AsReadOnlySpan();
+        var rows = new List<ClassificationRow>(slots.Length);
+        for (var carIndex = 0; carIndex < slots.Length; carIndex++)
+        {
+            var slot = slots[carIndex];
+            if (IsEmptySlot(slot))
+            {
+                continue;
+            }
+
+            rows.Add(MapClassificationRow(carIndex, slot));
+        }
+
+        return new ClassificationFrame(packet.Header.SessionUID.ToString(), packet.Header.PlayerCarIndex, rows);
+    }
+
+    private static bool IsEmptySlot(FinalClassificationData slot) =>
+        slot.ResultStatus is F1Enums.ResultStatus.Invalid or F1Enums.ResultStatus.Inactive || slot.Position == 0;
+
+    private static ClassificationRow MapClassificationRow(int carIndex, FinalClassificationData slot) => new(
+        CarIndex: carIndex,
+        Position: slot.Position,
+        GridPosition: slot.GridPosition,
+        NumLaps: slot.NumLaps,
+        Points: slot.Points,
+        NumPitStops: slot.NumPitStops,
+        NumPenalties: slot.NumPenalties,
+        ResultStatus: F1EnumMaps.ToResultStatus(slot.ResultStatus),
+        BestLapTimeMs: ClampToInt(slot.BestLapTimeInMS),
+        TotalRaceTimeMs: SecondsToMilliseconds(slot.TotalRaceTime),
+        PenaltiesTimeMs: slot.PenaltiesTime * MillisecondsPerSecond,
+        TyreStints: MapTyreStints(slot));
+
+    private static List<TyreStint> MapTyreStints(FinalClassificationData slot)
+    {
+        var actual = slot.TyreStintsActual.AsReadOnlySpan();
+        var visual = slot.TyreStintsVisual.AsReadOnlySpan();
+        var endLaps = slot.TyreStintsEndLaps.AsReadOnlySpan();
+        var count = Math.Min((int)slot.NumTyreStints, MaxTyreStints);
+
+        var stints = new List<TyreStint>(count);
+        for (var i = 0; i < count; i++)
+        {
+            stints.Add(new TyreStint(
+                EndLap: endLaps[i],
+                VisualCompound: F1EnumMaps.ToVisualCompound(visual[i]),
+                ActualCompound: F1EnumMaps.ToActualCompoundLabel(actual[i])));
+        }
+
+        return stints;
+    }
+
+    /// <summary>
+    /// 초(double) → 밀리초(int), 사사오입(0.5는 0에서 먼 쪽). 깨진 값(NaN·음수·범위 밖)은 백엔드가 영구 거부하는 값을 만들지 않도록
+    /// 0 또는 <see cref="int.MaxValue"/>로 다듬는다(12 §0 실패 원칙).
+    /// </summary>
+    private static int SecondsToMilliseconds(double seconds)
+    {
+        if (double.IsNaN(seconds) || seconds <= 0)
+        {
+            return 0;
+        }
+
+        var milliseconds = Math.Round(seconds * MillisecondsPerSecond, MidpointRounding.AwayFromZero);
+        return milliseconds >= int.MaxValue ? int.MaxValue : (int)milliseconds;
+    }
+
+    private static int ClampToInt(uint value) => value > int.MaxValue ? int.MaxValue : (int)value;
+
+    /// <summary>UDP의 이름 필드는 고정 길이 버퍼라 NUL 패딩이 남을 수 있다 — 첫 NUL에서 자른다. null이면 빈 문자열.</summary>
+    private static string CutAtFirstNul(string? name)
+    {
+        if (string.IsNullOrEmpty(name))
+        {
+            return string.Empty;
+        }
+
+        var nul = name.IndexOf('\0');
+        return nul < 0 ? name : name[..nul];
+    }
 
     public LapFrame MapLap(LapData lap, PacketHeader header) => new(
         SessionRef: header.SessionUID.ToString(),
