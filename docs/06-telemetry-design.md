@@ -1,8 +1,9 @@
 # 06 · Telemetry Event Design (F1 UDP)
 
-> Status: **Design (미승인)** · Last Updated: 2026-10-17 (P6 개인 모드 반영)
+> Status: **Design (미승인)** · Last Updated: 2026-10-18 (P7 시즌·세션 반영, 앞서 P6 개인 모드 반영)
 > 계약 원본: `shared/telemetry/`. Agent(`Agent.Core`)의 파싱·판정 규칙을 정의한다.
 > P6에서 Agent 설정(`RigCode`·`BackendUrl`·`AgentCredential` → `ServerBaseUrl` + 장치 키 파일)과 envelope(`rigCode` 삭제)이 바뀌었다([11](./11-personal-mode.md) §6).
+> P7에서 Participants(4)·Final Classification(8) 패킷 파싱, `SessionResultTracker`, `LapFinished` 세션 맥락 필드, Outbox 적재 전 크기 검사가 추가됐다([12](./12-seasons-sessions.md) §5).
 > **대상:** F1 25 (`GameCode = F1_25`, D-14 확정). 추후 타 게임 지원 대비해 파서를 게임별로
 > 교체 가능하게 설계하고, 도메인 이벤트는 게임 중립적으로 유지한다(가변 섹터·세션타입).
 
@@ -17,13 +18,16 @@ UDP 20777
 PacketParser        ── PacketHeader 읽어 packetId 분기, 버전(m_packetFormat) 검증
    │  구조화된 패킷
    ▼
-LapAnalyzer         ── 플레이어 차량 상태 추적, 랩/섹터 전이 감지
+분석기 목록 (순서 무관 · 분석기마다 예외 격리)
+  ├─ LapAnalyzer          ── 플레이어 차량 상태 추적, 랩/섹터 전이 감지
+  └─ SessionResultTracker ── 세션 최종 순위표 + 참가자 → SessionClassified (P7)
    │  상태 변화
    ▼
-DomainEventFactory  ── 의미 있는 이벤트만 생성 (LapFinished 등)
+DomainEventFactory  ── 의미 있는 이벤트만 생성 (LapFinished, SessionClassified 등)
    │  TelemetryEnvelope
    ▼
 Outbox(SQLite) → TelemetryClient(SignalR)   ── Raw 패킷은 서버에 전송/저장하지 않음
+              (적재 전 직렬화 크기 검사 48KiB — §5)
 ```
 
 **핵심 원칙**
@@ -52,11 +56,13 @@ F1(Codemasters/EA) 텔레메트리는 UDP로 여러 **패킷 타입**을 브로�
 
 | packetId | 이름 | 사용 목적 |
 |---|---|---|
-| 1 | **Session** | 트랙 ID, **세션 타입(m_sessionType)** → `SessionStarted`. Time Trial 구분 필수(D-16) |
+| 1 | **Session** | 트랙 ID, **세션 타입(m_sessionType)** → `SessionStarted`. Time Trial 구분 필수(D-16). P7: `GameMode`·`SessionKind`(상세)·링크 식별자 3개(`SeasonLinkIdentifier`·`WeekendLinkIdentifier`·`SessionLinkIdentifier`)·`TotalLaps`·`AIDifficulty`·`IsNetworkGame` |
 | 2 | **Lap Data** | 랩/섹터 시간, 현재 랩 유효성, 랩 번호 → 랩/섹터 판정의 **주 소스** |
 | 3 | **Event** | `SSTA`(세션시작)/`SEND`(세션종료) 등 마커 → 세션 경계 보정 |
+| 4 | **Participants** (P7) | 차별 `Name`·`Driver`(게임 드라이버 ID, 사람이면 `NetworkHuman`)·`Team`·`RaceNumber`·`IsAiControlled` → `SessionClassified`의 드라이버 정보 (5초마다 도착) |
+| 8 | **Final Classification** (P7) | 세션 끝의 최종 순위표: 순위·그리드·랩 수·점수·피트·패널티·결과 상태·베스트 랩·총 시간·타이어 스틴트 → `SessionClassified` (세션당 도착) |
 
-> Motion(0), CarTelemetry(6), CarStatus(7), CarDamage(10) 등은 MVP 랭킹에 불필요 → **파싱하지 않음**(YAGNI).
+> Motion(0), CarTelemetry(6), CarStatus(7), CarDamage(10), Session History(11) 등은 현재 랭킹·시즌에 불필요 → **파싱하지 않음**(YAGNI). Session History(11)·Car Damage(10)는 P8 후보.
 > 단, 이들은 **상세 텔레메트리 조회(Future)**의 소스이므로 Agent 파이프라인은 프레임 순회 지점을
 > 확장 가능하게 유지한다. → [09-lap-telemetry-trace.md](./09-lap-telemetry-trace.md)
 
@@ -114,6 +120,23 @@ Idle ──SessionStart──► InSession ──lapNum 증가──► LapInPro
 
 - UDP는 고주파(수십 Hz)로 동일 상태를 반복 전송한다. LapAnalyzer는 **전이(edge)에서만** 이벤트를 만든다(레벨이 아니라 엣지 트리거) → 서버 전송량 최소화.
 
+### 3.4 세션 결과 수집 (SessionResultTracker · P7)
+
+`SessionResultTracker`(`Agent.Core/Analysis`)는 `SessionFrame`·`ParticipantsFrame`·`ClassificationFrame`만 보는 순수·상태 저장 분석기다. `LapAnalyzer`와 **상태를 공유하지 않으므로**
+파이프라인에서 두 분석기의 순서는 상관없다. 분석기마다 try/catch로 감싸 한쪽의 예외가 다른 쪽을 막지 않는다.
+
+| 입력 | 처리 |
+|---|---|
+| `SessionFrame` | 세션 맥락(모드·링크 식별자·트랙·세션 종류)을 바꾼다. `SessionRef`가 바뀌면 참가자 목록을 비운다 |
+| `ParticipantsFrame` | 맥락과 `SessionRef`가 같을 때만 저장한다 |
+| `ClassificationFrame` | 맥락이 없거나 `SessionRef`가 다르면 무시. `SessionType`이 `TimeTrial`이면 무시(D-30). 이미 보낸 `SessionRef`면 무시. **행이 하나도 없으면 무시하고 그 `SessionRef`를 보낸 것으로 기억하지 않는다.** 아니면 참가자를 `carIndex`로 붙여 `SessionClassified` 1건을 만들고 그 `SessionRef`를 기억한다 |
+
+- 참가자 정보가 없는 차는 `driverName`·`gameDriverId`·`teamId`·`raceNumber`를 null, `isAiControlled`를 false로 보낸다.
+- 세션 도중에 Agent를 시작해 맥락 없는 순위표를 받으면 보내지 않는다(그 세션 1건 손실).
+- 매퍼(`F1PacketMapper`, Agent.Infrastructure)는 Final Classification에서 `ResultStatus`가 Invalid·Inactive이거나 `Position == 0`인 칸(빈 그리드)을 빼고,
+  시간을 ms로 바꾼다(`TotalRaceTime`은 초 → ms 반올림). NaN·0 이하·범위 밖의 깨진 값은 0 또는 `int.MaxValue`로 보정한다. UDP 이름은 첫 NUL에서 자른다.
+  게임 모드·세션 종류·컴파운드 매핑은 [12](./12-seasons-sessions.md) §5.2.
+
 ---
 
 ## 4. Agent → Backend 이벤트 (TelemetryEnvelope)
@@ -139,10 +162,17 @@ Idle ──SessionStart──► InSession ──lapNum 증가──► LapInPro
     ],
     "isValid": true,
     "isOutOrInLap": false,
-    "trackId": 2
+    "trackId": 2,
+    "gameMode": "DriverCareer",          // P7 선택 필드 4개 — 세션 맥락(LapAnalyzer가 Session 패킷에서 보관)
+    "seasonLinkId": 2847561234,
+    "weekendLinkId": 99112233,
+    "sessionLinkId": 44556677
   }
 }
 ```
+
+- P7 선택 필드(`gameMode`·`seasonLinkId`·`weekendLinkId`·`sessionLinkId`)는 백엔드가 `Lap.SessionKey`를 계산하는 데 쓴다(저장만, 조회는 P8). 게임 모드를 모르거나 링크가 없으면 `gameMode = "Other"`, 링크 `0`으로 간다.
+- 세션 끝에는 `SessionClassified`(최종 순위표 1건)가 따로 간다. payload·응답 규칙은 [05](./05-signalr-design.md) §2.4·§2.5.
 
 - `trackId`(게임 정수) → Backend가 `Track` 마스터(GameCode+GameTrackId)로 변환.
 - `eventId`는 Agent가 생성하는 **멱등키**. 재전송 시 동일 값 → Backend 중복 제거.
@@ -164,6 +194,9 @@ DomainEvent ──► [SQLite Outbox: status=Pending] ──► SignalR 전송 �
 - **모든 이벤트는 전송 전에 Outbox에 먼저 기록**된다. (전원/네트워크 장애 시 유실 방지)
 - 앱 재시작·네트워크 복구 시 `Pending` 이벤트를 `occurredAt` 순서로 재전송.
 - Backend `Ack(eventId)` 수신 후에만 Outbox에서 정리. (at-least-once + 멱등 = effectively-once)
+- **적재 전 크기 검사 (P7):** 허브는 64KiB를 넘는 메시지를 Reject가 아니라 연결 종료로 거절하고, 그러면 같은 항목이 끝없이 재시도된다. 그래서 Outbox에 넣기 전에
+  직렬화한 JSON의 UTF-8 바이트가 `OutboxTelemetrySink.MaxEnvelopeBytes`(48KiB)를 넘는지 잰다. 넘는 `SessionClassified`는 **타이어 스틴트를 빼고** 다시 재서 적재하고(경고 로그),
+  그래도 넘거나 다른 유형이면 적재하지 않고 오류 로그를 남긴다. 게임 최대(24대 × 8스틴트) 실측은 약 24KB(이름이 검증 한도까지 길어도 약 32KB)라 정상 경로에서는 일어나지 않는다([12](./12-seasons-sessions.md) §5.5·§14).
 
 ---
 
@@ -195,6 +228,8 @@ DomainEvent ──► [SQLite Outbox: status=Pending] ──► SignalR 전송 �
 ## 7. 확정된 결정 (반영 완료)
 
 - **D-26 ✅** Agent 인증 = 장치 키(DPAPI 저장). 활성 세션이 없으면 랩을 버리던 규칙(~~D-22~~)은 사라졌다 — 랩은 항상 장치 주인에게 귀속된다.
+- **D-28 ✅** 세션 결과 = 세션당 최종 순위표 1건(`SessionClassified`), Participants·Final Classification을 Agent가 합쳐 보낸다.
+- **D-30 ✅** Time Trial 순위표는 Agent도 보내지 않고, 백엔드도 저장하지 않는다(최종 판정은 백엔드).
 - **D-14 ✅** F1 25 대상. `m_packetFormat` 버전 검증 + 게임별 파서 확장 여지(OCP).
 - **D-15 ✅** 무효/아웃/인랩도 저장, 랭킹 적격 판정은 Backend가 최종 수행.
 - **D-16 ✅** SessionType 캡처, 실시간 랭킹은 Time Trial만. 타 세션 개별 조회 가능.

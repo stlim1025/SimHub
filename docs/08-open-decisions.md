@@ -1,6 +1,6 @@
 # 08 · Open Decisions — 승인 필요 결정사항
 
-> Status: **Design** · Last Updated: 2026-10-17 (P6 개인 모드: D-25~27 추가, 대체된 결정 표기)
+> Status: **Design** · Last Updated: 2026-10-18 (P7 시즌·세션: D-28~34 추가. P6 개인 모드: D-25~27 추가·대체된 결정 표기는 2026-10-17)
 > AI 작업 규칙("추측 금지, 필요 시 질문") 준수를 위해, **추측 없이 사용자 승인이 필요한 결정**을 모은다.
 > 각 항목: 배경 / 선택지 / **권장안** / 영향 문서. 승인 시 각 문서에 반영한다.
 
@@ -203,7 +203,67 @@ invalid 랩도 우선 기록은 해두고 랭킹 집계에서는 사용하지 �
 
 ---
 
-## 결정 요약 (전체 확정 ✅ · 2026-07-06, 2026-10-17 P6 갱신)
+## I. Phase 7 시즌·세션 결정 (2026-10-17 확정, 상세: [12](./12-seasons-sessions.md))
+
+> 사용자가 질문 없이 진행(자동 모드)하도록 요청해, 아래는 권장안을 기본값으로 확정한 것이다. 바꾸려면 새 결정으로 해당 항목을 대체한다.
+
+### D-28. 세션 결과 수집 = 세션당 최종 순위표 1건(`SessionClassified`)
+- **결정:** Agent가 Final Classification 패킷을 받으면 같은 세션의 Session 맥락(모드·링크 식별자·트랙)과 Participants(이름·팀·AI 여부)를
+  차 번호(`carIndex`)로 합쳐 도메인 이벤트 1건을 보낸다. 같은 `SessionRef`로는 한 번만 보낸다. raw 패킷은 보내지 않는다(헌장).
+- 이유: 이벤트 하나가 자기 완결적이라 순서·재전송·중복에 강하다. 22대 기준 약 10KB다.
+- 검토한 대안: (a) Participants·Classification을 각각 이벤트로 보내고 서버에서 합치기 — 패킷 중계에 가깝고, 두 이벤트의 순서·누락을 서버가 다뤄야 한다.
+  (b) `SessionStarted`에 맥락을 싣고 `SessionClassified`에는 결과만 — 이벤트끼리 의존이 생겨 재접속·재개 시 깨지기 쉽다.
+- 영향: [05](./05-signalr-design.md), [06](./06-telemetry-design.md), [12](./12-seasons-sessions.md) §5, `shared/schema`, backend, agent
+
+### D-29. 시즌·주말·세션 식별 = 게임 링크 식별자(시즌 대상 모드에서만)
+- **결정:** `SeasonLinkIdentifier`·`WeekendLinkIdentifier`·`SessionLinkIdentifier`(`uint`, "세이브가 바뀌어도 유지")로 묶는다.
+  **시즌 대상** = 게임 모드가 커리어 4종(Driver Career · My Team · Online Career · Challenge Career) 또는 Grand Prix이고 시즌·주말 링크가 모두 0이 아닐 때.
+  그 밖의 세션(온라인 로비, 스토리 등)은 시즌 없이 Sessions 목록에만 나온다.
+- **세션 키:** 시즌 대상이고 세션 링크가 0이 아니면 `link:{season}:{weekend}:{session}`, 그 밖에는 `uid:{SessionRef}`. 사용자·게임별로 유일하다.
+  링크 값의 의미를 확인하지 못한 모드(온라인 등)에서 서로 다른 세션이 같은 키로 덮이지 않게 하기 위해서다.
+- 같은 키로 다시 분류되면 최신 결과로 병합한다(세션 재시작, 세이브 불러온 뒤 다시 완주). 저장된 세션과 트랙 또는 세션 종류가 다르면 `uid:` 키로 따로 저장하고
+  경고 로그를 남기며 시즌·주말에 넣지 않는다. 받은 시각이 저장된 것보다 이르면 무시한다.
+- 랩도 같은 규칙으로 `Lap.SessionKey`를 저장한다(P8에서 세션과 연결하기 위한 씨앗, P7은 조회에 쓰지 않는다).
+- 이 가정들(링크 값이 세션 재시작·다음 해에 어떻게 변하는지 등)은 게임에서 확인해야 한다 — [12](./12-seasons-sessions.md) §3.3, [TESTING-local-e2e.md](./TESTING-local-e2e.md) §10.
+- 영향: [02](./02-domain-design.md), [03](./03-entity-design.md), [12](./12-seasons-sessions.md) §4·§6, backend, agent
+
+### D-30. Sessions 목록 = 최종 순위가 확정된 세션만, Time Trial 제외
+- **결정:** 최종 순위표를 받은 세션만 `GameSession`이 된다(중간에 나간 세션은 목록에 없다). Time Trial은 Laps·Leaderboard가 담당하므로
+  Agent는 `SessionType.TimeTrial` 순위표를 보내지 않고, **백엔드도** `sessionType` 또는 `gameMode`가 TimeTrial이면 저장하지 않고 Ack한다.
+- 이유: 정책의 최종 판정은 백엔드에 둔다(D-15와 같은 원칙). Agent만 거르면 옛·다른 Agent가 보낸 Time Trial 순위표가 그대로 저장된다.
+- 영향: [06](./06-telemetry-design.md), [12](./12-seasons-sessions.md) §5.3·§6.2, backend, agent
+
+### D-31. Standings = 기록된 세션의 점수 합(본 레이스 카운트백), Constructors 포함
+- **결정:** 드라이버 점수 = 그 시즌에 **기록된** 세션의 `Points` 합(스프린트 포함). 게임 안의 공식 순위표가 아니라 Agent가 받은 세션 기준이며,
+  화면에 "기록된 세션 기준"을 표시한다.
+- **계산 대상 세션:** 같은 주말·같은 세션 종류(`SessionKind`, `Unknown` 제외)가 여러 건이면 `ClassifiedAt`이 가장 늦은 1건만 쓴다(링크 식별자가 바뀌어 같은 세션이 두 번 저장된 경우의 이중 집계 방지).
+- **본 레이스:** 주말마다 레이스 세션(`SessionType.Race`) 중 `ClassifiedAt`이 가장 늦은 1건. 우승·포디움·카운트백은 본 레이스만 센다(스프린트는 점수에만 들어간다).
+  기록된 레이스가 스프린트 하나뿐인 주말은 그 스프린트가 본 레이스가 된다.
+- 동점: 본 레이스 1위 횟수 → 2위 횟수 → … → 표시 이름 오름차순(Ordinal) → `DriverKey` 오름차순(Ordinal).
+  Constructors = 팀별 점수 합, 동점은 우승 수 → 팀 이름 오름차순(Ordinal) → 팀 ID 오름차순.
+- 이유: 스프린트 우승을 GP 우승으로 세면 실제 F1 규칙과 어긋난다. 이중 집계 방지는 가정(§3.3)이 틀렸을 때의 안전장치다.
+- 영향: [12](./12-seasons-sessions.md) §7.3, backend, app
+
+### D-32. 시즌 안의 드라이버 식별 = 플레이어 → 게임 드라이버 ID → 이름+차 번호
+- **결정:** `isPlayer`(그 PC의 플레이어 차)이면 `player`, 게임 드라이버 ID가 있으면 `driver:{id}`, 없으면(네트워크 사람 등) `name:{정규화한 이름}#{차 번호}`.
+  참가자 정보를 못 받은 차는 `car:{SessionRef}:{carIndex}` — 그 세션 안에서만 유일하다(다른 라운드의 다른 드라이버와 합쳐지지 않게).
+- 이유: 커리어에서 플레이어의 드라이버 ID는 게임마다 특수값일 수 있고, 온라인 사람은 ID가 `NetworkHuman`(65535)이다.
+- 영향: [12](./12-seasons-sessions.md) §4.4, backend
+
+### D-33. 팀 이름·색 = 백엔드의 게임별 정적 카탈로그
+- **결정:** `(gameCode, teamId)` → 표시 이름·색(hex). F1 25의 2025 팀 10개, 2024 차량 10개, 2026 시즌팩 팀 11개, My Team(104), F1 Generic(41)을 넣고,
+  없는 ID는 `Team {id}` + 중립 회색으로 보인다. API가 `teamName`·`teamColor`를 내려 주어 앱은 매핑하지 않는다.
+- 이유: 상수 표(불변)라 헌장의 "Global Static 금지"(가변 전역 상태)에 해당하지 않는다. `GameCodes`와 같은 성격이다.
+- 영향: [04](./04-api-design.md), [12](./12-seasons-sessions.md) §7.4, backend
+
+### D-34. 남의 시즌·세션 조회 = 404
+- **결정:** 조회 API는 모두 `sub` 기준으로 내 것만 찾는다. 남의 ID는 없는 ID와 똑같이 404를 돌려준다(존재 여부를 알려 주지 않는다).
+  (P6의 장치 해제는 쓰기 작업이라 403을 유지한다.)
+- 영향: [04](./04-api-design.md), backend
+
+---
+
+## 결정 요약 (전체 확정 ✅ · 2026-07-06, 2026-10-17 P6 갱신, 2026-10-18 P7 갱신)
 
 | ID | 결정 | 반영 문서 |
 |---|---|---|
@@ -232,6 +292,13 @@ invalid 랩도 우선 기록은 해두고 랭킹 집계에서는 사용하지 �
 | D-25 | **개인 모드 전환**: 매장·좌석·체크인 제거, 랩 귀속 = 계정에 연결된 Agent 장치(장치 주인) | 00, 02~07, 11, backend, agent, app |
 | D-26 | Agent 계정 연결 = 1회용 연결 코드(10분) → 장치별 키(`X-Agent-Key`, SHA-256 해시 저장, `deviceId`·`sub` 클레임) | 04, 05, 06, 11, backend, agent |
 | D-27 | 랭킹 기간 경계 타임존 = 서버 설정 `Ranking:TimeZoneId`(기본 `Asia/Seoul`, 시작 시 검증) | 03, 04, 11, backend |
+| D-28 | 세션 결과 수집 = 세션당 최종 순위표 1건(`SessionClassified`, Participants·Final Classification을 Agent가 합침) | 05, 06, 12, agent, backend |
+| D-29 | 시즌·주말·세션 식별 = 게임 링크 식별자(시즌 대상 모드만), 세션 키 `link:`/`uid:`, 같은 키는 최신 결과로 병합, `Lap.SessionKey` 저장 | 02, 03, 12, backend, agent |
+| D-30 | Sessions 목록 = 최종 순위가 확정된 세션만, Time Trial 제외(Agent·백엔드 모두) | 06, 12, backend, agent |
+| D-31 | Standings = 기록된 세션 점수 합, 우승·포디움·카운트백은 본 레이스만, 같은 주말·종류는 최신 1건, Constructors 포함 | 12, backend, app |
+| D-32 | 시즌 안의 드라이버 식별 = `player` → `driver:{id}` → `name:{이름}#{번호}` (→ `car:{SessionRef}:{carIndex}`) | 12, backend |
+| D-33 | 팀 이름·색 = 백엔드의 게임별 정적 카탈로그(`TeamCatalog`), 앱은 매핑하지 않음 | 04, 12, backend |
+| D-34 | 남의 시즌·세션 조회 = 404(없는 것과 동일) | 04, backend |
 
 **MVP 관련 결정은 모두 확정되어 각 문서에 반영 완료.** 본 설계 문서 세트 최종 승인 시,
 **Phase 0(계약 & 스캐폴딩)** 상세 설계로 진입합니다.

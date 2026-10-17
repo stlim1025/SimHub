@@ -1,8 +1,9 @@
 # 05 · SignalR Event Design
 
-> Status: **Design (미승인)** · Last Updated: 2026-10-17 (P6 개인 모드 반영)
+> Status: **Design (미승인)** · Last Updated: 2026-10-18 (P7 `SessionClassified` 반영, 앞서 P6 개인 모드 반영)
 > 계약 원본: `shared/schema/*.json`. 두 개의 Hub로 **인입(Ingest)**과 **브로드캐스트(Broadcast)**를 분리한다.
 > P6에서 Agent 인증이 좌석 키에서 **장치 키**로 바뀌었고 envelope의 `rigCode`가 사라졌다(D-25·D-26, [11](./11-personal-mode.md) §5).
+> P7에서 이벤트 유형 `SessionClassified`(세션당 최종 순위표 1건)와 인입 메시지 한도(`TelemetryHub.MaxMessageBytes` 64KiB)가 추가됐다(D-28, [12](./12-seasons-sessions.md) §5.5·§6).
 
 ---
 
@@ -62,13 +63,37 @@
 | `SectorCompleted` | `{ sessionRef, lapNumber, sectorNumber, sectorTimeMs }` |
 | `LapFinished` | `{ sessionRef, lapNumber, lapTimeMs, sectors[], isValid, trackId }` — sectors는 가변 배열(D-7) |
 | `SessionEnded` | `{ sessionRef }` |
+| `SessionClassified` (P7) | `{ sessionRef, trackId, sessionType, sessionKind, gameMode, seasonLinkId, weekendLinkId, sessionLinkId, totalLaps, aiDifficulty, isNetworkGame, results[] }` — 세션당 최종 순위표 1건(D-28) |
 
 `sectors[]` = `[{ sectorNumber, sectorTimeMs }, ...]` (게임별 개수 상이).
 `sessionType` = 게임 세션 모드. 랭킹 적격 판정은 Backend가 수행(D-15/D-16).
 
-- `sessionRef` = Agent 로컬 게임세션 식별자(`m_sessionUID`). P6 서버는 저장에 쓰지 않는다(P7에서 시즌·세션 묶음에 활용 예정).
+- `sessionRef` = Agent 로컬 게임세션 식별자(`m_sessionUID`). P7부터 서버가 `GameSession.SessionRef`로 저장한다.
+- **`LapFinished` 선택 필드(P7):** `gameMode`, `seasonLinkId`, `weekendLinkId`, `sessionLinkId`. 서버가 `Lap.SessionKey`를 계산해 저장한다(조회는 P8). 옛 Agent는 보내지 않으며 이때 키는 `uid:{sessionRef}`다.
 - `trackId` = 게임 UDP의 트랙 정수 ID → Backend가 Track 마스터로 변환.
 - **귀속:** 서버는 envelope이 아니라 **인증된 장치**를 신뢰한다. `Lap.UserId = device.UserId`, `Lap.AgentDeviceId = device.Id`.
+
+**`SessionClassified` payload (P7 · D-28)** — 계약 원본 `shared/schema/session_classified.json`, 예시 `shared/samples/telemetry_session_classified_envelope.json`(22대)
+```jsonc
+{
+  "sessionRef": "1844674407370955161", "trackId": 10,
+  "sessionType": "Race", "sessionKind": "Race", "gameMode": "DriverCareer",       // enum은 문자열
+  "seasonLinkId": 2847561234, "weekendLinkId": 99112233, "sessionLinkId": 44556677,
+  "totalLaps": 29, "aiDifficulty": 85, "isNetworkGame": false,
+  "results": [ {
+      "carIndex": 3, "isPlayer": true,
+      "position": 1, "gridPosition": 2, "numLaps": 29, "points": 25,
+      "numPitStops": 1, "numPenalties": 0, "resultStatus": "Finished",
+      "bestLapTimeMs": 81234, "totalRaceTimeMs": 2493120, "penaltiesTimeMs": 0,
+      "driverName": "S. LIM", "gameDriverId": null, "teamId": 2, "raceNumber": 26, "isAiControlled": false,
+      "tyreStints": [ { "endLap": 14, "visualCompound": "Medium", "actualCompound": "C3" },
+                      { "endLap": 29, "visualCompound": "Hard", "actualCompound": "C2" } ] } ]
+}
+```
+- Agent가 Final Classification 패킷과 같은 세션의 Session·Participants 정보를 `carIndex`로 합쳐 만든다. **같은 `sessionRef`로는 한 번만** 보낸다(raw 패킷은 보내지 않는다).
+- 참가자 정보가 없는 차는 `driverName`·`gameDriverId`·`teamId`·`raceNumber`가 null, `isAiControlled`가 false다.
+- enum 문자열(`sessionType`·`sessionKind`·`gameMode`·`resultStatus`·`visualCompound`)은 대소문자를 무시하고 해석하며, **모르는 값은 0번 대체값**(`Other`/`Unknown`)으로 받는다(게임 업데이트로 값이 늘어도 세션당 한 번뿐인 이벤트를 잃지 않는다).
+- `Time Trial` 순위표는 저장하지 않고 Ack한다(D-30). 같은 세션 키로 다시 오면 최신 결과로 병합한다(D-29).
 
 ### 2.5 서버 응답 (Ack / Reject)
 
@@ -77,7 +102,7 @@ D-23 정련: `SubmitEvent`는 별도 S→C 메서드 대신 **반환값 `IngestR
 | 응답 | 용도 |
 |---|---|
 | Ack | 수신·처리 확인 → Agent가 Outbox에서 flush |
-| Reject(reason) | 영구 무효(파싱 실패·트랙 매핑 없음). Agent는 Outbox에서 폐기, 서버는 로깅 |
+| Reject(reason) | 영구 무효(파싱 실패·트랙 매핑 없음·검증 실패). Agent는 Outbox에서 폐기, 서버는 로깅 |
 | Reject("연결이 해제된 장치입니다.") | **예외:** 이벤트가 아니라 장치 키가 무효. Agent는 그 항목을 **Outbox에 남기고** 업로드를 멈춘 뒤 `다시 연결 필요`로 바뀐다(401과 같은 처리) |
 
 > **멱등성:** Backend는 `eventId`로 중복을 걸러낸다(재전송 안전). Agent는 응답을 받을 때까지 Outbox 보관(무응답만 재전송).
@@ -86,6 +111,26 @@ D-23 정련: `SubmitEvent`는 별도 S→C 메서드 대신 **반환값 `IngestR
 > Agent `TelemetryUploadService.RevokedDeviceRejectReason`, 바꿀 때 함께 바꾼다). 세션을 닫고 다른 키가 저장될 때까지 기다리며,
 > 같은 키로 새로 연결하면 401이다. 새 코드로 다시 연결하면 남겨 둔 항목부터 올라간다([11](./11-personal-mode.md) §6.4).
 > `AgentDevice.LastSeenAt`은 모든 이벤트 유형에서 갱신하되 1분에 한 번만 쓴다.
+
+**`SessionClassified`의 응답 (P7)**
+
+| 결과 | 조건 | 응답 |
+|---|---|---|
+| Stored | 새 세션 저장 또는 같은 세션 키 병합 | Ack + 멱등 기록 |
+| Ignored | Time Trial(`sessionType`/`gameMode`), 이미 저장된 것보다 이른 옛 결과 | Ack + 멱등 기록(변경 없음) |
+| Rejected | 아래 사유 | Reject(reason) — 영구 무효 |
+
+Reject 사유(고정 문구): `"SessionClassified payload 파싱 실패"`, `"SessionClassified payload가 비어 있습니다."`, `"SessionClassified 검증 실패: {상세}"`,
+트랙 없음은 랩과 같은 `"트랙 매핑 없음(gameCode=…, trackId=…)"`. 검증은 DB 열 제약에 걸릴 값(길이·NUL·음수 등)을 모두 여기서 거른다 — 저장 시점 예외는 허브 오류로 Agent에 돌아가 같은 항목이 끝없이 재시도되기 때문이다.
+
+### 2.6 메시지 크기 한도 (P7)
+
+- 허브가 받는 메시지의 최대 크기는 **`TelemetryHub.MaxMessageBytes` = 64KiB**(`AddHubOptions<TelemetryHub>`로 명시, SignalR 기본 32KB에 기대지 않는다).
+  한도를 넘는 메시지는 Reject가 아니라 **연결 종료**라 Agent가 같은 Outbox 항목을 끝없이 재시도하게 되므로, 서버가 한도를 정하고 Agent가 먼저 지킨다.
+- Agent는 Outbox에 넣기 전에 직렬화 크기(UTF-8 바이트)를 재서 **48KiB**(`OutboxTelemetrySink.MaxEnvelopeBytes`)를 넘으면 `SessionClassified`의 타이어 스틴트를 빼고 다시 잰다(경고 로그).
+  그래도 넘거나 다른 유형이면 적재하지 않고 오류 로그를 남긴다.
+- 실측: 검증 상한 `SessionClassified`(32대 × 8스틴트, 비ASCII 이름 64자)는 SignalR 와이어에서 약 32~34KB(기본 JSON 인코더가 비ASCII를 `\uXXXX`로 escape). 게임 최대(24대 × 8스틴트)는 Agent 쪽 직렬화(UTF-8) 기준 약 24KB(이름이 검증 한도인 비ASCII 64자까지 길어도 약 32KB). 22대 × 스틴트 2~3개는 약 10KB로 추정한다(측정하지 않음).
+- 배포 순서: **백엔드 → Agent**. 옛 백엔드는 모르는 이벤트 유형을 Ack하고 버리므로(데이터 손실) 새 Agent를 먼저 배포하면 안 된다.
 
 ---
 
@@ -164,6 +209,7 @@ Agent                TelemetryHub          Backend App-Service        RankingHub
 ## 6. 결정 반영/기본값
 
 - **D-26 ✅** Agent 인증 = 장치별 키(1회용 연결 코드로 교환, SHA-256 해시 저장) (~~D-12/D-21 좌석 API Key~~ 대체)
+- **D-28 ✅** 세션 결과 = 이벤트 유형 `SessionClassified`(세션당 최종 순위표 1건). 허브 메시지 한도 64KiB 명시
 - **D-13** 이벤트 순서 보장 = 세션 단위 (기본값)
 - **D-7 ✅** LapFinished 섹터 = 가변 배열
 - **D-16 ✅** SessionStarted에 sessionType 포함, 실시간 랭킹은 Time Trial만 브로드캐스트

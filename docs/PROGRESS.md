@@ -1,20 +1,26 @@
 # PROGRESS — 진행 상황 / 인수인계
 
-> Last Updated: 2026-10-17
+> Last Updated: 2026-10-18
 > **이 문서 목적:** 다른 PC·다른 세션에서도 작업을 그대로 이어가기 위한 단일 상태 파일.
-> 새 세션은 이 파일 → `CLAUDE.md` → `docs/00~11` 순으로 읽으면 맥락이 복원된다.
+> 새 세션은 이 파일 → `CLAUDE.md` → `docs/00~12` 순으로 읽으면 맥락이 복원된다.
 > (주의: AI 메모리는 머신 로컬(`~/.claude`)이라 이동하지 않는다. **진행 상태의 진실 원천은 이 문서**다.)
 
 ---
 
 ## 1. 한 줄 상태
 
-**Phase 6(개인 모드 전환 + 웹 셸) 완료 — 카페 모델(매장·좌석·체크인)을 개인 모델로 전환. 웹에서 1회용 연결 코드를 받아
+**Phase 7(시즌·세션 결과 수집) 완료 — Agent가 세션 끝의 최종 순위표를 Participants와 합쳐 `SessionClassified` 1건으로 보내고, 백엔드가
+게임 링크 식별자로 시즌 → 그랑프리 주말 → 세션 → 드라이버별 결과(AI 포함)를 저장한다. 앱은 Seasons(Season · Results · Standings 탭)·Sessions 화면을 갖는다.
+테스트: Backend 363(Domain 49 + Application 278 + 통합 36) · Agent 189(Core 41 + Infrastructure 148) · App 303 전부 통과, `flutter analyze` 이슈 0,
+빌드 경고 0. **게임으로 확인한 것은 아직 없다** — [12](./12-seasons-sessions.md) §3.3의 가정 8개와 실제 Final Classification 수신은 F1 25로 확인해야 한다
+([TESTING-local-e2e.md](./TESTING-local-e2e.md) §10). 다음 = P8 세션 상세.**
+
+(이전) Phase 6(개인 모드 전환 + 웹 셸) 완료 — 카페 모델(매장·좌석·체크인)을 개인 모델로 전환. 웹에서 1회용 연결 코드를 받아
 Agent가 `pair`(장치별 키, DPAPI 저장)로 내 계정에 연결하고, 랩은 장치 주인에게 귀속된다. 앱은 사이드바 셸
 (Dashboard · Laps · Leaderboard · Telemetry App). 테스트: Backend 95(Domain 3 + Application 76 + 통합 16) ·
 Agent 95(Core 19 + Infrastructure 76) · App 127 전부 통과, `flutter analyze` 이슈 0, 빌드 경고 0
 (NuGet 취약성 권고 NU1902/NU1903도 해소 — SignalR.Client·Data.Sqlite 10.0.13, Cryptography.Xml/Pkcs 10.0.13 고정).
-헤드리스 통합 확인(가입→코드 발급→`pair`→허브 연결→장치 목록→해제→Agent 401 중단) 통과, 랩 단계만 F1 25 없어 보류. 다음 = P7 시즌·세션 수집.**
+헤드리스 통합 확인(가입→코드 발급→`pair`→허브 연결→장치 목록→해제→Agent 401 중단) 통과, 랩 단계만 F1 25 없어 보류.
 
 (이전) Phase 5(Flutter MVP 앱) 완료 — MVP 스코프 달성. 앱: Splash→Login→Home→Today's Ranking(실시간)
 →My Lap Record 풀 라우팅, Riverpod+GoRouter+dio(REST)+signalr_netcore(RankingHub 구독/재동기화).
@@ -37,10 +43,10 @@ Agent 95(Core 19 + Infrastructure 76) · App 127 전부 통과, `flutter analyze
 ## 2. 리포지토리 현재 상태
 
 - 위치(개발 PC 기준): `D:\Project\SimHub` (경로는 환경마다 다를 수 있음)
-- 형상: **Phase 0~6 완료.** 계약 스펙 + 3개 솔루션이 구현됨. 빌드·테스트 통과 확인. (브랜치 `feat/p6-personal-mode`에서 P6 작업)
+- 형상: **Phase 0~7 완료.** 계약 스펙 + 3개 솔루션이 구현됨. 빌드·테스트 통과 확인. (브랜치 `feat/p6-personal-mode`에서 P6, `feat/p7-seasons-sessions`에서 P7 작업 — 머지 여부는 git으로 확인)
   ```
   CLAUDE.md                        # 프로젝트 헌장(압축본)
-  docs/00~11 + PROGRESS.md + TESTING-local-e2e.md   # 설계 문서 + 진행 상황 + 로컬 E2E 가이드
+  docs/00~12 + PROGRESS.md + TESTING-local-e2e.md   # 설계 문서 + 진행 상황 + 로컬 E2E 가이드
   global.json                      # .NET 10 SDK 버전 고정
   shared/                          # 계약(Contract) — OpenAPI, JSON Schema, Telemetry Spec, Samples
   backend/                         # ASP.NET Core 10 Clean Architecture (빌드 ✅)
@@ -68,7 +74,8 @@ Agent 95(Core 19 + Infrastructure 76) · App 127 전부 통과, `flutter analyze
    | `09-lap-telemetry-trace.md` | 상세 텔레메트리 조회(Future 설계) |
    | `10-realtime-ingest.md` | P3 실시간 인입 As-Built (P6 반영) |
    | `11-personal-mode.md` | P6 개인 모드 전환 + 웹 셸 설계·구현 기록 |
-   | `TESTING-local-e2e.md` | 로컬 E2E 가이드 (웹 가입 → 코드 발급 → `pair` → 주행 확인) |
+   | `12-seasons-sessions.md` | P7 시즌·세션 결과 수집 설계·구현 기록 (D-28~34, 구현 중 달라진 점 §14) |
+   | `TESTING-local-e2e.md` | 로컬 E2E 가이드 (웹 가입 → 코드 발급 → `pair` → 주행 확인 → §10 시즌·세션 게임 확인) |
 2. **핵심 결정 D-1~D-16 + D-8a 전부 확정** (§5 참조), 각 문서 반영 완료. (P6에서 D-1·D-2·D-10·D-12·D-21·D-22는 D-25로 대체)
 3. **사용자 최종 승인 완료** (설계 세트 approve).
 4. **`CLAUDE.md` 압축 재작성** (646줄 → 71줄, 상세는 docs로 위임).
@@ -192,23 +199,48 @@ Agent 95(Core 19 + Infrastructure 76) · App 127 전부 통과, `flutter analyze
      `GET /me/agent-devices`에 PC 이름·`lastSeenAt null` → Cli 실행 로그 `TelemetryHub 연결됨` → `DELETE /me/agent-devices/{id}` 204 →
      Agent 재시작 시 401 경고로 업로드 중단("다시 연결이 필요합니다") → 같은 코드 재사용 400, 잘못된 코드 연타 시 429. 끝난 뒤 `device.key` 삭제(PC 미연결 상태로 복원).
      **F1 25가 없어 랩 업로드 단계는 보류**(§4-B). Flutter 화면은 브라우저 육안 확인 대상.
+13. **Phase 7 — 시즌·세션 결과 수집 (완료: Backend 363 · Agent 189 · App 303 통과, analyze 이슈 0, 빌드 경고 0):** 설계 [docs/12](./12-seasons-sessions.md), 결정 D-28~34, 구현 중 달라진 점 §14.
+   - **Backend:**
+     - Domain: enum 4종(`GameMode`·`SessionKind`·`ResultStatus`·`TyreCompound`), 엔티티 5종(`Season`·`RaceWeekend`·`GameSession`·`SessionResult`·`SessionResultTyreStint`),
+       순수 규칙 `SeasonPolicy`·`SessionKeys`·`DriverKeys`, 재분류 병합 `GameSession.ReplaceResults`(carIndex 제자리 갱신 + soft delete, `Remove`·`Clear` 금지).
+     - Application(`Seasons/Ingest`): `SessionClassificationIngestor`(파싱 → 검증 → Time Trial Ignored → 트랙 → 분류 시각 → 세션 찾기 → 늦은 결과 Ignored → 시즌·주말 업서트 → 세션 생성·병합),
+       `SessionClassificationValidator`(DB 열 제약에 걸릴 값을 모두 Reject), 모르는 enum 문자열은 0번 대체값(`LenientEnum`). `TelemetryIngestService`가 유형별로 분기하고 `Lap.SessionKey`를 저장.
+       `Seasons/Queries`: `SeasonQueryService`·`SessionQueryService`, 순수 계산 `SeasonSessionSelector`·`StandingsCalculator`·`RoundNumbering`, 정적 `TeamCatalog`.
+       읽기 포트는 `ISeasonQueryRepository`·`IGameSessionQueryRepository`로 쓰기 포트와 분리.
+     - Infrastructure: 설정 5종(모든 unique index에 `is_deleted = false` 필터, `Id`는 `ValueGeneratedNever`), 저장소 4종, **마이그레이션 `AddSeasonsAndSessions`**(가산적: 테이블 5개 + `laps.session_key`).
+     - Api: `GET /me/seasons`·`/me/seasons/{id}`·`/me/sessions`(`sessionType` 필터)·`/me/sessions/{id}`(남의 것 = 404), `TelemetryHub.MaxMessageBytes` = 64KiB 명시.
+   - **Agent:** Core — enum 4종·프레임(`ParticipantsFrame`·`ClassificationFrame`, `SessionFrame` 필드 추가)·`SessionResultTracker`·`ITelemetryAnalyzer`, `LapFinished`에 `gameMode`·링크 3개.
+     Infrastructure — `F1PacketMapper`가 Participants(4)·Final Classification(8)을 매핑(`F1EnumMaps`, 빈 칸 제외, 깨진 시간값 보정, 이름 NUL 절단),
+     `TelemetryPipeline`이 분석기 목록을 분석기별 try/catch로 실행, `OutboxTelemetrySink`가 적재 전 48KiB 검사(초과 시 스틴트를 빼고 재시도).
+   - **App:** `features/seasons`(Seasons 목록 · 시즌 상세 Season/Results/Standings 탭)·`features/sessions`(Sessions 목록 + 필터 · 세션 결과), 경로 `/seasons`·`/seasons/:seasonId?tab=`·`/sessions?type=`·`/sessions/:sessionId`,
+     사이드바 순서 Dashboard · Seasons · Sessions · Laps · Leaderboard · Telemetry App. 공용 위젯 `PaginationBar`·`NotFoundState`·`Stat`·`TeamColorBar`·`AiBadge`·`EmptyStateCard`(`core/widgets`), `parseHexColor`(`core/util`).
+   - **계약·문서:** `shared/schema/session_classified.json`(신규)·`telemetry_envelope.json`·`lap_finished.json`, `shared/samples/telemetry_session_classified_envelope.json`(22대), `shared/openapi/openapi.yaml`,
+     `CLAUDE.md`·`docs/02~06·08·11·12`·`TESTING-local-e2e.md` 갱신.
+   - **검증 범위:** 단위·통합 테스트(PostgreSQL 통합 36개: 허브 → 인입 → 조회 API, 병합, 64KiB 한도 회귀, 404/400/401). **F1 25로는 확인하지 못했다** — Final Classification 수신,
+     Participants 레이아웃, 링크 식별자 동작 등 §3.3의 가정 8개는 미확인([TESTING-local-e2e.md](./TESTING-local-e2e.md) §10).
 
 ---
 
 ## 4. 다음 할 일 (미완료) ⬜
 
-**Phase 6 완료 → 다음 = P7 시즌·세션 수집**(`SeasonLinkIdentifier`/`WeekendLinkIdentifier`/`SessionLinkIdentifier`로 시즌 → 그랑프리 → 세션을 묶고,
-`FinalClassification`·`Participants`로 전 드라이버 결과·Standings 저장 → Seasons·Sessions 화면). 설계 → 리뷰 → 계획 → 구현 → 리뷰 순서로 착수한다(로드맵: [07](./07-roadmap.md), [11](./11-personal-mode.md) §0).
-이후 P8 세션 상세 → P9 랩 상세·텔레메트리 → P10 Analytics → P11 Agent 배포.
+**Phase 7 완료 → 다음 = P8 세션 상세**(랩별 랩타임, 타이어 스틴트별 마모·랩타임, 패널티 내역, 그랑프리 주말 상세 화면. `Lap.SessionKey`로 랩과 세션을 잇는다).
+설계 → 리뷰 → 계획 → 구현 → 리뷰 순서로 착수한다(로드맵: [07](./07-roadmap.md), [11](./11-personal-mode.md) §0).
+이후 P9 랩 상세·텔레메트리 → P10 Analytics → P11 Agent 배포.
 
 ### 4-A. 이월분
 - Agent **자동실행(Windows 시작 등록)** — Tray 부팅 시 자동 기동/재접속. (설치 파일·자동 업데이트와 함께 P11에서 다룰 후보)
-- P6 웹 화면의 육안 확인(브라우저)은 컨트롤러 확인 대상.
+- P6 웹 화면의 육안 확인(브라우저)은 컨트롤러 확인 대상. P7의 Seasons·Sessions 화면도 같다(테스트는 통과했지만 브라우저로 본 적은 없다).
+- P7 이월: Agent Outbox의 독성 항목 처리(같은 항목이 허브 예외로 계속 실패하면 dead-letter로 옮겨 뒤의 항목을 막지 않기, [12](./12-seasons-sessions.md) §12),
+  시즌 이름 변경·삭제·숨기기, Dashboard 시즌 카드, Seasons·Sessions 실시간 갱신, 세션 Details 탭(P8).
+- P7 리뷰에서 미뤄 둔 알려진 사항: ① Agent 매퍼가 Final Classification의 `Position`(byte)을 자르지 않는다 — 32를 넘는 깨진 값이면 백엔드 검증이 그 세션을 Reject해 1건을 잃는다(빈 칸으로 취급하는 보정 후보).
+  ② 앱의 화면 내부 위젯 중복(`_DriverCell`, 표 스캐폴드 등)과 sessions ↔ seasons 기능 간 상호 import는 정리하지 않았다. ③ `TelemetryHub.MaxMessageBytes` 주석의 "약 30KB"는 실측(32~34KB)과 다르다([12](./12-seasons-sessions.md) §14).
 
 ### 4-B. 라이브 검증(하드웨어 의존, 보류 항목)
 - Agent Cli/Tray를 실 F1 25(UDP 20777)로 지향해 SessionStarted→LapStarted→SectorCompleted→LapFinished 로그 관찰,
   Time Trial 1랩 후 Laps·Leaderboard·Dashboard 반영 확인([TESTING-local-e2e.md](./TESTING-local-e2e.md) §5).
   현재는 게임/장비 없어 단위테스트 + 통합(E2E) + 헤드리스 연결 확인까지만 검증됨.
+- **P7 게임 확인:** 커리어에서 예선·레이스를 결과 화면까지 진행 → Agent 로그에서 `SessionClassified` 1건 → `/seasons`·`/sessions` 확인, 그리고 [12](./12-seasons-sessions.md) §3.3의 가정 8개 확인.
+  절차와 체크리스트는 [TESTING-local-e2e.md](./TESTING-local-e2e.md) §10. 결과는 12 §3.3 "확인 결과" 열에 적는다.
 
 ### 4-C. 확정 범위 메모
 - Phase 1 = Auth만(세션 유스케이스 P3로 연기, 엔티티 스키마는 선반영).
@@ -251,6 +283,13 @@ Agent 95(Core 19 + Infrastructure 76) · App 127 전부 통과, `flutter analyze
 | **D-25** | **개인 모드 전환: 매장·좌석·체크인 제거, 랩 귀속 = 계정에 연결된 Agent 장치(장치 주인)** |
 | **D-26** | **Agent 계정 연결 = 1회용 연결 코드(10분) → 장치별 키(`X-Agent-Key`, SHA-256 해시, DPAPI 로컬 저장, `deviceId`·`sub` 클레임)** |
 | **D-27** | **랭킹 기간 경계 타임존 = 서버 설정 `Ranking:TimeZoneId`(기본 `Asia/Seoul`, 시작 시 검증)** |
+| **D-28** | **세션 결과 수집 = 세션당 최종 순위표 1건(`SessionClassified`, Agent가 Participants·Final Classification을 합침)** |
+| **D-29** | **시즌·주말·세션 식별 = 게임 링크 식별자(시즌 대상 모드만), 세션 키 `link:`/`uid:`, 같은 키는 최신 결과로 병합, `Lap.SessionKey` 저장** |
+| **D-30** | **Sessions = 최종 순위가 확정된 세션만, Time Trial 제외(Agent·백엔드 모두)** |
+| **D-31** | **Standings = 기록된 세션 점수 합, 우승·포디움·카운트백은 본 레이스만, 같은 주말·종류는 최신 1건, Constructors 포함** |
+| **D-32** | **시즌 안의 드라이버 식별 = `player` → `driver:{id}` → `name:{이름}#{번호}`(→ `car:{SessionRef}:{carIndex}`)** |
+| **D-33** | **팀 이름·색 = 백엔드의 게임별 정적 카탈로그(`TeamCatalog`)** |
+| **D-34** | **남의 시즌·세션 조회 = 404(없는 것과 동일)** |
 
 **Future 결정(해당 Phase 착수 시 결정, 지금 불필요):** D-17(트레이스 저장 원칙 해석), D-18(트레이스 저장소), D-19(샘플링·채널·보존). → `docs/09`
 
@@ -262,7 +301,7 @@ Agent 95(Core 19 + Infrastructure 76) · App 127 전부 통과, `flutter analyze
 2. .NET 10 SDK 설치: `dotnet-install.ps1 -Channel 10.0` 또는 공식 인스톨러.
 3. Flutter SDK 설치 (Android/iOS/Web 타겟).
 4. 새 세션에서 읽는 순서: **이 `PROGRESS.md` → `CLAUDE.md` → `docs/08`(결정) → 필요한 설계 문서.**
-5. 진행 지점: **§4 "다음 할 일" = P7 시즌·세션 수집 설계 착수.** 코드 착수 전 설계안 리뷰부터. (P6 브랜치 `feat/p6-personal-mode`의 머지 여부는 git으로 확인)
+5. 진행 지점: **§4 "다음 할 일" = P8 세션 상세 설계 착수.** 코드 착수 전 설계안 리뷰부터. (P6·P7 브랜치 `feat/p6-personal-mode`·`feat/p7-seasons-sessions`의 머지 여부는 git으로 확인)
 6. 작업 규칙(헌장): 설계 → 리뷰 → 구현 → 리뷰. 추측 금지, 불확실하면 질문. 구조 임의 변경 금지.
 7. 로컬에서 직접 돌려 보려면 [TESTING-local-e2e.md](./TESTING-local-e2e.md) (가입 → 연결 코드 → `pair` → 주행).
 

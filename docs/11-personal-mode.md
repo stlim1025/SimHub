@@ -16,7 +16,7 @@ F1Laps와 비슷한 구성(Dashboard · Seasons · Sessions · Laps · Analytics
 | 단계 | 내용 | 결과물 |
 |---|---|---|
 | **P6** | 개인 모드 전환 + 웹 셸 (**이 문서**) | 내 PC의 Agent로 내 랩이 쌓이고, 새 레이아웃이 보인다 |
-| P7 | 시즌·세션 수집. `SeasonLinkIdentifier` / `WeekendLinkIdentifier` / `SessionLinkIdentifier`로 시즌 → 그랑프리 → 세션을 묶고, `FinalClassification`·`Participants`로 AI 포함 전 드라이버 결과를 저장하며 Standings를 계산한다 | Seasons(Season/Results/Standings) · Sessions 화면 |
+| P7 ([12](./12-seasons-sessions.md)) | 시즌·세션 수집. `SeasonLinkIdentifier` / `WeekendLinkIdentifier` / `SessionLinkIdentifier`로 시즌 → 그랑프리 → 세션을 묶고, `FinalClassification`·`Participants`로 AI 포함 전 드라이버 결과를 저장하며 Standings를 계산한다 | Seasons(Season/Results/Standings) · Sessions 화면 |
 | P8 | 세션 상세: 랩별 랩타임, 타이어 스틴트별 마모·랩타임, 패널티 | 그랑프리 상세 · 세션 Details 화면 |
 | P9 | 랩 상세 + 텔레메트리 트레이스([09](./09-lap-telemetry-trace.md), D-17~19). 섹터 비교(내 최고 기록 대비), 스로틀·브레이크·스티어링 | 랩 상세(Telemetry 탭 포함) |
 | P10 | Analytics(트랙별 AI 난이도 등) | Analytics 화면 |

@@ -1,6 +1,6 @@
 # CLAUDE.md — SimCenter Project Constitution
 
-> Last Updated: 2026-10-17 · 상세 설계는 `docs/00~11` 참조. 헌장과 설계가 충돌하면 헌장이 우선.
+> Last Updated: 2026-10-18 · 상세 설계는 `docs/00~12` 참조. 헌장과 설계가 충돌하면 헌장이 우선.
 
 ## Overview
 SimCenter는 **개인용 F1 기록·시즌·텔레메트리 플랫폼**이다(D-25). 사용자가 자기 PC에 Agent를 설치해 계정에 연결하면
@@ -39,7 +39,7 @@ EF Core Code First + Migration. JWT 인증. 실시간은 SignalR, 조회는 REST
 
 ## Agent Rules
 모든 UDP 패킷을 보내지 않는다. **의미 있는 도메인 이벤트만** 전송
-(SessionStarted/LapStarted/SectorCompleted/LapFinished/SessionEnded).
+(SessionStarted/LapStarted/SectorCompleted/LapFinished/SessionEnded/SessionClassified — 마지막은 세션당 최종 순위표 1건).
 Raw 패킷 firehose는 서버로 흘리거나 원본 저장하지 않는다.
 오프라인 시 SQLite Outbox 저장 → 복구 시 자동 재전송(멱등키 + Ack). 자동 실행/재접속.
 **계정 연결:** 웹에서 받은 1회용 연결 코드를 장치별 키로 교환해 DPAPI로 저장하고, 허브는 그 키(`X-Agent-Key`)로 인증한다(D-26).
@@ -61,6 +61,7 @@ Magic Number·Global Static 금지. Null 체크·Exception 처리·Logging(Seril
 - 대상 게임 = **F1 25**(`F1_25`), 단 도메인은 게임 중립(가변 섹터·SessionType)
 - 섹터 = 가변 `LapSector` 테이블 · 무효 랩 저장하되 랭킹 제외(개별 조회 가능)
 - 랭킹 = Time Trial만, 일/월/연 지원. **실시간 랭킹 기본 기준 = 월별** · 기간 경계 타임존 = 서버 설정 `Ranking:TimeZoneId`
+- 시즌 묶음 = 게임 링크 식별자(시즌 대상 모드만, D-29) · Standings = 기록된 세션 점수 합, 우승·카운트백은 본 레이스만(D-31)
 
 ## Roadmap (상세: `docs/07`, P6~ `docs/11`)
 P0~P5 MVP(계약 → Backend 코어 → Agent Core → 실시간 인입 → 랭킹 → Flutter, 완료) →
