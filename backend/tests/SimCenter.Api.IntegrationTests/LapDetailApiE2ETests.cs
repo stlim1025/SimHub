@@ -75,6 +75,18 @@ public sealed class LapDetailApiE2ETests : IClassFixture<ApiFactory>
         Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync("/api/v1/me/laps/not-a-guid")).StatusCode);
     }
 
+    [Fact]
+    public async Task Swagger_DescribesLapDetailEndpoints()
+    {
+        var client = _factory.CreateClient();
+
+        var swagger = await client.GetFromJsonAsync<JsonElement>("/swagger/v1/swagger.json");
+
+        var paths = swagger.GetProperty("paths");
+        Assert.True(paths.TryGetProperty("/api/v1/me/laps/{lapId}", out _));
+        Assert.True(paths.TryGetProperty("/api/v1/me/laps/{lapId}/trace", out _));
+    }
+
     private static async Task AssertDetailAsync(HttpClient client, Guid currentId, Guid bestId, Guid trackId)
     {
         var detail = await client.GetFromJsonAsync<JsonElement>($"/api/v1/me/laps/{currentId}");
