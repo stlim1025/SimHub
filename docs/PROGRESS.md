@@ -9,7 +9,14 @@
 
 ## 1. 한 줄 상태
 
-**실제 게임 연동 버그 수정(D-41) — F1 25로 랩을 돌아도 기록이 저장되지 않던 문제. F1Game.UDP 26.0.0은 2026 시즌팩 레이아웃(24대)이라 실제 게임(F1 25 v1.26, 22대)의
+**P9 랩 상세·텔레메트리 + F1Laps 화면 맞추기(D-42~D-50, [15](./15-lap-detail-telemetry.md)) — 사용자 요청으로 P8보다 먼저. Flutter 유지(D-42).
+Laps = F1Laps 배치(국기 + 트랙 메뉴(F1 25 캘린더 순서) · TEAM·TIME·MODE·날씨·DATE 표 · 행 → 랩 상세), 랩 상세 3탭(Lap Details · Telemetry(동기화 십자선·내 최고 랩 비교·델타) · Your Best Laps),
+Agent가 랩 스냅샷(팀·타이어·손상·연료·ERS·날씨)과 5m 트레이스(7채널 + extra 118채널), 셋업·이벤트·세션 랩 기록까지 전부 수집(D-49), 새 랩은 웹에 실시간 알림(D-50).
+프로필 팀 로고는 `app/assets/team_logos/{CODE}.png`를 넣으면 보인다(파일은 상표라 저장소 밖, D-48). 허브 쿼리 토큰이 요청 로그에 찍히던 문제도 고침.
+테스트: Agent 398(Core 123 + Infrastructure 275) · Backend 626(Domain 66 + Application 495 + 통합 65) · App 539, `flutter analyze` 0, 빌드 경고 0.
+데모 데이터(가짜 랩)로 브라우저 확인 완료. **실제 게임으로 Car Telemetry·Status·Damage·Motion 등 새 패킷 해석은 아직 확인 못 함**(합성 바이트 테스트만) — 한 랩 돌고 랩 상세에서 확인할 것. 다음 = P8 세션 상세.**
+
+(이전) **실제 게임 연동 버그 수정(D-41) — F1 25로 랩을 돌아도 기록이 저장되지 않던 문제. F1Game.UDP 26.0.0은 2026 시즌팩 레이아웃(24대)이라 실제 게임(F1 25 v1.26, 22대)의
 Session·LapData를 모두 "바이트 부족"으로 버렸다 → 25.1.1로 교체, 해석 실패 경고 로그, 실제 패킷 회귀 테스트(`F1WireLayoutTests`). 캡처 재생으로 Tray → 허브 수신까지 확인,
 랩 저장(LapFinished)은 게임으로 한 랩 더 돌아 확인해야 한다. 테스트: Agent 246(Core 41 + Infrastructure 205) 통과.**
 

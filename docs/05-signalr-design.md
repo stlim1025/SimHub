@@ -147,7 +147,7 @@ Reject 사유(고정 문구): `"SessionClassified payload 파싱 실패"`, `"Ses
 | 이벤트(메서드명) | Payload | 설명 |
 |---|---|---|
 | `RankingUpdated` | `RankingSnapshot` | 특정 트랙 TOP10 갱신 |
-| `LapRecorded` | `LapRecordedNotice` | 새 유효 랩 저장됨(내 랩 목록 갱신 트리거) |
+| `LapRecorded` | `LapRecordedNotice` | 새 랩 저장됨(무효 랩 포함) — **그 랩 주인에게만**(`Clients.User`, JWT `sub`). 앱은 알림을 띄우고 랩 목록을 다시 불러온다(D-50, [15](./15-lap-detail-telemetry.md) §9) |
 | `PersonalBestAchieved` | `PersonalBestNotice` | 내 개인 최고 갱신 |
 
 ### 3.3 Client → Server (App이 호출)
@@ -173,9 +173,10 @@ Reject 사유(고정 문구): `"SessionClassified payload 파싱 실패"`, `"Ses
 
 // ↑ entries[].displayName: 랭킹 이름 비공개 사용자(showOnLeaderboard=false)는 "익명 드라이버"(D-39, 14 §6). REST /rankings와 같다.
 
-// LapRecorded
-{ "lapId": "guid", "userId": "guid", "trackId": "guid", "sessionType": "TimeTrial",
-  "lapTimeMs": 83452, "isValid": true, "isRankingEligible": true }
+// LapRecorded (D-50) — GET /me/laps의 랩 한 건(LapDto)과 같은 모양 + trackId. userId는 없다(받는 사람이 주인뿐).
+{ "lapId": "guid", "trackId": "guid", "trackName": "Jeddah", "gameCode": "F1_25", "sessionType": "TimeTrial",
+  "lapTimeMs": 98448, "sectors": [ … ], "isValid": true, "isRankingEligible": true, "setAt": "...",
+  "lapNumber": 6, "gameMode": "TimeTrial", "team": { "name": "Ferrari", "color": "#E8002D" }, "weather": "Clear", "hasTrace": true }
 
 // PersonalBestAchieved
 { "userId": "guid", "trackId": "guid", "lapTimeMs": 83452, "previousBestMs": 84120 }

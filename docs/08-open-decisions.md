@@ -363,6 +363,13 @@ invalid 랩도 우선 기록은 해두고 랭킹 집계에서는 사용하지 �
 - `assets/team_logos/{CODE}.png`가 있으면 팀 색 원 안에 로고, 없으면 D-39의 팀 색 원 + 코드. 로고 파일은 상표라 저장소에 넣지 않는다.
 - 영향: [03](./03-entity-design.md), [04](./04-api-design.md), [06](./06-telemetry-design.md), [09](./09-lap-telemetry-trace.md), [14](./14-profile-settings.md), [15](./15-lap-detail-telemetry.md), agent, backend, app, shared
 
+### D-49. 텔레메트리 전부 수집 (2026-10-18)
+- 사용자: "텔레메트리로 가져올 수 있는 건 일단 다 가져오자, 보여주는 건 차차." 플레이어 차·세션의 F1 25 UDP 값을 모두 랩·세션 단위로 정제해 저장한다(패킷 원본은 여전히 보내지 않음).
+- 새 값은 이름 붙은 묶음(트레이스 `extra`, 스냅샷 `details`, 세션 `details`)으로 저장해 화면을 정할 때 스키마를 바꾸지 않는다. 봉투 한도 Agent 768KiB · 허브 1MiB. 상세: [15](./15-lap-detail-telemetry.md) §8.
+
+### D-50. 새 랩 실시간 표시 (2026-10-18)
+- 사용자: "새 랩을 받으면 새로고침 없이 바로 띄워줬으면." 랩 저장 뒤 RankingHub로 주인에게만 `LapRecorded`(LapDto + trackId). 앱은 어느 화면이든 아래 알림 [보기] + 랩 목록·대시보드 갱신·새 행 강조. 화면을 저절로 넘기지는 않는다. 상세: [15](./15-lap-detail-telemetry.md) §9.
+
 ---
 
 ## 결정 요약 (전체 확정 ✅ · 2026-07-06, 2026-10-17 P6 갱신, 2026-10-18 P7 갱신)
@@ -415,6 +422,8 @@ invalid 랩도 우선 기록은 해두고 랭킹 집계에서는 사용하지 �
 | D-46 | 랩 상세 = `/laps/:lapId` 3탭, 비교 = 같은 트랙 내 최고 유효 랩 | 04, 15, backend, app |
 | D-47 | Laps = F1Laps 배치(마지막 트랙, 제목 트랙 메뉴, TEAM·TIME·MODE·날씨·DATE, 행 → 상세) | 15, app |
 | D-48 | 프로필 팀 로고 = `assets/team_logos/{CODE}.png` 있으면 표시(파일은 저장소 밖), 없으면 팀 색 원 | 14, 15, app |
+| D-49 | 텔레메트리 전부 수집: 트레이스 `extra` 채널 맵(118채널)·스냅샷 `details`(셋업·엔진 마모·이벤트 등)·세션 `lapHistory`·`lapPositions`, 봉투 768KiB / 허브 1MiB | 06, 15, agent, backend |
+| D-50 | 새 랩 실시간 표시: RankingHub `LapRecorded`를 주인에게만(LapDto + trackId, 무효 랩 포함), 앱은 알림 + 목록 갱신(자동 이동 없음) | 05, 15, backend, app |
 
 **MVP 관련 결정은 모두 확정되어 각 문서에 반영 완료.** 본 설계 문서 세트 최종 승인 시,
 **Phase 0(계약 & 스캐폴딩)** 상세 설계로 진입합니다.
