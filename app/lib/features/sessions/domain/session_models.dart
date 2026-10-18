@@ -1,3 +1,8 @@
+import '../../laps/domain/lap_models.dart';
+import 'session_detail_models.dart';
+
+export 'session_detail_models.dart';
+
 /// 세션 목록 한 줄(`GET /me/sessions`, docs/12 §7.2).
 /// 내 차 결과가 없으면 `my*`가 모두 null이고, 시즌에 속하지 않으면 [seasonId]가 null이다.
 /// 열거형(`sessionType`·`sessionKind`·`gameMode`·`myResultStatus`)은 서버가 준 문자열 그대로 둔다.
@@ -16,6 +21,9 @@ class SessionSummary {
     required this.myResultStatus,
     required this.myBestLapTimeMs,
     required this.myPoints,
+    this.countryCode,
+    this.myTeam,
+    this.seasonNumber,
   });
 
   final String sessionId;
@@ -38,6 +46,15 @@ class SessionSummary {
   final int? myBestLapTimeMs;
   final int? myPoints;
 
+  /// 트랙 나라(ISO alpha-2, docs/15 §11.4). 옛 서버면 null.
+  final String? countryCode;
+
+  /// 내가 고른 팀(이름·색, D-52). 내 결과가 없거나 옛 서버면 null.
+  final LapTeam? myTeam;
+
+  /// 시즌 번호(1부터). 시즌이 아니면 null.
+  final int? seasonNumber;
+
   factory SessionSummary.fromJson(Map<String, dynamic> json) => SessionSummary(
         sessionId: json['sessionId'] as String,
         classifiedAt: DateTime.parse(json['classifiedAt'] as String),
@@ -52,6 +69,9 @@ class SessionSummary {
         myResultStatus: json['myResultStatus'] as String?,
         myBestLapTimeMs: json['myBestLapTimeMs'] as int?,
         myPoints: json['myPoints'] as int?,
+        countryCode: jsonString(json['countryCode']),
+        myTeam: LapTeam.fromJsonOrNull(json['myTeam']),
+        seasonNumber: jsonInt(json['seasonNumber']),
       );
 }
 
@@ -95,10 +115,14 @@ class SessionDetailHeader extends SessionSummary {
     required super.myResultStatus,
     required super.myBestLapTimeMs,
     required super.myPoints,
+    super.countryCode,
+    super.myTeam,
+    super.seasonNumber,
     required this.totalLaps,
     required this.aiDifficulty,
     required this.isNetworkGame,
     required this.round,
+    this.weather,
   });
 
   final int totalLaps;
@@ -107,6 +131,9 @@ class SessionDetailHeader extends SessionSummary {
 
   /// 시즌 안의 라운드 번호. 시즌에 속하지 않으면 null.
   final int? round;
+
+  /// 세션 날씨(`Clear`·`LightRain` …, docs/15 §11.4). 모르면 null.
+  final String? weather;
 
   factory SessionDetailHeader.fromJson(Map<String, dynamic> json) {
     final summary = SessionSummary.fromJson(json);
@@ -124,10 +151,14 @@ class SessionDetailHeader extends SessionSummary {
       myResultStatus: summary.myResultStatus,
       myBestLapTimeMs: summary.myBestLapTimeMs,
       myPoints: summary.myPoints,
+      countryCode: summary.countryCode,
+      myTeam: summary.myTeam,
+      seasonNumber: summary.seasonNumber,
       totalLaps: json['totalLaps'] as int,
       aiDifficulty: json['aiDifficulty'] as int,
       isNetworkGame: json['isNetworkGame'] as bool,
       round: json['round'] as int?,
+      weather: jsonString(json['weather']),
     );
   }
 }
@@ -178,6 +209,8 @@ class SessionResult {
     required this.points,
     required this.resultStatus,
     required this.tyreStints,
+    this.gapMs,
+    this.positionChange,
   });
 
   final int position;
@@ -203,6 +236,12 @@ class SessionResult {
   final String resultStatus;
   final List<TyreStintView> tyreStints;
 
+  /// 1위 대비 차(ms, 레이스 = 총 시간, 예선·연습 = 최고 랩, docs/15 §11.4). 옛 서버면 null.
+  final int? gapMs;
+
+  /// 그리드 − 순위(양수 = 올라감). 옛 서버면 null.
+  final int? positionChange;
+
   factory SessionResult.fromJson(Map<String, dynamic> json) => SessionResult(
         position: json['position'] as int,
         carIndex: json['carIndex'] as int,
@@ -226,20 +265,50 @@ class SessionResult {
         tyreStints: (json['tyreStints'] as List<dynamic>)
             .map((e) => TyreStintView.fromJson(e as Map<String, dynamic>))
             .toList(),
+        gapMs: jsonInt(json['gapMs']),
+        positionChange: jsonInt(json['positionChange']),
       );
 }
 
-/// 세션 상세 응답(`GET /me/sessions/{id}`): 헤더 + 결과(순위 오름차순).
+/// 세션 상세 응답(`GET /me/sessions/{id}`): 헤더 + 결과(순위 오름차순) + P8 카드 데이터(docs/15 §11.4, 모두 선택).
 class SessionDetail {
-  const SessionDetail({required this.header, required this.results});
+  const SessionDetail({
+    required this.header,
+    required this.results,
+    this.qualifyingPositions = const [],
+    this.myBestLap,
+    this.setup,
+    this.laps = const [],
+    this.engineWear,
+    this.tyreStints = const [],
+    this.penalties = const [],
+  });
 
   final SessionDetailHeader header;
   final List<SessionResult> results;
+
+  /// 같은 주말 예선의 내 순위(예선 세션일 때).
+  final List<QualifyingPosition> qualifyingPositions;
+  final SessionBestLap? myBestLap;
+
+  /// 마지막 랩의 셋업 키 → 값. 없으면 null.
+  final Map<String, Object?>? setup;
+  final List<SessionLap> laps;
+  final EngineWear? engineWear;
+  final List<SessionTyreStint> tyreStints;
+  final List<SessionPenalty> penalties;
 
   factory SessionDetail.fromJson(Map<String, dynamic> json) => SessionDetail(
         header: SessionDetailHeader.fromJson(json['session'] as Map<String, dynamic>),
         results: (json['results'] as List<dynamic>)
             .map((e) => SessionResult.fromJson(e as Map<String, dynamic>))
             .toList(),
+        qualifyingPositions: QualifyingPosition.listFromJson(json['qualifyingPositions']),
+        myBestLap: SessionBestLap.fromJsonOrNull(json['myBestLap']),
+        setup: setupFromJson(json['setup']),
+        laps: jsonObjects(json['laps'], SessionLap.fromJsonOrNull),
+        engineWear: EngineWear.fromJsonOrNull(json['engineWear']),
+        tyreStints: jsonObjects(json['tyreStints'], SessionTyreStint.fromJsonOrNull),
+        penalties: jsonObjects(json['penalties'], SessionPenalty.fromJsonOrNull),
       );
 }

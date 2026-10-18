@@ -1,40 +1,40 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/layout/layout_constants.dart';
 import '../../../core/theme/app_palette.dart';
-import '../../../core/util/lap_time.dart';
 import '../../../core/widgets/empty_state_card.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/pagination_bar.dart';
 import '../application/sessions_providers.dart';
 import '../domain/session_display.dart';
-import '../domain/session_models.dart';
+import 'sessions_table.dart';
 
 const String _sessionsPath = '/sessions';
 const String _telemetryAppPath = '/telemetry-app';
 const String _telemetryAppLabel = 'Telemetry App';
 
+const String _title = 'All Sessions';
+const String _filtersLabel = 'Filters';
 const String _guideText = '결과 화면까지 마친 세션이 여기에 기록됩니다.';
 const String _noMatchText = '이 조건에 맞는 세션이 없습니다.';
 
-const double _rowHeight = 44;
-const double _filterSpacing = 8;
-const double _gridGap = 8;
+const double _titleGap = 12;
+const double _menuFaceHeight = 32;
+const double _menuFaceRadius = 6;
+const double _menuIconSize = 18;
+const EdgeInsets _menuFacePadding = EdgeInsets.only(left: 12, right: 6);
 
-/// 필터 값 → 칩 글자(`kSessionFilters`와 같은 순서로 그린다).
-const Map<String, String> _filterLabels = {
+/// 필터 값 → 메뉴 글자(`kSessionFilters`와 같은 순서로 그린다).
+const Map<String, String> kSessionFilterLabels = {
   kSessionFilterAll: 'All',
   kSessionFilterRace: 'Race',
   kSessionFilterQualifying: 'Qualifying',
   kSessionFilterPractice: 'Practice',
 };
 
-const _timeStyle = TextStyle(fontFeatures: [FontFeature.tabularFigures()]);
-
-/// 내 세션 목록(docs/12 §8.3). 필터는 주소의 `?type=`(모르는 값은 all), 페이지 번호는 화면 상태.
+/// 내 세션 목록(docs/15 §11.2, F1Laps "All Sessions"). 필터는 주소의 `?type=`(모르는 값은 all), 페이지 번호는 화면 상태.
 class SessionsPage extends ConsumerStatefulWidget {
   const SessionsPage({super.key, this.filter});
 
@@ -61,7 +61,7 @@ class _SessionsPageState extends ConsumerState<SessionsPage> {
     }
   }
 
-  /// 칩을 누를 때마다 브라우저 기록에 항목이 쌓이지 않도록 neglect로 감싸 쿼리만 바꾼다.
+  /// 고를 때마다 브라우저 기록에 항목이 쌓이지 않도록 neglect로 감싸 쿼리만 바꾼다.
   void _selectFilter(String filter) {
     if (filter == _filter) {
       return;
@@ -78,12 +78,19 @@ class _SessionsPageState extends ConsumerState<SessionsPage> {
     return ListView(
       padding: kPagePadding,
       children: [
-        Text(
-          'Sessions',
-          style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+        Wrap(
+          spacing: _titleGap,
+          runSpacing: _titleGap,
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(
+              _title,
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            SessionFilterMenu(selected: _filter, onSelected: _selectFilter),
+          ],
         ),
-        const SizedBox(height: 24),
-        _FilterChips(selected: _filter, onSelected: _selectFilter),
         const SizedBox(height: 16),
         sessions.when(
           loading: () => const Padding(
@@ -97,18 +104,14 @@ class _SessionsPageState extends ConsumerState<SessionsPage> {
           ),
           data: (data) => data.total == 0
               ? _EmptySessions(filtered: _filter != kSessionFilterAll)
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _SessionsTable(items: data.items),
-                    const SizedBox(height: 12),
-                    PaginationBar(
-                      page: data.page,
-                      pageSize: data.pageSize,
-                      total: data.total,
-                      onPageChanged: _changePage,
-                    ),
-                  ],
+              : SessionsTable(
+                  items: data.items,
+                  footer: PaginationBar(
+                    page: data.page,
+                    pageSize: data.pageSize,
+                    total: data.total,
+                    onPageChanged: _changePage,
+                  ),
                 ),
         ),
       ],
@@ -116,25 +119,44 @@ class _SessionsPageState extends ConsumerState<SessionsPage> {
   }
 }
 
-class _FilterChips extends StatelessWidget {
-  const _FilterChips({required this.selected, required this.onSelected});
+/// `Filters ▾` 메뉴(세션 종류 하나 고르기). 전체가 아니면 `Filters: Race`처럼 보인다.
+class SessionFilterMenu extends StatelessWidget {
+  const SessionFilterMenu({super.key, required this.selected, required this.onSelected});
 
   final String selected;
   final ValueChanged<String> onSelected;
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: _filterSpacing,
-      runSpacing: _filterSpacing,
-      children: [
+    final palette = context.palette;
+    final text = selected == kSessionFilterAll ? _filtersLabel : '$_filtersLabel: ${kSessionFilterLabels[selected]}';
+    return PopupMenuButton<String>(
+      key: const ValueKey('sessions-filter-menu'),
+      tooltip: _filtersLabel,
+      onSelected: onSelected,
+      itemBuilder: (_) => [
         for (final filter in kSessionFilters)
-          ChoiceChip(
-            label: Text(_filterLabels[filter]!),
-            selected: filter == selected,
-            onSelected: (_) => onSelected(filter),
+          CheckedPopupMenuItem<String>(
+            value: filter,
+            checked: filter == selected,
+            child: Text(kSessionFilterLabels[filter]!),
           ),
       ],
+      child: Container(
+        height: _menuFaceHeight,
+        padding: _menuFacePadding,
+        decoration: BoxDecoration(
+          border: Border.all(color: palette.border),
+          borderRadius: BorderRadius.circular(_menuFaceRadius),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(text, style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
+            Icon(Icons.arrow_drop_down, size: _menuIconSize, color: palette.textMuted),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -154,95 +176,5 @@ class _EmptySessions extends StatelessWidget {
             actionLabel: _telemetryAppLabel,
             actionPath: _telemetryAppPath,
           );
-  }
-}
-
-class _SessionsTable extends StatelessWidget {
-  const _SessionsTable({required this.items});
-
-  static final _dateFormat = DateFormat('yyyy-MM-dd HH:mm');
-
-  final List<SessionSummary> items;
-
-  @override
-  Widget build(BuildContext context) {
-    final headingStyle = Theme.of(context).textTheme.labelLarge?.copyWith(color: context.palette.textMuted);
-
-    return Card(
-      // 좁은 화면에서는 표를 가로로 스크롤하고, 넓은 화면에서는 카드 폭을 채운다.
-      child: LayoutBuilder(
-        builder: (context, constraints) => SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minWidth: constraints.maxWidth),
-            child: DataTable(
-              showCheckboxColumn: false,
-              headingTextStyle: headingStyle,
-              headingRowHeight: _rowHeight,
-              dataRowMinHeight: _rowHeight,
-              dataRowMaxHeight: _rowHeight,
-              columns: const [
-                DataColumn(label: Text('날짜')),
-                DataColumn(label: Text('트랙')),
-                DataColumn(label: Text('세션')),
-                DataColumn(label: Text('모드')),
-                DataColumn(label: Text('결과')),
-                DataColumn(label: Text('베스트 랩')),
-                DataColumn(label: Text('점수')),
-              ],
-              rows: [
-                for (final session in items)
-                  DataRow(
-                    onSelectChanged: (_) => context.go('$_sessionsPath/${session.sessionId}'),
-                    cells: [
-                      DataCell(Text(_dateFormat.format(session.classifiedAt.toLocal()))),
-                      DataCell(Text(session.trackName)),
-                      DataCell(Text(sessionKindLabel(session.sessionKind))),
-                      DataCell(Text(gameModeLabel(session.gameMode))),
-                      DataCell(_ResultCell(session: session)),
-                      DataCell(Text(_bestLapText(session), style: _timeStyle)),
-                      DataCell(Text(session.myPoints?.toString() ?? kNoValueText)),
-                    ],
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  static String _bestLapText(SessionSummary session) {
-    final bestLap = session.myBestLapTimeMs;
-    return bestLap == null ? kNoValueText : formatLapTime(bestLap);
-  }
-}
-
-/// `P4 / 22` + 출발 순위(`Grid P6`). 내 결과가 없으면 `-`.
-class _ResultCell extends StatelessWidget {
-  const _ResultCell({required this.session});
-
-  final SessionSummary session;
-
-  @override
-  Widget build(BuildContext context) {
-    final position = session.myPosition;
-    if (position == null) {
-      return const Text(kNoValueText);
-    }
-    final grid = session.myGridPosition;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text('P$position / ${session.carCount}', style: const TextStyle(fontWeight: FontWeight.w600)),
-        if (grid != null && grid > 0) ...[
-          const SizedBox(width: _gridGap),
-          Text(
-            'Grid P$grid',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: context.palette.textMuted),
-          ),
-        ],
-      ],
-    );
   }
 }

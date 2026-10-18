@@ -54,6 +54,7 @@ class CompactTable<T> extends StatelessWidget {
     this.rowKey,
     this.footer,
     this.compactWidth = kCompactTableDefaultWidth,
+    this.framed = true,
   });
 
   final List<CompactColumn<T>> columns;
@@ -71,6 +72,9 @@ class CompactTable<T> extends StatelessWidget {
   final Widget? footer;
   final double compactWidth;
 
+  /// false면 카드 테두리 없이 표만 그린다(제목 있는 카드 안에 넣을 때, docs/15 §11.3).
+  final bool framed;
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -80,29 +84,28 @@ class CompactTable<T> extends StatelessWidget {
           for (final column in columns)
             if (!(compact && column.compactHidden)) column,
         ];
-        return Card(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _HeaderRow<T>(columns: visible),
-              for (final row in rows) ...[
-                const Divider(height: 1),
-                _BodyRow<T>(
-                  key: rowKey?.call(row),
-                  row: row,
-                  columns: visible,
-                  highlighted: isHighlighted?.call(row) ?? false,
-                  fresh: isFresh?.call(row) ?? false,
-                  onTap: onRowTap == null ? null : () => onRowTap!(row),
-                ),
-              ],
-              if (footer != null) ...[
-                const Divider(height: 1),
-                Padding(padding: _footerPadding, child: footer),
-              ],
+        final table = Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _HeaderRow<T>(columns: visible),
+            for (final row in rows) ...[
+              const Divider(height: 1),
+              _BodyRow<T>(
+                key: rowKey?.call(row),
+                row: row,
+                columns: visible,
+                highlighted: isHighlighted?.call(row) ?? false,
+                fresh: isFresh?.call(row) ?? false,
+                onTap: onRowTap == null ? null : () => onRowTap!(row),
+              ),
             ],
-          ),
+            if (footer != null) ...[
+              const Divider(height: 1),
+              Padding(padding: _footerPadding, child: footer),
+            ],
+          ],
         );
+        return framed ? Card(child: table) : table;
       },
     );
   }

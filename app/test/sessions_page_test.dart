@@ -3,9 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:simcenter_app/core/theme/app_theme.dart';
 import 'package:simcenter_app/core/widgets/pagination_bar.dart';
+import 'package:simcenter_app/features/laps/domain/lap_models.dart';
 import 'package:simcenter_app/features/sessions/data/sessions_repository.dart';
 import 'package:simcenter_app/features/sessions/domain/session_models.dart';
+import 'package:simcenter_app/features/sessions/presentation/session_widgets.dart';
 import 'package:simcenter_app/features/sessions/presentation/sessions_page.dart';
 
 import 'support/fakes.dart';
@@ -13,6 +16,7 @@ import 'support/fakes.dart';
 const _guideText = '결과 화면까지 마친 세션이 여기에 기록됩니다.';
 const _noMatchText = '이 조건에 맞는 세션이 없습니다.';
 const _pageSize = 15;
+const _ferrari = LapTeam(name: 'Ferrari', color: '#E8002D');
 
 /// 첫 호출만 실패하고 이후엔 정상 응답하는 저장소(다시 시도 검증용).
 class _FlakySessionsRepository extends FakeSessionsRepository {
@@ -36,6 +40,7 @@ Future<GoRouter> _pump(
   SessionsRepository repo, {
   String initialLocation = '/sessions',
   Size size = const Size(1000, 2400),
+  ThemeData? theme,
 }) async {
   setViewSize(tester, size);
   final router = GoRouter(initialLocation: initialLocation, routes: [
@@ -52,7 +57,7 @@ Future<GoRouter> _pump(
 
   await tester.pumpWidget(ProviderScope(
     overrides: [sessionsRepositoryProvider.overrideWithValue(repo)],
-    child: MaterialApp.router(routerConfig: router),
+    child: MaterialApp.router(theme: theme, routerConfig: router),
   ));
   await tester.pumpAndSettle();
   return router;
@@ -62,20 +67,33 @@ String _location(GoRouter router) => router.routeInformationProvider.value.uri.t
 
 List<SessionSummary> _races(int count) => [
       for (var i = 0; i < count; i++)
-        sessionOf('s$i', trackName: 'Track $i', myPosition: i + 1, classifiedAt: DateTime.utc(2026, 10, 12, 9, i)),
+        sessionOf(
+          's$i',
+          trackName: 'Track $i',
+          myPosition: i + 1,
+          classifiedAt: DateTime.utc(2026, 10, 12, 9, i),
+          countryCode: 'BE',
+          myTeam: _ferrari,
+          seasonNumber: 1,
+        ),
     ];
 
 OutlinedButton _button(WidgetTester tester, String label) =>
     tester.widget<OutlinedButton>(find.widgetWithText(OutlinedButton, label));
 
-bool _chipSelected(WidgetTester tester, String label) =>
-    tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, label)).selected;
+Future<void> _pickFilter(WidgetTester t, String label) async {
+  await t.tap(find.byKey(const ValueKey('sessions-filter-menu')));
+  await t.pumpAndSettle();
+  await t.tap(find.widgetWithText(CheckedPopupMenuItem<String>, label));
+  await t.pumpAndSettle();
+}
 
 void main() {
   group('SessionsPage', () {
     testWidgets('SessionsPage_Empty_ShowsGuide', (t) async {
       final router = await _pump(t, FakeSessionsRepository());
 
+      expect(find.text('All Sessions'), findsOneWidget);
       expect(find.text(_guideText), findsOneWidget);
       expect(find.text(_noMatchText), findsNothing);
       expect(find.textContaining('Showing'), findsNothing);
@@ -96,7 +114,7 @@ void main() {
       expect(find.text(_noMatchText), findsOneWidget);
       expect(find.text(_guideText), findsNothing);
       expect(find.text('Telemetry App'), findsNothing);
-      expect(find.widgetWithText(ChoiceChip, 'All'), findsOneWidget); // 필터는 그대로 바꿀 수 있다.
+      expect(find.text('Filters: Race'), findsOneWidget); // 필터는 그대로 바꿀 수 있다.
     });
 
     testWidgets('SessionsPage_Initial_RequestsAllFirstPageOf15', (t) async {
@@ -104,31 +122,30 @@ void main() {
       await _pump(t, repo);
 
       expect(repo.requests, [(sessionType: null, page: 1, pageSize: _pageSize)]);
-      expect(_chipSelected(t, 'All'), isTrue);
-      expect(_chipSelected(t, 'Race'), isFalse);
+      expect(find.text('Filters'), findsOneWidget);
     });
 
-    testWidgets('SessionsPage_ShowsRowsAndPagination', (t) async {
+    testWidgets('SessionsPage_ShowsF1LapsColumnsAndPagination', (t) async {
       final repo = FakeSessionsRepository(sessions: _races(16));
       await _pump(t, repo);
 
+      for (final header in ['TRACK', 'TEAM', 'RESULT', 'TIME']) {
+        expect(find.text(header), findsOneWidget, reason: header);
+      }
       expect(find.text('Showing 1 to 15 of 16'), findsOneWidget);
-      expect(find.text('R'), findsNWidgets(_pageSize));
       expect(find.text('Track 0'), findsOneWidget);
       expect(find.text('Track 14'), findsOneWidget);
       expect(find.text('Track 15'), findsNothing);
-      expect(find.text('P4 / 22'), findsOneWidget);
-      expect(find.text('Grid P6'), findsNWidgets(_pageSize));
-      expect(find.text('Driver Career'), findsNWidgets(_pageSize));
-      expect(find.text('1:45.321'), findsNWidgets(_pageSize));
-      expect(find.text('12'), findsNWidgets(_pageSize));
-      expect(
-        find.text(DateFormat('yyyy-MM-dd HH:mm').format(DateTime.utc(2026, 10, 12, 9).toLocal())),
-        findsOneWidget,
-      );
+      expect(find.text('Race'), findsNWidgets(_pageSize)); // 트랙 아래 세션 종류
+      expect(find.text('Ferrari'), findsNWidgets(_pageSize)); // Team 221이 아니라 내 팀 이름
+      expect(find.text('Driver Career Season 1'), findsNWidgets(_pageSize));
+      expect(find.text('P4'), findsOneWidget);
+      expect(find.byKey(const ValueKey('track-flag-BE')), findsNWidgets(_pageSize));
+      final local = DateTime.utc(2026, 10, 12, 9).toLocal();
+      expect(find.text(DateFormat('yyyy-MM-dd').format(local)), findsNWidgets(_pageSize));
+      expect(find.text(DateFormat('HH:mm').format(local)), findsOneWidget);
       expect(find.byType(PaginationBar), findsOneWidget);
       expect(_button(t, '이전').onPressed, isNull);
-      expect(_button(t, '다음').onPressed, isNotNull);
 
       await t.tap(find.text('다음'));
       await t.pumpAndSettle();
@@ -139,49 +156,70 @@ void main() {
       expect(_button(t, '다음').onPressed, isNull);
     });
 
-    testWidgets('SessionsPage_FilterChip_RequestsSessionType_AndResetsPage', (t) async {
+    testWidgets('SessionsPage_RaceBadgeIsEmphasized_QualifyingIsNot', (t) async {
+      final repo = FakeSessionsRepository(sessions: [
+        sessionOf('r', myPosition: 22),
+        sessionOf('q', sessionType: 'Qualifying', sessionKind: 'Qualifying3', myPosition: 8, gameMode: 'GrandPrix'),
+      ]);
+      await _pump(t, repo);
+
+      expect(t.widget<PositionBadge>(find.widgetWithText(PositionBadge, 'P22')).emphasized, isTrue);
+      expect(t.widget<PositionBadge>(find.widgetWithText(PositionBadge, 'P8')).emphasized, isFalse);
+      expect(find.text('Qualifying 3'), findsOneWidget);
+      expect(find.text('Grand Prix'), findsOneWidget); // 시즌이 아니면 모드만
+    });
+
+    testWidgets('SessionsPage_TeamDotUsesMyTeamColor', (t) async {
+      await _pump(t, FakeSessionsRepository(sessions: _races(1)));
+
+      final dot = t.widget<Container>(
+        find.descendant(of: find.byType(TeamDot), matching: find.byType(Container)),
+      );
+      expect((dot.decoration! as BoxDecoration).color, const Color(0xFFE8002D));
+    });
+
+    testWidgets('SessionsPage_FilterMenu_RequestsSessionType_AndResetsPage', (t) async {
       final repo = FakeSessionsRepository(sessions: _races(16));
       final router = await _pump(t, repo);
       await t.tap(find.text('다음'));
       await t.pumpAndSettle();
       expect(repo.requests.last.page, 2);
 
-      await t.tap(find.widgetWithText(ChoiceChip, 'Race'));
-      await t.pumpAndSettle();
+      await _pickFilter(t, 'Race');
 
       expect(repo.requests.last, (sessionType: 'Race', page: 1, pageSize: _pageSize));
       expect(_location(router), '/sessions?type=race');
-      expect(_chipSelected(t, 'Race'), isTrue);
-      expect(_chipSelected(t, 'All'), isFalse);
+      expect(find.text('Filters: Race'), findsOneWidget);
       expect(find.text('Showing 1 to 15 of 16'), findsOneWidget);
     });
 
-    testWidgets('SessionsPage_EachChip_MapsToItsSessionType', (t) async {
+    testWidgets('SessionsPage_EachFilter_MapsToItsSessionType', (t) async {
       final repo = FakeSessionsRepository(sessions: _races(1));
       final router = await _pump(t, repo);
 
-      await t.tap(find.widgetWithText(ChoiceChip, 'Qualifying'));
-      await t.pumpAndSettle();
+      await _pickFilter(t, 'Qualifying');
       expect(repo.requests.last.sessionType, 'Qualifying');
       expect(_location(router), '/sessions?type=qualifying');
 
-      await t.tap(find.widgetWithText(ChoiceChip, 'Practice'));
-      await t.pumpAndSettle();
+      await _pickFilter(t, 'Practice');
       expect(repo.requests.last.sessionType, 'Practice');
       expect(_location(router), '/sessions?type=practice');
 
-      await t.tap(find.widgetWithText(ChoiceChip, 'All'));
-      await t.pumpAndSettle();
+      await _pickFilter(t, 'All');
       expect(repo.requests.last.sessionType, isNull);
       expect(_location(router), '/sessions?type=all');
     });
 
-    testWidgets('SessionsPage_SelectedChip_DoesNotReload', (t) async {
+    testWidgets('SessionsPage_FilterMenu_ChecksSelected_AndSameChoiceDoesNotReload', (t) async {
       final repo = FakeSessionsRepository(sessions: _races(1));
       final router = await _pump(t, repo, initialLocation: '/sessions?type=race');
       final calls = repo.requests.length;
 
-      await t.tap(find.widgetWithText(ChoiceChip, 'Race'));
+      await t.tap(find.byKey(const ValueKey('sessions-filter-menu')));
+      await t.pumpAndSettle();
+      final items = t.widgetList<CheckedPopupMenuItem<String>>(find.byType(CheckedPopupMenuItem<String>));
+      expect([for (final item in items) item.checked], [false, true, false, false]);
+      await t.tap(find.widgetWithText(CheckedPopupMenuItem<String>, 'Race'));
       await t.pumpAndSettle();
 
       expect(repo.requests.length, calls);
@@ -193,10 +231,10 @@ void main() {
       await _pump(t, repo, initialLocation: '/sessions?type=weird');
 
       expect(repo.requests.single.sessionType, isNull);
-      expect(_chipSelected(t, 'All'), isTrue);
+      expect(find.text('Filters'), findsOneWidget);
     });
 
-    testWidgets('SessionsPage_PlayerAbsent_ShowsDash', (t) async {
+    testWidgets('SessionsPage_PlayerAbsentAndOldServer_ShowsDashesAndFallbackFlag', (t) async {
       final repo = FakeSessionsRepository(sessions: [
         sessionOf(
           'ghost',
@@ -210,20 +248,9 @@ void main() {
       await _pump(t, repo);
 
       expect(find.text('Spa'), findsOneWidget);
-      expect(find.text('-'), findsNWidgets(3)); // 결과 · 베스트 랩 · 점수
-      expect(find.textContaining('Grid'), findsNothing);
-      expect(find.textContaining(' / '), findsNothing);
-    });
-
-    testWidgets('SessionsPage_PositionWithoutGrid_OmitsGrid', (t) async {
-      final repo = FakeSessionsRepository(sessions: [
-        sessionOf('quali', sessionType: 'Qualifying', sessionKind: 'Qualifying3', myPosition: 2, myGridPosition: 0),
-      ]);
-      await _pump(t, repo);
-
-      expect(find.text('P2 / 22'), findsOneWidget);
-      expect(find.text('Q3'), findsOneWidget);
-      expect(find.textContaining('Grid'), findsNothing);
+      expect(find.text('-'), findsNWidgets(2)); // 팀 · 결과
+      expect(find.byKey(const ValueKey('track-flag-fallback')), findsOneWidget);
+      expect(find.text('Driver Career'), findsOneWidget);
     });
 
     testWidgets('SessionsPage_TapRow_OpensSessionDetail', (t) async {
@@ -249,17 +276,38 @@ void main() {
       expect(find.text('Track 0'), findsOneWidget);
     });
 
-    testWidgets('SessionsPage_NarrowScreen_DoesNotOverflow', (t) async {
-      final repo = FakeSessionsRepository(sessions: _races(16));
-      await _pump(t, repo, size: const Size(400, 2400));
+    testWidgets('SessionsPage_Narrow_HidesTeamSecondLineAndTime', (t) async {
+      await _pump(t, FakeSessionsRepository(sessions: _races(1)), size: const Size(500, 1200));
 
       expect(t.takeException(), isNull);
-      expect(find.text('Showing 1 to 15 of 16'), findsOneWidget);
-      expect(find.widgetWithText(ChoiceChip, 'Practice'), findsOneWidget);
+      expect(find.text('Ferrari'), findsOneWidget);
+      expect(find.text('Race'), findsOneWidget); // 트랙 아래줄은 남는다
+      expect(find.text('Driver Career Season 1'), findsNothing);
+      expect(find.text(DateFormat('HH:mm').format(DateTime.utc(2026, 10, 12, 9).toLocal())), findsNothing);
+    });
+
+    testWidgets('SessionsPage_375_DoesNotOverflow_BothThemes', (t) async {
+      final long = [
+        for (var i = 0; i < 16; i++)
+          sessionOf(
+            'l$i',
+            trackName: 'Autodromo Internazionale Enzo e Dino Ferrari $i',
+            sessionKind: 'OneShotSprintShootout',
+            countryCode: 'IT',
+            myTeam: const LapTeam(name: 'Visa Cash App Racing Bulls Formula One Team', color: '#6692FF'),
+            myPosition: 22,
+          ),
+      ];
+      for (final theme in [AppTheme.dark, AppTheme.light]) {
+        await _pump(t, FakeSessionsRepository(sessions: long), size: const Size(375, 2400), theme: theme);
+
+        expect(t.takeException(), isNull, reason: '${theme.brightness}');
+        expect(find.text('Showing 1 to 15 of 16'), findsOneWidget);
+      }
     });
 
     testWidgets('SessionsPage_NarrowScreen_EmptyDoesNotOverflow', (t) async {
-      await _pump(t, FakeSessionsRepository(), size: const Size(400, 800));
+      await _pump(t, FakeSessionsRepository(), size: const Size(375, 800));
 
       expect(t.takeException(), isNull);
       expect(find.text(_guideText), findsOneWidget);
