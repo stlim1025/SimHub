@@ -78,7 +78,7 @@ public sealed class OutboxTelemetrySinkLapDetailTests : IAsyncLifetime
 
         var trace = payload.GetProperty("trace");
         Assert.Equal(
-            new[] { "resolutionM", "timeMs", "speedKph", "throttle", "brake", "steer", "gear", "rpm" }.Order(),
+            new[] { "resolutionM", "timeMs", "speedKph", "throttle", "brake", "steer", "gear", "rpm", "extra" }.Order(),
             Names(trace).Order());
         Assert.Equal(TraceResolutionM, trace.GetProperty("resolutionM").GetInt32());
         Assert.Equal(new[] { 7, 7, 7, 7 }, trace.GetProperty("gear").EnumerateArray().Select(v => v.GetInt32()));
@@ -94,6 +94,24 @@ public sealed class OutboxTelemetrySinkLapDetailTests : IAsyncLifetime
         Assert.Equal(JsonValueKind.Null, payload.GetProperty("car").ValueKind);
         Assert.Equal(JsonValueKind.Null, payload.GetProperty("conditions").ValueKind);
         Assert.Equal(JsonValueKind.Null, payload.GetProperty("trace").ValueKind);
+    }
+
+    [Fact]
+    public async Task TraceExtra_IsWrittenAsNameToNumberArrayMap_WithNamesUnchanged()
+    {
+        var extra = new Dictionary<string, IReadOnlyList<double>>
+        {
+            ["tyreSurfaceTempFL"] = new[] { 91d, 92.5, 93d, 94d },
+            ["wheelSlipRatioPctRR"] = new[] { -1.25, 0d, 0.5, 2d },
+        };
+
+        await _sut.EmitAsync(Envelope(Lap(car: null, conditions: null, Trace(4, value: 7) with { Extra = extra })));
+
+        using var doc = JsonDocument.Parse(await SingleOutboxJsonAsync());
+        var wire = doc.RootElement.GetProperty("payload").GetProperty("trace").GetProperty("extra");
+        Assert.Equal(new[] { "tyreSurfaceTempFL", "wheelSlipRatioPctRR" }, Names(wire));   // 사전 키는 바꾸지 않는다(이미 camelCase)
+        Assert.Equal(new[] { 91, 92.5, 93, 94 }, wire.GetProperty("tyreSurfaceTempFL").EnumerateArray().Select(v => v.GetDouble()));
+        Assert.Equal("[-1.25,0,0.5,2]", wire.GetProperty("wheelSlipRatioPctRR").GetRawText());
     }
 
     [Fact]

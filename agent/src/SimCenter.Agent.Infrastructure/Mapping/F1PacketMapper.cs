@@ -102,16 +102,22 @@ public sealed class F1PacketMapper
                 return new ITelemetryFrame[] { MapSession(session) };
 
             case F1Enums.PacketType.LapData when packet.TryGetLapDataPacket(out var lapPacket):
-                return MapPlayerCar(packet.PacketType, packet.Header, lapPacket.LapData.AsReadOnlySpan(), MapLap);
+                return MapPlayerCar(packet.PacketType, packet.Header, lapPacket.LapData.AsReadOnlySpan(), MapLapFrames);
 
             case F1Enums.PacketType.CarTelemetry when packet.TryGetCarTelemetryDataPacket(out var telemetry):
-                return MapPlayerCar(packet.PacketType, packet.Header, telemetry.CarTelemetryData.AsReadOnlySpan(), MapCarTelemetry);
+                return MapCarTelemetryPacket(telemetry);
 
             case F1Enums.PacketType.CarStatus when packet.TryGetCarStatusDataPacket(out var status):
-                return MapPlayerCar(packet.PacketType, packet.Header, status.CarStatusData.AsReadOnlySpan(), MapCarStatus);
+                return MapPlayerCar(packet.PacketType, packet.Header, status.CarStatusData.AsReadOnlySpan(), MapCarStatusFrames);
+
+            case F1Enums.PacketType.Motion when packet.TryGetMotionDataPacket(out var motion):
+                return MapPlayerCar(packet.PacketType, packet.Header, motion.CarMotionData.AsReadOnlySpan(), MapMotionFrames);
+
+            case F1Enums.PacketType.MotionEx when packet.TryGetMotionExDataPacket(out var motionEx):
+                return [ExtraFrame(motionEx.Header, F1ExtraChannels.FromMotionEx(motionEx))];
 
             case F1Enums.PacketType.CarDamage when packet.TryGetCarDamageDataPacket(out var damage):
-                return MapPlayerCar(packet.PacketType, packet.Header, damage.CarDamageData.AsReadOnlySpan(), MapCarDamage);
+                return MapPlayerCar(packet.PacketType, packet.Header, damage.CarDamageData.AsReadOnlySpan(), (car, header) => [MapCarDamage(car, header)]);
 
             case F1Enums.PacketType.Event when packet.TryGetEventDataPacket(out var eventPacket):
             {
@@ -138,25 +144,62 @@ public sealed class F1PacketMapper
         F1Enums.PacketType packetType,
         PacketHeader header,
         ReadOnlySpan<TCar> cars,
-        Func<TCar, PacketHeader, ITelemetryFrame> map)
+        Func<TCar, PacketHeader, IReadOnlyList<ITelemetryFrame>> map)
+    {
+        return IsPlayerSlot(packetType, header, cars.Length) ? map(cars[header.PlayerCarIndex], header) : Empty;
+    }
+
+    /// <summary>헤더의 플레이어 번호가 칸 안이면 true. 아니면(관전 중 등) 패킷 종류와 무관하게 한 번만 경고한다.</summary>
+    private bool IsPlayerSlot(F1Enums.PacketType packetType, PacketHeader header, int slots)
     {
         var index = header.PlayerCarIndex;
-        if (index >= cars.Length)
+        if (index < slots)
         {
-            if (IsFirstDrop("player-index"))
-            {
-                _logger.LogWarning(
-                    "플레이어 차 번호 {Index}가 {PacketType} 칸 수 {Slots}를 넘어 플레이어 차를 읽지 못했습니다(관전 중이면 정상) — 아니면 게임의 UDP 레이아웃과 F1Game.UDP 버전이 맞는지 확인하세요",
-                    index,
-                    packetType,
-                    cars.Length);
-            }
+            return true;
+        }
 
+        if (IsFirstDrop("player-index"))
+        {
+            _logger.LogWarning(
+                "플레이어 차 번호 {Index}가 {PacketType} 칸 수 {Slots}를 넘어 플레이어 차를 읽지 못했습니다(관전 중이면 정상) — 아니면 게임의 UDP 레이아웃과 F1Game.UDP 버전이 맞는지 확인하세요",
+                index,
+                packetType,
+                slots);
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Car Telemetry: extra 채널(D-49)을 <b>먼저</b> 싣는다 — 트레이스 기록기가 다음 Car Telemetry 프레임에서 그 칸에 최신 묶음을 찍으므로
+    /// 같은 패킷의 값이 같은 칸에 들어간다. 추천 기어는 패킷 단위 값이다.
+    /// </summary>
+    private IReadOnlyList<ITelemetryFrame> MapCarTelemetryPacket(CarTelemetryDataPacket packet)
+    {
+        var cars = packet.CarTelemetryData.AsReadOnlySpan();
+        if (!IsPlayerSlot(F1Enums.PacketType.CarTelemetry, packet.Header, cars.Length))
+        {
             return Empty;
         }
 
-        return new[] { map(cars[index], header) };
+        var car = cars[packet.Header.PlayerCarIndex];
+        return [ExtraFrame(packet.Header, F1ExtraChannels.FromCarTelemetry(car, packet.SuggestedGear)), MapCarTelemetry(car, packet.Header)];
     }
+
+    /// <summary>
+    /// Lap Data: 랩 프레임을 <b>먼저</b> 싣는다 — 랩이 바뀌는 프레임이면 분석기가 앞 랩을 확정한 뒤에 새 랩의 값이 들어온다.
+    /// </summary>
+    private IReadOnlyList<ITelemetryFrame> MapLapFrames(LapData lap, PacketHeader header) =>
+        [MapLap(lap, header), ExtraFrame(header, F1ExtraChannels.FromLapData(lap))];
+
+    private IReadOnlyList<ITelemetryFrame> MapCarStatusFrames(CarStatusData car, PacketHeader header) =>
+        [MapCarStatus(car, header), ExtraFrame(header, F1ExtraChannels.FromCarStatus(car))];
+
+    private static IReadOnlyList<ITelemetryFrame> MapMotionFrames(CarMotionData car, PacketHeader header) =>
+        [ExtraFrame(header, F1ExtraChannels.FromMotion(car))];
+
+    private static ExtraChannelsFrame ExtraFrame(PacketHeader header, IReadOnlyDictionary<string, double> channels) =>
+        new(header.SessionUID.ToString(), channels);
 
     public SessionFrame MapSession(SessionDataPacket packet) => new(
         SessionRef: packet.Header.SessionUID.ToString(),

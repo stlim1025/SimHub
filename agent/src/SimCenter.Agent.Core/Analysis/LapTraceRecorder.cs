@@ -7,6 +7,7 @@ namespace SimCenter.Agent.Core.Analysis;
 /// 1랩 거리 기준 트레이스 기록기(D-45, docs/15 §3.3). <see cref="LapAnalyzer"/>가 Lap Data마다 <see cref="UpdatePosition"/>으로 현재 거리·시간을 알려 주고,
 /// Car Telemetry마다 <see cref="Record"/>로 칸 <c>floor(거리 / 5m)</c>에 표본을 <b>덮어쓴다</b>(플래시백으로 되돌아가 다시 달리면 나중 값이 이긴다).
 /// 랩이 바뀌면 <see cref="Flush"/>로 LapFinished에 실을 트레이스를 만들고 비운다. 상태 저장이라 스레드 안전하지 않다(분석기와 같다).
+/// <c>extra</c> 채널(D-49, docs/15 §8)은 <see cref="OnExtraChannels"/>로 최신 값을 받아 같은 칸에 함께 찍는다(<see cref="TraceExtraChannels"/>).
 /// </summary>
 public sealed class LapTraceRecorder
 {
@@ -31,6 +32,7 @@ public sealed class LapTraceRecorder
     private const int MaxRpm = 25_000;
 
     private readonly TraceSample?[] _buckets = new TraceSample?[MaxSamples];
+    private readonly TraceExtraChannels _extra = new(MaxSamples);
     private int _lastFilled = -1;
     private int _filledCount;
     private int? _currentBucket;   // null = 위치 모름(아직 Lap Data 없음, 음수 거리, 이전 랩 프레임)
@@ -46,7 +48,10 @@ public sealed class LapTraceRecorder
     /// <summary>위치를 모르는 상태로 둔다 — 다음 <see cref="UpdatePosition"/> 전까지 표본을 버린다.</summary>
     public void ClearPosition() => _currentBucket = null;
 
-    /// <summary>현재 위치의 칸에 표본을 덮어쓴다. 위치를 모르면 버린다.</summary>
+    /// <summary>extra 채널 최신 값을 갱신한다(칸에는 다음 <see cref="Record"/> 때 찍힌다).</summary>
+    public void OnExtraChannels(ExtraChannelsFrame frame) => _extra.Update(frame.Channels);
+
+    /// <summary>현재 위치의 칸에 표본(과 extra 채널 최신 값)을 덮어쓴다. 위치를 모르면 버린다.</summary>
     public void Record(CarTelemetryFrame frame)
     {
         if (_currentBucket is not int bucket)
@@ -60,6 +65,7 @@ public sealed class LapTraceRecorder
         }
 
         _buckets[bucket] = ToSample(frame, _currentLapTimeMs);
+        _extra.Capture(bucket);
         _lastFilled = Math.Max(_lastFilled, bucket);
     }
 
@@ -70,14 +76,22 @@ public sealed class LapTraceRecorder
     public LapTrace? Flush()
     {
         var trace = Build();
-        Clear();
+        ClearSamples();
         return trace;
     }
 
-    /// <summary>표본·위치를 모두 버린다(세션 변경 등).</summary>
+    /// <summary>표본·위치와 extra 채널 최신 값까지 모두 버린다(세션 변경 등).</summary>
     public void Clear()
     {
+        ClearSamples();
+        _extra.Reset();
+    }
+
+    /// <summary>표본·위치만 버린다 — extra 채널 최신 값은 다음 랩으로 이어진다(같은 차 상태에서 계속 달린다).</summary>
+    private void ClearSamples()
+    {
         Array.Clear(_buckets, 0, _lastFilled + 1);
+        _extra.ClearSamples(_lastFilled);
         _lastFilled = -1;
         _filledCount = 0;
         _currentBucket = null;
@@ -106,7 +120,7 @@ public sealed class LapTraceRecorder
             (time[i], speed[i], throttle[i], brake[i], steer[i], gear[i], rpm[i]) = current;
         }
 
-        return new LapTrace(DefaultResolutionM, time, speed, throttle, brake, steer, gear, rpm);
+        return new LapTrace(DefaultResolutionM, time, speed, throttle, brake, steer, gear, rpm, _extra.Build(length));
     }
 
     private TraceSample FirstFilled()

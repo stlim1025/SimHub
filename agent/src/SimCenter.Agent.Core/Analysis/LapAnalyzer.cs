@@ -69,6 +69,9 @@ public sealed class LapAnalyzer : ITelemetryAnalyzer
             case CarTelemetryFrame telemetry:
                 _trace.Record(telemetry);
                 break;
+            case ExtraChannelsFrame extra:
+                _trace.OnExtraChannels(extra);
+                break;
             case CarStatusFrame status:
                 _carState.OnStatus(status);
                 break;

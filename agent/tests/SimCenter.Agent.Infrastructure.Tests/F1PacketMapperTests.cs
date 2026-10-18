@@ -410,7 +410,7 @@ public class F1PacketMapperTests
             ClassificationData = Slots(CarSlotCount, (0, FinishedCar())),
         };
 
-        var fromParticipants = Assert.Single(_sut.Map(participants));
+        var fromParticipants = Assert.Single(_sut.Map(participants).OfType<ParticipantsFrame>());
         var fromClassification = Assert.Single(_sut.Map(classification));
 
         Assert.IsType<ParticipantsFrame>(fromParticipants);
