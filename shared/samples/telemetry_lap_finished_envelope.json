@@ -24,6 +24,48 @@
     ],
     "isValid": true,
     "isOutOrInLap": false,
-    "trackId": 2
+    "trackId": 2,
+    "gameMode": "TimeTrial",
+    "car": {
+      "teamId": 1,
+      "visualTyreCompound": 16,
+      "actualTyreCompound": 18,
+      "tyreAgeLaps": 3,
+      "tyreWearStart": { "frontLeft": 27.0, "frontRight": 14.0, "rearLeft": 20.0, "rearRight": 14.0 },
+      "tyreWearEnd": { "frontLeft": 31.0, "frontRight": 18.0, "rearLeft": 24.0, "rearRight": 18.0 },
+      "tyreDamage": { "frontLeft": 0, "frontRight": 0, "rearLeft": 0, "rearRight": 0 },
+      "brakeDamage": { "frontLeft": 0, "frontRight": 0, "rearLeft": 0, "rearRight": 0 },
+      "frontLeftWingDamage": 0,
+      "frontRightWingDamage": 10,
+      "rearWingDamage": 0,
+      "floorDamage": 0,
+      "diffuserDamage": 0,
+      "sidepodDamage": 20,
+      "gearboxDamage": 10,
+      "engineDamage": 30,
+      "fuelStartKg": 24.4,
+      "fuelEndKg": 22.7,
+      "fuelRemainingLaps": 13.1,
+      "ersStoreStartJ": 1494000,
+      "ersStoreEndJ": 988000,
+      "ersDeployedJ": 2100000,
+      "ersHarvestedJ": 1600000
+    },
+    "conditions": {
+      "weather": "Clear",
+      "airTempC": 21,
+      "trackTempC": 31,
+      "rainForecastPercent": 4
+    },
+    "trace": {
+      "resolutionM": 5,
+      "timeMs": [0, 62, 124, 186, 248, 310],
+      "speedKph": [289, 290, 290, 291, 292, 292],
+      "throttle": [100, 100, 100, 100, 100, 100],
+      "brake": [0, 0, 0, 0, 0, 0],
+      "steer": [-2, -2, -1, 0, 1, 1],
+      "gear": [7, 7, 7, 7, 7, 7],
+      "rpm": [11650, 11680, 11690, 11710, 11730, 11740]
+    }
   }
 }
