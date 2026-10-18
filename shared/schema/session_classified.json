@@ -171,8 +171,50 @@
                 }
               }
             }
+          },
+          "lapHistory": {
+            "type": ["array", "null"],
+            "maxItems": 100,
+            "description": "선택(D-49, docs/15 §8). 그 차의 랩별 기록(Session History 11 — 세션 동안 받은 그 차의 최신 목록). 받지 못했으면 null. 봉투 한도를 넘으면 Agent가 먼저 뺀다.",
+            "items": { "$ref": "#/definitions/lapHistoryEntry" }
           }
         }
+      }
+    },
+    "lapPositions": {
+      "type": ["array", "null"],
+      "maxItems": 255,
+      "description": "선택(D-49, docs/15 §8). 랩별 순위(Lap Positions 15) — 랩 번호 순. 받지 못했으면 null. 봉투 한도를 넘으면 Agent가 먼저 뺀다.",
+      "items": {
+        "type": "object",
+        "required": ["lapNumber", "positions"],
+        "properties": {
+          "lapNumber": { "type": "integer", "minimum": 1, "maximum": 255 },
+          "positions": {
+            "type": "array",
+            "maxItems": 32,
+            "description": "positions[carIndex] = 그 랩의 순위. 0 = 기록 없음(빈 그리드 칸 포함). results[].carIndex로 맞춰 읽는다.",
+            "items": { "type": "integer", "minimum": 0, "maximum": 255 }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "lapHistoryEntry": {
+      "type": "object",
+      "description": "차 1대의 랩 1개 기록(Session History 랩 칸). 시간은 ms(분 칸 합산), 0 = 아직 없음. 유효 플래그는 게임 비트 플래그를 푼 것.",
+      "required": ["lapNumber", "lapTimeMs", "sector1TimeMs", "sector2TimeMs", "sector3TimeMs", "lapValid", "sector1Valid", "sector2Valid", "sector3Valid"],
+      "properties": {
+        "lapNumber": { "type": "integer", "minimum": 1 },
+        "lapTimeMs": { "type": "integer", "minimum": 0 },
+        "sector1TimeMs": { "type": "integer", "minimum": 0 },
+        "sector2TimeMs": { "type": "integer", "minimum": 0 },
+        "sector3TimeMs": { "type": "integer", "minimum": 0 },
+        "lapValid": { "type": "boolean" },
+        "sector1Valid": { "type": "boolean" },
+        "sector2Valid": { "type": "boolean" },
+        "sector3Valid": { "type": "boolean" }
       }
     }
   }

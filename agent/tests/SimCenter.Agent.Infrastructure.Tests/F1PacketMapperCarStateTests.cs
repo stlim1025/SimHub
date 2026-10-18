@@ -174,7 +174,7 @@ public class F1PacketMapperCarStateTests
         var car = new CarTelemetryData { Speed = 312, Throttle = 0.75f, Brake = 0.1f, Steer = -0.25f, Gear = 7, EngineRPM = 11_850 };
         var packet = new CarTelemetryDataPacket { Header = Header(uid: 77), CarTelemetryData = Slots(CarSlotCount, PlayerIndex, car) };
 
-        var frame = Assert.IsType<CarTelemetryFrame>(Assert.Single(_sut.Map(packet)));
+        var frame = Assert.Single(_sut.Map(packet).OfType<CarTelemetryFrame>());
 
         Assert.Equal(new CarTelemetryFrame("77", 312, 0.75f, 0.1f, -0.25f, 7, 11_850), frame);
     }
@@ -185,7 +185,7 @@ public class F1PacketMapperCarStateTests
         var car = new CarTelemetryData { Gear = -1 };
         var packet = new CarTelemetryDataPacket { Header = Header(), CarTelemetryData = Slots(CarSlotCount, PlayerIndex, car) };
 
-        var frame = Assert.IsType<CarTelemetryFrame>(Assert.Single(_sut.Map(packet)));
+        var frame = Assert.Single(_sut.Map(packet).OfType<CarTelemetryFrame>());
 
         Assert.Equal(-1, frame.Gear);
     }
@@ -207,7 +207,7 @@ public class F1PacketMapperCarStateTests
         };
         var packet = new CarStatusDataPacket { Header = Header(uid: 77), CarStatusData = Slots(CarSlotCount, PlayerIndex, car) };
 
-        var frame = Assert.IsType<CarStatusFrame>(Assert.Single(_sut.Map(packet)));
+        var frame = Assert.Single(_sut.Map(packet).OfType<CarStatusFrame>());
 
         Assert.Equal(new CarStatusFrame("77", 24.4f, 13.1f, 1_494_000f, 2_100_000f, 1_000_000f, 600_000f, 18, 16, 3), frame);
     }
@@ -231,7 +231,7 @@ public class F1PacketMapperCarStateTests
         };
         var packet = new CarDamageDataPacket { Header = Header(uid: 77), CarDamageData = Slots(CarSlotCount, PlayerIndex, car) };
 
-        var frame = Assert.IsType<CarDamageFrame>(Assert.Single(_sut.Map(packet)));
+        var frame = Assert.Single(_sut.Map(packet).OfType<CarDamageFrame>());
 
         Assert.Equal(new WheelSet<float>(FrontLeft: 27f, FrontRight: 14f, RearLeft: 20.5f, RearRight: 14.25f), frame.TyreWearPercent);
         Assert.Equal(new WheelSet<int>(FrontLeft: 1, FrontRight: 2, RearLeft: 3, RearRight: 4), frame.TyreDamagePercent);

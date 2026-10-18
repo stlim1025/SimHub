@@ -11,10 +11,11 @@ namespace SimCenter.Agent.Infrastructure.Mapping;
 
 /// <summary>
 /// F1Game.UDP 패킷을 Agent.Core의 게임중립 프레임으로 매핑한다(D-20 경계).
-/// 관심 패킷만 처리(Session/LapData/Event, P7: Participants/FinalClassification), 나머지는 무시(YAGNI, docs/06 §2.2).
+/// 처음엔 관심 패킷만 처리했으나(docs/06 §2.2) D-49(docs/15 §8)부터 Lobby Info(9)를 뺀 모든 패킷의 플레이어 차·세션 값을 읽는다
+/// (추가분은 <c>F1PacketMapper.CollectAll.cs</c>). 다른 차의 Motion은 읽지 않는다.
 /// 개별 Map* 메서드는 구성 가능한 패킷 구조체를 받아 단위테스트가 가능하다.
 /// </summary>
-public sealed class F1PacketMapper
+public sealed partial class F1PacketMapper
 {
     private const int MillisecondsPerSecond = 1000;
 
@@ -99,34 +100,31 @@ public sealed class F1PacketMapper
         switch (packet.PacketType)
         {
             case F1Enums.PacketType.Session when packet.TryGetSessionDataPacket(out var session):
-                return new ITelemetryFrame[] { MapSession(session) };
+                return [MapSession(session), DetailsFrame(session.Header, F1DetailSections.Session, F1SessionDetails.From(session))];
 
             case F1Enums.PacketType.LapData when packet.TryGetLapDataPacket(out var lapPacket):
-                return MapPlayerCar(packet.PacketType, packet.Header, lapPacket.LapData.AsReadOnlySpan(), MapLap);
+                return MapLapDataPacket(lapPacket);
 
             case F1Enums.PacketType.CarTelemetry when packet.TryGetCarTelemetryDataPacket(out var telemetry):
-                return MapPlayerCar(packet.PacketType, packet.Header, telemetry.CarTelemetryData.AsReadOnlySpan(), MapCarTelemetry);
+                return MapCarTelemetryPacket(telemetry);
 
             case F1Enums.PacketType.CarStatus when packet.TryGetCarStatusDataPacket(out var status):
-                return MapPlayerCar(packet.PacketType, packet.Header, status.CarStatusData.AsReadOnlySpan(), MapCarStatus);
+                return MapPlayerCar(packet.PacketType, packet.Header, status.CarStatusData.AsReadOnlySpan(), MapCarStatusFrames);
 
             case F1Enums.PacketType.CarDamage when packet.TryGetCarDamageDataPacket(out var damage):
-                return MapPlayerCar(packet.PacketType, packet.Header, damage.CarDamageData.AsReadOnlySpan(), MapCarDamage);
+                return MapPlayerCar(packet.PacketType, packet.Header, damage.CarDamageData.AsReadOnlySpan(), MapCarDamageFrames);
 
             case F1Enums.PacketType.Event when packet.TryGetEventDataPacket(out var eventPacket):
-            {
-                var marker = MapEvent(eventPacket);
-                return marker is null ? Empty : new ITelemetryFrame[] { marker };
-            }
+                return MapEventFrames(eventPacket);
 
             case F1Enums.PacketType.Participants when packet.TryGetParticipantsDataPacket(out var participants):
-                return new ITelemetryFrame[] { MapParticipants(participants) };
+                return MapParticipantsFrames(participants);
 
             case F1Enums.PacketType.FinalClassification when packet.TryGetFinalClassificationDataPacket(out var classification):
-                return new ITelemetryFrame[] { MapClassification(classification) };
+                return [MapClassification(classification)];
 
             default:
-                return Empty;
+                return MapCollectAllPacket(packet);
         }
     }
 
@@ -138,24 +136,30 @@ public sealed class F1PacketMapper
         F1Enums.PacketType packetType,
         PacketHeader header,
         ReadOnlySpan<TCar> cars,
-        Func<TCar, PacketHeader, ITelemetryFrame> map)
+        Func<TCar, PacketHeader, IReadOnlyList<ITelemetryFrame>> map)
+    {
+        return IsPlayerSlot(packetType, header, cars.Length) ? map(cars[header.PlayerCarIndex], header) : Empty;
+    }
+
+    /// <summary>헤더의 플레이어 번호가 칸 안이면 true. 아니면(관전 중 등) 패킷 종류와 무관하게 한 번만 경고한다.</summary>
+    private bool IsPlayerSlot(F1Enums.PacketType packetType, PacketHeader header, int slots)
     {
         var index = header.PlayerCarIndex;
-        if (index >= cars.Length)
+        if (index < slots)
         {
-            if (IsFirstDrop("player-index"))
-            {
-                _logger.LogWarning(
-                    "플레이어 차 번호 {Index}가 {PacketType} 칸 수 {Slots}를 넘어 플레이어 차를 읽지 못했습니다(관전 중이면 정상) — 아니면 게임의 UDP 레이아웃과 F1Game.UDP 버전이 맞는지 확인하세요",
-                    index,
-                    packetType,
-                    cars.Length);
-            }
-
-            return Empty;
+            return true;
         }
 
-        return new[] { map(cars[index], header) };
+        if (IsFirstDrop("player-index"))
+        {
+            _logger.LogWarning(
+                "플레이어 차 번호 {Index}가 {PacketType} 칸 수 {Slots}를 넘어 플레이어 차를 읽지 못했습니다(관전 중이면 정상) — 아니면 게임의 UDP 레이아웃과 F1Game.UDP 버전이 맞는지 확인하세요",
+                index,
+                packetType,
+                slots);
+        }
+
+        return false;
     }
 
     public SessionFrame MapSession(SessionDataPacket packet) => new(

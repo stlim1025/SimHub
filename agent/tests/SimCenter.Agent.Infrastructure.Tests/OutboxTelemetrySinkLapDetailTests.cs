@@ -18,9 +18,10 @@ namespace SimCenter.Agent.Infrastructure.Tests;
 public sealed class OutboxTelemetrySinkLapDetailTests : IAsyncLifetime
 {
     private const int TraceResolutionM = 5;
-    private const int LargeValue = 1_000_000;            // 7자리 + 쉼표 = 칸마다 8바이트
-    private const int WireBytesPerLargeSample = 7 * 8;   // 채널 7개
-    private const int OversizedSectorCount = 5000;
+    private const int LargeValue = 1_000_000;              // 7자리 + 쉼표 = 칸마다 8바이트
+    private const int LargeExtraChannelCount = 93;         // 기본 7채널 + extra 93 = 100채널 — 768KiB 한도를 넘길 만큼(D-49)
+    private const int WireBytesPerLargeSample = (7 + LargeExtraChannelCount) * 8;
+    private const int OversizedSectorCount = 25_000;       // 섹터 1개 ≈ 42바이트 → 약 1MB
     private const int SpaLengthM = 7004;
     private const int SpaLapTimeMs = 106_000;
 
@@ -58,7 +59,7 @@ public sealed class OutboxTelemetrySinkLapDetailTests : IAsyncLifetime
                 "teamId", "visualTyreCompound", "actualTyreCompound", "tyreAgeLaps", "tyreWearStart", "tyreWearEnd",
                 "tyreDamage", "brakeDamage", "frontLeftWingDamage", "frontRightWingDamage", "rearWingDamage", "floorDamage",
                 "diffuserDamage", "sidepodDamage", "gearboxDamage", "engineDamage", "fuelStartKg", "fuelEndKg",
-                "fuelRemainingLaps", "ersStoreStartJ", "ersStoreEndJ", "ersDeployedJ", "ersHarvestedJ",
+                "fuelRemainingLaps", "ersStoreStartJ", "ersStoreEndJ", "ersDeployedJ", "ersHarvestedJ", "details",
             }.Order(),
             Names(car).Order());
         foreach (var wheels in new[] { "tyreWearStart", "tyreWearEnd", "tyreDamage", "brakeDamage" })
@@ -78,7 +79,7 @@ public sealed class OutboxTelemetrySinkLapDetailTests : IAsyncLifetime
 
         var trace = payload.GetProperty("trace");
         Assert.Equal(
-            new[] { "resolutionM", "timeMs", "speedKph", "throttle", "brake", "steer", "gear", "rpm" }.Order(),
+            new[] { "resolutionM", "timeMs", "speedKph", "throttle", "brake", "steer", "gear", "rpm", "extra" }.Order(),
             Names(trace).Order());
         Assert.Equal(TraceResolutionM, trace.GetProperty("resolutionM").GetInt32());
         Assert.Equal(new[] { 7, 7, 7, 7 }, trace.GetProperty("gear").EnumerateArray().Select(v => v.GetInt32()));
@@ -94,6 +95,57 @@ public sealed class OutboxTelemetrySinkLapDetailTests : IAsyncLifetime
         Assert.Equal(JsonValueKind.Null, payload.GetProperty("car").ValueKind);
         Assert.Equal(JsonValueKind.Null, payload.GetProperty("conditions").ValueKind);
         Assert.Equal(JsonValueKind.Null, payload.GetProperty("trace").ValueKind);
+    }
+
+    [Fact]
+    public async Task TraceExtra_IsWrittenAsNameToNumberArrayMap_WithNamesUnchanged()
+    {
+        var extra = new Dictionary<string, IReadOnlyList<double>>
+        {
+            ["tyreSurfaceTempFL"] = new[] { 91d, 92.5, 93d, 94d },
+            ["wheelSlipRatioPctRR"] = new[] { -1.25, 0d, 0.5, 2d },
+        };
+
+        await _sut.EmitAsync(Envelope(Lap(car: null, conditions: null, Trace(4, value: 7) with { Extra = extra })));
+
+        using var doc = JsonDocument.Parse(await SingleOutboxJsonAsync());
+        var wire = doc.RootElement.GetProperty("payload").GetProperty("trace").GetProperty("extra");
+        Assert.Equal(new[] { "tyreSurfaceTempFL", "wheelSlipRatioPctRR" }, Names(wire));   // 사전 키는 바꾸지 않는다(이미 camelCase)
+        Assert.Equal(new[] { 91, 92.5, 93, 94 }, wire.GetProperty("tyreSurfaceTempFL").EnumerateArray().Select(v => v.GetDouble()));
+        Assert.Equal("[-1.25,0,0.5,2]", wire.GetProperty("wheelSlipRatioPctRR").GetRawText());
+    }
+
+    [Fact]
+    public async Task CarDetails_AreWrittenAsNestedObjects_WithEventsAndSessionHistory()
+    {
+        var details = new Dictionary<string, object?>
+        {
+            ["setup"] = new Dictionary<string, object?> { ["frontWing"] = (byte)30, ["tyrePressureFL"] = 22.3, ["fuelLoad"] = null },
+            ["tyreSets"] = new Dictionary<string, object?> { ["sets"] = new object?[] { new Dictionary<string, object?> { ["fitted"] = true } } },
+            ["events"] = new[] { new LapEventEntry("PENA", 15_250, new Dictionary<string, object?> { ["penaltyType"] = 5 }) },
+            ["sessionHistory"] = new LapHistoryEntry(5, 83_452, 27_010, 30_110, 26_332, true, true, true, false),
+        };
+
+        await _sut.EmitAsync(Envelope(Lap(Snapshot() with { Details = details }, conditions: null, trace: null)));
+
+        var json = await SingleOutboxJsonAsync();
+        _output.WriteLine(json);
+        using var doc = JsonDocument.Parse(json);
+        var wire = doc.RootElement.GetProperty("payload").GetProperty("car").GetProperty("details");
+        Assert.Equal(30, wire.GetProperty("setup").GetProperty("frontWing").GetInt32());
+        Assert.Equal(22.3, wire.GetProperty("setup").GetProperty("tyrePressureFL").GetDouble());
+        Assert.Equal(JsonValueKind.Null, wire.GetProperty("setup").GetProperty("fuelLoad").ValueKind);
+        Assert.True(wire.GetProperty("tyreSets").GetProperty("sets")[0].GetProperty("fitted").GetBoolean());
+        var penalty = Assert.Single(wire.GetProperty("events").EnumerateArray());
+        Assert.Equal(new[] { "code", "lapTimeMs", "details" }, Names(penalty));
+        Assert.Equal("PENA", penalty.GetProperty("code").GetString());
+        Assert.Equal(15_250, penalty.GetProperty("lapTimeMs").GetInt32());
+        Assert.Equal(5, penalty.GetProperty("details").GetProperty("penaltyType").GetInt32());
+        var history = wire.GetProperty("sessionHistory");
+        Assert.Equal(
+            new[] { "lapNumber", "lapTimeMs", "sector1TimeMs", "sector2TimeMs", "sector3TimeMs", "lapValid", "sector1Valid", "sector2Valid", "sector3Valid" },
+            Names(history));
+        Assert.False(history.GetProperty("sector3Valid").GetBoolean());
     }
 
     [Fact]
@@ -115,7 +167,7 @@ public sealed class OutboxTelemetrySinkLapDetailTests : IAsyncLifetime
     [InlineData(2_400, 20, 600)]    // 10m로도 넘고 20m면 들어간다
     public async Task OversizedTrace_IsDownsampledUntilItFits(int samples, int expectedResolutionM, int expectedSamples)
     {
-        var lap = Lap(Snapshot(), conditions: null, Trace(samples, LargeValue));
+        var lap = Lap(Snapshot(), conditions: null, Trace(samples, LargeValue, LargeExtraChannelCount));
         Assert.True(samples * WireBytesPerLargeSample > OutboxTelemetrySink.MaxEnvelopeBytes, "전제: 5m 트레이스는 한도 초과");
 
         await _sut.EmitAsync(Envelope(lap));
@@ -127,13 +179,14 @@ public sealed class OutboxTelemetrySinkLapDetailTests : IAsyncLifetime
         Assert.Equal(expectedResolutionM, trace.GetProperty("resolutionM").GetInt32());
         Assert.Equal(expectedSamples, trace.GetProperty("timeMs").GetArrayLength());
         Assert.Equal(expectedSamples, trace.GetProperty("rpm").GetArrayLength());
+        Assert.Equal(expectedSamples, trace.GetProperty("extra").GetProperty("x0").GetArrayLength());   // extra도 같이 줄었다
         Assert.DoesNotContain(_logger.Entries, e => e.Level >= LogLevel.Warning);
     }
 
     [Fact]
     public async Task OversizedTraceEvenAt20m_IsDropped_AndLapIsStillEnqueued()
     {
-        var lap = Lap(Snapshot(), new LapConditions(Weather.Clear, 21, 31, null), Trace(5_000, LargeValue));
+        var lap = Lap(Snapshot(), new LapConditions(Weather.Clear, 21, 31, null), Trace(5_000, LargeValue, LargeExtraChannelCount));
 
         await _sut.EmitAsync(Envelope(lap));
 
@@ -156,6 +209,23 @@ public sealed class OutboxTelemetrySinkLapDetailTests : IAsyncLifetime
 
         Assert.Equal(0, await _outbox.CountAsync());
         Assert.Contains(_logger.Entries, e => e.Level == LogLevel.Error);
+    }
+
+    [Fact]
+    public async Task OversizedDetailsEvenWithoutTrace_AreDropped_AndSnapshotIsKept()
+    {
+        // 상세가 비정상적으로 커서 트레이스를 빼도 넘는 경우 — 상세를 빼고 다시 맞춘다: 랩·스냅샷 본체·트레이스는 지킨다(D-49).
+        var huge = new Dictionary<string, object?> { ["setup"] = new Dictionary<string, object?> { ["blob"] = new string('x', OutboxTelemetrySink.MaxEnvelopeBytes) } };
+        var lap = Lap(Snapshot() with { Details = huge }, conditions: null, Trace(4, value: 1));
+
+        await _sut.EmitAsync(Envelope(lap));
+
+        using var doc = JsonDocument.Parse(await SingleOutboxJsonAsync());
+        var payload = doc.RootElement.GetProperty("payload");
+        Assert.Equal(TraceResolutionM, payload.GetProperty("trace").GetProperty("resolutionM").GetInt32());   // 상세 탓에 트레이스를 잃지 않는다
+        Assert.Equal(JsonValueKind.Null, payload.GetProperty("car").GetProperty("details").ValueKind);
+        Assert.Equal(1, payload.GetProperty("car").GetProperty("teamId").GetInt32());
+        Assert.Single(_logger.Entries, e => e.Level == LogLevel.Warning);
     }
 
     [Fact]
@@ -220,10 +290,14 @@ public sealed class OutboxTelemetrySinkLapDetailTests : IAsyncLifetime
         ErsDeployedJ: 2_100_000,
         ErsHarvestedJ: 1_600_000);
 
-    private static LapTrace Trace(int samples, int value)
+    private static LapTrace Trace(int samples, int value, int extraChannels = 0)
     {
         var channel = Enumerable.Repeat(value, samples).ToArray();
-        return new LapTrace(TraceResolutionM, channel, channel, channel, channel, channel, channel, channel);
+        IReadOnlyList<double> extraChannel = channel.Select(v => (double)v).ToArray();
+        var extra = extraChannels == 0
+            ? null
+            : Enumerable.Range(0, extraChannels).ToDictionary(i => $"x{i}", _ => extraChannel);
+        return new LapTrace(TraceResolutionM, channel, channel, channel, channel, channel, channel, channel, extra);
     }
 
     /// <summary>자릿수가 실제와 비슷한 1랩 트레이스(시간 0~106초, 속도 80~340, RPM 9,000~12,500, 스티어 −100~100).</summary>

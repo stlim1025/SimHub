@@ -22,9 +22,9 @@ public sealed class OutboxTelemetrySinkSizeTests : IAsyncLifetime
     private const int RealisticNameLength = 10;
     private const int ValidationMaxNameLength = 64;       // 백엔드 MaxDriverNameLength
     private const int ValidationMaxActualCompoundLength = 10;   // 백엔드 MaxActualCompoundLength
-    private const int OversizedCompoundLength = 200;
-    private const int OversizedNameLength = 400;
-    private const int OversizedSectorCount = 5000;
+    private const int OversizedCompoundLength = 5_000;     // 24대 × 8스틴트 × 5,000자 ≈ 960KB > 768KiB(D-49)
+    private const int OversizedNameLength = 6_000;         // 24대 × 6,000자 × 6바이트 ≈ 864KB
+    private const int OversizedSectorCount = 25_000;       // 섹터 1개 ≈ 42바이트 → 약 1MB
     private const string NonAsciiChar = "가";                 // 기본 인코더는 \uXXXX(6바이트)로 escape한다
 
     private static readonly DateTime OccurredAt = new(2026, 10, 17, 9, 0, 0, DateTimeKind.Utc);
@@ -170,6 +170,50 @@ public sealed class OutboxTelemetrySinkSizeTests : IAsyncLifetime
 
         var warning = Assert.Single(_logger.Entries);
         Assert.Equal(LogLevel.Warning, warning.Level);
+    }
+
+    [Fact]
+    public async Task RealisticRaceWithLapRecords_FitsUnderLimit()
+    {
+        // 22대 × 78랩(모나코 100%) 랩 기록 + 78랩 순위표 — 가장 긴 레이스의 SessionClassified(D-49).
+        const int cars = 22;
+        const int laps = 78;
+        var history = Enumerable.Range(1, laps).Select(lap => new LapHistoryEntry(lap, 74_812, 19_834, 34_655, 20_323, true, true, true, true)).ToArray();
+        var results = Cars(cars, nameLength: RealisticNameLength, stints: LongestLabelStints(3)).Select(result => result with { LapHistory = history }).ToArray();
+        var positions = Enumerable.Range(1, laps).Select(lap => new LapPositionsEntry(lap, Enumerable.Range(1, cars).ToArray())).ToArray();
+
+        await _sut.EmitAsync(Envelope(Classified(results) with { LapPositions = positions }));
+
+        var json = await SingleOutboxJsonAsync();
+        var bytes = Utf8Bytes(json);
+        _output.WriteLine($"22 cars x 78 laps SessionClassified with lapHistory + lapPositions: {bytes} bytes (limit {OutboxTelemetrySink.MaxEnvelopeBytes})");
+        Assert.True(bytes <= OutboxTelemetrySink.MaxEnvelopeBytes, $"{bytes} bytes");
+        using var doc = JsonDocument.Parse(json);
+        var payload = doc.RootElement.GetProperty("payload");
+        Assert.Equal(laps, payload.GetProperty("lapPositions").GetArrayLength());
+        Assert.Equal(laps, payload.GetProperty("results")[0].GetProperty("lapHistory").GetArrayLength());
+        Assert.Empty(_logger.Entries);
+    }
+
+    [Fact]
+    public async Task OversizedLapRecords_AreDroppedFirst_StintsKept()
+    {
+        var history = Enumerable.Range(1, 2_000).Select(lap => new LapHistoryEntry(lap, 74_812, 19_834, 34_655, 20_323, true, true, true, true)).ToArray();
+        var results = Cars(MaxCars, nameLength: RealisticNameLength, stints: LongestLabelStints(MaxTyreStints)).Select(result => result with { LapHistory = history }).ToArray();
+        var payload = Classified(results) with { LapPositions = [new LapPositionsEntry(1, [1, 2])] };
+        Assert.True(Utf8Bytes(Serialize(payload)) > OutboxTelemetrySink.MaxEnvelopeBytes, "전제: 랩 기록 포함 시 한도 초과");
+
+        await _sut.EmitAsync(Envelope(payload));
+
+        using var doc = JsonDocument.Parse(await SingleOutboxJsonAsync());
+        var wire = doc.RootElement.GetProperty("payload");
+        Assert.Equal(JsonValueKind.Null, wire.GetProperty("lapPositions").ValueKind);
+        Assert.All(wire.GetProperty("results").EnumerateArray(), result =>
+        {
+            Assert.Equal(JsonValueKind.Null, result.GetProperty("lapHistory").ValueKind);
+            Assert.Equal(MaxTyreStints, result.GetProperty("tyreStints").GetArrayLength());   // 스틴트는 남는다
+        });
+        Assert.Single(_logger.Entries, e => e.Level == LogLevel.Warning);
     }
 
     [Fact]

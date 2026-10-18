@@ -33,7 +33,7 @@ public class F1WireLayoutTests
     {
         var frames = Mapper().Map(ReadFixture("session.bin"));
 
-        var session = Assert.IsType<SessionFrame>(Assert.Single(frames));
+        var session = Assert.Single(frames.OfType<SessionFrame>());
         Assert.Equal((int)F1Enums.Track.Texas, session.TrackId);
         Assert.Equal(CoreSessionType.TimeTrial, session.SessionType);
         Assert.Equal(Format, session.PacketFormat);
@@ -44,7 +44,7 @@ public class F1WireLayoutTests
     {
         var frames = Mapper().Map(ReadFixture("lapdata.bin"));
 
-        var lap = Assert.IsType<LapFrame>(Assert.Single(frames));
+        var lap = Assert.Single(frames.OfType<LapFrame>());
         Assert.Equal(2, lap.CurrentLapNumber);
         Assert.Equal(99_191, lap.LastLapTimeMs); // 1:39.191 — 캡처 직전에 끝낸 랩
     }
@@ -139,7 +139,7 @@ public class F1WireLayoutTests
     [Fact]
     public void Map_RealSessionDatagram_ProducesConditions()
     {
-        var session = Assert.IsType<SessionFrame>(Assert.Single(Mapper().Map(ReadFixture("session.bin"))));
+        var session = Assert.Single(Mapper().Map(ReadFixture("session.bin")).OfType<SessionFrame>());
 
         Assert.Equal(Weather.Clear, session.Weather);
         Assert.Equal(27, session.AirTemperatureC);
@@ -151,7 +151,7 @@ public class F1WireLayoutTests
     [Fact]
     public void Map_RealLapDataDatagram_ProducesDistanceAndCurrentLapTime()
     {
-        var lap = Assert.IsType<LapFrame>(Assert.Single(Mapper().Map(ReadFixture("lapdata.bin"))));
+        var lap = Assert.Single(Mapper().Map(ReadFixture("lapdata.bin")).OfType<LapFrame>());
 
         // 랩 번호가 막 바뀐 순간의 캡처 — 시간은 0으로 돌아갔지만 거리는 아직 앞 랩 값이다(트레이스는 칸 덮어쓰기로 견딘다).
         Assert.Equal(5054.4614f, lap.LapDistanceM, precision: 3);
@@ -170,7 +170,7 @@ public class F1WireLayoutTests
         WriteBytes(datagram, car + 28, 31, 32, 33, 34, 35, 36);          // 앞날개 L·R, 뒷날개, 플로어, 디퓨저, 사이드포드
         WriteBytes(datagram, car + 36, 37, 38);                          // 기어박스, 엔진
 
-        var frame = Assert.IsType<CarDamageFrame>(Assert.Single(Mapper().Map(datagram)));
+        var frame = Assert.Single(Mapper().Map(datagram).OfType<CarDamageFrame>());
 
         Assert.Equal(new WheelSet<float>(FrontLeft: 3.5f, FrontRight: 4.5f, RearLeft: 1.5f, RearRight: 2.5f), frame.TyreWearPercent);
         Assert.Equal(new WheelSet<int>(FrontLeft: 13, FrontRight: 14, RearLeft: 11, RearRight: 12), frame.TyreDamagePercent);
@@ -194,7 +194,7 @@ public class F1WireLayoutTests
         datagram[car + 15] = unchecked((byte)(sbyte)-1);                              // m_gear(R)
         BinaryPrimitives.WriteUInt16LittleEndian(datagram.AsSpan(car + 16), 11_850);  // m_engineRPM
 
-        var frame = Assert.IsType<CarTelemetryFrame>(Assert.Single(Mapper().Map(datagram)));
+        var frame = Assert.Single(Mapper().Map(datagram).OfType<CarTelemetryFrame>());
 
         Assert.Equal(new CarTelemetryFrame("0", 287, 0.75f, 0.5f, -0.25f, -1, 11_850), frame);
     }
@@ -210,7 +210,7 @@ public class F1WireLayoutTests
         WriteFloats(datagram, car + 37, 1_494_000f);                   // m_ersStoreEnergy
         WriteFloats(datagram, car + 42, 1_000_000f, 600_000f, 2_100_000f);   // 이 랩 회수(MGU-K, MGU-H)·배포
 
-        var frame = Assert.IsType<CarStatusFrame>(Assert.Single(Mapper().Map(datagram)));
+        var frame = Assert.Single(Mapper().Map(datagram).OfType<CarStatusFrame>());
 
         Assert.Equal(new CarStatusFrame("0", 24.5f, 13.25f, 1_494_000f, 2_100_000f, 1_000_000f, 600_000f, 18, 16, 3), frame);
     }

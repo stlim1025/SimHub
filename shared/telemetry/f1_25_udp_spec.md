@@ -8,6 +8,7 @@
 > **참조용 스펙 문서**
 > F1 25 게임에서 송출되는 UDP Telemetry 패킷 중, **SimCenter MVP의 랩타임 측정 및 랭킹 정립**에 필요한 핵심 패킷 3종에 대한 세부 바이트 구조와 오프셋을 명세합니다.
 > 랩 상세(차량 스냅샷·텔레메트리 트레이스, [docs/15](../../docs/15-lap-detail-telemetry.md) §3, D-44·D-45)에 새로 쓰는 패킷·필드는 **§5**에 모았습니다.
+> "전부 수집"([docs/15](../../docs/15-lap-detail-telemetry.md) §8, D-49)의 **트레이스 extra 채널 카탈로그는 §6, 스냅샷 `car.details` 키는 §7, 순위표 랩 기록은 §8** — 이 세 표가 진실 원천이다.
 > 모든 데이터는 **Little Endian**으로 패킹되어 있습니다.
 
 ---
@@ -40,6 +41,8 @@
 - `7`: **Car Status Packet** (연료·ERS·타이어 컴파운드·나이 — 스냅샷 §5.4)
 - `8`: **Final Classification Packet** (세션 최종 순위표 — [docs/12](../../docs/12-seasons-sessions.md) §5.2)
 - `10`: **Car Damage Packet** (타이어 마모·손상, 날개·차체 손상 — 스냅샷 §5.5)
+- `0`·`5`·`11`·`12`·`13`·`14`·`15`: **Motion · Car Setups · Session History · Tyre Sets · Motion Ex · Time Trial · Lap Positions** — "전부 수집"(D-49):
+  트레이스 `extra`(§6) · 스냅샷 `details`(§7) · 순위표 랩 기록(§8). 읽지 않는 것은 `9`(Lobby Info)와 다른 차의 Motion뿐이다.
 
 ---
 
@@ -191,7 +194,7 @@
 | 0 | `TyresWear[4]` | float × 4 (RL·RR·FL·FR) | % → `tyreWearStart`·`tyreWearEnd`(0~100으로 다듬음) |
 | 16 | `TyresDamage[4]` | uint8 × 4 | % → `tyreDamage` |
 | 20 | `BrakesDamage[4]` | uint8 × 4 | % → `brakeDamage` |
-| 24 | `TyresBlisters[4]` | uint8 × 4 | (F1 25 신규, 쓰지 않음) |
+| 24 | `TyresBlisters[4]` | uint8 × 4 | `details.damage.tyreBlisters{FL…RR}`(D-49, §7) |
 | 28 ~ 33 | `FrontLeftWingDamage` · `FrontRightWingDamage` · `RearWingDamage` · `FloorDamage` · `DiffuserDamage` · `SidepodDamage` | uint8 | % → 같은 이름의 `…Damage` |
 | 36 · 37 | `GearBoxDamage` · `EngineDamage` | uint8 | % → `gearboxDamage` · `engineDamage` |
 
@@ -206,3 +209,150 @@
   (그보다 늦으면 Agent가 랩 중간에 시작한 것 → 시작 값 생략).
 - 랩이 바뀌는 프레임에서 Lap Data(2)가 Car Status(7)보다 먼저 온다고 본다(게임은 한 프레임의 패킷을 대체로 ID 순서로 보낸다 — 실제 캡처로는 확인하지 못함).
   그래야 "이 랩" ERS가 0으로 되돌아간 Car Status가 새 랩의 시작 값이 되고 앞 랩의 끝 값을 덮지 않는다.
+
+---
+
+## 6. 트레이스 `extra` 채널 카탈로그 (D-49, docs/15 §8)
+
+> 구현: `agent/src/SimCenter.Agent.Infrastructure/Mapping/F1ExtraChannels.cs`(채널 하나 = 한 줄). 이 표와 코드가 어긋나면 고친다 —
+> `F1ExtraChannelsWireTests.AllExtraChannels_HaveValidNames_AndFitTheLimit`가 채널 수(**118**)를 고정한다.
+
+**공통 규칙**
+- `trace.extra = { 이름: number[] }` — 기본 7채널과 **같은 칸·같은 길이**. 칸에는 그 칸의 Car Telemetry 표본을 쓰는 순간의 각 채널 **최신 값**을 찍는다(덮어쓰기·플래시백 규칙 동일).
+  Car Telemetry 패킷은 extra를 먼저 내 같은 패킷의 값이 같은 칸에 들어간다. 다른 패킷(Status·Motion·Motion Ex·Lap Data) 채널은 칸을 쓸 때까지 받은 최신 값이다.
+- 빈 칸 = 앞 값, 맨 앞 = 첫 값. 랩 동안 값이 한 번도 없던 채널은 빠진다. 최신 값은 랩을 넘어 이어지고 세션이 바뀌면 잊는다.
+- 값은 **유한 숫자**(NaN·±∞는 버리고 앞 값 유지), **소수 둘째 자리** 반올림(표의 "소수"가 더 작으면 그만큼). 불리언은 0/1, 열거형은 게임 원시 정수.
+- 이름 `^[A-Za-z0-9]{1,40}$`, 채널 ≤ 150(Core `TraceExtraChannels`가 넘는 새 채널을 버린다). 바퀴 4개는 접미사 `FL·FR·RL·RR`(UDP 배열 RL·RR·FL·FR을 이름으로 옮김 — 테스트로 고정).
+- 크기: Spa 1랩 5m(1,401칸) × 125채널 + 상세 ≈ **891KB** → 한도(768KiB) 초과라 **10m(≈459KB)**로 낮춰 보낸다(`OutboxTelemetrySinkCollectAllSizeTests`). 5km 안팎 트랙은 5m 그대로 들어간다.
+
+**Car Telemetry (6) — 25채널**
+
+| 채널 | 원천 필드 | 단위 | 소수 |
+|---|---|---|---|
+| `clutch` | `Clutch` | % (0~100) | 0 |
+| `drs` | `IsDrsOn` | 0/1 | 0 |
+| `revLightsPercent` | `RevLightsPercent` | % | 0 |
+| `brakeTemp{FL,FR,RL,RR}` | `BrakesTemperature[4]` | °C | 0 |
+| `tyreSurfaceTemp{FL,FR,RL,RR}` | `TyresSurfaceTemperature[4]` | °C | 0 |
+| `tyreInnerTemp{FL,FR,RL,RR}` | `TyresInnerTemperature[4]` | °C | 0 |
+| `engineTemp` | `EngineTemperature` | °C | 0 |
+| `tyrePressure{FL,FR,RL,RR}` | `TyresPressure[4]` | PSI | 2 |
+| `surfaceType{FL,FR,RL,RR}` | `SurfaceType[4]` | 열거(0 Tarmac·1 Rumble·2 Concrete·3 Rock·4 Gravel·5 Mud·6 Sand·7 Grass·8 Water·9 Cobble·10 Metal·11 Ridged) | 0 |
+| `suggestedGear` | 패킷 `SuggestedGear` | 기어(0 = 없음) | 0 |
+
+**Car Status (7) — 16채널** (랩 중 바뀌는 값. 연료·ERS 시작/끝 값은 `car` 본체에도 있다)
+
+| 채널 | 원천 필드 | 단위 | 소수 |
+|---|---|---|---|
+| `tractionControl` | `TractionControl` | 0 Off · 1 Medium · 2 Full | 0 |
+| `antiLockBrakes` | `AntiLockBrakes` | 0/1 | 0 |
+| `fuelMix` | `FuelMix` | 0 Lean · 1 Standard · 2 Rich · 3 Max | 0 |
+| `frontBrakeBias` | `FrontBrakeBias` | % | 0 |
+| `pitLimiter` | `IsPitLimiterOn` | 0/1 | 0 |
+| `fuelInTank` | `FuelInTank` | kg | 2 |
+| `fuelRemainingLaps` | `FuelRemainingLaps` | 랩(MFD, 음수 가능) | 2 |
+| `drsAllowed` | `DrsAllowed` | 0/1 | 0 |
+| `vehicleFiaFlag` | `VehicleFiaFlags` | −1 모름 · 0 없음 · 1 Green · 2 Blue · 3 Yellow | 0 |
+| `enginePowerIce` · `enginePowerMguk` | `EnginePowerICE` · `EnginePowerMGUK` | W | 0 |
+| `ersStoreEnergy` | `ErsStoreEnergy` | J | 0 |
+| `ersDeployMode` | `ErsDeployMode` | 0 None · 1 Medium · 2 Hotlap · 3 Overtake | 0 |
+| `ersHarvestedThisLapMguk` · `ersHarvestedThisLapMguh` | `ErsHarvestedThisLapMGUK` · `…MGUH` | J(랩마다 0으로) | 0 |
+| `ersDeployedThisLap` | `ErsDeployedThisLap` | J(랩마다 0으로) | 0 |
+
+**Motion (0) 플레이어 칸 — 12채널** (다른 차 칸은 읽지 않는다)
+
+| 채널 | 원천 필드 | 단위 | 소수 |
+|---|---|---|---|
+| `worldPosX` · `worldPosY` · `worldPosZ` | `WorldPosition{X,Y,Z}` | m(월드 좌표 — 트랙 지도) | 1 |
+| `worldVelX` · `worldVelY` · `worldVelZ` | `WorldVelocity{X,Y,Z}` | m/s | 2 |
+| `gForceLateral` · `gForceLongitudinal` · `gForceVertical` | `GForce{Lateral,Longitudinal,Vertical}` | G | 2 |
+| `yawDeg` · `pitchDeg` · `rollDeg` | `Yaw` · `Pitch` · `Roll` | ° (rad × 180/π) | 2 |
+
+**Motion Ex (13, 플레이어 전용) — 61채널**
+
+| 채널 | 원천 필드 | 단위 | 소수 |
+|---|---|---|---|
+| `suspensionPosition{FL,FR,RL,RR}` | `SuspensionPosition[4]` | 게임 단위(mm 추정) | 2 |
+| `suspensionVelocity{…}` | `SuspensionVelocity[4]` | 게임 단위/s | 2 |
+| `suspensionAcceleration{…}` | `SuspensionAcceleration[4]` | 게임 단위/s² | 0 |
+| `wheelSpeed{…}` | `WheelSpeed[4]` | m/s | 2 |
+| `wheelSlipRatioPct{…}` | `WheelSlipRatio[4]` | % (비 × 100) | 2 |
+| `wheelSlipAngleDeg{…}` | `WheelSlipAngle[4]` | ° | 2 |
+| `wheelLatForce{…}` · `wheelLongForce{…}` · `wheelVertForce{…}` | `WheelLateralForce[4]` · `WheelLongitudinalForce[4]` · `WheelVerticalForce[4]` | N | 0 |
+| `wheelCamberDeg{…}` · `wheelCamberGainDeg{…}` | `WheelsCamper[4]` · `WheelsCamperGain[4]`(라이브러리 철자) | ° | 2 |
+| `heightOfCogMm` | `HeightOfCOGAboveGround` | mm (m × 1000) | 1 |
+| `localVelX` · `localVelY` · `localVelZ` | `LocalVelocity{X,Y,Z}` | m/s | 2 |
+| `angularVelX` · `angularVelY` · `angularVelZ` | `AngularVelocity{X,Y,Z}` | rad/s | 2 |
+| `angularAccX` · `angularAccY` · `angularAccZ` | `AngularAcceleration{X,Y,Z}` | rad/s² | 2 |
+| `frontWheelsAngleDeg` | `FrontWheelsAngle` | ° | 2 |
+| `frontAeroHeightMm` · `rearAeroHeightMm` | `FrontAeroHeight` · `RearAeroHeight` | mm | 1 |
+| `frontRollAngleDeg` · `rearRollAngleDeg` | `FrontRollAngle` · `RearRollAngle` | ° | 2 |
+| `chassisYawDeg` · `chassisPitchDeg` | `ChassisYaw` · `ChassisPitch` | ° | 2 |
+
+**Lap Data (2) 플레이어 칸 — 4채널**
+
+| 채널 | 원천 필드 | 단위 | 소수 |
+|---|---|---|---|
+| `carPosition` | `CarPosition` | 순위 | 0 |
+| `deltaToCarInFrontMs` | `DeltaToCarInFront{Minutes,InMS}` | ms(분 합산) | 0 |
+| `deltaToRaceLeaderMs` | `DeltaToRaceLeader{Minutes,InMS}` | ms | 0 |
+| `safetyCarDelta` | `SafetyCarDelta` | s | 2 |
+
+**넣지 않은 값:** `RevLightsBitValue`(퍼센트와 중복), Motion `WorldForwardDir`·`WorldRightDir`(요·피치·롤과 중복), MFD 패널 상태(화면 상태).
+
+---
+
+## 7. 스냅샷 `car.details` 키 (D-49, docs/15 §8)
+
+> 구현: `Mapping/F1DetailSections.cs`·`F1SessionDetails.cs`·`F1GameEvents.cs`, 조립·다듬기는 Core `LapDetailsTracker`·`DetailValues`.
+
+**공통 규칙:** 묶음마다 **가장 최근 값**(랩을 넘어 유지 — 셋업·타이어 세트·타임 트라이얼은 랩마다 오지 않는다, 세션이 바뀌면 잊는다). 받은 묶음만 실린다.
+값은 숫자·불리언·문자열·null·그런 값의 객체/배열, 열거형은 **게임 원시 정수**(뜻은 F1 25 UDP 스펙), 실수는 소수 **셋째 자리**, 유한하지 않으면 null.
+바퀴 4개는 접미사 `FL·FR·RL·RR`. 묶음을 하나도 못 받았으면 `details` = null. 봉투 한도를 트레이스 없이도 넘으면 `details`를 뺀다.
+
+| 키 | 원천 | 내용 |
+|---|---|---|
+| `setup` | Car Setups(5) 플레이어 칸 | `frontWing` `rearWing` `onThrottle` `offThrottle` `frontCamber` `rearCamber` `frontToe` `rearToe`(°) `frontSuspension` `rearSuspension` `frontAntiRollBar` `rearAntiRollBar` `frontSuspensionHeight` `rearSuspensionHeight` `brakePressure` `brakeBias` `engineBraking`(%) `tyrePressure{FL…RR}`(PSI) `ballast` `fuelLoad`(kg) `nextFrontWingValue`(패킷) |
+| `damage` | Car Damage(10) 나머지 | `tyreBlisters{FL…RR}`(%) `drsFault` `ersFault` `engineMguhWear` `engineEsWear` `engineCeWear` `engineIceWear` `engineMgukWear` `engineTcWear`(%) `engineBlown` `engineSeized` |
+| `status` | Car Status(7) 나머지 | `tractionControl` `antiLockBrakes` `fuelMix` `frontBrakeBias` `pitLimiter` `fuelCapacity`(kg) `maxRpm` `idleRpm` `maxGears` `drsAllowed` `drsActivationDistance`(m, 0 = 못 씀) `vehicleFiaFlag` `enginePowerIce` `enginePowerMguk`(W) `ersDeployMode` `networkPaused` |
+| `tyreSets` | Tyre Sets(12), `CarIndex` = 플레이어일 때만 | `fittedIndex`, `sets[20]` = { `actualCompound` `visualCompound` `wearPercent` `available` `recommendedSession` `lifeSpanLaps` `usableLifeLaps` `lapDeltaTimeMs`(지금 세트 대비) `fitted` } |
+| `timeTrial` | Time Trial(14) | `playerSessionBest` · `personalBest` · `rival` = { `carIndex` `teamId` `lapTimeMs` `sector1TimeMs` `sector2TimeMs` `sector3TimeMs` `tractionControl` `gearboxAssist` `antiLockBrakes` `equalCarPerformance` `customSetup` `valid` } |
+| `session` | Session(1) 전체 | `trackId` `sessionType` `formula` `weather` `trackTemperature` `airTemperature` `totalLaps` `trackLength` `sessionTimeLeftS` `sessionDurationS` `pitSpeedLimitKph` `gamePaused` `spectating` `spectatorCarIndex` `sliProNativeSupport` `marshalZones[]`={`zoneStart`(랩 비율) `zoneFlag`} `safetyCarStatus` `networkGame` `forecastAccuracy` `weatherForecast[]`={`sessionType` `timeOffsetMin` `weather` `trackTemperature` `trackTemperatureChange` `airTemperature` `airTemperatureChange` `rainPercentage`} `aiDifficulty` `pitStopWindowIdealLap` `pitStopWindowLatestLap` `pitStopRejoinPosition` `steeringAssist` `brakingAssist` `gearboxAssist` `pitAssist` `pitReleaseAssist` `ersAssist` `drsAssist` `dynamicRacingLine` `dynamicRacingLineType` `gameMode` `ruleSet` `timeOfDayMin` `sessionLength` `speedUnits` `temperatureUnits` `numSafetyCarPeriods` `numVirtualSafetyCarPeriods` `numRedFlagPeriods` `equalCarPerformance` `recoveryMode` `flashbackLimit` `surfaceType` `lowFuelMode` `raceStarts` `tyreTemperature` `pitLaneTyreSim` `carDamage` `carDamageRate` `collisions` `collisionsOffForFirstLapOnly` `unsafePitRelease` `collisionsOffForGriefing` `cornerCuttingStringency` `parcFermeRules` `pitStopExperience` `safetyCar` `safetyCarExperience` `formationLap` `formationLapExperience` `redFlags` `affectsLicenceLevelSolo` `affectsLicenceLevelMp` `weekendStructure[]`(세션 종류) `sector2LapDistanceStart` `sector3LapDistanceStart`(m). 배열은 개수 칸까지만 |
+| `participant` | Participants(4) 플레이어 칸(관전 중이면 없음) | `carIndex` `aiControlled` `driverId`(255 = 네트워크 사람) `networkId` `teamId` `myTeam` `raceNumber` `nationality` `name` `telemetryPublic` `showOnlineNames` `techLevel` `platform` (리버리 색은 넣지 않음) |
+| `lapData` | Lap Data(2) 플레이어 칸 나머지 — 랩이 바뀌기 직전 값 | `carIndex`(이벤트의 차 번호와 맞춰 읽는 플레이어 번호) `lapDistance` `totalDistance` `carPosition` `currentLapNum` `pitStatus` `numPitStops` `sector` `currentLapInvalid` `penaltiesS` `totalWarnings` `cornerCuttingWarnings` `numUnservedDriveThroughPens` `numUnservedStopGoPens` `gridPosition` `driverStatus` `resultStatus` `pitLaneTimerActive` `pitLaneTimeInLaneMs` `pitStopTimerMs` `pitStopShouldServePen` `speedTrapFastestSpeedKph` `speedTrapFastestLap`(255 = 없음) `timeTrialPbCarIndex` `timeTrialRivalCarIndex`(패킷) |
+| `events[]` | Event(3) — 그 랩 동안 받은 순서, 랩마다 비움, 최대 200 | `{ code, lapTimeMs(받은 순간 랩 경과), details }` — 아래 표. 다른 묶음이 있으면 이벤트가 없어도 `[]` |
+| `droppedEvents` | — | 200개를 넘어 버린 이벤트 수(있을 때만) |
+| `sessionHistory` | Session History(11) 플레이어의 이 랩 칸 | §8 `lapHistoryEntry`. 랩 끝 순간 값이라 `lapTimeMs`·`sector3TimeMs`가 0일 수 있다(세션 전체는 §8) |
+
+**이벤트 `details` (차 번호 = 원시 carIndex, 시간 = ms 정수)**
+
+| 코드 | 뜻 | details |
+|---|---|---|
+| `PENA` | 패널티 | `penaltyType` `infringementType` `vehicleIndex` `otherVehicleIndex` `timeS` `lapNumber` `placesGained` |
+| `FTLP` | 최고 랩 | `vehicleIndex` `lapTimeMs` |
+| `RTMT` | 리타이어 | `vehicleIndex` `reason` |
+| `DRSD` · `DRSE` | DRS 꺼짐 · 켜짐 | `reason`(DRSD만) |
+| `TMPT` | 팀 동료 피트 | `vehicleIndex` |
+| `RCWN` | 레이스 우승 | `vehicleIndex` |
+| `SPTP` | 스피드 트랩 | `vehicleIndex` `speedKph` `overallFastestInSession` `driverFastestInSession` `fastestVehicleIndexInSession` `fastestSpeedInSessionKph` |
+| `STLG` · `LGOT` | 출발 신호등 · 소등 | `numLights`(STLG만) |
+| `DTSV` · `SGSV` | 드라이브 스루 · 스톱 앤 고 수행 | `vehicleIndex`, `stopTimeMs`(SGSV) |
+| `FLBK` | 플래시백 | `flashbackFrameIdentifier` `flashbackSessionTimeMs` |
+| `OVTK` | 추월 | `overtakingVehicleIndex` `beingOvertakenVehicleIndex` |
+| `SCAR` | 세이프티카 | `safetyCarType` `eventType` |
+| `COLL` | 충돌 | `vehicle1Index` `vehicle2Index` |
+| `CHQF` · `RDFL` | 체커기 · 적기 | (없음) |
+
+`SSTA`·`SEND`는 세션 경계 마커로 쓰고 목록에 넣지 않는다. `BUTN`(버튼 상태)은 입력 장치 상태라 버린다. 라이브러리가 모르는 코드는 상세 없이 코드만 싣는다.
+
+---
+
+## 8. 순위표 랩 기록 — `SessionClassified` (D-49, docs/15 §8)
+
+| 필드 | 원천 | 규칙 |
+|---|---|---|
+| `results[].lapHistory[]` | Session History(11), 차마다 돌아가며 옴 | 그 차의 최신 패킷 목록(`NumLaps`칸까지). `lapHistoryEntry` = { `lapNumber` `lapTimeMs` `sector1TimeMs` `sector2TimeMs` `sector3TimeMs`(분 칸 합산) `lapValid` `sector1Valid` `sector2Valid` `sector3Valid`(비트 0x01·0x02·0x04·0x08) }. 못 받은 차는 null |
+| `lapPositions[]` | Lap Positions(15) | { `lapNumber`, `positions[carIndex]`(0 = 기록 없음) } 랩 번호 순. 랩 번호 = `StartingLap`(0부터) + 1 + i. 여러 패킷(50랩 구간)을 랩 번호로 합친다(같은 랩은 나중 값) |
+
+세션이 바뀌면 비운다. 봉투 한도를 넘으면 **랩 기록 → 타이어 스틴트** 순으로 뺀다. 22대 × 78랩(모나코 100%) ≈ 324KB로 보통은 그대로 간다.
+Session History의 타이어 스틴트 칸은 Final Classification의 `tyreStints`와 같아 싣지 않는다.
