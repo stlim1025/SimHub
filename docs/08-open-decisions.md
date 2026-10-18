@@ -330,6 +330,41 @@ invalid 랩도 우선 기록은 해두고 랭킹 집계에서는 사용하지 �
 
 ---
 
+## L. F1Laps 수준 맞추기 결정 (2026-10-18, 상세: [15](./15-lap-detail-telemetry.md))
+
+> 사용자 요청: F1Laps와 디자인·구성·기능이 다르다 — 랩 상세·텔레메트리·캘린더 순서 트랙과 국기·팀 아이콘. P9를 P8보다 앞당긴다.
+
+### D-42. 앱은 Flutter 유지
+- **근거:** 차이의 원인은 Material 기본 위젯 사용과 빠진 기능·데이터다. HTML·JS로 바꿔도 남고, 앱 전체를 다시 쓰는 비용에 비해 얻는 것이 없다.
+  F1Laps 모양은 직접 만든 위젯으로 맞춘다. Flutter Web의 약점(첫 로딩, 브라우저 찾기·텍스트 선택)은 문제가 되면 그때 다시 판단한다.
+
+### D-43. 트랙 표시 정보 = `Track.CountryCode`·`DisplayOrder`
+- 백엔드가 가진다(D-33의 팀 카탈로그와 같은 원칙 — 앱은 매핑하지 않는다). 시드가 매번 기존 행의 국가·순서를 시드 값으로 맞춘다(이름은 그대로).
+- 순서 = F1 25 캘린더 24개 → 리버스 3개 → Madrid → 옛 트랙. `GET /tracks`는 이 순서. 국기는 앱의 `country_flags` 패키지(이모지는 Windows에서 안 그려짐).
+
+### D-44. 랩 스냅샷 = LapFinished `car`·`conditions` → `lap_snapshots`
+- Agent가 Car Status·Car Damage·Session·Participants의 마지막 값(끝 값)과 랩 시작 직후 값(시작 값)을 모아 보낸다. 백엔드는 평평한 nullable 열로 저장.
+- 틀린 스냅샷은 버리고 랩은 저장한다(랩 기록이 본체).
+
+### D-45. 텔레메트리 트레이스 = 거리 5m · 7채널, LapFinished `trace` → bytea gzip (D-17·D-18·D-19 확정)
+- D-17: 정제된 1랩 표본 1건이라 Raw firehose 금지와 양립한다(승인 해석).
+- D-18: PostgreSQL `bytea`(gzip JSON, `lap_telemetry_traces`). D-19: 거리 기준 5m, 채널 timeMs·speedKph·throttle·brake·steer·gear·rpm, 보존 무기한.
+- [09](./09-lap-telemetry-trace.md)의 별도 REST 업로드 대신 LapFinished에 싣는다 — Outbox(오프라인 보관·멱등·Ack)를 그대로 쓰고 랩과 한 번에 저장된다.
+  봉투 한도(48KiB)를 넘으면 10m → 20m로 낮추고, 그래도 넘으면 트레이스만 뺀다. 틀린 트레이스는 버리고 랩은 저장한다.
+
+### D-46. 랩 상세 = `/laps/:lapId` 3탭, 비교 = 같은 트랙의 내 최고 유효 랩
+- Lap Details · Telemetry · Your Best Laps. 랭킹 1위 랩과의 비교는 이후(남의 트레이스 공개 범위를 따로 정해야 한다).
+
+### D-47. Laps 화면 = F1Laps 배치
+- `/laps`는 마지막으로 달린 트랙을 바로 연다. 제목(국기 + 이름)을 누르면 캘린더 순서 트랙 메뉴. 표 = TEAM·TIME·MODE·날씨·DATE, 행 클릭 → 랩 상세.
+  Leaderboard도 같은 트랙 메뉴를 쓴다.
+
+### D-48. 프로필 팀 로고 = asset이 있으면 그린다 (D-39 보완)
+- `assets/team_logos/{CODE}.png`가 있으면 팀 색 원 안에 로고, 없으면 D-39의 팀 색 원 + 코드. 로고 파일은 상표라 저장소에 넣지 않는다.
+- 영향: [03](./03-entity-design.md), [04](./04-api-design.md), [06](./06-telemetry-design.md), [09](./09-lap-telemetry-trace.md), [14](./14-profile-settings.md), [15](./15-lap-detail-telemetry.md), agent, backend, app, shared
+
+---
+
 ## 결정 요약 (전체 확정 ✅ · 2026-07-06, 2026-10-17 P6 갱신, 2026-10-18 P7 갱신)
 
 | ID | 결정 | 반영 문서 |
@@ -373,6 +408,13 @@ invalid 랩도 우선 기록은 해두고 랭킹 집계에서는 사용하지 �
 | D-39 | 프로필·설정 = User 설정 필드(저장만 하는 항목 포함) + `PUT /me/profile`·`POST /me/email`(사용자당 분당 10회), 이름 비공개 = 랭킹에서 "익명 드라이버", 사진 = 팀 색 원(로고 미사용), 밝은 테마 추가 | 03, 04, 05, 14, backend, app |
 | D-40 | 기본 테마 = `Dark`(기존·새 사용자, 로그아웃·스플래시 포함). System은 사용자가 고를 때만 | 03, 04, 14, backend, app |
 | D-41 | F1Game.UDP = **25.1.1**(실제 F1 25 레이아웃, 26.0.0은 2026 시즌팩 24대 레이아웃이라 모든 랩이 버려졌음). 해석 실패는 종류마다 1회 경고, 실제 패킷 회귀 테스트 | 06, 12, agent, shared/telemetry |
+| D-42 | 앱 = Flutter 유지, F1Laps 모양은 직접 만든 위젯으로 | 15, app |
+| D-43 | 트랙 표시 = `Track.CountryCode`·`DisplayOrder`(시드가 맞춤), 목록 = F1 25 캘린더 순서, 국기 = `country_flags` | 03, 04, 15, backend, app |
+| D-44 | 랩 스냅샷(팀·타이어·손상·연료·ERS·날씨) = LapFinished `car`·`conditions` → `lap_snapshots`, 틀리면 스냅샷만 버림 | 03, 04, 06, 15, agent, backend |
+| D-45 | 트레이스 = 거리 5m·7채널, LapFinished `trace`(한도 넘으면 10→20m→제거) → bytea gzip, 보존 무기한 (D-17·18·19 확정) | 03, 06, 09, 15, agent, backend |
+| D-46 | 랩 상세 = `/laps/:lapId` 3탭, 비교 = 같은 트랙 내 최고 유효 랩 | 04, 15, backend, app |
+| D-47 | Laps = F1Laps 배치(마지막 트랙, 제목 트랙 메뉴, TEAM·TIME·MODE·날씨·DATE, 행 → 상세) | 15, app |
+| D-48 | 프로필 팀 로고 = `assets/team_logos/{CODE}.png` 있으면 표시(파일은 저장소 밖), 없으면 팀 색 원 | 14, 15, app |
 
 **MVP 관련 결정은 모두 확정되어 각 문서에 반영 완료.** 본 설계 문서 세트 최종 승인 시,
 **Phase 0(계약 & 스캐폴딩)** 상세 설계로 진입합니다.
@@ -381,6 +423,6 @@ invalid 랩도 우선 기록은 해두고 랭킹 집계에서는 사용하지 �
 
 | ID | 항목 | 문서 |
 |---|---|---|
-| D-17 | 정제 1랩 트레이스 저장이 Raw-패킷 저장 금지 원칙과 양립한다는 해석 승인 | [09](./09-lap-telemetry-trace.md) |
-| D-18 | 상세 텔레메트리 저장소(bytea / Object Storage / TimescaleDB) | [09](./09-lap-telemetry-trace.md) |
-| D-19 | 샘플링 기준·해상도·채널 세트·보존 기간 | [09](./09-lap-telemetry-trace.md) |
+| D-17 | ~~정제 1랩 트레이스 저장이 Raw-패킷 저장 금지 원칙과 양립한다는 해석 승인~~ → D-45로 확정 | [09](./09-lap-telemetry-trace.md) |
+| D-18 | ~~상세 텔레메트리 저장소(bytea / Object Storage / TimescaleDB)~~ → D-45로 확정(bytea) | [09](./09-lap-telemetry-trace.md) |
+| D-19 | ~~샘플링 기준·해상도·채널 세트·보존 기간~~ → D-45로 확정 | [09](./09-lap-telemetry-trace.md) |
