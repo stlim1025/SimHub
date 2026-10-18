@@ -58,7 +58,7 @@ public sealed class OutboxTelemetrySinkLapDetailTests : IAsyncLifetime
                 "teamId", "visualTyreCompound", "actualTyreCompound", "tyreAgeLaps", "tyreWearStart", "tyreWearEnd",
                 "tyreDamage", "brakeDamage", "frontLeftWingDamage", "frontRightWingDamage", "rearWingDamage", "floorDamage",
                 "diffuserDamage", "sidepodDamage", "gearboxDamage", "engineDamage", "fuelStartKg", "fuelEndKg",
-                "fuelRemainingLaps", "ersStoreStartJ", "ersStoreEndJ", "ersDeployedJ", "ersHarvestedJ",
+                "fuelRemainingLaps", "ersStoreStartJ", "ersStoreEndJ", "ersDeployedJ", "ersHarvestedJ", "details",
             }.Order(),
             Names(car).Order());
         foreach (var wheels in new[] { "tyreWearStart", "tyreWearEnd", "tyreDamage", "brakeDamage" })
@@ -112,6 +112,39 @@ public sealed class OutboxTelemetrySinkLapDetailTests : IAsyncLifetime
         Assert.Equal(new[] { "tyreSurfaceTempFL", "wheelSlipRatioPctRR" }, Names(wire));   // 사전 키는 바꾸지 않는다(이미 camelCase)
         Assert.Equal(new[] { 91, 92.5, 93, 94 }, wire.GetProperty("tyreSurfaceTempFL").EnumerateArray().Select(v => v.GetDouble()));
         Assert.Equal("[-1.25,0,0.5,2]", wire.GetProperty("wheelSlipRatioPctRR").GetRawText());
+    }
+
+    [Fact]
+    public async Task CarDetails_AreWrittenAsNestedObjects_WithEventsAndSessionHistory()
+    {
+        var details = new Dictionary<string, object?>
+        {
+            ["setup"] = new Dictionary<string, object?> { ["frontWing"] = (byte)30, ["tyrePressureFL"] = 22.3, ["fuelLoad"] = null },
+            ["tyreSets"] = new Dictionary<string, object?> { ["sets"] = new object?[] { new Dictionary<string, object?> { ["fitted"] = true } } },
+            ["events"] = new[] { new LapEventEntry("PENA", 15_250, new Dictionary<string, object?> { ["penaltyType"] = 5 }) },
+            ["sessionHistory"] = new LapHistoryEntry(5, 83_452, 27_010, 30_110, 26_332, true, true, true, false),
+        };
+
+        await _sut.EmitAsync(Envelope(Lap(Snapshot() with { Details = details }, conditions: null, trace: null)));
+
+        var json = await SingleOutboxJsonAsync();
+        _output.WriteLine(json);
+        using var doc = JsonDocument.Parse(json);
+        var wire = doc.RootElement.GetProperty("payload").GetProperty("car").GetProperty("details");
+        Assert.Equal(30, wire.GetProperty("setup").GetProperty("frontWing").GetInt32());
+        Assert.Equal(22.3, wire.GetProperty("setup").GetProperty("tyrePressureFL").GetDouble());
+        Assert.Equal(JsonValueKind.Null, wire.GetProperty("setup").GetProperty("fuelLoad").ValueKind);
+        Assert.True(wire.GetProperty("tyreSets").GetProperty("sets")[0].GetProperty("fitted").GetBoolean());
+        var penalty = Assert.Single(wire.GetProperty("events").EnumerateArray());
+        Assert.Equal(new[] { "code", "lapTimeMs", "details" }, Names(penalty));
+        Assert.Equal("PENA", penalty.GetProperty("code").GetString());
+        Assert.Equal(15_250, penalty.GetProperty("lapTimeMs").GetInt32());
+        Assert.Equal(5, penalty.GetProperty("details").GetProperty("penaltyType").GetInt32());
+        var history = wire.GetProperty("sessionHistory");
+        Assert.Equal(
+            new[] { "lapNumber", "lapTimeMs", "sector1TimeMs", "sector2TimeMs", "sector3TimeMs", "lapValid", "sector1Valid", "sector2Valid", "sector3Valid" },
+            Names(history));
+        Assert.False(history.GetProperty("sector3Valid").GetBoolean());
     }
 
     [Fact]

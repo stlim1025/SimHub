@@ -88,10 +88,13 @@ public sealed class LapCarStateTracker
         StartLap(captureStartValues: false);
     }
 
-    /// <summary>이번 랩의 <c>car</c>. 팀·상태·손상을 하나도 받지 못했으면 null.</summary>
-    public LapCarSnapshot? BuildCar()
+    /// <summary>
+    /// 이번 랩의 <c>car</c>. 팀·상태·손상·상세(<paramref name="details"/>, D-49)를 하나도 받지 못했으면 null.
+    /// 상세만 있으면 나머지 필드는 null인 스냅샷에 상세만 싣는다.
+    /// </summary>
+    public LapCarSnapshot? BuildCar(IReadOnlyDictionary<string, object?>? details = null)
     {
-        if (_playerTeamId is null && _endStatus is null && _endDamage is null)
+        if (_playerTeamId is null && _endStatus is null && _endDamage is null && details is null)
         {
             return null;
         }
@@ -121,7 +124,8 @@ public sealed class LapCarStateTracker
             ErsStoreStartJ: ToJoules(_startStatus?.ErsStoreEnergyJ),
             ErsStoreEndJ: ToJoules(status?.ErsStoreEnergyJ),
             ErsDeployedJ: ToJoules(status?.ErsDeployedThisLapJ),
-            ErsHarvestedJ: ToJoules(status?.ErsHarvestedThisLapMgukJ + status?.ErsHarvestedThisLapMguhJ));
+            ErsHarvestedJ: ToJoules(status?.ErsHarvestedThisLapMgukJ + status?.ErsHarvestedThisLapMguhJ),
+            Details: details);
     }
 
     /// <summary>최신 Session 값의 <c>conditions</c>. Session을 못 받았거나 조건 값이 하나도 없으면 null.</summary>

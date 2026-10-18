@@ -10,6 +10,7 @@ namespace SimCenter.Agent.Core.Analysis;
 /// 단일 세션·단일 플레이어 상태를 갖는 <b>상태 저장</b> 클래스이므로 스레드 안전하지 않다(파이프라인이 순차 처리).
 /// 차량 상태·텔레메트리 프레임은 이벤트를 만들지 않고 랩 스냅샷(<see cref="LapCarStateTracker"/>, D-44)과
 /// 트레이스(<see cref="LapTraceRecorder"/>, D-45)에 쌓기만 한다 — 랩이 바뀌는 순간 LapFinished에 함께 싣는다.
+/// "전부 수집"(D-49, docs/15 §8)의 extra 채널은 트레이스로, 상세 묶음·게임 이벤트·Session History는 <see cref="LapDetailsTracker"/>로 간다.
 /// </summary>
 public sealed class LapAnalyzer : ITelemetryAnalyzer
 {
@@ -26,6 +27,7 @@ public sealed class LapAnalyzer : ITelemetryAnalyzer
 
     private readonly LapCarStateTracker _carState = new();
     private readonly LapTraceRecorder _trace = new();
+    private readonly LapDetailsTracker _details = new();
 
     // 세션 상태
     private string? _sessionRef;
@@ -43,6 +45,7 @@ public sealed class LapAnalyzer : ITelemetryAnalyzer
     private bool _outOrInLapAccum;
     private int _completedSector1Ms;
     private int _completedSector2Ms;
+    private int _currentLapTimeMs;      // 지금 랩의 최신 경과 시간 — 이벤트 시각(D-49)
 
     /// <summary>프레임 1개를 처리하고 그로 인해 발생한 도메인 이벤트(0..N)를 순서대로 반환한다.</summary>
     public IReadOnlyList<TelemetryEvent> Process(ITelemetryFrame frame)
@@ -71,6 +74,15 @@ public sealed class LapAnalyzer : ITelemetryAnalyzer
                 break;
             case ExtraChannelsFrame extra:
                 _trace.OnExtraChannels(extra);
+                break;
+            case CarDetailsFrame section:
+                _details.OnSection(section);
+                break;
+            case GameEventFrame gameEvent:
+                _details.OnEvent(gameEvent, _currentLapTimeMs);
+                break;
+            case SessionHistoryFrame history:
+                _details.OnSessionHistory(history);
                 break;
             case CarStatusFrame status:
                 _carState.OnStatus(status);
@@ -165,10 +177,12 @@ public sealed class LapAnalyzer : ITelemetryAnalyzer
         _lastSector = lf.CurrentSector;
         ResetLapAccumulators();
         _carState.StartLap(captureStartValues: observedLapStart);
+        _details.StartLap();
 
         // 새 랩의 첫 프레임 상태를 누적 시작.
         AccumulateLapFlags(lf);
         _trace.UpdatePosition(lf.LapDistanceM, lf.CurrentLapTimeMs);
+        _currentLapTimeMs = lf.CurrentLapTimeMs;
         return events;
     }
 
@@ -211,7 +225,7 @@ public sealed class LapAnalyzer : ITelemetryAnalyzer
             SeasonLinkId: _seasonLinkId,
             WeekendLinkId: _weekendLinkId,
             SessionLinkId: _sessionLinkId,
-            Car: _carState.BuildCar(),
+            Car: _carState.BuildCar(_details.Build(completedLapNumber)),
             Conditions: _carState.BuildConditions(),
             Trace: _trace.Flush());
     }
@@ -225,6 +239,7 @@ public sealed class LapAnalyzer : ITelemetryAnalyzer
         if (lf.CurrentLapNumber == _lastLapNumber)
         {
             _trace.UpdatePosition(lf.LapDistanceM, lf.CurrentLapTimeMs);
+            _currentLapTimeMs = lf.CurrentLapTimeMs;
         }
         else
         {
@@ -273,6 +288,8 @@ public sealed class LapAnalyzer : ITelemetryAnalyzer
         ResetLapAccumulators();
         _carState.Reset();
         _trace.Clear();
+        _details.Reset();
+        _currentLapTimeMs = 0;
     }
 
     private void ResetSession()
