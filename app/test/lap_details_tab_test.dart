@@ -6,6 +6,7 @@ import 'package:simcenter_app/core/theme/app_colors.dart';
 import 'package:simcenter_app/core/theme/app_palette.dart';
 import 'package:simcenter_app/features/lap_detail/domain/lap_detail_models.dart';
 import 'package:simcenter_app/features/lap_detail/presentation/car_painter.dart';
+import 'package:simcenter_app/features/lap_detail/presentation/car_tyres_card.dart';
 import 'package:simcenter_app/features/sessions/presentation/tyre_stints_view.dart';
 
 import 'support/fakes.dart';
@@ -64,13 +65,14 @@ void main() {
   });
 
   group('Lap Details 목록', () {
-    testWidgets('Track · Team · Game Mode · Session · Lap · Lap Valid · Lap ID · Date', (t) async {
+    testWidgets('Track · Team · Game Mode(모드 · 세션) · Lap · Lap Valid · Lap ID · Date', (t) async {
       await _pump(t, sampleDetail());
 
       expect(_rowValue('Track', 'Jeddah'), findsOneWidget);
       expect(_rowValue('Team', 'Ferrari'), findsOneWidget);
-      expect(_rowValue('Game Mode', 'Driver Career'), findsOneWidget);
-      expect(_rowValue('Session', 'Time Trial'), findsOneWidget);
+      // D-51: Game Mode 줄은 모드와 세션을 함께(Session 줄은 따로 두지 않는다).
+      expect(_rowValue('Game Mode', 'Driver Career · Time Trial'), findsOneWidget);
+      expect(find.text('Session'), findsNothing);
       expect(_rowValue('Lap', '5'), findsOneWidget);
       expect(_rowValue('Lap Valid', 'Valid'), findsOneWidget);
       expect(_rowValue('Lap ID', 'l1'), findsOneWidget);
@@ -83,7 +85,7 @@ void main() {
 
       expect(_rowValue('Lap Valid', 'Invalid'), findsOneWidget);
       expect(_rowValue('Team', '-'), findsOneWidget);
-      expect(_rowValue('Game Mode', '-'), findsOneWidget);
+      expect(_rowValue('Game Mode', 'Time Trial'), findsOneWidget); // 모드를 모르면 세션만
       expect(_rowValue('Lap', '-'), findsOneWidget);
       expect(find.text('세션 보기'), findsNothing);
     });
@@ -162,8 +164,11 @@ void main() {
       );
 
       expect(find.text('10%'), findsNWidgets(4));
-      final wearDeltas = find.byWidgetPredicate(
-        (w) => w is Text && (w.data?.startsWith('+') ?? false) && (w.data?.endsWith('%') ?? false),
+      final wearDeltas = find.descendant(
+        of: find.byType(CarTyresCard),
+        matching: find.byWidgetPredicate(
+          (w) => w is Text && (w.data?.startsWith('+') ?? false) && (w.data?.endsWith('%') ?? false),
+        ),
       );
       expect(wearDeltas, findsNothing);
     });

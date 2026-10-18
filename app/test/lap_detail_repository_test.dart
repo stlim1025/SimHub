@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:simcenter_app/core/network/api_exception.dart';
 import 'package:simcenter_app/features/lap_detail/data/lap_detail_repository.dart';
+import 'package:simcenter_app/features/lap_detail/domain/lap_compare.dart';
 import 'package:simcenter_app/features/laps/data/laps_repository.dart';
 
 import 'support/stub_adapter.dart';
@@ -55,6 +56,48 @@ void main() {
       expect(adapter.requests.single.path, '/me/laps/l%201');
       expect(detail.lap.lapId, 'l 1');
       expect(detail.countryCode, 'SA');
+    });
+
+    test('getLapDetail은 기본 비교(best)면 쿼리를 붙이지 않는다', () async {
+      final adapter = StubAdapter(200, _detailBody);
+
+      await LapDetailRepository(stubDio(adapter)).getLapDetail('l1');
+
+      expect(adapter.requests.single.queryParameters, isEmpty);
+    });
+
+    test('getLapDetail은 비교 선택을 API 쿼리(compare·compareLapId·필터)로 보낸다(D-51)', () async {
+      final adapter = StubAdapter(200, _detailBody);
+      final repo = LapDetailRepository(stubDio(adapter));
+
+      await repo.getLapDetail(
+        'l1',
+        compare: const LapCompareSelection(
+          kind: LapCompareKind.leaderboard,
+          filters: {LapCompareFilter.sameTeam, LapCompareFilter.sameAssists},
+        ),
+      );
+      await repo.getLapDetail(
+        'l1',
+        compare: const LapCompareSelection(kind: LapCompareKind.lap, compareLapId: 'other-lap-1', filters: {LapCompareFilter.sameTeam}),
+      );
+
+      expect(adapter.requests[0].queryParameters, {'compare': 'leaderboard', 'sameTeam': 'true', 'sameAssists': 'true'});
+      // 랩 ID 비교에는 필터를 보내지 않는다.
+      expect(adapter.requests[1].queryParameters, {'compare': 'lap', 'compareLapId': 'other-lap-1'});
+    });
+
+    test('getComparisonTrace는 GET /laps/{lapId}/trace(공개 규칙 경로)를 호출하고, 404면 null', () async {
+      final ok = StubAdapter(200, _traceBody);
+      final trace = await LapDetailRepository(stubDio(ok)).getComparisonTrace('r 1');
+      expect(ok.requests.single.path, '/laps/r%201/trace');
+      expect(trace?.length, 2);
+
+      final missing = StubAdapter(404, '{"title":"Resource not found"}');
+      expect(await LapDetailRepository(stubDio(missing)).getComparisonTrace('r1'), isNull);
+
+      final failing = StubAdapter(500, '{"title":"boom"}');
+      await expectLater(LapDetailRepository(stubDio(failing)).getComparisonTrace('r1'), throwsA(isA<ApiException>()));
     });
 
     test('getLapDetail이 404면 statusCode 404인 ApiException을 던진다', () async {

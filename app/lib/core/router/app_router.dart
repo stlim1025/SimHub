@@ -7,6 +7,7 @@ import '../../features/auth/presentation/login_page.dart';
 import '../../features/auth/presentation/splash_page.dart';
 import '../../features/dashboard/presentation/dashboard_page.dart';
 import '../../features/devices/presentation/telemetry_app_page.dart';
+import '../../features/lap_detail/domain/lap_compare.dart';
 import '../../features/lap_detail/presentation/lap_detail_page.dart';
 import '../../features/laps/presentation/laps_page.dart';
 import '../../features/laps/presentation/track_laps_page.dart';
@@ -111,12 +112,14 @@ final routerProvider = Provider<GoRouter>((ref) {
             '/laps/tracks/:trackId',
             (state) => TrackLapsPage(trackId: state.pathParameters['trackId']!),
           ),
-          // 랩 상세의 탭은 `?tab=details|telemetry|best`(모르는 값은 details, docs/15 §2.3).
+          // 랩 상세의 탭은 `?tab=details|telemetry|best`(모르는 값은 details, docs/15 §2.3),
+          // 비교 대상·필터는 `?compare=…&compareLapId=…&sameTeam=true…`(docs/15 §10, D-51).
           _screen(
             '/laps/:lapId',
             (state) => LapDetailPage(
               lapId: state.pathParameters['lapId']!,
               tab: state.uri.queryParameters['tab'],
+              compare: LapCompareSelection.fromQuery(state.uri.queryParameters),
             ),
           ),
           _screen(

@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import '../../laps/domain/lap_models.dart';
+import 'lap_compare.dart';
 
 /// 트레이스 해상도의 최솟값(m). 서버 검증은 1~50m(docs/15 §5) — 0 이하가 오면 이 값으로 본다.
 const int _minResolutionM = 1;
@@ -157,7 +158,63 @@ class LapConditions {
   }
 }
 
-/// 비교 대상 = 같은 트랙·게임의 내 최고 유효 랩(D-46). 이 랩 자신일 수도 있다.
+/// 드라이버 어시스트(docs/15 §10, D-51 `assists`). 값은 서버 이름(`Off`·`Medium`·`On`·`Manual`·`CornersOnly` …), 모르면 null.
+class LapAssists {
+  const LapAssists({
+    this.tractionControl,
+    this.antiLockBrakes,
+    this.steeringAssist,
+    this.brakingAssist,
+    this.gearbox,
+    this.racingLine,
+  });
+
+  final String? tractionControl;
+  final String? antiLockBrakes;
+  final String? steeringAssist;
+  final String? brakingAssist;
+  final String? gearbox;
+  final String? racingLine;
+
+  /// 값이 하나도 없으면 null(영역을 숨긴다).
+  static LapAssists? fromJsonOrNull(Object? json) {
+    final map = _mapOrNull(json);
+    if (map == null) {
+      return null;
+    }
+    final assists = LapAssists(
+      tractionControl: _stringOrNull(map['tractionControl']),
+      antiLockBrakes: _stringOrNull(map['antiLockBrakes']),
+      steeringAssist: _stringOrNull(map['steeringAssist']),
+      brakingAssist: _stringOrNull(map['brakingAssist']),
+      gearbox: _stringOrNull(map['gearbox']),
+      racingLine: _stringOrNull(map['racingLine']),
+    );
+    final values = [
+      assists.tractionControl,
+      assists.antiLockBrakes,
+      assists.steeringAssist,
+      assists.brakingAssist,
+      assists.gearbox,
+      assists.racingLine,
+    ];
+    return values.every((v) => v == null) ? null : assists;
+  }
+}
+
+/// 비교 대상이 없는 까닭(`comparisonUnavailable`, D-51).
+enum ComparisonUnavailable {
+  /// 고른 랩 ID가 없거나 남의 비공개 랩.
+  notFound,
+
+  /// 조건(필터 포함)에 맞는 최고 랩이 없음.
+  noMatch;
+
+  static ComparisonUnavailable? parse(Object? value) => values.where((v) => v.name == value).firstOrNull;
+}
+
+/// 비교 대상 랩(docs/15 §10, D-51). 기본은 같은 트랙·게임의 내 최고 유효 랩이며 이 랩 자신일 수도 있다.
+/// 남의 랩이면 [isMine] = false, [displayName]은 랭킹과 같은 이름 규칙(이름 비공개 = 익명 드라이버).
 class ComparisonLap {
   const ComparisonLap({
     required this.lapId,
@@ -165,6 +222,12 @@ class ComparisonLap {
     required this.sectors,
     required this.setAt,
     required this.hasTrace,
+    this.kind = LapCompareKind.best,
+    this.isMine = true,
+    this.displayName,
+    this.team,
+    this.sessionType,
+    this.appliedFilters = const {},
   });
 
   final String lapId;
@@ -172,6 +235,14 @@ class ComparisonLap {
   final List<LapSector> sectors;
   final DateTime setAt;
   final bool hasTrace;
+  final LapCompareKind kind;
+  final bool isMine;
+  final String? displayName;
+  final LapTeam? team;
+  final String? sessionType;
+
+  /// 서버가 실제로 적용한 필터(이 랩의 값을 모르면 빠진다).
+  final Set<LapCompareFilter> appliedFilters;
 
   /// 비교 대상은 덤이라, 필수 값(Id·랩타임·시각)이 빠지거나 형식이 틀리면 null(비교 없음)로 보고 랩 상세는 그대로 보인다.
   static ComparisonLap? fromJsonOrNull(Object? json) {
@@ -183,6 +254,7 @@ class ComparisonLap {
       return null;
     }
     final rawSectors = map['sectors'];
+    final rawFilters = map['appliedFilters'];
     return ComparisonLap(
       lapId: lapId,
       lapTimeMs: lapTimeMs,
@@ -192,6 +264,16 @@ class ComparisonLap {
       ],
       setAt: setAt,
       hasTrace: map['hasTrace'] == true,
+      kind: LapCompareKind.parse(_stringOrNull(map['kind'])),
+      // 모르면 내 랩으로 본다(옛 서버 = 내 최고 랩만 비교).
+      isMine: map['isMine'] != false,
+      displayName: _stringOrNull(map['displayName']),
+      team: LapTeam.fromJsonOrNull(map['team']),
+      sessionType: _stringOrNull(map['sessionType']),
+      appliedFilters: {
+        if (rawFilters is List)
+          for (final filter in rawFilters) ?LapCompareFilter.parse(filter),
+      },
     );
   }
 
@@ -212,7 +294,9 @@ class LapDetail {
     this.sessionId,
     this.car,
     this.conditions,
+    this.assists,
     this.comparison,
+    this.comparisonUnavailable,
   });
 
   final Lap lap;
@@ -226,11 +310,15 @@ class LapDetail {
   final CarSnapshot? car;
   final LapConditions? conditions;
 
-  /// 내 최고 유효 랩. 유효 랩이 없으면 null.
-  final ComparisonLap? comparison;
+  /// 드라이버 어시스트. 모르면 null(D-51).
+  final LapAssists? assists;
 
-  /// 이 랩이 곧 내 최고 유효 랩인지.
-  bool get isPersonalBest => comparison?.lapId == lap.lapId;
+  /// 고른 비교 대상. 없으면 null — 까닭은 [comparisonUnavailable](비교 안 함이면 둘 다 null).
+  final ComparisonLap? comparison;
+  final ComparisonUnavailable? comparisonUnavailable;
+
+  /// 비교 대상이 곧 이 랩인지(내 최고 랩·리더보드 최고 랩이 이 랩일 때).
+  bool get comparesWithItself => comparison?.lapId == lap.lapId;
 
   factory LapDetail.fromJson(Map<String, dynamic> json) => LapDetail(
         lap: Lap.fromJson(json['lap'] as Map<String, dynamic>),
@@ -239,7 +327,9 @@ class LapDetail {
         sessionId: json['sessionId'] as String?,
         car: CarSnapshot.fromJsonOrNull(json['car']),
         conditions: LapConditions.fromJsonOrNull(json['conditions']),
+        assists: LapAssists.fromJsonOrNull(json['assists']),
         comparison: ComparisonLap.fromJsonOrNull(json['comparison']),
+        comparisonUnavailable: ComparisonUnavailable.parse(json['comparisonUnavailable']),
       );
 }
 

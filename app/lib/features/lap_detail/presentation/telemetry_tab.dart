@@ -11,9 +11,11 @@ import '../../auth/application/auth_controller.dart';
 import '../../auth/domain/user_preferences.dart';
 import '../../laps/presentation/empty_laps_card.dart';
 import '../application/lap_detail_providers.dart';
+import '../domain/lap_compare.dart';
 import '../domain/lap_detail_models.dart';
 import '../domain/telemetry_channels.dart';
 import '../domain/telemetry_math.dart';
+import 'lap_time_cards.dart';
 import 'telemetry_chart.dart';
 
 const String _noTraceText = '이 랩은 텔레메트리가 저장되지 않았어요(새 Agent로 달린 랩부터 저장돼요)';
@@ -29,9 +31,12 @@ const EdgeInsets _cardPadding = EdgeInsets.all(16);
 /// 가로 = 랩 거리, 이 랩은 강조색, 비교 랩(내 최고 랩)은 청록. 그래프 위에 마우스를 올리거나 누르면 모든 그래프에 같은 거리의 십자선과
 /// 두 랩의 값이 보인다. 속도 단위는 사용자 설정(`units`). 트레이스가 없으면 안내.
 class TelemetryTab extends ConsumerWidget {
-  const TelemetryTab({super.key, required this.detail});
+  const TelemetryTab({super.key, required this.detail, this.compare = LapCompareSelection.defaults});
 
   final LapDetail detail;
+
+  /// 고른 비교(D-51). "비교 안 함"이면 비교 선·Delta 그래프가 없다.
+  final LapCompareSelection compare;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -39,12 +44,13 @@ class TelemetryTab extends ConsumerWidget {
     if (!lap.hasTrace) {
       return const EmptyLapsCard(message: _noTraceText);
     }
-    final comparison = detail.comparison;
+    final comparison = compare.kind == LapCompareKind.none ? null : detail.comparison;
     final comparisonId = comparison != null && comparison.hasTrace && comparison.lapId != lap.lapId
         ? comparison.lapId
         : null;
     final trace = ref.watch(lapTraceProvider(lap.lapId));
-    final reference = comparisonId == null ? null : ref.watch(lapTraceProvider(comparisonId));
+    // 비교 랩 트레이스는 공개 규칙을 지키는 경로(`/laps/{id}/trace`)로 읽는다 — 남의 공개 랩도 여기로 온다(D-51).
+    final reference = comparisonId == null ? null : ref.watch(comparisonTraceProvider(comparisonId));
     final units = ref.watch(authControllerProvider).valueOrNull?.preferences.units ?? UnitSystem.metric;
 
     // 비교 랩 트레이스가 아직 오는 중이면 기다린다. 실패하면 이 랩만 그린다.
@@ -68,10 +74,18 @@ class TelemetryTab extends ConsumerWidget {
               reference: reference?.valueOrNull,
               lapTimeMs: lap.lapTimeMs,
               referenceLapTimeMs: comparison?.lapTimeMs,
+              referenceLabel: comparison == null ? _bestLapLabel : referenceLegendLabel(comparison),
               units: units,
             ),
     );
   }
+}
+
+/// 범례의 비교 랩 이름: 비교 종류별 행 이름, 남의 랩이면 ` · {드라이버}`(D-51).
+String referenceLegendLabel(ComparisonLap comparison) {
+  final base = comparisonRowLabel(comparison.kind);
+  final owner = comparison.isMine ? null : comparison.displayName;
+  return owner == null ? base : '$base · $owner';
 }
 
 /// 트레이스가 준비된 뒤의 그래프 묶음. 십자선 거리([_cursor])를 모든 그래프가 함께 본다.
@@ -83,6 +97,7 @@ class TelemetryCharts extends StatefulWidget {
     required this.lapTimeMs,
     required this.referenceLapTimeMs,
     required this.units,
+    this.referenceLabel = _bestLapLabel,
   });
 
   final LapTrace trace;
@@ -92,6 +107,9 @@ class TelemetryCharts extends StatefulWidget {
   final int lapTimeMs;
   final int? referenceLapTimeMs;
   final UnitSystem units;
+
+  /// 범례의 비교 랩 이름(`내 최고 랩`·`리더보드 랩 · 익명 드라이버` …).
+  final String referenceLabel;
 
   @override
   State<TelemetryCharts> createState() => _TelemetryChartsState();
@@ -151,7 +169,7 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
               thisLapText: '$_thisLapLabel ${formatLapTime(widget.lapTimeMs)}',
               referenceText: reference == null || referenceTime == null
                   ? null
-                  : '$_bestLapLabel ${formatLapTime(referenceTime)}',
+                  : '${widget.referenceLabel} ${formatLapTime(referenceTime)}',
               cursor: _cursor,
             ),
             for (final chart in charts) ...[const SizedBox(height: _chartGap), chart],

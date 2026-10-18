@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:simcenter_app/core/network/api_exception.dart';
 import 'package:simcenter_app/core/theme/app_theme.dart';
+import 'package:simcenter_app/features/lap_detail/domain/lap_compare.dart';
 import 'package:simcenter_app/features/lap_detail/domain/lap_detail_models.dart';
 
 import 'support/fakes.dart';
@@ -14,9 +15,9 @@ class _FlakyDetailRepository extends FakeLapDetailRepository {
   int failuresLeft = 1;
 
   @override
-  Future<LapDetail> getLapDetail(String lapId) async {
+  Future<LapDetail> getLapDetail(String lapId, {LapCompareSelection compare = LapCompareSelection.defaults}) async {
     if (failuresLeft-- > 0) throw ApiException('서버가 아파요.', statusCode: 500);
-    return super.getLapDetail(lapId);
+    return super.getLapDetail(lapId, compare: compare);
   }
 }
 
@@ -31,7 +32,7 @@ void main() {
   testWidgets('머리줄은 국기 + 트랙 이름 · 랩타임이고, 뒤로 가기는 그 트랙의 표로 간다', (t) async {
     final router = await pumpLapDetail(t, detailRepo: _repo());
 
-    expect(find.text('Jeddah · 1:38.448'), findsOneWidget);
+    expect(find.text('Jeddah Lap 1:38.448'), findsOneWidget);
     expect(find.byKey(const ValueKey('track-flag-SA')), findsWidgets);
 
     await _tapAndSettle(t, find.byTooltip('트랙 표로'));
@@ -76,19 +77,19 @@ void main() {
     expect(t.widget<TabBar>(find.byType(TabBar)).controller?.index, 1);
   });
 
-  testWidgets('비교 대상(내 최고 유효 랩)과 그 랩타임을 탭 아래에 보인다', (t) async {
+  testWidgets('탭 아래에 "Compare with: Your best lap"(기본)과 "Filter by"가 있다', (t) async {
     await pumpLapDetail(t, detailRepo: _repo());
 
-    expect(find.text('Compare with'), findsOneWidget);
-    expect(find.text('내 최고 유효 랩 · 1:38.000'), findsOneWidget);
+    expect(find.text('Compare with: Your best lap'), findsOneWidget);
+    expect(find.text('Filter by'), findsOneWidget);
   });
 
   testWidgets('이 랩이 내 최고면 비교 칸에 그렇게 보이고, 유효 랩이 없으면 비교할 랩이 없다고 보인다', (t) async {
     await pumpLapDetail(t, detailRepo: _repo(sampleDetail(comparison: sampleComparison(id: 'l1'))));
-    expect(find.text('내 최고 유효 랩 · 이 랩'), findsOneWidget);
+    expect(find.text('이 랩이 내 최고 기록'), findsOneWidget);
 
     await pumpLapDetail(t, detailRepo: _repo(sampleDetail(withComparison: false)));
-    expect(find.text('비교할 유효 랩이 없어요'), findsWidgets);
+    expect(find.text('비교할 유효 랩이 없어요'), findsOneWidget);
   });
 
   testWidgets('없거나 남의 랩(404)이면 찾을 수 없음 + Laps 링크', (t) async {
@@ -110,7 +111,7 @@ void main() {
 
     await _tapAndSettle(t, find.text('다시 시도'));
 
-    expect(find.text('Jeddah · 1:38.448'), findsOneWidget);
+    expect(find.text('Jeddah Lap 1:38.448'), findsOneWidget);
     expect(repo.detailRequests, ['l1']); // 실패한 첫 호출은 기록 전에 던진다 — 다시 시도한 호출만 남는다.
   });
 

@@ -1,3 +1,4 @@
+import 'lap_compare.dart';
 import 'lap_detail_models.dart';
 
 /// 값이 없는 칸의 자리표시.
@@ -31,8 +32,13 @@ const List<String> kLapTabs = [kLapTabDetails, kLapTabTelemetry, kLapTabBest];
 /// 주소의 `tab` 값을 탭으로 바꾼다. 없거나 모르는 값이면 `details`(docs/15 §2.3).
 String normalizeLapTab(String? value) => kLapTabs.contains(value) ? value! : kLapTabDetails;
 
-/// 랩 상세 주소. [tab]을 주면 `?tab=`을 붙인다(행 클릭은 탭 없이 연다).
-String lapDetailLocation(String lapId, {String? tab}) => tab == null ? '/laps/$lapId' : '/laps/$lapId?tab=$tab';
+/// 랩 상세 주소. [tab]을 주면 `?tab=`을, [compare]를 주면 비교 선택 쿼리(docs/15 §10, D-51 — 기본값은 싣지 않음)를 붙인다.
+/// 행 클릭은 탭·비교 없이 연다.
+String lapDetailLocation(String lapId, {String? tab, LapCompareSelection? compare}) {
+  final query = {'tab': ?tab, ...?compare?.toQuery()};
+  final path = '/laps/$lapId';
+  return query.isEmpty ? path : Uri(path: path, queryParameters: query).toString();
+}
 
 // -- 비교 Delta -------------------------------------------------------------------
 
@@ -55,6 +61,19 @@ String formatDeltaMs(int deltaMs) {
   }
   final seconds = ((abs ~/ _msPerSecond) % _secondsPerMinute).toString().padLeft(2, '0');
   return '$sign${abs ~/ _msPerMinute}:$seconds.$millis';
+}
+
+/// Delta 비율 `+12.3%` = (이 랩 − 비교 랩) / 비교 랩(docs/15 §10, D-51). 비교 랩이 0 이하면 null(순수 함수).
+String? formatDeltaPercent(int lapMs, int referenceMs) {
+  if (referenceMs <= 0) {
+    return null;
+  }
+  final percent = (lapMs - referenceMs) / referenceMs * _percent;
+  final rounded = percent.toStringAsFixed(1);
+  if (rounded == '0.0' || rounded == '-0.0') {
+    return '0.0%';
+  }
+  return '${percent > 0 ? '+' : ''}$rounded%';
 }
 
 // -- 타이어·손상 --------------------------------------------------------------------

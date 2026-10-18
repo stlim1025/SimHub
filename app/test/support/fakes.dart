@@ -11,6 +11,7 @@ import 'package:simcenter_app/features/auth/domain/auth_models.dart';
 import 'package:simcenter_app/features/devices/data/devices_repository.dart';
 import 'package:simcenter_app/features/devices/domain/device_models.dart';
 import 'package:simcenter_app/features/lap_detail/data/lap_detail_repository.dart';
+import 'package:simcenter_app/features/lap_detail/domain/lap_compare.dart';
 import 'package:simcenter_app/features/lap_detail/domain/lap_detail_models.dart';
 import 'package:simcenter_app/features/laps/data/laps_repository.dart';
 import 'package:simcenter_app/features/laps/domain/lap_models.dart';
@@ -273,17 +274,22 @@ MyTrack trackOf(String id, String name, {int lapCount = 3, int? bestMs = 83452, 
 /// 랩 상세·트레이스를 메모리에서 돌려주는 저장소. [details]에 없는 랩은 404 [ApiException],
 /// [traces]에 없는 랩의 트레이스는 null(서버 404와 같다).
 class FakeLapDetailRepository implements LapDetailRepository {
-  FakeLapDetailRepository({this.details = const {}, this.traces = const {}});
+  /// [compared]가 있으면 비교 선택마다 상세를 바꿔 돌려준다(없거나 null이면 [details]).
+  FakeLapDetailRepository({this.details = const {}, this.traces = const {}, this.compared});
 
   final Map<String, LapDetail> details;
   final Map<String, LapTrace> traces;
+  final LapDetail? Function(String lapId, LapCompareSelection compare)? compared;
   final detailRequests = <String>[];
+  final compareRequests = <LapCompareSelection>[];
   final traceRequests = <String>[];
+  final comparisonTraceRequests = <String>[];
 
   @override
-  Future<LapDetail> getLapDetail(String lapId) async {
+  Future<LapDetail> getLapDetail(String lapId, {LapCompareSelection compare = LapCompareSelection.defaults}) async {
     detailRequests.add(lapId);
-    final detail = details[lapId];
+    compareRequests.add(compare);
+    final detail = compared?.call(lapId, compare) ?? details[lapId];
     if (detail == null) {
       throw ApiException('대상을 찾을 수 없어요.', statusCode: 404);
     }
@@ -295,9 +301,15 @@ class FakeLapDetailRepository implements LapDetailRepository {
     traceRequests.add(lapId);
     return traces[lapId];
   }
+
+  @override
+  Future<LapTrace?> getComparisonTrace(String lapId) async {
+    comparisonTraceRequests.add(lapId);
+    return traces[lapId];
+  }
 }
 
-/// 랩 상세. [comparison]을 생략하면 비교 대상 없음.
+/// 랩 상세. [comparison]을 생략하면 비교 대상 없음([unavailable] = 까닭).
 LapDetail lapDetailOf(
   Lap lap, {
   String trackId = 't1',
@@ -305,7 +317,9 @@ LapDetail lapDetailOf(
   String? sessionId,
   CarSnapshot? car,
   LapConditions? conditions,
+  LapAssists? assists,
   ComparisonLap? comparison,
+  ComparisonUnavailable? unavailable,
 }) =>
     LapDetail(
       lap: lap,
@@ -314,16 +328,31 @@ LapDetail lapDetailOf(
       sessionId: sessionId,
       car: car,
       conditions: conditions,
+      assists: assists,
       comparison: comparison,
+      comparisonUnavailable: unavailable,
     );
 
-ComparisonLap comparisonOf(String lapId, int ms, {List<LapSector> sectors = const [], bool hasTrace = false}) =>
+ComparisonLap comparisonOf(
+  String lapId,
+  int ms, {
+  List<LapSector> sectors = const [],
+  bool hasTrace = false,
+  LapCompareKind kind = LapCompareKind.best,
+  bool isMine = true,
+  String? displayName,
+  LapTeam? team,
+}) =>
     ComparisonLap(
       lapId: lapId,
       lapTimeMs: ms,
       sectors: sectors,
       setAt: DateTime.utc(2026, 10, 1, 9),
       hasTrace: hasTrace,
+      kind: kind,
+      isMine: isMine,
+      displayName: displayName,
+      team: team,
     );
 
 /// 거리 [resolutionM]m 간격 표본 [count]개짜리 트레이스. 시간·속도는 [timeAt]·[speedAt](표본 번호 → 값)으로 바꿀 수 있다.

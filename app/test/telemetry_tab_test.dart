@@ -113,7 +113,8 @@ void main() {
     testWidgets('Speed · Throttle · Brake · Gear · Steering · RPM을 위에서부터 쌓고, 비교 랩 트레이스가 있으면 맨 위에 Delta', (t) async {
       final repo = await _pump(t);
 
-      expect(repo.traceRequests.toSet(), {'l1', 'best'});
+      expect(repo.traceRequests, ['l1']);
+      expect(repo.comparisonTraceRequests, ['best']); // 비교 랩은 공개 규칙 경로(/laps/{id}/trace, D-51)
       final keys = ['delta', ..._channelKeys];
       for (var i = 1; i < keys.length; i++) {
         expect(t.getTopLeft(_chart(keys[i - 1])).dy, lessThan(t.getTopLeft(_chart(keys[i])).dy), reason: keys[i]);
