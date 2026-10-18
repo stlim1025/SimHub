@@ -30,10 +30,20 @@ class RankingHubClient {
   final _rankingUpdated = StreamController<Map<String, dynamic>>.broadcast();
   final _lapRecorded = StreamController<Map<String, dynamic>>.broadcast();
   final _personalBest = StreamController<Map<String, dynamic>>.broadcast();
+  final _reconnected = StreamController<void>.broadcast();
+  final _closed = StreamController<void>.broadcast();
 
   Stream<Map<String, dynamic>> get rankingUpdated => _rankingUpdated.stream;
+
+  /// 내 새 랩(D-50, docs/15 §9). 페이로드 = `GET /me/laps`의 LapDto 한 건 + `trackId`. 서버가 랩 주인에게만 보낸다.
   Stream<Map<String, dynamic>> get lapRecorded => _lapRecorded.stream;
   Stream<Map<String, dynamic>> get personalBest => _personalBest.stream;
+
+  /// 자동 재접속에 성공할 때마다(놓친 이벤트를 REST로 채우는 신호, 05 §5·docs/15 §9).
+  Stream<void> get reconnected => _reconnected.stream;
+
+  /// 자동 재접속도 포기하고 연결이 끊겼을 때([stop]으로 닫은 경우는 제외). 이후 [connect]는 새 연결을 만든다.
+  Stream<void> get closed => _closed.stream;
 
   bool get _isConnected => _connection?.state == HubConnectionState.Connected;
 
@@ -69,6 +79,15 @@ class RankingHubClient {
       final trackId = _subscribedTrackId;
       if (trackId != null) {
         await conn.invoke('SubscribeTrack', args: [trackId]);
+      }
+      _addIfOpen(_reconnected);
+    });
+
+    conn.onclose(({error}) {
+      // stop()이 닫은 연결은 이미 _connection에서 빠져 있다 — 지금 쓰는 연결이 끊긴 경우만 알린다.
+      if (identical(_connection, conn)) {
+        _connection = null;
+        _addIfOpen(_closed);
       }
     });
 
@@ -120,8 +139,14 @@ class RankingHubClient {
       .build();
 
   void _emit(StreamController<Map<String, dynamic>> controller, List<Object?>? args) {
-    if (args != null && args.isNotEmpty && args.first is Map) {
+    if (args != null && args.isNotEmpty && args.first is Map && !controller.isClosed) {
       controller.add(Map<String, dynamic>.from(args.first as Map));
+    }
+  }
+
+  void _addIfOpen(StreamController<void> controller) {
+    if (!controller.isClosed) {
+      controller.add(null);
     }
   }
 
@@ -131,6 +156,8 @@ class RankingHubClient {
     _rankingUpdated.close();
     _lapRecorded.close();
     _personalBest.close();
+    _reconnected.close();
+    _closed.close();
     _connection?.stop();
   }
 }

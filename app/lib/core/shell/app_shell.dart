@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/auth/application/auth_controller.dart';
 import '../../features/auth/application/sign_out.dart';
+import '../../features/live_laps/application/live_laps_controller.dart';
+import '../../features/live_laps/presentation/new_lap_snack_bar.dart';
 import '../../features/profile/presentation/team_avatar.dart';
 import '../layout/layout_constants.dart';
 import '../theme/app_colors.dart';
@@ -41,6 +43,13 @@ class AppShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // 로그인한 셸에 있는 동안 내 새 랩을 듣고, 받으면 어느 화면이든 아래 알림을 띄운다(D-50, docs/15 §9).
+    ref.listen<LiveLapEvent?>(liveLapsControllerProvider, (_, next) {
+      if (next != null) {
+        showNewLapSnackBar(context, next.lap);
+      }
+    });
+
     final content = Expanded(
       key: _contentKey,
       child: Align(

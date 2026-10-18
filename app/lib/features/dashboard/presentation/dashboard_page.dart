@@ -8,9 +8,11 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/util/lap_time.dart';
 import '../../../core/widgets/error_retry.dart';
+import '../../../core/widgets/fresh_highlight.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../devices/presentation/connection_status_card.dart';
 import '../../lap_detail/domain/lap_detail_display.dart';
+import '../../laps/application/fresh_laps.dart';
 import '../../laps/domain/lap_display.dart';
 import '../../laps/domain/lap_models.dart';
 import '../../laps/presentation/lap_cells.dart';
@@ -80,19 +82,27 @@ class _EmptyLaps extends StatelessWidget {
   }
 }
 
-class _RecentLaps extends StatelessWidget {
+/// 최근 랩 목록. 실시간으로 막 들어온 랩 행은 잠깐 강조된다(D-50, docs/15 §9).
+class _RecentLaps extends ConsumerWidget {
   const _RecentLaps({required this.laps});
 
   final List<Lap> laps;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final freshIds = ref.watch(freshLapIdsProvider);
     return Card(
+      clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
           for (var i = 0; i < laps.length; i++) ...[
             if (i > 0) const Divider(),
-            _RecentLapRow(lap: laps[i]),
+            KeyedSubtree(
+              key: ValueKey('recent-lap-${laps[i].lapId}'),
+              child: freshIds.contains(laps[i].lapId)
+                  ? FreshHighlight(child: _RecentLapRow(lap: laps[i]))
+                  : _RecentLapRow(lap: laps[i]),
+            ),
           ],
         ],
       ),

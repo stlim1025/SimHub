@@ -140,6 +140,38 @@ void main() {
       expect(repo.requests.last.trackId, 't2');
     });
 
+    testWidgets('표 행 위에 겹친 메뉴 항목을 누르면 랩 상세가 아니라 그 트랙으로 간다', (t) async {
+      final repo = FakeLapsRepository(tracks: [trackOf('t0', 'Melbourne')], laps: _manyLaps(15));
+      final router = await _pump(t, repo);
+      await _tapAndSettle(t, find.byKey(const ValueKey('track-picker')));
+
+      final option = find.byKey(const ValueKey('track-option-t2'));
+      final rowUnder = find.byWidgetPredicate((w) {
+        final key = w.key;
+        return key is ValueKey<String> &&
+            key.value.startsWith('lap-row-') &&
+            t.getRect(find.byKey(key)).contains(t.getCenter(option));
+      });
+      expect(rowUnder, findsOneWidget); // 정말로 행 위에 겹쳐 있다.
+
+      await _tapAndSettle(t, option);
+
+      expect(_location(router), '/laps/tracks/t2');
+    });
+
+    testWidgets('메뉴가 열린 채로 메뉴 밖의 표 행을 누르면 메뉴만 닫히고 랩 상세로 가지 않는다', (t) async {
+      final repo = FakeLapsRepository(tracks: [trackOf('t0', 'Melbourne')], laps: _manyLaps(15));
+      final router = await _pump(t, repo);
+      await _tapAndSettle(t, find.byKey(const ValueKey('track-picker')));
+
+      final row = t.getRect(find.byKey(const ValueKey('lap-row-l1')));
+      await t.tapAt(Offset(row.right - 40, row.center.dy)); // 메뉴(폭 280) 오른쪽 바깥.
+      await t.pumpAndSettle();
+
+      expect(_location(router), '/laps');
+      expect(find.byKey(const ValueKey('track-option-t2')), findsNothing);
+    });
+
     testWidgets('트랙 목록을 불러오지 못하면 다시 시도할 수 있다', (t) async {
       final repo = _FlakyLapsRepository(tracks: [trackOf('t1', 'Jeddah')], laps: [lapOf('l1', 'Jeddah', 98448)]);
       await _pump(t, repo);

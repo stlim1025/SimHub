@@ -66,6 +66,9 @@ class TrackPicker extends StatelessWidget {
     return MenuAnchor(
       // 폭 제한(280)이 목록에 그대로 걸리게 한다(기본값은 가로 제약을 풀어 내용 폭이 된다).
       crossAxisUnconstrained: false,
+      // 열린 목록 밖을 누르면 목록만 닫는다. 기본값(false)은 그 누름이 아래 위젯까지 전달돼
+      // Laps 표 행이 함께 눌려 랩 상세로 이동했다(D-50 작업 중 보고된 메뉴 관통 버그).
+      consumeOutsideTap: true,
       style: MenuStyle(
         backgroundColor: WidgetStatePropertyAll(palette.surface),
         surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),

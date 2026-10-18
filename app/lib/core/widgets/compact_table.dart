@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
 import '../theme/app_palette.dart';
+import 'fresh_highlight.dart';
 
 /// 행 높이(docs/15 §2.1 "높이 44").
 const double kCompactRowHeight = 44;
@@ -49,6 +50,7 @@ class CompactTable<T> extends StatelessWidget {
     required this.rows,
     this.onRowTap,
     this.isHighlighted,
+    this.isFresh,
     this.rowKey,
     this.footer,
     this.compactWidth = kCompactTableDefaultWidth,
@@ -60,6 +62,9 @@ class CompactTable<T> extends StatelessWidget {
 
   /// 참이면 그 행을 강조 배경(`AppColors.playerRow`)으로 칠한다(예: 지금 보는 랩).
   final bool Function(T row)? isHighlighted;
+
+  /// 참이면 그 행을 막 들어온 행으로 잠깐 강조한다([FreshHighlight], D-50).
+  final bool Function(T row)? isFresh;
 
   /// 행 위젯의 키(테스트·상태 보존용).
   final Key Function(T row)? rowKey;
@@ -87,6 +92,7 @@ class CompactTable<T> extends StatelessWidget {
                   row: row,
                   columns: visible,
                   highlighted: isHighlighted?.call(row) ?? false,
+                  fresh: isFresh?.call(row) ?? false,
                   onTap: onRowTap == null ? null : () => onRowTap!(row),
                 ),
               ],
@@ -153,22 +159,25 @@ class _BodyRow<T> extends StatelessWidget {
     required this.row,
     required this.columns,
     required this.highlighted,
+    required this.fresh,
     required this.onTap,
   });
 
   final T row;
   final List<CompactColumn<T>> columns;
   final bool highlighted;
+  final bool fresh;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
+    final body = _rowBody();
     // 읽기 도구에는 칸 조각이 아니라 눌러 여는 한 줄(버튼)로 알린다.
     return MergeSemantics(
       child: Semantics(
         button: onTap != null,
         selected: highlighted,
-        child: _rowBody(),
+        child: fresh ? FreshHighlight(child: body) : body,
       ),
     );
   }
