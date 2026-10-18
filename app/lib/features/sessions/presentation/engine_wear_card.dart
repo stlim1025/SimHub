@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_palette.dart';
 import '../../lap_detail/domain/lap_detail_display.dart';
-import '../../lap_detail/presentation/car_tyres_card.dart';
+import '../../lap_detail/presentation/diagram_style.dart';
 import '../domain/session_detail_display.dart';
 import '../domain/session_models.dart';
 import 'engine_painter.dart';
@@ -19,6 +19,21 @@ const double _swatchGap = 8;
 const double _swatchRadius = 2;
 const double _legendRowPadding = 4;
 
+/// 그림 부품 → 마모 %(docs/15 §11.3).
+double? engineWearOf(EnginePart part, EngineWear wear) => switch (part) {
+  EnginePart.ice => wear.ice,
+  EnginePart.turboCharger => wear.turboCharger,
+  EnginePart.mguH => wear.mguH,
+  EnginePart.mguK => wear.mguK,
+  EnginePart.energyStore => wear.energyStore,
+  EnginePart.controlElectronics => wear.controlElectronics,
+  EnginePart.gearbox => wear.gearbox,
+};
+
+/// 그림 부품 색: 마모 단계 색(25/50/75%), 값이 없으면 중립 회색.
+Color engineColorFor(EnginePart part, EngineWear wear, AppPalette palette) =>
+    diagramColorFor(engineWearOf(part, wear), palette);
+
 /// Engine Wear 카드(docs/15 §11.3): 엔진 그림(부품별 마모 색) + ICE · Turbo Charger · MGU-H · MGU-K · Energy Store ·
 /// Control Electronics · Gearbox · Engine Damage 목록(색 네모 + %). 색 단계는 타이어 마모와 같은 25/50/75%.
 class EngineWearCard extends StatelessWidget {
@@ -33,14 +48,16 @@ class EngineWearCard extends StatelessWidget {
       return const SessionCard(title: 'Engine Wear', child: SessionEmptyText(_emptyText));
     }
     final palette = context.palette;
-    Color colorOf(double? percent) => wearLevelColor(tyreWearLevelOf(percent), palette);
+    Color colorOf(double? percent) => diagramColorFor(percent, palette);
     final items = engineWearItems(value);
-    final parts = [value.ice, value.turboCharger, value.mguH, value.mguK, value.energyStore, value.controlElectronics, value.gearbox];
     final diagram = Semantics(
       label: _diagramSemantics,
       child: CustomPaint(
         size: kEngineDiagramSize,
-        painter: EnginePainter(partColors: [for (final p in parts) colorOf(p)], outlineColor: palette.textMuted),
+        painter: EnginePainter(
+          partColors: [for (final part in EnginePart.values) engineColorFor(part, value, palette)],
+          baseColor: palette.surface,
+        ),
       ),
     );
     final legend = Column(

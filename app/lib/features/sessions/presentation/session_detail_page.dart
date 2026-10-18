@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/layout/equal_height.dart';
 import '../../../core/layout/layout_constants.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_palette.dart';
@@ -168,6 +169,7 @@ class _SessionCards extends StatelessWidget {
   }
 }
 
+/// 2열의 한 줄: 두 카드는 같은 폭·같은 높이, 가로 간격 = 세로 간격(docs/15 §11.3).
 class _Pair extends StatelessWidget {
   const _Pair(this.left, this.right);
 
@@ -175,12 +177,5 @@ class _Pair extends StatelessWidget {
   final Widget right;
 
   @override
-  Widget build(BuildContext context) => Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(child: left),
-          const SizedBox(width: _cardGap),
-          Expanded(child: right),
-        ],
-      );
+  Widget build(BuildContext context) => EqualHeightRow(gap: _cardGap, children: [left, right]);
 }

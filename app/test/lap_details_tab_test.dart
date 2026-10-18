@@ -19,11 +19,8 @@ Future<void> _pump(WidgetTester tester, LapDetail detail) =>
 Finder _rowValue(String label, String value) =>
     find.descendant(of: find.byKey(ValueKey('detail-row-$label')), matching: find.text(value));
 
-CarPainter _carPainter(WidgetTester tester) => tester
-    .widgetList<CustomPaint>(find.byType(CustomPaint))
-    .map((p) => p.painter)
-    .whereType<CarPainter>()
-    .single;
+CarPainter _carPainter(WidgetTester tester) =>
+    tester.widgetList<CustomPaint>(find.byType(CustomPaint)).map((p) => p.painter).whereType<CarPainter>().single;
 
 void main() {
   group('Lap Time · Comparison', () {
@@ -102,7 +99,9 @@ void main() {
       const longId = '0192f0aa-1111-7000-8000-000000000001';
       await pumpLapDetail(
         t,
-        detailRepo: FakeLapDetailRepository(details: {longId: sampleDetail(lap: sampleLap(id: longId))}),
+        detailRepo: FakeLapDetailRepository(
+          details: {longId: sampleDetail(lap: sampleLap(id: longId))},
+        ),
         location: '/laps/$longId',
       );
       expect(_rowValue('Lap ID', '0192f0aa'), findsOneWidget);
@@ -128,10 +127,51 @@ void main() {
     testWidgets('바퀴는 마모 단계(25/50/75%)로, 앞날개 L/R은 손상으로 칠한다', (t) async {
       await _pump(t, sampleDetail());
 
+      final colors = _carPainter(t).colors;
+      expect(
+        [
+          CarPart.tyreFrontLeft,
+          CarPart.tyreFrontRight,
+          CarPart.tyreRearLeft,
+          CarPart.tyreRearRight,
+        ].map((p) => colors[p]),
+        [AppColors.wearMedium, AppColors.wearLow, AppColors.wearLow, AppColors.wearCritical],
+      );
+      expect(colors[CarPart.frontWingLeft], AppColors.wearLow);
+      expect(colors[CarPart.frontWingRight], AppColors.wearHigh);
+    });
+
+    testWidgets('값이 없는 부품(노즈·서스펜션·섀시)은 중립 회색, 조종석은 배경색', (t) async {
+      await _pump(t, sampleDetail());
+
       final painter = _carPainter(t);
-      expect(painter.wheelColors, [AppColors.wearMedium, AppColors.wearLow, AppColors.wearLow, AppColors.wearCritical]);
-      expect(painter.frontWingLeftColor, AppColors.wearLow);
-      expect(painter.frontWingRightColor, AppColors.wearHigh);
+      final palette = t.element(find.byType(CustomPaint).first).palette;
+      for (final part in [CarPart.nose, CarPart.suspension, CarPart.chassis]) {
+        expect(painter.colors[part], palette.textMuted, reason: part.name);
+      }
+      expect(painter.cockpitColor, palette.background);
+    });
+
+    test('carColorFor: 부품마다 맞는 손상 값을 25/50/75% 단계 색으로', () {
+      const car = CarSnapshot(
+        sidepodDamage: 10,
+        floorDamage: 30,
+        diffuserDamage: 60,
+        engineDamage: 80,
+        rearWingDamage: 0,
+        tyreWearEnd: WheelValues(rearLeft: 49, rearRight: 50, frontLeft: 24.9, frontRight: 75),
+      );
+      const palette = AppPalette.dark;
+      expect(carColorFor(CarPart.sidepods, car, palette), AppColors.wearLow);
+      expect(carColorFor(CarPart.floor, car, palette), AppColors.wearMedium);
+      expect(carColorFor(CarPart.diffuser, car, palette), AppColors.wearHigh);
+      expect(carColorFor(CarPart.engineCover, car, palette), AppColors.wearCritical);
+      expect(carColorFor(CarPart.rearWing, car, palette), AppColors.wearLow);
+      expect(carColorFor(CarPart.tyreFrontLeft, car, palette), AppColors.wearLow);
+      expect(carColorFor(CarPart.tyreRearLeft, car, palette), AppColors.wearMedium);
+      expect(carColorFor(CarPart.tyreRearRight, car, palette), AppColors.wearHigh);
+      expect(carColorFor(CarPart.tyreFrontRight, car, palette), AppColors.wearCritical);
+      expect(carColorFor(CarPart.frontWingLeft, car, palette), palette.textMuted);
     });
 
     testWidgets('바퀴 옆 마모 % 배지와 기울임 증가분', (t) async {
@@ -160,7 +200,9 @@ void main() {
     testWidgets('마모 시작 값이 없으면 증가분을 보이지 않는다', (t) async {
       await _pump(
         t,
-        sampleDetail(car: const CarSnapshot(tyreWearEnd: WheelValues(frontLeft: 10, frontRight: 10, rearLeft: 10, rearRight: 10))),
+        sampleDetail(
+          car: const CarSnapshot(tyreWearEnd: WheelValues(frontLeft: 10, frontRight: 10, rearLeft: 10, rearRight: 10)),
+        ),
       );
 
       expect(find.text('10%'), findsNWidgets(4));

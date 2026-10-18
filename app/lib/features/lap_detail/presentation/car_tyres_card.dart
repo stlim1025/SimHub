@@ -33,7 +33,7 @@ Color wearLevelColor(TyreWearLevel level, AppPalette palette) => switch (level) 
       TyreWearLevel.unknown => palette.border,
     };
 
-/// Car & Tyres 카드(docs/15 §2.3): 위에서 본 차(바퀴 = 마모, 앞날개 = 손상) + 바퀴 옆 `31%` 배지와 기울임 `+4.0%`, 컴파운드 원 + "N랩째".
+/// Car & Tyres 카드(docs/15 §2.3): 위에서 본 F1 차(바퀴 = 마모, 날개·사이드포드·플로어·디퓨저·엔진 커버 = 손상) + 바퀴 옆 `31%` 배지와 기울임 `+4.0%`, 컴파운드 원 + "N랩째".
 class CarTyresCard extends StatelessWidget {
   const CarTyresCard({super.key, required this.car});
 
@@ -44,15 +44,9 @@ class CarTyresCard extends StatelessWidget {
     final palette = context.palette;
     final start = car.tyreWearStart;
     final end = car.tyreWearEnd;
-    Color damageColor(double? damage) => wearLevelColor(tyreWearLevelOf(damage), palette);
-
     final painter = CarPainter(
-      wheelColors: [for (final wear in (end ?? const WheelValues()).ordered) damageColor(wear)],
-      frontWingLeftColor: damageColor(car.frontLeftWingDamage),
-      frontWingRightColor: damageColor(car.frontRightWingDamage),
-      rearWingColor: damageColor(car.rearWingDamage),
-      bodyColor: palette.border,
-      outlineColor: palette.textMuted,
+      colors: {for (final part in CarPart.values) part: carColorFor(part, car, palette)},
+      baseColor: palette.surface,
       cockpitColor: palette.background,
     );
     final frontTop = kFrontWheelCenterFactor * kCarDiagramSize.height - _badgeHeight / 2;
