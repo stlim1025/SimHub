@@ -89,39 +89,6 @@ public sealed class LapRepository : ILapRepository
             .ToList();
     }
 
-    public async Task<(IReadOnlyList<Lap> Items, int Total)> GetMyLapsAsync(
-        Guid userId,
-        Guid? trackId,
-        SessionType? sessionType,
-        MyLapsSort sort,
-        int skip,
-        int take,
-        CancellationToken cancellationToken = default)
-    {
-        var query = _context.Laps.AsNoTracking().Where(l => l.UserId == userId);
-
-        if (trackId.HasValue)
-        {
-            query = query.Where(l => l.TrackId == trackId.Value);
-        }
-
-        if (sessionType.HasValue)
-        {
-            query = query.Where(l => l.SessionType == sessionType.Value);
-        }
-
-        var total = await query.CountAsync(cancellationToken);
-
-        var items = await Order(query, sort)
-            .Include(l => l.Track)
-            .Include(l => l.Sectors)
-            .Skip(skip)
-            .Take(take)
-            .ToListAsync(cancellationToken);
-
-        return (items, total);
-    }
-
     public async Task<IReadOnlyList<MyTrackSummaryRow>> GetMyTrackSummariesAsync(
         Guid userId,
         CancellationToken cancellationToken = default)
@@ -161,15 +128,6 @@ public sealed class LapRepository : ILapRepository
                 r.TrackId, r.Name, r.GameCode, r.LapCount, r.BestValidLapTimeMs, r.LastSetAt, r.CountryCode, r.DisplayOrder))
             .ToList();
     }
-
-    /// <summary>
-    /// 정렬 적용. Fastest = 유효 랩 우선 → 랩타임 오름차순 → 먼저 세운 순. 그 외(Recent 포함)는 최근 순.
-    /// 동률이 나와도 페이지 경계가 흔들리지 않도록 마지막에 Id로 결정적 순서를 보장한다.
-    /// </summary>
-    private static IOrderedQueryable<Lap> Order(IQueryable<Lap> query, MyLapsSort sort)
-        => sort == MyLapsSort.Fastest
-            ? query.OrderByDescending(l => l.IsValid).ThenBy(l => l.LapTimeMs).ThenBy(l => l.SetAt).ThenBy(l => l.Id)
-            : query.OrderByDescending(l => l.SetAt).ThenBy(l => l.Id);
 
     public async Task<Lap?> GetPersonalBestLapAsync(
         Guid userId,

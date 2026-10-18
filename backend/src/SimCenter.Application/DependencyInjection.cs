@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using SimCenter.Application.AgentDevices;
 using SimCenter.Application.Auth;
+using SimCenter.Application.Laps;
 using SimCenter.Application.Laps.Ingest;
 using SimCenter.Application.Profile;
 using SimCenter.Application.Rankings;
@@ -23,6 +24,7 @@ public static class DependencyInjection
         services.AddScoped<ISeasonQueryService, SeasonQueryService>();
         services.AddScoped<ISessionQueryService, SessionQueryService>();
         services.AddScoped<IRankingService, RankingService>();
+        services.AddScoped<ILapQueryService, LapQueryService>();
         services.AddScoped<IAgentPairingService, AgentPairingService>();
         services.AddScoped<IAgentDeviceService, AgentDeviceService>();
         return services;

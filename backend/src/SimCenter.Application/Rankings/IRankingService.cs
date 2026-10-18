@@ -16,11 +16,15 @@ public interface IRankingService
     /// <summary>트랙 마스터 목록(04 §3.8).</summary>
     Task<TrackListResponse> GetTracksAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>내 랩 기록(무효 랩 포함). trackId 지정 시 해당 트랙 개인 최고를 함께 반환. sort로 최근 순/빠른 순을 고른다.</summary>
+    /// <summary>
+    /// 내 랩 기록(무효 랩 포함, <paramref name="validOnly"/>면 유효 랩만). trackId 지정 시 해당 트랙 개인 최고를 함께 반환.
+    /// sort로 최근 순/빠른 순을 고른다.
+    /// </summary>
     Task<MyLapsResponse> GetMyLapsAsync(
         Guid userId,
         Guid? trackId,
         SessionType? sessionType,
+        bool validOnly,
         MyLapsSort sort,
         int page,
         int pageSize,

@@ -53,7 +53,10 @@ public sealed record MyTracksResponse(IReadOnlyList<MyTrackDto> Items);
 /// <summary>개인 최고 기록(랭킹 적격 기준).</summary>
 public sealed record PersonalBestDto(Guid TrackId, int LapTimeMs, DateTime SetAt);
 
-/// <summary>개별 랩(무효 랩 포함, D-15/D-16).</summary>
+/// <summary>
+/// 개별 랩(무효 랩 포함, D-15/D-16). 15 §4.2 추가 필드: 랩 번호, 게임 모드(옛 랩 null), 팀(스냅샷의 팀 ID → <c>TeamCatalog</c>, 없으면 null),
+/// 날씨(<c>Weather</c> 이름, 모르면 null), 트레이스 유무.
+/// </summary>
 public sealed record LapDto(
     Guid LapId,
     string TrackName,
@@ -63,7 +66,15 @@ public sealed record LapDto(
     IReadOnlyList<LapSectorDto> Sectors,
     bool IsValid,
     bool IsRankingEligible,
-    DateTime SetAt);
+    DateTime SetAt,
+    int LapNumber,
+    string? GameMode,
+    TeamRefDto? Team,
+    string? Weather,
+    bool HasTrace);
+
+/// <summary>팀 표시 이름과 색(<c>#RRGGBB</c>, D-33).</summary>
+public sealed record TeamRefDto(string Name, string Color);
 
 /// <summary>가변 섹터(D-7).</summary>
 public sealed record LapSectorDto(int SectorNumber, int SectorTimeMs);

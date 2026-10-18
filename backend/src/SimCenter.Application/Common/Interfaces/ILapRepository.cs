@@ -4,7 +4,10 @@ using SimCenter.Domain.Enums;
 
 namespace SimCenter.Application.Common.Interfaces;
 
-/// <summary>Lap 영속성/조회 포트. 섹터(Lap.Sectors)·스냅샷(Lap.Snapshot)은 랩과 함께 저장된다(cascade).</summary>
+/// <summary>
+/// Lap 영속성/랭킹 조회 포트. 섹터(Lap.Sectors)·스냅샷(Lap.Snapshot)은 랩과 함께 저장된다(cascade).
+/// 내 랩 목록·상세 조회는 <see cref="ILapQueryRepository"/>가 맡는다.
+/// </summary>
 public interface ILapRepository
 {
     Task AddAsync(Lap lap, CancellationToken cancellationToken = default);
@@ -23,19 +26,6 @@ public interface ILapRepository
         DateTime fromUtc,
         DateTime toUtc,
         int top,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// 내 랩 기록 페이지(무효 랩 포함). Track/Sectors 포함, 총 개수 함께 반환.
-    /// 정렬: <see cref="MyLapsSort.Recent"/> = SetAt DESC, <see cref="MyLapsSort.Fastest"/> = 유효 랩 우선 → LapTimeMs ASC → SetAt ASC.
-    /// </summary>
-    Task<(IReadOnlyList<Lap> Items, int Total)> GetMyLapsAsync(
-        Guid userId,
-        Guid? trackId,
-        SessionType? sessionType,
-        MyLapsSort sort,
-        int skip,
-        int take,
         CancellationToken cancellationToken = default);
 
     /// <summary>

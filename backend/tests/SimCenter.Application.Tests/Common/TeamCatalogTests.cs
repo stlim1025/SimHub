@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
-using SimCenter.Application.Seasons.Queries;
+using SimCenter.Application.Common;
 
-namespace SimCenter.Application.Tests.Seasons;
+namespace SimCenter.Application.Tests.Common;
 
 public class TeamCatalogTests
 {
