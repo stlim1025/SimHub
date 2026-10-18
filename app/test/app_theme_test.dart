@@ -79,6 +79,22 @@ void main() {
     expect(theme.textTheme.bodyMedium?.color, AppColors.lightTextPrimary);
   });
 
+  test('링크 글자(랩타임)는 두 테마의 표면·배경·표 머리줄 위에서 4.5:1 이상이다', () {
+    for (final palette in [AppPalette.dark, AppPalette.light]) {
+      for (final background in [palette.surface, palette.background, palette.tableHeader]) {
+        expect(_contrast(palette.link, background), greaterThanOrEqualTo(_minTextContrast));
+      }
+    }
+  });
+
+  test('그래프 선(이 랩 강조색·비교 랩 청록)은 두 테마의 표면 위에서 3:1 이상이다', () {
+    const minGraphicContrast = 3.0;
+    for (final palette in [AppPalette.dark, AppPalette.light]) {
+      expect(_contrast(AppColors.accent, palette.surface), greaterThanOrEqualTo(minGraphicContrast));
+      expect(_contrast(palette.comparison, palette.surface), greaterThanOrEqualTo(minGraphicContrast));
+    }
+  });
+
   test('밝은 팔레트의 글자색은 밝은 배경·표면 위에서 4.5:1 이상이다', () {
     const palette = AppPalette.light;
     final textColors = {
@@ -89,6 +105,7 @@ void main() {
       'podiumGold': palette.podiumGold,
       'podiumSilver': palette.podiumSilver,
       'podiumBronze': palette.podiumBronze,
+      'link': palette.link,
     };
 
     for (final MapEntry(key: name, value: color) in textColors.entries) {

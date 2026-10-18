@@ -53,35 +53,41 @@ class TyreStintsView extends StatelessWidget {
       children: [
         for (var i = 0; i < stints.length; i++) ...[
           if (i > 0) const SizedBox(width: _circleGap),
-          _TyreCircle(stint: stints[i]),
+          TyreCompoundCircle(compound: stints[i].visualCompound, tooltip: _stintTooltip(stints[i])),
         ],
       ],
     );
   }
 }
 
-class _TyreCircle extends StatelessWidget {
-  const _TyreCircle({required this.stint});
+/// 컴파운드 원(색 + 한 글자, 세션 결과·랩 상세 공용). [compound]는 `Soft`·`Medium`·`Hard`·`Intermediate`·`Wet`, 모르면 회색 `?`.
+class TyreCompoundCircle extends StatelessWidget {
+  const TyreCompoundCircle({super.key, required this.compound, required this.tooltip, this.size = _circleSize});
 
-  final TyreStintView stint;
+  final String compound;
+  final String tooltip;
+  final double size;
+
+  /// 원 지름 대비 글자 크기 비율.
+  static const double _letterScale = _letterSize / _circleSize;
 
   @override
   Widget build(BuildContext context) {
     return Tooltip(
-      message: _stintTooltip(stint),
+      message: tooltip,
       child: Container(
-        width: _circleSize,
-        height: _circleSize,
+        width: size,
+        height: size,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: tyreColorOf(stint.visualCompound),
+          color: tyreColorOf(compound),
           border: Border.all(color: context.palette.border),
         ),
         child: Text(
-          _compoundLetter(stint.visualCompound),
-          style: const TextStyle(
-            fontSize: _letterSize,
+          _compoundLetter(compound),
+          style: TextStyle(
+            fontSize: size * _letterScale,
             fontWeight: FontWeight.bold,
             color: AppColors.background,
           ),

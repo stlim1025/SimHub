@@ -2,6 +2,9 @@
 const String kLapSortRecent = 'recent';
 const String kLapSortFastest = 'fastest';
 
+/// 옛 서버가 `displayOrder`를 주지 않을 때의 순서 값(서버 순서를 그대로 쓰므로 표시에는 영향이 없다).
+const int kUnknownDisplayOrder = 0;
+
 /// 가변 섹터(D-7).
 class LapSector {
   const LapSector({required this.sectorNumber, required this.sectorTimeMs});
@@ -15,7 +18,29 @@ class LapSector {
       );
 }
 
-/// 개별 랩(무효 랩 포함, D-15/D-16).
+/// 랩 스냅샷의 팀(docs/15 §4.2 `team`). 백엔드 TeamCatalog(D-33)가 푼 이름·색.
+class LapTeam {
+  const LapTeam({required this.name, this.color});
+
+  final String name;
+
+  /// `#RRGGBB`. 화면에서는 `parseHexColor`로 바꾼다.
+  final String? color;
+
+  /// 객체가 아니거나 이름이 없으면 팀 없음(null).
+  static LapTeam? fromJsonOrNull(Object? json) {
+    if (json is! Map<String, dynamic>) {
+      return null;
+    }
+    final name = json['name'];
+    if (name is! String || name.isEmpty) {
+      return null;
+    }
+    return LapTeam(name: name, color: json['color'] as String?);
+  }
+}
+
+/// 개별 랩(무효 랩 포함, D-15/D-16). docs/15 §4.2의 추가 필드는 옛 서버·옛 랩을 위해 모두 없어도 읽는다.
 class Lap {
   const Lap({
     required this.lapId,
@@ -27,6 +52,11 @@ class Lap {
     required this.isValid,
     required this.isRankingEligible,
     required this.setAt,
+    this.lapNumber,
+    this.gameMode,
+    this.team,
+    this.weather,
+    this.hasTrace = false,
   });
 
   final String lapId;
@@ -38,6 +68,21 @@ class Lap {
   final bool isValid;
   final bool isRankingEligible;
   final DateTime setAt;
+
+  /// 세션 안의 랩 번호. 모르면 null.
+  final int? lapNumber;
+
+  /// 게임 모드(`DriverCareer` 등, 서버 문자열 그대로). 모르면(옛 랩) null.
+  final String? gameMode;
+
+  /// 스냅샷의 팀. 스냅샷이 없으면 null.
+  final LapTeam? team;
+
+  /// 날씨(`Clear`·`LightCloud`·`Overcast`·`LightRain`·`HeavyRain`·`Storm`). 모르면 null.
+  final String? weather;
+
+  /// 텔레메트리 트레이스가 저장됐는지(`GET /me/laps/{id}/trace`).
+  final bool hasTrace;
 
   factory Lap.fromJson(Map<String, dynamic> json) => Lap(
         lapId: json['lapId'] as String,
@@ -51,6 +96,11 @@ class Lap {
         isValid: json['isValid'] as bool,
         isRankingEligible: json['isRankingEligible'] as bool,
         setAt: DateTime.parse(json['setAt'] as String),
+        lapNumber: json['lapNumber'] as int?,
+        gameMode: json['gameMode'] as String?,
+        team: LapTeam.fromJsonOrNull(json['team']),
+        weather: json['weather'] as String?,
+        hasTrace: json['hasTrace'] as bool? ?? false,
       );
 }
 
@@ -69,7 +119,7 @@ class PersonalBest {
       );
 }
 
-/// 내 랩이 1개 이상 있는 트랙 한 건(`GET /me/tracks`, docs/11 §8).
+/// 내 랩이 1개 이상 있는 트랙 한 건(`GET /me/tracks`, docs/11 §8). 서버가 마지막 주행 순으로 준다.
 /// [bestValidLapTimeMs]는 유효 랩 중 최소 랩타임이며, 유효 랩이 없으면 null.
 class MyTrack {
   const MyTrack({
@@ -79,6 +129,8 @@ class MyTrack {
     required this.lapCount,
     required this.bestValidLapTimeMs,
     required this.lastSetAt,
+    this.countryCode,
+    this.displayOrder = kUnknownDisplayOrder,
   });
 
   final String trackId;
@@ -88,6 +140,12 @@ class MyTrack {
   final int? bestValidLapTimeMs;
   final DateTime lastSetAt;
 
+  /// ISO 3166-1 alpha-2 대문자(D-43). 모르면 null(회색 원 국기).
+  final String? countryCode;
+
+  /// 캘린더 순서(D-43).
+  final int displayOrder;
+
   factory MyTrack.fromJson(Map<String, dynamic> json) => MyTrack(
         trackId: json['trackId'] as String,
         trackName: json['trackName'] as String,
@@ -95,6 +153,8 @@ class MyTrack {
         lapCount: json['lapCount'] as int,
         bestValidLapTimeMs: json['bestValidLapTimeMs'] as int?,
         lastSetAt: DateTime.parse(json['lastSetAt'] as String),
+        countryCode: json['countryCode'] as String?,
+        displayOrder: json['displayOrder'] as int? ?? kUnknownDisplayOrder,
       );
 }
 

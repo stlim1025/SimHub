@@ -5,16 +5,18 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_provider.dart';
 import '../domain/lap_models.dart';
 
-/// 내 랩 기록 REST 어댑터(04 §3.9, docs/11 §8).
+/// 내 랩 기록 REST 어댑터(04 §3.9, docs/11 §8, docs/15 §4.2).
 class LapsRepository {
   LapsRepository(this._dio);
 
   final Dio _dio;
 
+  /// [validOnly]가 true면 유효 랩만(`validOnly=true`). 기본(false)은 쿼리에 붙이지 않는다(서버 기본과 같다).
   Future<MyLaps> getMyLaps({
     String? trackId,
     String? sessionType,
     String sort = kLapSortRecent,
+    bool validOnly = false,
     int page = 1,
     int pageSize = 20,
   }) async {
@@ -25,6 +27,7 @@ class LapsRepository {
           'trackId': ?trackId,
           'sessionType': ?sessionType,
           'sort': sort,
+          if (validOnly) 'validOnly': true,
           'page': page,
           'pageSize': pageSize,
         },

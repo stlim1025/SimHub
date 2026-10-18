@@ -10,6 +10,8 @@ import 'package:simcenter_app/features/auth/application/auth_controller.dart';
 import 'package:simcenter_app/features/auth/domain/auth_models.dart';
 import 'package:simcenter_app/features/devices/data/devices_repository.dart';
 import 'package:simcenter_app/features/devices/domain/device_models.dart';
+import 'package:simcenter_app/features/lap_detail/data/lap_detail_repository.dart';
+import 'package:simcenter_app/features/lap_detail/domain/lap_detail_models.dart';
 import 'package:simcenter_app/features/laps/data/laps_repository.dart';
 import 'package:simcenter_app/features/laps/domain/lap_models.dart';
 import 'package:simcenter_app/features/profile/data/profile_repository.dart';
@@ -130,14 +132,17 @@ Map<String, dynamic> hubPayload(String trackId, List<RankingEntry> entries, {Str
       ],
     };
 
+/// 랩 조회 요청 한 건(가짜 저장소가 기록한다).
+typedef LapsRequest = ({String? trackId, String sort, bool validOnly, int page, int pageSize});
+
 /// 요청을 기록하고 미리 정한 랩·트랙을 돌려주는 랩 저장소.
-/// `sort=fastest`면 랩타임 오름차순으로 정렬하고, 요청한 page/pageSize만큼 잘라 돌려준다(서버 계약 흉내).
+/// `validOnly`면 유효 랩만 거르고, `sort=fastest`면 랩타임 오름차순으로 정렬해 요청한 page/pageSize만큼 잘라 돌려준다(서버 계약 흉내).
 class FakeLapsRepository implements LapsRepository {
   FakeLapsRepository({this.laps = const [], this.tracks = const []});
 
   final List<Lap> laps;
   final List<MyTrack> tracks;
-  final requests = <({String? trackId, String sort, int page, int pageSize})>[];
+  final requests = <LapsRequest>[];
 
   List<int> get pageSizes => [for (final r in requests) r.pageSize];
 
@@ -146,16 +151,21 @@ class FakeLapsRepository implements LapsRepository {
     String? trackId,
     String? sessionType,
     String sort = kLapSortRecent,
+    bool validOnly = false,
     int page = 1,
     int pageSize = 20,
   }) async {
-    requests.add((trackId: trackId, sort: sort, page: page, pageSize: pageSize));
-    final ordered = sort == kLapSortFastest
-        ? ([...laps]..sort((a, b) => a.lapTimeMs.compareTo(b.lapTimeMs)))
-        : laps;
+    requests.add((trackId: trackId, sort: sort, validOnly: validOnly, page: page, pageSize: pageSize));
+    final matching = [
+      for (final lap in laps)
+        if (!validOnly || lap.isValid) lap,
+    ];
+    if (sort == kLapSortFastest) {
+      matching.sort((a, b) => a.lapTimeMs.compareTo(b.lapTimeMs));
+    }
     final start = (page - 1) * pageSize;
-    final items = ordered.skip(start).take(pageSize).toList();
-    return MyLaps(personalBest: null, page: page, pageSize: pageSize, total: laps.length, laps: items);
+    final items = matching.skip(start).take(pageSize).toList();
+    return MyLaps(personalBest: null, page: page, pageSize: pageSize, total: matching.length, laps: items);
   }
 
   @override
@@ -169,6 +179,12 @@ Lap lapOf(
   bool isValid = true,
   String sessionType = 'TimeTrial',
   List<LapSector> sectors = const [],
+  int? lapNumber,
+  String? gameMode,
+  LapTeam? team,
+  String? weather,
+  bool hasTrace = false,
+  DateTime? setAt,
 }) =>
     Lap(
       lapId: id,
@@ -179,16 +195,99 @@ Lap lapOf(
       sectors: sectors,
       isValid: isValid,
       isRankingEligible: isValid,
-      setAt: DateTime.utc(2026, 10, 12, 9),
+      setAt: setAt ?? DateTime.utc(2026, 10, 12, 9),
+      lapNumber: lapNumber,
+      gameMode: gameMode,
+      team: team,
+      weather: weather,
+      hasTrace: hasTrace,
     );
 
-MyTrack trackOf(String id, String name, {int lapCount = 3, int? bestMs = 83452}) => MyTrack(
+MyTrack trackOf(String id, String name, {int lapCount = 3, int? bestMs = 83452, String? countryCode}) => MyTrack(
       trackId: id,
       trackName: name,
       gameCode: 'F1_25',
       lapCount: lapCount,
       bestValidLapTimeMs: bestMs,
       lastSetAt: DateTime.utc(2026, 10, 12, 9),
+      countryCode: countryCode,
+    );
+
+/// 랩 상세·트레이스를 메모리에서 돌려주는 저장소. [details]에 없는 랩은 404 [ApiException],
+/// [traces]에 없는 랩의 트레이스는 null(서버 404와 같다).
+class FakeLapDetailRepository implements LapDetailRepository {
+  FakeLapDetailRepository({this.details = const {}, this.traces = const {}});
+
+  final Map<String, LapDetail> details;
+  final Map<String, LapTrace> traces;
+  final detailRequests = <String>[];
+  final traceRequests = <String>[];
+
+  @override
+  Future<LapDetail> getLapDetail(String lapId) async {
+    detailRequests.add(lapId);
+    final detail = details[lapId];
+    if (detail == null) {
+      throw ApiException('대상을 찾을 수 없어요.', statusCode: 404);
+    }
+    return detail;
+  }
+
+  @override
+  Future<LapTrace?> getLapTrace(String lapId) async {
+    traceRequests.add(lapId);
+    return traces[lapId];
+  }
+}
+
+/// 랩 상세. [comparison]을 생략하면 비교 대상 없음.
+LapDetail lapDetailOf(
+  Lap lap, {
+  String trackId = 't1',
+  String? countryCode = 'SA',
+  String? sessionId,
+  CarSnapshot? car,
+  LapConditions? conditions,
+  ComparisonLap? comparison,
+}) =>
+    LapDetail(
+      lap: lap,
+      trackId: trackId,
+      countryCode: countryCode,
+      sessionId: sessionId,
+      car: car,
+      conditions: conditions,
+      comparison: comparison,
+    );
+
+ComparisonLap comparisonOf(String lapId, int ms, {List<LapSector> sectors = const [], bool hasTrace = false}) =>
+    ComparisonLap(
+      lapId: lapId,
+      lapTimeMs: ms,
+      sectors: sectors,
+      setAt: DateTime.utc(2026, 10, 1, 9),
+      hasTrace: hasTrace,
+    );
+
+/// 거리 [resolutionM]m 간격 표본 [count]개짜리 트레이스. 시간·속도는 [timeAt]·[speedAt](표본 번호 → 값)으로 바꿀 수 있다.
+/// 기본값: 시간 i×100ms, 속도 200+i, 스로틀 50+i, 브레이크 i, 스티어 −i, 기어 6, RPM 11000+i.
+LapTrace traceOf(
+  String lapId, {
+  int count = 5,
+  int resolutionM = 5,
+  int Function(int i)? timeAt,
+  int Function(int i)? speedAt,
+}) =>
+    LapTrace(
+      lapId: lapId,
+      resolutionM: resolutionM,
+      timeMs: [for (var i = 0; i < count; i++) timeAt?.call(i) ?? i * 100],
+      speedKph: [for (var i = 0; i < count; i++) speedAt?.call(i) ?? 200 + i],
+      throttle: [for (var i = 0; i < count; i++) 50 + i],
+      brake: [for (var i = 0; i < count; i++) i],
+      steer: [for (var i = 0; i < count; i++) -i],
+      gear: [for (var i = 0; i < count; i++) 6],
+      rpm: [for (var i = 0; i < count; i++) 11000 + i],
     );
 
 /// 장치 목록·연결 코드 발급·연결 해제를 메모리에서 흉내 내는 저장소.

@@ -3,14 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:simcenter_app/core/realtime/ranking_hub_client.dart';
+import 'package:simcenter_app/core/widgets/track_picker.dart';
 import 'package:simcenter_app/features/ranking/data/ranking_repository.dart';
 import 'package:simcenter_app/features/ranking/domain/ranking_models.dart';
 import 'package:simcenter_app/features/ranking/presentation/leaderboard_page.dart';
 
 import 'support/fakes.dart';
 
-const _monaco = Track(trackId: 't1', gameCode: 'F1_25', name: 'Monaco');
-const _silverstone = Track(trackId: 't2', gameCode: 'F1_25', name: 'Silverstone');
+const _monaco = Track(trackId: 't1', gameCode: 'F1_25', name: 'Monaco', countryCode: 'MC', displayOrder: 8);
+const _silverstone = Track(trackId: 't2', gameCode: 'F1_25', name: 'Silverstone', countryCode: 'GB', displayOrder: 12);
 
 class _Harness {
   _Harness(this.router, this.repo, this.hub);
@@ -96,9 +97,9 @@ void main() {
   testWidgets('트랙을 고르면 ?trackId=로 주소가 바뀌고 그 트랙을 읽는다', (t) async {
     final h = await _pumpLeaderboard(t);
 
-    await t.tap(find.byType(DropdownButton<String>));
+    await t.tap(find.byKey(const ValueKey('track-picker')));
     await t.pumpAndSettle();
-    await t.tap(find.text('Silverstone').last);
+    await t.tap(find.byKey(const ValueKey('track-option-t2')));
     await t.pumpAndSettle();
 
     expect(h.location, '/leaderboard?trackId=t2');
@@ -111,9 +112,9 @@ void main() {
     await t.tap(find.text('연'));
     await t.pumpAndSettle();
 
-    await t.tap(find.byType(DropdownButton<String>));
+    await t.tap(find.byKey(const ValueKey('track-picker')));
     await t.pumpAndSettle();
-    await t.tap(find.text('Silverstone').last);
+    await t.tap(find.byKey(const ValueKey('track-option-t2')));
     await t.pumpAndSettle();
 
     expect(h.repo.requests.last, (trackId: 't2', period: 'yearly'));
@@ -135,31 +136,36 @@ void main() {
 
     expect(find.textContaining('아직 기록이 없어요'), findsOneWidget);
   });
-  group('트랙 선택 상자와 기간 버튼', () {
-    void expectSameHeightRow(WidgetTester t) {
-      final field = find.byType(InputDecorator).first;
-      final segments = find.byType(SegmentedButton<String>);
-      expect(field, findsOneWidget);
-      expect(segments, findsOneWidget);
-      expect(t.getSize(field).height, t.getSize(segments).height);
-      expect(t.getCenter(field).dy, t.getCenter(segments).dy);
-    }
+  group('트랙 메뉴(D-43)', () {
+    testWidgets('제목에 고른 트랙의 국기가 보이고, 메뉴는 서버 순서대로 국기와 함께 연다', (t) async {
+      await _pumpLeaderboard(t, location: '/leaderboard?trackId=t2');
 
-    for (final platform in [TargetPlatform.windows, TargetPlatform.macOS, TargetPlatform.android, TargetPlatform.iOS]) {
-      testWidgets('${platform.name}에서도 높이가 같고 세로 중앙이 맞는다', (t) async {
-        await _pumpLeaderboard(t, platform: platform);
+      expect(find.byKey(const ValueKey('track-flag-GB')), findsOneWidget);
 
-        expectSameHeightRow(t);
+      await t.tap(find.byKey(const ValueKey('track-picker')));
+      await t.pumpAndSettle();
+
+      final monaco = find.byKey(const ValueKey('track-option-t1'));
+      final silverstone = find.byKey(const ValueKey('track-option-t2'));
+      expect(t.getTopLeft(monaco).dy, lessThan(t.getTopLeft(silverstone).dy));
+      expect(find.descendant(of: monaco, matching: find.byKey(const ValueKey('track-flag-MC'))), findsOneWidget);
+    });
+
+    testWidgets('드롭다운 상자 대신 공용 트랙 메뉴를 쓴다', (t) async {
+      await _pumpLeaderboard(t);
+
+      expect(find.byType(DropdownButton<String>), findsNothing);
+      expect(find.byType(TrackPicker), findsOneWidget);
+    });
+
+    for (final platform in [TargetPlatform.windows, TargetPlatform.android]) {
+      testWidgets('${platform.name} 좁은 화면(320)에서도 트랙 메뉴와 기간 버튼이 넘치지 않는다', (t) async {
+        await _pumpLeaderboard(t, size: const Size(320, 800), platform: platform);
+
+        expect(t.takeException(), isNull);
+        expect(find.byType(TrackPicker), findsOneWidget);
+        expect(find.byType(SegmentedButton<String>), findsOneWidget);
       });
     }
-
-    testWidgets('좁은 화면에서는 줄바꿈되어도 넘치지 않고 높이가 같다', (t) async {
-      await _pumpLeaderboard(t, size: const Size(320, 800), platform: TargetPlatform.android);
-
-      expect(t.takeException(), isNull);
-      final field = find.byType(InputDecorator).first;
-      final segments = find.byType(SegmentedButton<String>);
-      expect(t.getSize(field).height, t.getSize(segments).height);
-    });
   });
 }

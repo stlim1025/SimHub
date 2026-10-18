@@ -7,18 +7,15 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/util/lap_time.dart';
 import '../../../core/widgets/error_retry.dart';
+import '../../../core/widgets/track_picker.dart';
 import '../application/ranking_providers.dart';
 import '../domain/ranking_models.dart';
+import 'track_choices.dart';
 
-const double _trackFieldWidth = 260;
 const double _rankBadgeSize = 32;
 
-/// 트랙 선택 상자와 기간 버튼이 나란히 놓이는 줄의 공통 높이.
-/// 라벨이 테두리에 걸치는 outlined 상자가 보통 이 높이라 버튼을 여기에 맞춘다.
+/// 기간 버튼 높이. 플랫폼 밀도에 따라 달라지지 않게 고정한다.
 const double _filterControlHeight = kMinInteractiveDimension;
-
-/// 트랙 선택 상자 안쪽 여백. 세로를 얇게 두어 표준 밀도에서도 [_filterControlHeight]를 넘지 않게 한다.
-const _trackFieldPadding = EdgeInsets.symmetric(horizontal: 12, vertical: 4);
 
 /// 기간 버튼 좌우 여백. 세로 여백은 0으로 두고 라벨 높이([_filterControlHeight])가 버튼 높이를 정한다.
 const double _periodButtonHorizontalPadding = 12;
@@ -98,39 +95,20 @@ class _LeaderboardPageState extends ConsumerState<LeaderboardPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Wrap(
-          spacing: 12,
+          spacing: 16,
           runSpacing: 12,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            SizedBox(
-              width: _trackFieldWidth,
-              child: InputDecorator(
-                decoration: const InputDecoration(
-                  labelText: '트랙',
-                  isDense: true,
-                  contentPadding: _trackFieldPadding,
-                  // 데스크톱(compact 밀도)에서는 더 낮아지므로 하한을 둬 모든 플랫폼에서 같게 한다.
-                  constraints: BoxConstraints(minHeight: _filterControlHeight),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    isDense: true,
-                    isExpanded: true,
-                    value: selected.trackId,
-                    items: [
-                      for (final t in tracks)
-                        DropdownMenuItem(value: t.trackId, child: Text(t.name)),
-                    ],
-                    onChanged: (id) {
-                      if (id != null) _selectTrack(id);
-                    },
-                  ),
-                ),
-              ),
+            // 트랙 메뉴(D-43·D-47): 국기 + 이름 + ⇅, 캘린더 순서 목록. Laps와 같은 위젯이다.
+            TrackPicker(
+              tracks: trackChoicesOf(tracks),
+              selected: trackChoiceOf(selected),
+              onSelected: (choice) => _selectTrack(choice.id),
+              textStyle: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
             SegmentedButton<String>(
               showSelectedIcon: false,
-              // 플랫폼 밀도·탭 영역 패딩에 따라 높이가 달라지지 않게 고정해 트랙 선택 상자와 맞춘다.
+              // 플랫폼 밀도·탭 영역 패딩에 따라 높이가 달라지지 않게 고정한다.
               style: SegmentedButton.styleFrom(
                 visualDensity: VisualDensity.standard,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,

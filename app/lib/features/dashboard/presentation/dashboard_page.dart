@@ -4,12 +4,16 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/layout/layout_constants.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/util/lap_time.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../devices/presentation/connection_status_card.dart';
+import '../../lap_detail/domain/lap_detail_display.dart';
+import '../../laps/domain/lap_display.dart';
 import '../../laps/domain/lap_models.dart';
+import '../../laps/presentation/lap_cells.dart';
 import '../application/dashboard_providers.dart';
 
 /// 로그인 직후 홈. 환영 문구 + 내 최근 랩(docs/11 §7.3).
@@ -106,35 +110,35 @@ class _RecentLapRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(lap.trackName, style: const TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 2),
-                Text(
-                  '${lap.sessionType} · ${_dateFormat.format(lap.setAt.toLocal())}',
-                  style: theme.textTheme.bodySmall?.copyWith(color: context.palette.textMuted),
-                ),
-              ],
+    final mode = lapModeLabel(gameMode: lap.gameMode, sessionType: lap.sessionType);
+    // 행을 누르면 그 랩의 상세(D-46).
+    return InkWell(
+      onTap: () => context.go(lapDetailLocation(lap.lapId)),
+      hoverColor: AppColors.rowHover,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(lap.trackName, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 2),
+                  Text(
+                    '$mode · ${_dateFormat.format(lap.setAt.toLocal())}',
+                    style: theme.textTheme.bodySmall?.copyWith(color: context.palette.textMuted),
+                  ),
+                ],
+              ),
             ),
-          ),
-          if (!lap.isValid) ...[
-            Text('무효', style: theme.textTheme.bodySmall?.copyWith(color: context.palette.danger)),
-            const SizedBox(width: 12),
+            if (!lap.isValid) ...[
+              Text('무효', style: theme.textTheme.bodySmall?.copyWith(color: context.palette.danger)),
+              const SizedBox(width: 12),
+            ],
+            Text(formatLapTime(lap.lapTimeMs), style: lapTimeLinkStyle(context)),
           ],
-          Text(
-            formatLapTime(lap.lapTimeMs),
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontFeatures: [FontFeature.tabularFigures()],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
