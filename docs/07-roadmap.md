@@ -66,8 +66,8 @@
 |---|---|---|
 | **P6** | 개인 모드 전환(`AgentDevice`·연결 코드·장치 키) + 사이드바 웹 셸(Dashboard · Laps · Leaderboard · Telemetry App) | ✅ 완료 (2026-10-17) |
 | P7 | **시즌·세션 수집** — `SeasonLinkIdentifier`/`WeekendLinkIdentifier`/`SessionLinkIdentifier`로 시즌 → 그랑프리 → 세션을 묶고, `FinalClassification`·`Participants`로 전 드라이버 결과·Standings 저장 ([12](./12-seasons-sessions.md)) | ✅ 완료 (2026-10-18) — 게임 확인(12 §3.3 가정)은 미완 |
-| P8 | 세션 상세 — 랩별 랩타임, 타이어 스틴트별 마모·랩타임, 패널티 | ⬜ **다음** |
-| P9 | 랩 상세 + 텔레메트리 트레이스([09](./09-lap-telemetry-trace.md)), 섹터 비교 | ⬜ |
+| P8 | 세션 상세 — 랩별 랩타임, 타이어 스틴트별 마모·랩타임, 패널티 | ⬜ **다음**(P9를 먼저 함) |
+| P9 | 랩 상세 + 텔레메트리 트레이스 + F1Laps 화면 맞추기(트랙 캘린더 순서·국기, 팀 로고 자리) — [15](./15-lap-detail-telemetry.md)(설계 [09](./09-lap-telemetry-trace.md) 개념을 D-45로 확정) | 🔶 진행 중 (2026-10-18, 사용자 요청으로 P8보다 먼저) |
 | P10 | Analytics (트랙별 AI 난이도 등) | ⬜ |
 | P11 | Agent 배포 — 설치 파일, 자동 업데이트, 다운로드 링크 | ⬜ |
 | Future | Competition(대회/리그) · Community · Membership | 경계만 정의([02](./02-domain-design.md)) |
@@ -94,5 +94,5 @@
 ## 5. 다음 액션
 
 1. ✅ P0~P5 MVP 완료, ✅ P6 개인 모드 완료, ✅ P7 시즌·세션 수집 완료 ([PROGRESS.md](./PROGRESS.md))
-2. 다음 = **P8 세션 상세**: 설계 → 리뷰 → 계획 → 구현 → 리뷰 순서로 착수
+2. 진행 중 = **P9 랩 상세·텔레메트리**([15](./15-lap-detail-telemetry.md)) — 사용자가 F1Laps와의 차이(랩 상세·텔레메트리·트랙 순서·국기·팀 아이콘)를 지적해 P8보다 먼저 한다. 그다음 = P8 세션 상세
 3. 이후 Phase마다 설계 → 리뷰 → 구현 → 리뷰 반복
