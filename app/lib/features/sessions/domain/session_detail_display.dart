@@ -105,6 +105,18 @@ int? _computedGapMs(SessionResult row, SessionResult reference, {required bool i
   return rowBest == null || referenceBest == null ? null : rowBest - referenceBest;
 }
 
+/// Laps 카드 섹터 칸: 1분 미만 `30.123`, 이상 `1:02.345`, 없으면 `-`(순수 함수).
+String formatSectorTime(int? ms) {
+  if (ms == null) {
+    return kNoValueText;
+  }
+  final value = math.max(0, ms);
+  final tail = _three(value % _msPerSecond);
+  return value < _msPerMinute
+      ? '${value ~/ _msPerSecond}.$tail'
+      : '${value ~/ _msPerMinute}:${_two((value ~/ _msPerSecond) % _secondsPerMinute)}.$tail';
+}
+
 /// Laps 카드 GAP 칸(내 최고 랩 대비 `+0.418`). 최고 랩(0)·값 없음은 `-`.
 String lapGapText(SessionLap lap) {
   final gap = lap.gapToBestMs;

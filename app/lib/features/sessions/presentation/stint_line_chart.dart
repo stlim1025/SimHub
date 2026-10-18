@@ -34,6 +34,14 @@ class StintChartSeries {
   final String label;
   final Color color;
   final List<StintPoint> points;
+
+  // 값 동등성: build마다 새로 만들어도 같은 데이터면 다시 그리지 않는다(shouldRepaint).
+  @override
+  bool operator ==(Object other) =>
+      other is StintChartSeries && other.label == label && other.color == color && listEquals(other.points, points);
+
+  @override
+  int get hashCode => Object.hash(label, color, Object.hashAll(points));
 }
 
 /// 가로 눈금 랩 번호들(1부터 [maxX]까지, 많으면 건너뛴다). 순수 함수.

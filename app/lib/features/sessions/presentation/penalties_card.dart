@@ -13,8 +13,11 @@ const double _lapWidth = 44;
 String _driverOf(SessionPenalty penalty) =>
     penalty.driverName ?? (penalty.carIndex == null ? kNoValueText : 'Car ${penalty.carIndex! + 1}');
 
-/// 한 줄 말줄임 글자.
-Widget _text(String? value) => Text(value ?? kNoValueText, maxLines: 1, overflow: TextOverflow.ellipsis);
+/// 한 줄 말줄임 글자. 잘려도 툴팁으로 전체를 볼 수 있다.
+Widget _text(String? value) {
+  final text = value ?? kNoValueText;
+  return Tooltip(message: text, child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis));
+}
 
 /// Penalties 카드(docs/15 §11.3): LAP · DRIVER(팀 점, 나는 "You") · INCIDENT(침해) · PENALTY(벌칙). 내 행은 강조.
 class PenaltiesCard extends StatelessWidget {

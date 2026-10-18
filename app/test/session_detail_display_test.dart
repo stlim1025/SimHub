@@ -69,6 +69,14 @@ void main() {
     });
   });
 
+  group('formatSectorTime', () {
+    test('1분 미만 s.SSS, 이상 m:ss.SSS, 없으면 -', () {
+      expect(formatSectorTime(30123), '30.123');
+      expect(formatSectorTime(62345), '1:02.345');
+      expect(formatSectorTime(null), '-');
+    });
+  });
+
   group('lapGapText', () {
     test('최고 랩·0·null은 -, 그 밖은 +s.SSS', () {
       expect(lapGapText(const SessionLap(lapNumber: 1, gapToBestMs: 418)), '+0.418');

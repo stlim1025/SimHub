@@ -27,19 +27,6 @@ const double _tagFontSize = 11;
 const EdgeInsets _tagPadding = EdgeInsets.symmetric(horizontal: 6, vertical: 2);
 const double _tagAlpha = 0.16;
 
-const int _msPerMinute = 60000;
-const int _msPerSecond = 1000;
-
-/// 섹터 시간: 1분 미만 `30.123`, 이상 `1:02.345`.
-String _sectorText(int? ms) {
-  if (ms == null) {
-    return kNoValueText;
-  }
-  return ms < _msPerMinute
-      ? '${ms ~/ _msPerSecond}.${(ms % _msPerSecond).toString().padLeft(3, '0')}'
-      : formatLapTime(ms);
-}
-
 /// Laps 카드(docs/15 §11.3): # · POS.(순위 + 변동) · 타이어 원 · IN PIT · LAP TIME · GAP(내 최고 랩 대비) · SECTOR 1·2·3.
 /// 세션 최고 랩·최고 섹터는 보라(`fastestLap`), 무효 랩은 빨강. 저장된 랩이면 행을 눌러 랩 상세로 간다.
 /// 600px 미만은 IN PIT·GAP·섹터를 숨긴다.
@@ -99,7 +86,7 @@ class SessionLapsCard extends StatelessWidget {
               flex: 2,
               compactHidden: true,
               cell: (lap) => _TimeText(
-                text: _sectorText(lap.sectorsMs[i]),
+                text: formatSectorTime(lap.sectorsMs[i]),
                 color: lap.bestSectors[i] ? AppColors.fastestLap : null,
               ),
             ),

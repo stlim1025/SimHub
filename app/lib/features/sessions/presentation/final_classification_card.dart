@@ -59,6 +59,8 @@ class FinalClassificationCard extends StatelessWidget {
           CompactColumn(
             label: 'Position',
             width: _positionWidth,
+            // 좁은 화면은 순서가 곧 순위라 숨겨 드라이버 이름 폭을 확보한다.
+            compactHidden: true,
             cell: (row) => Text('${row.position}', style: kTabularStyle.copyWith(fontWeight: FontWeight.bold)),
           ),
           CompactColumn(
