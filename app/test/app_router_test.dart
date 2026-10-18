@@ -11,6 +11,8 @@ import 'package:simcenter_app/features/auth/presentation/login_page.dart';
 import 'package:simcenter_app/features/dashboard/presentation/dashboard_page.dart';
 import 'package:simcenter_app/features/devices/data/devices_repository.dart';
 import 'package:simcenter_app/features/devices/presentation/telemetry_app_page.dart';
+import 'package:simcenter_app/features/lap_detail/data/lap_detail_repository.dart';
+import 'package:simcenter_app/features/lap_detail/presentation/lap_detail_page.dart';
 import 'package:simcenter_app/features/laps/data/laps_repository.dart';
 import 'package:simcenter_app/features/laps/presentation/laps_page.dart';
 import 'package:simcenter_app/features/laps/presentation/track_laps_page.dart';
@@ -32,11 +34,13 @@ Future<GoRouter> _pumpApp(
   AppUser? user = testUser,
   FakeSessionsRepository? sessionsRepo,
   FakeSeasonsRepository? seasonsRepo,
+  FakeLapDetailRepository? lapDetailRepo,
 }) async {
   setViewSize(tester, const Size(1000, 800));
   final container = ProviderContainer(overrides: [
     fakeAuth(user),
     lapsRepositoryProvider.overrideWithValue(FakeLapsRepository()),
+    lapDetailRepositoryProvider.overrideWithValue(lapDetailRepo ?? FakeLapDetailRepository()),
     seasonsRepositoryProvider.overrideWithValue(seasonsRepo ?? FakeSeasonsRepository()),
     sessionsRepositoryProvider.overrideWithValue(sessionsRepo ?? FakeSessionsRepository()),
     devicesRepositoryProvider.overrideWithValue(FakeDevicesRepository()),
@@ -262,6 +266,22 @@ void main() {
     expect(find.byType(SeasonsPage), findsOneWidget);
   });
 
+  testWidgets('/laps/:lapId?tab=는 셸 안에서 랩 상세를 열고 tab을 넘긴다(Laps 메뉴 선택 유지)', (t) async {
+    final repo = FakeLapDetailRepository(details: {'l1': lapDetailOf(lapOf('l1', 'Jeddah', 98448))});
+    final router = await _pumpApp(t, lapDetailRepo: repo);
+
+    router.go('/laps/l1?tab=best');
+    await t.pumpAndSettle();
+
+    expect(_location(router), '/laps/l1?tab=best');
+    final page = t.widget<LapDetailPage>(find.byType(LapDetailPage));
+    expect(page.lapId, 'l1');
+    expect(page.tab, 'best');
+    expect(repo.detailRequests, ['l1']);
+    expect(find.text('Jeddah · 1:38.448'), findsOneWidget);
+    expect(t.widget<ListTile>(find.widgetWithText(ListTile, 'Laps')).selected, isTrue);
+  });
+
   testWidgets('/laps/tracks/:trackId도 셸 안에서 열린다', (t) async {
     final router = await _pumpApp(t);
 
@@ -286,6 +306,7 @@ void main() {
         '/',
         '/laps',
         '/laps/tracks/t1',
+        '/laps/l1?tab=telemetry',
         '/seasons',
         '/sessions',
         '/leaderboard',

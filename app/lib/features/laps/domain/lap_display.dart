@@ -41,9 +41,12 @@ final DateFormat _dateFormat = DateFormat('yyyy-MM-dd');
 /// `TimeTrial` → `Time Trial`. 모르는 값은 `-`(순수 함수).
 String sessionTypeLabel(String sessionType) => _sessionTypeLabels[sessionType] ?? kLapNoValueText;
 
+/// 아는 게임 모드의 라벨. `Other`·null·모르는 값은 null(순수 함수).
+String? knownGameModeLabel(String? gameMode) => _gameModeLabels[gameMode];
+
 /// MODE 열 글자: 게임 모드 라벨, `Other`·null·모르는 값이면 세션 유형 라벨(순수 함수).
 String lapModeLabel({required String? gameMode, required String sessionType}) =>
-    _gameModeLabels[gameMode] ?? sessionTypeLabel(sessionType);
+    knownGameModeLabel(gameMode) ?? sessionTypeLabel(sessionType);
 
 /// 날씨 이름. 모르는 값은 서버 문자열 그대로, null이면 null(순수 함수).
 String? weatherLabel(String? weather) => weather == null ? null : (_weatherLabels[weather] ?? weather);
