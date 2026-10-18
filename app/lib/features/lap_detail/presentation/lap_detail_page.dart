@@ -16,6 +16,7 @@ import '../domain/lap_detail_models.dart';
 import 'best_laps_tab.dart';
 import 'lap_details_tab.dart';
 import 'lap_time_cards.dart';
+import 'telemetry_tab.dart';
 
 const String _lapsPath = '/laps';
 const String _notFoundMessage = '찾을 수 없는 랩입니다.';
@@ -213,7 +214,7 @@ class _TabContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return switch (tab) {
-      kLapTabTelemetry => const SizedBox.shrink(),
+      kLapTabTelemetry => TelemetryTab(detail: detail),
       kLapTabBest => BestLapsTab(detail: detail),
       _ => LapDetailsTab(detail: detail),
     };

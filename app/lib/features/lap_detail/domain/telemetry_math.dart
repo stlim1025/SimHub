@@ -46,15 +46,19 @@ List<double?> deltaSeconds(LapTrace lap, LapTrace reference) => [
     ];
 
 /// 십자선 거리 → 가장 가까운 표본 번호. 음수·트레이스 끝을 반 칸 넘게 지난 거리·빈 트레이스면 null(순수 함수).
-int? sampleIndexAt(LapTrace trace, double distanceM) {
-  if (trace.isEmpty || distanceM < 0) {
+int? sampleIndexAt(LapTrace trace, double distanceM) =>
+    seriesIndexAt(length: trace.length, resolutionM: trace.resolutionM, distanceM: distanceM);
+
+/// 표본 [length]개·간격 [resolutionM]m인 계열에서 [distanceM]에 가장 가까운 표본 번호. 범위 밖이면 null(순수 함수).
+int? seriesIndexAt({required int length, required int resolutionM, required double distanceM}) {
+  if (length == 0 || distanceM < 0 || resolutionM <= 0) {
     return null;
   }
-  final position = distanceM / trace.resolutionM;
-  if (position > trace.length - 1 + _halfSample) {
+  final position = distanceM / resolutionM;
+  if (position > length - 1 + _halfSample) {
     return null;
   }
-  return math.min(position.round(), trace.length - 1);
+  return math.min(position.round(), length - 1);
 }
 
 /// 그래프 세로축 범위.
