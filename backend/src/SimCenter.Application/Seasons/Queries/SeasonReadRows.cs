@@ -4,7 +4,8 @@ namespace SimCenter.Application.Seasons.Queries;
 
 /// <summary>
 /// 시즌 조회용 읽기 행(12 §7.3) — 결과 1건(드라이버 1명 × 세션 1건)의 프로젝션. 저장소 → 순수 계산기 전달용이다.
-/// 활성(삭제되지 않은) 행만 담는다. <c>IsImported</c> = 가져온 세션의 행(D-55 — 점수는 가져온 스탠딩 기준선에 이미 들어 있다).
+/// 활성(삭제되지 않은) 행만 담는다. <c>IsImported</c> = 가져온 스탠딩 기준선에 점수가 이미 들어 있는 행(D-55): 가져온 세션과
+/// 가져오기 전에 기록되어 그 시즌으로 옮긴 세션(<c>ClassifiedAt ≤ ImportedAt</c>).
 /// </summary>
 public sealed record SeasonResultRow(
     Guid SeasonId,

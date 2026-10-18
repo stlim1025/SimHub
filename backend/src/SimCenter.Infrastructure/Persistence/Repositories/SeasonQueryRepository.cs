@@ -72,10 +72,17 @@ public sealed class SeasonQueryRepository : ISeasonQueryRepository
         var rows =
             from result in _context.SessionResults.AsNoTracking()
             join session in _context.GameSessions.AsNoTracking() on result.GameSessionId equals session.Id
+            join season in _context.Seasons.AsNoTracking() on session.SeasonId equals (Guid?)season.Id
             where session.SeasonId != null
                 && session.RaceWeekendId != null
                 && ids.Contains(session.SeasonId.Value)
-            select new { result, session };
+            // 가져온 시즌(docs/15 §12, D-55): 가져온 세션과 가져오기 전에 기록된(옮긴) 세션의 점수는 가져온 스탠딩에 이미 들어 있다.
+            select new
+            {
+                result,
+                session,
+                coveredByBaseline = session.IsImported || (season.ImportedAt != null && session.ClassifiedAt <= season.ImportedAt),
+            };
 
         if (scoringRowsOnly)
         {
@@ -102,7 +109,7 @@ public sealed class SeasonQueryRepository : ISeasonQueryRepository
                 x.result.Position,
                 x.result.ResultStatus,
                 x.result.Points,
-                x.session.IsImported))
+                x.coveredByBaseline))
             .ToListAsync(cancellationToken);
     }
 }

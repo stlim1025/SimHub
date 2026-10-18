@@ -121,11 +121,8 @@ public static class SeasonImportBuilder
             };
 
             var round = first.Track?.DisplayOrder ?? 0;
-            if (round is >= 1 and <= ImportCalendar.RoundCount)
-            {
-                weekends.TryAdd(round, weekend);
-            }
-            else
+            // 같은 라운드에 주말 링크가 둘이면(재시작 등) 두 번째는 캘린더 밖 주말로 따로 저장한다 — 버리면 FK가 깨진다.
+            if (round is < 1 or > ImportCalendar.RoundCount || !weekends.TryAdd(round, weekend))
             {
                 weekends[-weekends.Count - 1] = weekend;
             }

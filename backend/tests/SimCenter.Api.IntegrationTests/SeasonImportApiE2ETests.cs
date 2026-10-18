@@ -119,6 +119,27 @@ public sealed class SeasonImportApiE2ETests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Sessions_recorded_before_import_are_not_counted_twice()
+    {
+        var (client, connection) = await SeedMiamiQualifyingAsync();
+        await using var _ = connection;
+        await SendAsync(connection, SessionClassifiedPayloads.Build(
+            GridSize, 1, MiamiSeasonLink, MiamiWeekendLink, 4100, playerCarIndex: PlayerCarIndex, trackId: MiamiTrackId,
+            gameMode: "Other", sessionRef: "8100"), DateTime.UtcNow.AddMinutes(-10));
+
+        var preview = await PostOkAsync(client, PreviewUrl, All);
+        var seasonId = await ImportAsync(client, All);
+        var detail = await GetOkAsync(client, $"{SeasonsUrl}/{seasonId}");
+
+        // 가져오기 전에 끝난 마이애미 레이스(19점)는 인게임 TOT(75)에 들어 있다고 본다.
+        var me = detail.GetProperty("standings").GetProperty("drivers").EnumerateArray().Single(d => d.GetProperty("isPlayer").GetBoolean());
+        Assert.Equal(75, me.GetProperty("points").GetInt32());
+        var previewMe = preview.GetProperty("drivers").EnumerateArray().Single(d => d.GetProperty("isPlayer").GetBoolean());
+        Assert.Equal(75, previewMe.GetProperty("points").GetInt32());
+        Assert.Equal(4, preview.GetProperty("linkCandidate").GetProperty("sessions").GetArrayLength());
+    }
+
+    [Fact]
     public async Task Preview_bad_markdown_is_400_with_line_number()
     {
         var client = _factory.CreateClient();

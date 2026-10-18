@@ -12,8 +12,12 @@ namespace SimCenter.Api.Controllers;
 [ApiController]
 [Route("api/v1/me/seasons/import")]
 [Authorize]
+[RequestSizeLimit(MaxRequestBytes)]
 public sealed class MySeasonImportController(ISeasonImportService importService) : ControllerBase
 {
+    /// <summary>본문 상한(바이트): 마크다운 최대 길이 × UTF-8 3바이트 + JSON 여유. 서비스의 길이 검사보다 먼저 거른다.</summary>
+    private const long MaxRequestBytes = (ISeasonImportService.MaxMarkdownLength * 3L) + 64 * 1024;
+
     /// <summary>붙여넣은 마크다운을 해석해 만들 결과를 돌려준다(저장하지 않음).</summary>
     [HttpPost("preview")]
     [ProducesResponseType(typeof(SeasonImportPreviewDto), StatusCodes.Status200OK)]
