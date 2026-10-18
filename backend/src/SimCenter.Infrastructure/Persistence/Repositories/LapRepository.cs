@@ -148,11 +148,14 @@ public sealed class LapRepository : ILapRepository
                     summary.LapCount,
                     summary.BestValidLapTimeMs,
                     summary.LastSetAt,
+                    track.CountryCode,
+                    track.DisplayOrder,
                 })
             .ToListAsync(cancellationToken);
 
         return rows
-            .Select(r => new MyTrackSummaryRow(r.TrackId, r.Name, r.GameCode, r.LapCount, r.BestValidLapTimeMs, r.LastSetAt))
+            .Select(r => new MyTrackSummaryRow(
+                r.TrackId, r.Name, r.GameCode, r.LapCount, r.BestValidLapTimeMs, r.LastSetAt, r.CountryCode, r.DisplayOrder))
             .ToList();
     }
 

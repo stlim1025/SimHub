@@ -59,9 +59,10 @@ public sealed class RankingService : IRankingService
 
     public async Task<TrackListResponse> GetTracksAsync(CancellationToken cancellationToken = default)
     {
+        // 순서(게임 → 표시 순서 → 이름, D-43)는 리포지토리가 보장한다 — 그대로 매핑한다.
         var tracks = await _tracks.GetAllAsync(cancellationToken);
         var items = tracks
-            .Select(t => new TrackDto(t.Id, t.GameCode, t.Name))
+            .Select(t => new TrackDto(t.Id, t.GameCode, t.Name, t.CountryCode, t.DisplayOrder))
             .ToList();
 
         return new TrackListResponse(items);
@@ -109,7 +110,8 @@ public sealed class RankingService : IRankingService
 
         // 순서(마지막 세운 시각 내림차순)는 리포지토리가 보장한다 — 그대로 매핑한다.
         var items = rows
-            .Select(r => new MyTrackDto(r.TrackId, r.TrackName, r.GameCode, r.LapCount, r.BestValidLapTimeMs, r.LastSetAt))
+            .Select(r => new MyTrackDto(
+                r.TrackId, r.TrackName, r.GameCode, r.LapCount, r.BestValidLapTimeMs, r.LastSetAt, r.CountryCode, r.DisplayOrder))
             .ToList();
 
         return new MyTracksResponse(items);

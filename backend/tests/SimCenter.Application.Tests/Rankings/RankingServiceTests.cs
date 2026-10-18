@@ -142,8 +142,8 @@ public class RankingServiceTests
         var older = new DateTime(2026, 7, 10, 10, 0, 0, DateTimeKind.Utc);
         _laps.TrackSummaries =
         [
-            new MyTrackSummaryRow(TrackId, "Silverstone", GameCode, 5, 83452, newer),
-            new MyTrackSummaryRow(otherTrackId, "Suzuka", GameCode, 2, null, older),
+            new MyTrackSummaryRow(TrackId, "Silverstone", GameCode, 5, 83452, newer, "GB", 12),
+            new MyTrackSummaryRow(otherTrackId, "Suzuka", GameCode, 2, null, older, null, 0),
         ];
 
         var result = await _sut.GetMyTracksAsync(UserId);
@@ -158,6 +158,8 @@ public class RankingServiceTests
                 Assert.Equal(5, t.LapCount);
                 Assert.Equal(83452, t.BestValidLapTimeMs);
                 Assert.Equal(newer, t.LastSetAt);
+                Assert.Equal("GB", t.CountryCode);
+                Assert.Equal(12, t.DisplayOrder);
             },
             t =>
             {
@@ -166,6 +168,36 @@ public class RankingServiceTests
                 Assert.Equal(2, t.LapCount);
                 Assert.Null(t.BestValidLapTimeMs);
                 Assert.Equal(older, t.LastSetAt);
+                Assert.Null(t.CountryCode);
+                Assert.Equal(0, t.DisplayOrder);
+            });
+    }
+
+    [Fact]
+    public async Task GetTracks_MapsCountryAndDisplayOrder_InRepositoryOrder()
+    {
+        // 순서(표시 순서 → 이름)는 리포지토리가 보장한다 — 서비스는 다시 정렬하지 않는다(D-43).
+        _tracks.Items.Clear();
+        var melbourne = new Track { Id = Guid.NewGuid(), GameCode = GameCode, GameTrackId = 0, Name = "Melbourne", CountryCode = "AU", DisplayOrder = 1 };
+        var shanghai = new Track { Id = Guid.NewGuid(), GameCode = GameCode, GameTrackId = 2, Name = "Shanghai", CountryCode = "CN", DisplayOrder = 2 };
+        _tracks.Items.AddRange([melbourne, shanghai]);
+
+        var result = await _sut.GetTracksAsync();
+
+        Assert.Collection(result.Items,
+            t =>
+            {
+                Assert.Equal(melbourne.Id, t.TrackId);
+                Assert.Equal("Melbourne", t.Name);
+                Assert.Equal(GameCode, t.GameCode);
+                Assert.Equal("AU", t.CountryCode);
+                Assert.Equal(1, t.DisplayOrder);
+            },
+            t =>
+            {
+                Assert.Equal("Shanghai", t.Name);
+                Assert.Equal("CN", t.CountryCode);
+                Assert.Equal(2, t.DisplayOrder);
             });
     }
 
