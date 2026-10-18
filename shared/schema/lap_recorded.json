@@ -1,39 +1,45 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "LapRecorded",
+  "description": "RankingHub → 앱. 새 랩이 저장되면 그 랩 주인의 연결에만 보낸다(docs/15 §9, D-50). GET /me/laps의 LapDto 한 건 + trackId. 무효 랩도 보낸다.",
   "type": "object",
-  "required": ["lapId", "userId", "trackId", "sessionType", "lapTimeMs", "isValid", "isRankingEligible"],
+  "required": [
+    "lapId", "trackId", "trackName", "gameCode", "sessionType", "lapTimeMs", "sectors",
+    "isValid", "isRankingEligible", "setAt", "lapNumber", "gameMode", "team", "weather", "hasTrace"
+  ],
   "properties": {
-    "lapId": {
-      "type": "string",
-      "format": "uuid",
-      "description": "생성된 랩 기록의 고유 GUID"
+    "lapId": { "type": "string", "format": "uuid", "description": "랩 GUID(→ /laps/:lapId)" },
+    "trackId": { "type": "string", "format": "uuid", "description": "트랙 GUID" },
+    "trackName": { "type": "string", "description": "트랙 표시 이름" },
+    "gameCode": { "type": "string", "description": "게임 코드(예: F1_25)" },
+    "sessionType": { "type": "string", "description": "세션 유형 이름(예: TimeTrial, Race)" },
+    "lapTimeMs": { "type": "integer", "minimum": 0, "description": "랩타임(밀리초)" },
+    "sectors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["sectorNumber", "sectorTimeMs"],
+        "properties": {
+          "sectorNumber": { "type": "integer", "minimum": 1 },
+          "sectorTimeMs": { "type": "integer", "minimum": 0 }
+        }
+      }
     },
-    "userId": {
-      "type": "string",
-      "format": "uuid",
-      "description": "기록 주행자의 고유 GUID"
+    "isValid": { "type": "boolean", "description": "게임 판정 유효 여부" },
+    "isRankingEligible": { "type": "boolean", "description": "랭킹 적격 여부" },
+    "setAt": { "type": "string", "format": "date-time", "description": "랩 기록 시각(UTC)" },
+    "lapNumber": { "type": "integer", "description": "세션 안 랩 번호" },
+    "gameMode": { "type": ["string", "null"], "description": "게임 모드 이름(없으면 null)" },
+    "team": {
+      "type": ["object", "null"],
+      "required": ["name", "color"],
+      "properties": {
+        "name": { "type": "string" },
+        "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" }
+      },
+      "description": "팀 이름·색(스냅샷 없으면 null)"
     },
-    "trackId": {
-      "type": "string",
-      "format": "uuid",
-      "description": "트랙 고유 GUID"
-    },
-    "sessionType": {
-      "type": "string",
-      "description": "게임 내 세션 모드"
-    },
-    "lapTimeMs": {
-      "type": "integer",
-      "description": "기록된 랩타임 (밀리초)"
-    },
-    "isValid": {
-      "type": "boolean",
-      "description": "랩 유효 여부"
-    },
-    "isRankingEligible": {
-      "type": "boolean",
-      "description": "랭킹 등록 적격 여부"
-    }
+    "weather": { "type": ["string", "null"], "description": "날씨 이름(없으면 null)" },
+    "hasTrace": { "type": "boolean", "description": "텔레메트리 트레이스 유무" }
   }
 }

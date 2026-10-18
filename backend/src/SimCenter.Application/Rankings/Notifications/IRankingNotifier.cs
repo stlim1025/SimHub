@@ -10,22 +10,27 @@ public interface IRankingNotifier
     /// <summary>트랙 그룹(track:{trackId})에 갱신된 TOP N 스냅샷을 브로드캐스트한다.</summary>
     Task RankingUpdatedAsync(RankingSnapshotDto snapshot, CancellationToken cancellationToken = default);
 
-    /// <summary>사용자 그룹(user:{userId})에 새 랩 기록 신호를 보낸다(내 랩 목록 갱신 트리거).</summary>
-    Task LapRecordedAsync(LapRecordedNotice notice, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// 랩 주인(<paramref name="userId"/> = JWT <c>sub</c>)의 연결에만 새 랩을 보낸다(docs/15 §9, D-50). 앱은 새로고침 없이 그 랩을 띄운다.
+    /// </summary>
+    Task LapRecordedAsync(Guid userId, LapRecordedNotice notice, CancellationToken cancellationToken = default);
 
     /// <summary>사용자 그룹(user:{userId})에 개인 최고 갱신을 알린다.</summary>
     Task PersonalBestAchievedAsync(PersonalBestNotice notice, CancellationToken cancellationToken = default);
 }
 
-/// <summary>LapRecorded payload(05 §3.4, shared/schema/lap_recorded.json).</summary>
-public sealed record LapRecordedNotice(
-    Guid LapId,
-    Guid UserId,
-    Guid TrackId,
-    string SessionType,
-    int LapTimeMs,
-    bool IsValid,
-    bool IsRankingEligible);
+/// <summary>
+/// LapRecorded payload(docs/15 §9, D-50, shared/schema/lap_recorded.json) = <c>GET /me/laps</c>의 <see cref="LapDto"/> 한 건 + <see cref="TrackId"/>.
+/// 상속으로 같은 필드를 평평하게 싣는다 — 앱은 같은 파서로 읽는다. 받는 사람은 랩 주인뿐이라 userId는 싣지 않는다.
+/// </summary>
+public sealed record LapRecordedNotice : LapDto
+{
+    public LapRecordedNotice(LapDto lap, Guid trackId)
+        : base(lap ?? throw new ArgumentNullException(nameof(lap)))
+        => TrackId = trackId;
+
+    public Guid TrackId { get; init; }
+}
 
 /// <summary>PersonalBestAchieved payload(05 §3.4, shared/schema/personal_best_achieved.json).</summary>
 public sealed record PersonalBestNotice(Guid UserId, Guid TrackId, int LapTimeMs, int? PreviousBestMs);

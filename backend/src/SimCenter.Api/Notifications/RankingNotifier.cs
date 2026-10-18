@@ -17,13 +17,14 @@ public sealed class RankingNotifier : IRankingNotifier
 
     public Task RankingUpdatedAsync(RankingSnapshotDto snapshot, CancellationToken cancellationToken = default)
         => _hub.Clients.Group(RankingGroups.Track(snapshot.TrackId))
-            .SendAsync("RankingUpdated", snapshot, cancellationToken);
+            .SendAsync(RankingHubEvents.RankingUpdated, snapshot, cancellationToken);
 
-    public Task LapRecordedAsync(LapRecordedNotice notice, CancellationToken cancellationToken = default)
-        => _hub.Clients.Group(RankingGroups.User(notice.UserId))
-            .SendAsync("LapRecorded", notice, cancellationToken);
+    /// <summary>랩 주인의 연결에만 보낸다(D-50). 사용자 식별은 <see cref="JwtSubjectUserIdProvider"/>(JWT sub).</summary>
+    public Task LapRecordedAsync(Guid userId, LapRecordedNotice notice, CancellationToken cancellationToken = default)
+        => _hub.Clients.User(userId.ToString())
+            .SendAsync(RankingHubEvents.LapRecorded, notice, cancellationToken);
 
     public Task PersonalBestAchievedAsync(PersonalBestNotice notice, CancellationToken cancellationToken = default)
         => _hub.Clients.Group(RankingGroups.User(notice.UserId))
-            .SendAsync("PersonalBestAchieved", notice, cancellationToken);
+            .SendAsync(RankingHubEvents.PersonalBestAchieved, notice, cancellationToken);
 }

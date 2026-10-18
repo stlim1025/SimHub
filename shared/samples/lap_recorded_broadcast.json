@@ -1,0 +1,21 @@
+{
+  "lapId": "019a1f2e-8c40-7b3a-9d11-5f0c2a7e4b10",
+  "trackName": "Jeddah",
+  "gameCode": "F1_25",
+  "sessionType": "TimeTrial",
+  "lapTimeMs": 98448,
+  "sectors": [
+    { "sectorNumber": 1, "sectorTimeMs": 32816 },
+    { "sectorNumber": 2, "sectorTimeMs": 32816 },
+    { "sectorNumber": 3, "sectorTimeMs": 32816 }
+  ],
+  "isValid": true,
+  "isRankingEligible": true,
+  "setAt": "2026-10-18T11:00:00Z",
+  "lapNumber": 6,
+  "gameMode": "TimeTrial",
+  "team": { "name": "Ferrari", "color": "#E8002D" },
+  "weather": "LightCloud",
+  "hasTrace": true,
+  "trackId": "8f8b8941-cf8d-4e92-9111-c918a5e78a63"
+}
