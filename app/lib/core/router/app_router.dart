@@ -9,6 +9,7 @@ import '../../features/dashboard/presentation/dashboard_page.dart';
 import '../../features/devices/presentation/telemetry_app_page.dart';
 import '../../features/laps/presentation/laps_page.dart';
 import '../../features/laps/presentation/track_laps_page.dart';
+import '../../features/profile/presentation/settings_page.dart';
 import '../../features/ranking/presentation/leaderboard_page.dart';
 import '../../features/seasons/presentation/season_detail_page.dart';
 import '../../features/seasons/presentation/seasons_page.dart';
@@ -114,6 +115,8 @@ final routerProvider = Provider<GoRouter>((ref) {
             (state) => LeaderboardPage(trackId: state.uri.queryParameters['trackId']),
           ),
           _screen('/telemetry-app', (_) => const TelemetryAppPage()),
+          // 계정 설정(사이드바 하단 프로필에서 연다, docs/14 §8).
+          _screen(kSettingsPath, (_) => const SettingsPage()),
         ],
       ),
     ],

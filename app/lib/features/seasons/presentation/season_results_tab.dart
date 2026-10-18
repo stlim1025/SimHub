@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/team_color_bar.dart';
 import '../domain/season_display.dart';
 import '../domain/season_models.dart';
@@ -26,9 +27,9 @@ const Map<int, Color> _podiumColors = {
 };
 
 /// 행 하나의 배경: 내 행은 강조색, 아래에는 가는 구분선.
-BoxDecoration _rowDecoration({required bool highlighted}) => BoxDecoration(
+BoxDecoration _rowDecoration(BuildContext context, {required bool highlighted}) => BoxDecoration(
       color: highlighted ? AppColors.playerRow : null,
-      border: const Border(bottom: BorderSide(color: AppColors.border)),
+      border: Border(bottom: BorderSide(color: context.palette.border)),
     );
 
 /// Results 탭(docs/12 §8.3): 드라이버 × 라운드 표. 이름 열은 고정하고 라운드·점수 열만 가로로 스크롤한다.
@@ -41,7 +42,7 @@ class SeasonResultsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final headingStyle = Theme.of(context).textTheme.labelLarge?.copyWith(color: AppColors.textMuted);
+    final headingStyle = Theme.of(context).textTheme.labelLarge?.copyWith(color: context.palette.textMuted);
 
     return Card(
       child: Row(
@@ -102,7 +103,7 @@ class _NameHeader extends StatelessWidget {
       height: kResultsRowHeight,
       padding: const EdgeInsets.symmetric(horizontal: _cellPadding),
       alignment: Alignment.centerLeft,
-      decoration: _rowDecoration(highlighted: false),
+      decoration: _rowDecoration(context, highlighted: false),
       child: Text('Driver', style: style),
     );
   }
@@ -120,12 +121,12 @@ class _NameCell extends StatelessWidget {
       key: ValueKey('results-name-${driver.driverKey}'),
       height: kResultsRowHeight,
       padding: const EdgeInsets.symmetric(horizontal: _cellPadding),
-      decoration: _rowDecoration(highlighted: driver.isPlayer),
+      decoration: _rowDecoration(context, highlighted: driver.isPlayer),
       child: Row(
         children: [
           SizedBox(
             width: _positionWidth,
-            child: Text('${driver.position}', style: const TextStyle(color: AppColors.textMuted)),
+            child: Text('${driver.position}', style: TextStyle(color: context.palette.textMuted)),
           ),
           TeamColorBar(key: ValueKey('results-team-bar-${driver.driverKey}'), colorHex: driver.teamColor),
           const SizedBox(width: 8),
@@ -155,7 +156,7 @@ class _HeaderRow extends StatelessWidget {
     return Container(
       key: const ValueKey('results-header-row'),
       height: kResultsRowHeight,
-      decoration: _rowDecoration(highlighted: false),
+      decoration: _rowDecoration(context, highlighted: false),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -186,7 +187,7 @@ class _BodyRow extends StatelessWidget {
     return Container(
       key: ValueKey('results-row-${driver.driverKey}'),
       height: kResultsRowHeight,
-      decoration: _rowDecoration(highlighted: driver.isPlayer),
+      decoration: _rowDecoration(context, highlighted: driver.isPlayer),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -219,7 +220,7 @@ class _ResultCell extends StatelessWidget {
     // 순위 칸은 기본 글자색, 상태 칸·기록 없음은 textMuted.
     final color = podium != null
         ? _podiumColors[podium]
-        : (standingCellShowsPosition(cell) ? null : AppColors.textMuted);
+        : (standingCellShowsPosition(cell) ? null : context.palette.textMuted);
 
     return SizedBox(
       width: width,

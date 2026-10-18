@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/ai_badge.dart';
 import '../../../core/widgets/team_color_bar.dart';
 import '../domain/season_models.dart';
@@ -32,7 +33,7 @@ class SeasonStandingsTab extends StatelessWidget {
         const SizedBox(height: 8),
         _ConstructorsTable(constructors: standings.constructors),
         const SizedBox(height: 16),
-        Text(_note, style: theme.textTheme.bodySmall?.copyWith(color: AppColors.textMuted)),
+        Text(_note, style: theme.textTheme.bodySmall?.copyWith(color: context.palette.textMuted)),
       ],
     );
   }
@@ -58,7 +59,7 @@ class _StandingsTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final headingStyle = Theme.of(context).textTheme.labelLarge?.copyWith(color: AppColors.textMuted);
+    final headingStyle = Theme.of(context).textTheme.labelLarge?.copyWith(color: context.palette.textMuted);
 
     return Card(
       child: LayoutBuilder(

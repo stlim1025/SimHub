@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 
 const double _cardPadding = 32;
 const double _messageActionGap = 12;
@@ -32,7 +32,7 @@ class EmptyStateCard extends StatelessWidget {
               Text(
                 message,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: AppColors.textMuted),
+                style: TextStyle(color: context.palette.textMuted),
               ),
               if (label != null && path != null) ...[
                 const SizedBox(height: _messageActionGap),

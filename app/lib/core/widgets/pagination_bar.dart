@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import '../util/pagination.dart';
 
 /// 표 하단 페이지 바: `Showing 1 to 15 of 76` + 이전/다음. [page]는 1부터 시작한다.
@@ -29,7 +29,7 @@ class PaginationBar extends StatelessWidget {
         Expanded(
           child: Text(
             paginationLabel(page: page, pageSize: pageSize, total: total),
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textMuted),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: context.palette.textMuted),
           ),
         ),
         OutlinedButton(

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'features/profile/application/theme_mode_provider.dart';
 
 void main() {
   runApp(const ProviderScope(child: SimCenterApp()));
@@ -17,7 +18,10 @@ class SimCenterApp extends ConsumerWidget {
     return MaterialApp.router(
       title: 'SimCenter',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.dark,
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      // 사용자 테마 설정(docs/14 §7). 로그아웃 상태(로그인·스플래시)와 System은 기기 밝기를 따른다.
+      themeMode: ref.watch(themeModeProvider),
       routerConfig: router,
     );
   }

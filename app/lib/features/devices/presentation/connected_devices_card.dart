@@ -4,13 +4,14 @@ import 'package:intl/intl.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_palette.dart';
 import '../../../core/time/clock_provider.dart';
 import '../../../core/util/relative_time.dart';
 import '../../../core/widgets/error_retry.dart';
+import '../../../core/widgets/section_card.dart';
 import '../application/devices_providers.dart';
 import '../data/devices_repository.dart';
 import '../domain/device_models.dart';
-import 'section_card.dart';
 
 const String _revokeLabel = '연결 해제';
 const String _revokeFailedText = '연결을 해제하지 못했어요. 잠시 후 다시 시도해 주세요.';
@@ -60,7 +61,7 @@ class _ConnectedDevicesCardState extends ConsumerState<ConnectedDevicesCard> {
       title: '연결된 PC',
       trailing: IconButton(
         tooltip: '새로고침',
-        icon: const Icon(Icons.refresh, color: AppColors.textMuted),
+        icon: Icon(Icons.refresh, color: context.palette.textMuted),
         onPressed: () => ref.invalidate(agentDevicesProvider),
       ),
       child: devices.when(
@@ -74,7 +75,7 @@ class _ConnectedDevicesCardState extends ConsumerState<ConnectedDevicesCard> {
           onRetry: () => ref.invalidate(agentDevicesProvider),
         ),
         data: (items) => items.isEmpty
-            ? const Text(_emptyGuide, style: TextStyle(color: AppColors.textMuted))
+            ? Text(_emptyGuide, style: TextStyle(color: context.palette.textMuted))
             : Column(
                 children: [
                   for (var i = 0; i < items.length; i++) ...[
@@ -104,7 +105,7 @@ class _DeviceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final mutedSmall = Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textMuted);
+    final mutedSmall = Theme.of(context).textTheme.bodySmall?.copyWith(color: context.palette.textMuted);
     final lastSeen = device.lastSeenAt;
     final lastSeenText = lastSeen == null ? '마지막 수신 없음' : '마지막 수신 ${describeAgo(now.difference(lastSeen))}';
 
@@ -112,7 +113,7 @@ class _DeviceRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         children: [
-          const Icon(Icons.desktop_windows_outlined, color: AppColors.textMuted),
+          Icon(Icons.desktop_windows_outlined, color: context.palette.textMuted),
           const SizedBox(width: 12),
           Expanded(
             child: Column(

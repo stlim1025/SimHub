@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 
 const double _labelValueGap = 2;
 const TextStyle _valueStyle = TextStyle(
@@ -35,7 +36,7 @@ class Stat extends StatelessWidget {
       children: [
         Text(
           label,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textMuted),
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: context.palette.textMuted),
         ),
         const SizedBox(height: _labelValueGap),
         if (onTap == null) valueText else InkWell(onTap: onTap, child: valueText),

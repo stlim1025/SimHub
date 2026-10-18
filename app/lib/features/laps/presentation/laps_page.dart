@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/layout/layout_constants.dart';
-import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_palette.dart';
 import '../../../core/util/lap_time.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/stat.dart';
@@ -95,7 +95,7 @@ class _TrackRow extends StatelessWidget {
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
-                const Icon(Icons.chevron_right, color: AppColors.textMuted),
+                Icon(Icons.chevron_right, color: context.palette.textMuted),
               ],
             ),
             const SizedBox(height: 8),

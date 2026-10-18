@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/layout/layout_constants.dart';
-import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_palette.dart';
+import '../../../core/widgets/section_card.dart';
 import 'connected_devices_card.dart';
 import 'connection_status_card.dart';
 import 'pairing_code_card.dart';
-import 'section_card.dart';
 
 const double _sectionGap = 16;
 const double _settingLabelWidth = 150;
@@ -63,14 +63,14 @@ class _DownloadCard extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             '개발용으로는 agent/src/SimCenter.Agent.Cli 폴더에서 아래 명령으로 연결할 수 있어요.',
-            style: theme.textTheme.bodySmall?.copyWith(color: AppColors.textMuted),
+            style: theme.textTheme.bodySmall?.copyWith(color: context.palette.textMuted),
           ),
           const SizedBox(height: 8),
           DecoratedBox(
             decoration: BoxDecoration(
-              color: AppColors.background,
+              color: context.palette.background,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.border),
+              border: Border.all(color: context.palette.border),
             ),
             child: const Padding(
               padding: EdgeInsets.all(12),
@@ -97,19 +97,19 @@ class _UdpSettingsCard extends StatelessWidget {
         children: [
           Text(
             'F1 25의 Settings > Telemetry Settings에서 아래처럼 맞춰 주세요.',
-            style: theme.textTheme.bodySmall?.copyWith(color: AppColors.textMuted),
+            style: theme.textTheme.bodySmall?.copyWith(color: context.palette.textMuted),
           ),
           const SizedBox(height: 8),
           Table(
             columnWidths: const {0: FixedColumnWidth(_settingLabelWidth)},
-            border: const TableBorder(horizontalInside: BorderSide(color: AppColors.border)),
+            border: TableBorder(horizontalInside: BorderSide(color: context.palette.border)),
             children: [
               for (final (label, value) in _udpSettings)
                 TableRow(
                   children: [
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: _settingRowPadding),
-                      child: Text(label, style: const TextStyle(color: AppColors.textMuted)),
+                      child: Text(label, style: TextStyle(color: context.palette.textMuted)),
                     ),
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: _settingRowPadding),

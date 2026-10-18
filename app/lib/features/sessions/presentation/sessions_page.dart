@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/layout/layout_constants.dart';
-import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_palette.dart';
 import '../../../core/util/lap_time.dart';
 import '../../../core/widgets/empty_state_card.dart';
 import '../../../core/widgets/error_retry.dart';
@@ -166,7 +166,7 @@ class _SessionsTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final headingStyle = Theme.of(context).textTheme.labelLarge?.copyWith(color: AppColors.textMuted);
+    final headingStyle = Theme.of(context).textTheme.labelLarge?.copyWith(color: context.palette.textMuted);
 
     return Card(
       // 좁은 화면에서는 표를 가로로 스크롤하고, 넓은 화면에서는 카드 폭을 채운다.
@@ -239,7 +239,7 @@ class _ResultCell extends StatelessWidget {
           const SizedBox(width: _gridGap),
           Text(
             'Grid P$grid',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textMuted),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: context.palette.textMuted),
           ),
         ],
       ],

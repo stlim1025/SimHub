@@ -12,6 +12,8 @@ import 'package:simcenter_app/features/devices/data/devices_repository.dart';
 import 'package:simcenter_app/features/devices/domain/device_models.dart';
 import 'package:simcenter_app/features/laps/data/laps_repository.dart';
 import 'package:simcenter_app/features/laps/domain/lap_models.dart';
+import 'package:simcenter_app/features/profile/data/profile_repository.dart';
+import 'package:simcenter_app/features/profile/domain/profile_draft.dart';
 import 'package:simcenter_app/features/ranking/data/ranking_repository.dart';
 import 'package:simcenter_app/features/ranking/domain/ranking_models.dart';
 import 'package:simcenter_app/features/seasons/data/seasons_repository.dart';
@@ -560,3 +562,46 @@ void setViewSize(WidgetTester tester, Size size) {
 /// 인증 컨트롤러를 가짜로 바꾸는 override.
 Override fakeAuth([AppUser? user = testUser]) =>
     authControllerProvider.overrideWith(() => FakeAuthController(user));
+
+/// 설정 화면용 사용자(이메일 포함, 기본 설정).
+const settingsUser = AppUser(userId: 'u1', displayName: '홍길동', email: 'driver@simcenter.test');
+
+/// 프로필 저장·이메일 변경을 메모리에서 흉내 내는 저장소(실제 HTTP 없음). 서버처럼 저장된 프로필을 돌려준다.
+/// [updateError]·[emailError]를 주면 해당 호출이 그 오류로 실패한다. 테스트 도중에 바꿀 수 있다.
+class FakeProfileRepository implements ProfileRepository {
+  FakeProfileRepository({this.user = settingsUser, this.updateError, this.emailError});
+
+  /// 서버에 저장된 현재 프로필.
+  AppUser user;
+  Object? updateError;
+  Object? emailError;
+
+  final updates = <ProfileDraft>[];
+  final emailChanges = <({String newEmail, String currentPassword})>[];
+
+  /// 지정하면 완료될 때까지 저장이 끝나지 않는다(진행 중 상태 재현).
+  Completer<void>? updateGate;
+
+  @override
+  Future<AppUser> updateProfile(ProfileDraft draft) async {
+    updates.add(draft);
+    await updateGate?.future;
+    final error = updateError;
+    if (error != null) {
+      throw error;
+    }
+    user = user.copyWith(displayName: draft.displayName, preferences: draft.preferences);
+    return user;
+  }
+
+  @override
+  Future<AppUser> changeEmail({required String newEmail, required String currentPassword}) async {
+    emailChanges.add((newEmail: newEmail, currentPassword: currentPassword));
+    final error = emailError;
+    if (error != null) {
+      throw error;
+    }
+    user = user.copyWith(email: newEmail.toLowerCase());
+    return user;
+  }
+}

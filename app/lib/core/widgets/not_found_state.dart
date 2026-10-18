@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 
 /// 404(남의 것이거나 없는 대상) 상태. 다시 시도는 의미가 없으므로 목록으로 가는 링크만 둔다.
 class NotFoundState extends StatelessWidget {
@@ -29,7 +29,7 @@ class NotFoundState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.search_off, size: 40, color: AppColors.textMuted),
+            Icon(Icons.search_off, size: 40, color: context.palette.textMuted),
             const SizedBox(height: 12),
             Text(message, textAlign: TextAlign.center),
             const SizedBox(height: 12),

@@ -13,6 +13,8 @@ import 'package:simcenter_app/features/devices/data/devices_repository.dart';
 import 'package:simcenter_app/features/devices/presentation/telemetry_app_page.dart';
 import 'package:simcenter_app/features/laps/data/laps_repository.dart';
 import 'package:simcenter_app/features/laps/presentation/laps_page.dart';
+import 'package:simcenter_app/features/profile/data/profile_repository.dart';
+import 'package:simcenter_app/features/profile/presentation/settings_page.dart';
 import 'package:simcenter_app/features/ranking/data/ranking_repository.dart';
 import 'package:simcenter_app/features/ranking/domain/ranking_models.dart';
 import 'package:simcenter_app/features/seasons/data/seasons_repository.dart';
@@ -41,6 +43,7 @@ Future<GoRouter> _pumpApp(
       tracks: const [Track(trackId: 't1', gameCode: 'F1_25', name: 'Monaco')],
     )),
     rankingHubClientProvider.overrideWithValue(FakeRankingHub()),
+    profileRepositoryProvider.overrideWithValue(FakeProfileRepository()),
   ]);
   addTearDown(container.dispose);
   final router = container.read(routerProvider);
@@ -184,6 +187,27 @@ void main() {
     expect(page.from, 'season');
     expect(find.text('Monza'), findsOneWidget);
     expect(find.text('NORRIS'), findsOneWidget);
+  });
+
+  testWidgets('사이드바 하단 프로필을 누르면 셸 안에서 계정 설정(/settings)이 열린다', (t) async {
+    final router = await _pumpApp(t);
+
+    await t.tap(find.byKey(const ValueKey('account-settings')));
+    await t.pumpAndSettle();
+
+    expect(_location(router), '/settings');
+    expect(find.byType(SettingsPage), findsOneWidget);
+    expect(find.text('Edit Profile'), findsOneWidget);
+    expect(find.text('Dashboard'), findsOneWidget); // 사이드바가 그대로 있다.
+  });
+
+  testWidgets('로그아웃 상태에서 /settings는 /login으로 보낸다', (t) async {
+    final router = await _pumpApp(t, user: null);
+
+    router.go('/settings');
+    await t.pumpAndSettle();
+
+    expect(_location(router), '/login');
   });
 
   testWidgets('사이드바의 Sessions 메뉴로 이동한다', (t) async {

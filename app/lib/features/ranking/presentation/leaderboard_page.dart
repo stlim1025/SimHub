@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/layout/layout_constants.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_palette.dart';
 import '../../../core/util/lap_time.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../application/ranking_providers.dart';
@@ -84,7 +85,7 @@ class _LeaderboardPageState extends ConsumerState<LeaderboardPage> {
 
   Widget _buildLoaded(List<Track> tracks) {
     if (tracks.isEmpty) {
-      return const Text('등록된 트랙이 없어요.', style: TextStyle(color: AppColors.textMuted));
+      return Text('등록된 트랙이 없어요.', style: TextStyle(color: context.palette.textMuted));
     }
 
     final selected = tracks.firstWhere(
@@ -199,22 +200,22 @@ class _RankingList extends StatelessWidget {
           children: [
             Text(
               '$periodName · ${snapshot.periodKey}',
-              style: theme.textTheme.bodySmall?.copyWith(color: AppColors.textMuted),
+              style: theme.textTheme.bodySmall?.copyWith(color: context.palette.textMuted),
             ),
             const Spacer(),
             const Icon(Icons.circle, size: 10, color: AppColors.success),
             const SizedBox(width: 6),
-            Text('실시간', style: theme.textTheme.bodySmall?.copyWith(color: AppColors.textMuted)),
+            Text('실시간', style: theme.textTheme.bodySmall?.copyWith(color: context.palette.textMuted)),
           ],
         ),
         const SizedBox(height: 8),
         if (snapshot.entries.isEmpty)
-          const Card(
+          Card(
             child: Padding(
-              padding: EdgeInsets.all(24),
+              padding: const EdgeInsets.all(24),
               child: Text(
                 '아직 기록이 없어요. 첫 랩의 주인공이 되어보세요!',
-                style: TextStyle(color: AppColors.textMuted),
+                style: TextStyle(color: context.palette.textMuted),
               ),
             ),
           )
@@ -252,13 +253,13 @@ class _RankingRow extends StatelessWidget {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: isLeader ? AppColors.accent : AppColors.border,
+              color: isLeader ? AppColors.accent : context.palette.border,
             ),
             child: Text(
               '${entry.rank}',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
-                color: isLeader ? AppColors.onAccent : AppColors.textPrimary,
+                color: isLeader ? AppColors.onAccent : context.palette.textPrimary,
               ),
             ),
           ),

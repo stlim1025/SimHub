@@ -52,6 +52,7 @@ GoRouter _router({String initialLocation = '/'}) => GoRouter(
             GoRoute(path: '/laps', builder: (_, _) => const Text('body:laps')),
             GoRoute(path: '/leaderboard', builder: (_, _) => const Text('body:leaderboard')),
             GoRoute(path: '/telemetry-app', builder: (_, _) => const Text('body:telemetry-app')),
+            GoRoute(path: '/settings', builder: (_, _) => const Text('body:settings')),
           ],
         ),
       ],
@@ -184,6 +185,54 @@ void main() {
 
     expect(hub.stopCalls, 1);
     expect(container.read(authControllerProvider).value, isNull);
+  });
+
+  testWidgets('사이드바 하단 프로필(이름 첫 글자·계정 설정)을 누르면 /settings로 이동하고 강조된다', (t) async {
+    await _pumpShell(t, _wide);
+
+    expect(find.text('홍'), findsOneWidget); // 사진이 없으면 이름 첫 글자.
+    expect(find.text('계정 설정'), findsOneWidget);
+
+    await t.tap(find.byKey(const ValueKey('account-settings')));
+    await t.pumpAndSettle();
+
+    expect(find.text('body:settings'), findsOneWidget);
+    final footer = t.widget<Material>(
+      find.ancestor(of: find.byKey(const ValueKey('account-settings')), matching: find.byType(Material)).first,
+    );
+    expect(footer.color, isNot(Colors.transparent));
+    for (final label in ['Dashboard', 'Seasons', 'Sessions', 'Laps', 'Leaderboard', 'Telemetry App']) {
+      expect(_isSelected(t, label), isFalse, reason: label);
+    }
+  });
+
+  testWidgets('프로필 사진을 고른 사용자는 사이드바에 팀 코드 원이 보인다', (t) async {
+    setViewSize(t, _wide);
+    final user = testUser.copyWith(preferences: testUser.preferences.copyWith(avatarTeam: 'MCL'));
+    final container = ProviderContainer(overrides: [fakeAuth(user)]);
+    addTearDown(container.dispose);
+    await container.read(authControllerProvider.future);
+
+    await t.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp.router(routerConfig: _router()),
+    ));
+    await t.pumpAndSettle();
+
+    expect(find.text('MCL'), findsOneWidget);
+    expect(find.text('홍'), findsNothing);
+  });
+
+  testWidgets('서랍에서 계정 설정을 누르면 이동하고 서랍이 닫힌다', (t) async {
+    await _pumpShell(t, _narrow);
+
+    await t.tap(find.byTooltip('메뉴 열기'));
+    await t.pumpAndSettle();
+    await t.tap(find.byKey(const ValueKey('account-settings')));
+    await t.pumpAndSettle();
+
+    expect(find.text('body:settings'), findsOneWidget);
+    expect(find.text('계정 설정'), findsNothing); // 서랍이 닫혔다.
   });
 
   testWidgets('허브 종료를 기다리는 동안 사이드바가 사라져도 로그아웃은 끝까지 수행된다', (t) async {

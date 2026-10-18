@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../application/auth_controller.dart';
+import '../domain/user_input_rules.dart';
 
 /// 로그인/회원가입 화면. 클라이언트 입력 검증 후 서버에 위임(서버가 최종 권위).
 class LoginPage extends ConsumerStatefulWidget {
@@ -86,12 +87,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       textInputAction: TextInputAction.next,
                       autofillHints: const [AutofillHints.email],
                       decoration: const InputDecoration(labelText: '이메일'),
-                      validator: (v) {
-                        final value = (v ?? '').trim();
-                        if (value.isEmpty) return '이메일을 입력해 주세요.';
-                        if (!value.contains('@') || !value.contains('.')) return '이메일 형식이 올바르지 않아요.';
-                        return null;
-                      },
+                      validator: validateEmailInput,
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
@@ -115,12 +111,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                         textInputAction: TextInputAction.done,
                         onFieldSubmitted: (_) => _submit(),
                         decoration: const InputDecoration(labelText: '닉네임'),
-                        validator: (v) {
-                          final value = (v ?? '').trim();
-                          if (value.isEmpty) return '닉네임을 입력해 주세요.';
-                          if (value.length > 50) return '닉네임은 50자 이하여야 해요.';
-                          return null;
-                        },
+                        validator: validateDisplayNameInput,
                       ),
                     ],
                     const SizedBox(height: 24),

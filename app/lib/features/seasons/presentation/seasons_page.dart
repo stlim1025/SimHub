@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/layout/layout_constants.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/empty_state_card.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/pagination_bar.dart';
@@ -113,13 +114,13 @@ class _SeasonCard extends StatelessWidget {
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                   ),
-                  const Icon(Icons.chevron_right, color: AppColors.textMuted),
+                  Icon(Icons.chevron_right, color: context.palette.textMuted),
                 ],
               ),
               const SizedBox(height: 4),
               Text(
                 seasonPeriodLabel(season),
-                style: theme.textTheme.bodySmall?.copyWith(color: AppColors.textMuted),
+                style: theme.textTheme.bodySmall?.copyWith(color: context.palette.textMuted),
               ),
               const SizedBox(height: 12),
               Wrap(

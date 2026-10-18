@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/layout/layout_constants.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_palette.dart';
 import '../../../core/util/lap_time.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../auth/application/auth_controller.dart';
@@ -64,12 +65,12 @@ class _EmptyLaps extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Card(
+    return Card(
       child: Padding(
-        padding: EdgeInsets.all(24),
+        padding: const EdgeInsets.all(24),
         child: Text(
           '아직 기록된 랩이 없어요. 게임을 플레이하면 여기에 최근 랩이 표시돼요.',
-          style: TextStyle(color: AppColors.textMuted),
+          style: TextStyle(color: context.palette.textMuted),
         ),
       ),
     );
@@ -118,7 +119,7 @@ class _RecentLapRow extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   '${lap.sessionType} · ${_dateFormat.format(lap.setAt.toLocal())}',
-                  style: theme.textTheme.bodySmall?.copyWith(color: AppColors.textMuted),
+                  style: theme.textTheme.bodySmall?.copyWith(color: context.palette.textMuted),
                 ),
               ],
             ),

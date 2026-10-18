@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_palette.dart';
 import '../domain/session_display.dart';
 import '../domain/session_models.dart';
 
@@ -75,7 +76,7 @@ class _TyreCircle extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: tyreColorOf(stint.visualCompound),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: context.palette.border),
         ),
         child: Text(
           _compoundLetter(stint.visualCompound),

@@ -1,7 +1,8 @@
 import 'package:flutter/painting.dart';
 
-/// 앱 전체 색 토큰(docs/11 §7.1). 어두운 남색 배경 + 보라(인디고) 강조색.
-/// 위젯은 색 리터럴을 직접 쓰지 않고 이 토큰만 참조한다.
+/// 앱 전체 색 토큰(docs/11 §7.1, 밝은 테마·팀 색은 docs/14 §7). 어두운 남색 배경 + 보라(인디고) 강조색.
+/// 위젯은 색 리터럴을 직접 쓰지 않고 이 토큰만 참조한다. 배경·표면·테두리·글자처럼 테마마다 다른 색은
+/// 위젯이 [AppPalette](`context.palette`)로 읽는다 — 아래 이름 없는 토큰은 어두운 테마 값, `light*`는 밝은 테마 값이다.
 class AppColors {
   const AppColors._();
 
@@ -12,11 +13,21 @@ class AppColors {
   static const Color textPrimary = Color(0xFFE5E7EB);
   static const Color textMuted = Color(0xFF9CA3AF);
 
+  /// 밝은 테마의 배경·표면·테두리·글자(docs/14 §7). 강조색은 두 테마가 같다.
+  static const Color lightBackground = Color(0xFFF5F6FA);
+  static const Color lightSurface = Color(0xFFFFFFFF);
+  static const Color lightBorder = Color(0xFFE2E5EC);
+  static const Color lightTextPrimary = Color(0xFF111827);
+  static const Color lightTextMuted = Color(0xFF6B7280);
+
   /// 강조색 위에 올리는 글자색.
   static const Color onAccent = Color(0xFFFFFFFF);
 
   /// 정상·실시간 연결 표시.
   static const Color success = Color(0xFF22C55E);
+
+  /// 초록(`success`) 버튼 위 글자색(설정 화면의 "변경 사항 저장").
+  static const Color onSuccess = Color(0xFF052E16);
 
   /// 오류·무효 표시.
   static const Color danger = Color(0xFFF87171);
@@ -38,4 +49,19 @@ class AppColors {
   static const Color tyreHard = Color(0xFFF3F4F6);
   static const Color tyreIntermediate = Color(0xFF22C55E);
   static const Color tyreWet = Color(0xFF3B82F6);
+
+  /// 프로필 사진 팀 원(docs/14 §4). 값은 백엔드 `TeamCatalog`(D-33)의 팀 색과 같다. 실제 팀 로고는 쓰지 않는다.
+  static const Color teamMercedes = Color(0xFF27F4D2);
+  static const Color teamFerrari = Color(0xFFE8002D);
+  static const Color teamRedBull = Color(0xFF3671C6);
+  static const Color teamMcLaren = Color(0xFFFF8000);
+  static const Color teamAstonMartin = Color(0xFF229971);
+  static const Color teamAlpine = Color(0xFF0093CC);
+  static const Color teamWilliams = Color(0xFF64C4FF);
+  static const Color teamRacingBulls = Color(0xFF6692FF);
+  static const Color teamSauber = Color(0xFF52E252);
+  static const Color teamHaas = Color(0xFFB6BABD);
+
+  /// 밝은 팀 색 원 위의 코드 글자색(대비 확보용 진한 남색).
+  static const Color onTeamLight = Color(0xFF111827);
 }

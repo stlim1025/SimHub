@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/auth/application/auth_controller.dart';
+import '../../features/auth/application/sign_out.dart';
+import '../../features/profile/presentation/team_avatar.dart';
 import '../layout/layout_constants.dart';
-import '../realtime/ranking_hub_client.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_palette.dart';
 import 'nav_items.dart';
 
 /// 이 너비(논리 px) 이상이면 고정 사이드바, 미만이면 상단 바 + 서랍 메뉴.
@@ -14,9 +16,15 @@ const double kSidebarBreakpoint = 900;
 /// 사이드바 폭.
 const double kSidebarWidth = 220;
 
+/// 계정 설정 화면 경로(사이드바 하단 프로필에서 연다, docs/14 §8).
+const String kSettingsPath = '/settings';
+
 const double _sidebarPadding = 12;
 const double _selectedTileAlpha = 0.14;
+const double _footerRadius = 8;
+const double _footerAvatarSize = 32;
 const String _brandName = 'SimCenter';
+const String _accountSettingsLabel = '계정 설정';
 
 /// 로그인 후 화면의 공통 셸(docs/11 §7.2). 넓으면 왼쪽 사이드바, 좁으면 상단 바 + 서랍.
 class AppShell extends ConsumerWidget {
@@ -109,13 +117,13 @@ class _Sidebar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final displayName = ref.watch(authControllerProvider).valueOrNull?.displayName ?? '';
+    final user = ref.watch(authControllerProvider).valueOrNull;
 
     return Material(
-      color: AppColors.surface,
+      color: context.palette.surface,
       child: DecoratedBox(
-        decoration: const BoxDecoration(
-          border: Border(right: BorderSide(color: AppColors.border)),
+        decoration: BoxDecoration(
+          border: Border(right: BorderSide(color: context.palette.border)),
         ),
         child: SafeArea(
           child: Column(
@@ -136,7 +144,13 @@ class _Sidebar extends ConsumerWidget {
                 ),
               ),
               const Divider(),
-              _UserFooter(displayName: displayName, onLogout: () => _logout(ref)),
+              _UserFooter(
+                displayName: user?.displayName ?? '',
+                avatarTeam: user?.preferences.avatarTeam,
+                selected: location == kSettingsPath,
+                onOpenSettings: () => _navigate(context, kSettingsPath),
+                onLogout: () => signOut(ref),
+              ),
             ],
           ),
         ),
@@ -184,10 +198,10 @@ class _NavTile extends StatelessWidget {
       child: ListTile(
         dense: true,
         selected: selected,
-        selectedColor: AppColors.textPrimary,
+        selectedColor: context.palette.textPrimary,
         selectedTileColor: AppColors.accent.withValues(alpha: _selectedTileAlpha),
-        iconColor: AppColors.textMuted,
-        textColor: AppColors.textMuted,
+        iconColor: context.palette.textMuted,
+        textColor: context.palette.textMuted,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         leading: Icon(item.icon, color: selected ? AppColors.accent : null),
         title: Text(item.label),
@@ -197,42 +211,75 @@ class _NavTile extends StatelessWidget {
   }
 }
 
+/// 사이드바 하단: 프로필 사진 + 이름 + "계정 설정"(누르면 `/settings`, docs/14 §8) 과 로그아웃 아이콘.
 class _UserFooter extends StatelessWidget {
-  const _UserFooter({required this.displayName, required this.onLogout});
+  const _UserFooter({
+    required this.displayName,
+    required this.avatarTeam,
+    required this.selected,
+    required this.onOpenSettings,
+    required this.onLogout,
+  });
 
   final String displayName;
+  final String? avatarTeam;
+
+  /// 설정 화면을 보고 있는지(강조 표시).
+  final bool selected;
+  final VoidCallback onOpenSettings;
   final VoidCallback onLogout;
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 8, 12),
+      padding: const EdgeInsets.fromLTRB(_sidebarPadding, 8, 8, 12),
       child: Row(
         children: [
           Expanded(
-            child: Text(displayName, maxLines: 1, overflow: TextOverflow.ellipsis),
+            child: Material(
+              color: selected ? AppColors.accent.withValues(alpha: _selectedTileAlpha) : Colors.transparent,
+              borderRadius: BorderRadius.circular(_footerRadius),
+              child: InkWell(
+                key: const ValueKey('account-settings'),
+                borderRadius: BorderRadius.circular(_footerRadius),
+                onTap: onOpenSettings,
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Row(
+                    children: [
+                      TeamAvatar(teamCode: avatarTeam, displayName: displayName, size: _footerAvatarSize),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              displayName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            Text(
+                              _accountSettingsLabel,
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: palette.textMuted),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
           IconButton(
             tooltip: '로그아웃',
-            icon: const Icon(Icons.logout, color: AppColors.textMuted),
+            icon: Icon(Icons.logout, color: palette.textMuted),
             onPressed: onLogout,
           ),
         ],
       ),
     );
   }
-}
-
-/// 허브 연결을 먼저 끊고 로그아웃한다. 허브 종료가 실패해도 로그아웃은 반드시 수행한다.
-/// 허브 종료를 기다리는 동안 사이드바가 트리에서 사라져도(화면 폭 변경 등) 끝까지 수행되도록,
-/// `ref.read`는 첫 `await` 전에 모두 끝낸다.
-Future<void> _logout(WidgetRef ref) async {
-  final hub = ref.read(rankingHubClientProvider);
-  final auth = ref.read(authControllerProvider.notifier);
-  try {
-    await hub.stop();
-  } catch (e) {
-    debugPrint('랭킹 허브 종료 실패(로그아웃은 계속 진행): $e');
-  }
-  await auth.logout();
 }

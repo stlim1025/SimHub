@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/stat.dart';
 import '../../sessions/domain/session_display.dart';
 import '../domain/season_display.dart';
@@ -56,7 +56,7 @@ class _RoundCard extends StatelessWidget {
                 Text('R${round.round} · ${round.trackName}', style: const TextStyle(fontWeight: FontWeight.w600)),
                 Text(
                   formatSeasonDate(round.firstSessionAt),
-                  style: theme.textTheme.bodySmall?.copyWith(color: AppColors.textMuted),
+                  style: theme.textTheme.bodySmall?.copyWith(color: context.palette.textMuted),
                 ),
               ],
             ),
@@ -100,7 +100,7 @@ class _SessionChip extends StatelessWidget {
           Text(sessionKindLabel(session.sessionKind), style: const TextStyle(fontWeight: FontWeight.w600)),
           if (result != null) ...[
             const SizedBox(width: 6),
-            Text(result, style: const TextStyle(color: AppColors.textMuted)),
+            Text(result, style: TextStyle(color: context.palette.textMuted)),
           ],
         ],
       ),

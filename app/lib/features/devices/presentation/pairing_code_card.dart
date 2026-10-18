@@ -6,11 +6,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_palette.dart';
 import '../../../core/time/clock_provider.dart';
 import '../../../core/util/relative_time.dart';
+import '../../../core/widgets/section_card.dart';
 import '../application/devices_providers.dart';
 import '../domain/device_models.dart';
-import 'section_card.dart';
 
 /// 남은 시간을 갱신하는 주기.
 const Duration _tick = Duration(seconds: 1);
@@ -46,7 +47,7 @@ class PairingCodeCard extends ConsumerWidget {
           Text(
             'Agent에 코드를 입력하면 이 계정에 PC가 연결돼요. 코드는 10분 동안 한 번만 쓸 수 있고, '
             '새로 발급하면 이전 코드는 쓸 수 없어요.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textMuted),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: context.palette.textMuted),
           ),
           const SizedBox(height: 16),
           if (state.isLoading)
@@ -169,7 +170,7 @@ class _IssuedCodeState extends ConsumerState<_IssuedCode> {
             fontWeight: FontWeight.bold,
             letterSpacing: _codeLetterSpacing,
             fontFeatures: const [FontFeature.tabularFigures()],
-            color: expired ? AppColors.textMuted : AppColors.textPrimary,
+            color: expired ? context.palette.textMuted : context.palette.textPrimary,
             decoration: expired ? TextDecoration.lineThrough : null,
           ),
         ),
@@ -177,7 +178,7 @@ class _IssuedCodeState extends ConsumerState<_IssuedCode> {
         Row(
           children: [
             if (!expired) ...[
-              Text('남은 시간 ', style: theme.textTheme.bodyMedium?.copyWith(color: AppColors.textMuted)),
+              Text('남은 시간 ', style: theme.textTheme.bodyMedium?.copyWith(color: context.palette.textMuted)),
             ],
             Text(
               formatRemaining(remaining),

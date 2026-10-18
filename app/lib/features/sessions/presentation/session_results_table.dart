@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_palette.dart';
 import '../../../core/util/lap_time.dart';
 import '../../../core/widgets/ai_badge.dart';
 import '../../../core/widgets/team_color_bar.dart';
@@ -72,7 +73,7 @@ class SessionResultsTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final headingStyle = Theme.of(context).textTheme.labelLarge?.copyWith(color: AppColors.textMuted);
+    final headingStyle = Theme.of(context).textTheme.labelLarge?.copyWith(color: context.palette.textMuted);
     final reference = referenceRow(results, isRace: isRace);
 
     return LayoutBuilder(

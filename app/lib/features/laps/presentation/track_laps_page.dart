@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/layout/layout_constants.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_palette.dart';
 import '../../../core/util/lap_time.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/pagination_bar.dart';
@@ -153,7 +154,7 @@ class _LapsTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final headingStyle = Theme.of(context).textTheme.labelLarge?.copyWith(color: AppColors.textMuted);
+    final headingStyle = Theme.of(context).textTheme.labelLarge?.copyWith(color: context.palette.textMuted);
 
     return Card(
       // 좁은 화면에서는 표를 가로로 스크롤하고, 넓은 화면에서는 카드 폭을 채운다.

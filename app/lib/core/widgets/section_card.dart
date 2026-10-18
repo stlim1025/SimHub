@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Telemetry App 화면의 구획 카드: 제목(+오른쪽 보조 위젯)과 본문.
+/// 화면의 구획 카드: 제목(+오른쪽 보조 위젯)과 본문(Telemetry App·설정 화면 공통).
 class SectionCard extends StatelessWidget {
   const SectionCard({super.key, required this.title, required this.child, this.trailing});
 

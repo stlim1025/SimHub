@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_palette.dart';
 
 /// 기록된 랩이 하나도 없을 때의 안내(트랙 목록·트랙별 랩 표 공통).
 class EmptyLapsCard extends StatelessWidget {
@@ -8,11 +8,11 @@ class EmptyLapsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Card(
+    return Card(
       child: Padding(
-        padding: EdgeInsets.all(32),
+        padding: const EdgeInsets.all(32),
         child: Center(
-          child: Text('아직 기록된 랩이 없습니다', style: TextStyle(color: AppColors.textMuted)),
+          child: Text('아직 기록된 랩이 없습니다', style: TextStyle(color: context.palette.textMuted)),
         ),
       ),
     );

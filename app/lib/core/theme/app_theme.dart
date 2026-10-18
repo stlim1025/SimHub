@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'app_colors.dart';
+import 'app_palette.dart';
 
-/// 앱 테마(Material3). 어두운 남색 배경 + 보라(인디고) 강조색. 색은 [AppColors] 토큰만 쓴다.
+/// 앱 테마(Material3). 어두운 남색 배경 + 보라(인디고) 강조색이 기본이고, 같은 구성의 밝은 테마도 있다(docs/14 §7).
+/// 색은 [AppColors] 토큰과 [AppPalette]만 쓴다. 어느 테마를 쓸지는 사용자 설정(`themeModeProvider`)이 정한다.
 class AppTheme {
   const AppTheme._();
 
@@ -11,18 +13,24 @@ class AppTheme {
   static const double _controlRadius = 10;
   static const double _buttonHeight = 48;
 
-  static ThemeData get dark {
+  /// 어두운 테마(P6부터의 기본 화면).
+  static ThemeData get dark => _build(Brightness.dark, AppPalette.dark);
+
+  /// 밝은 테마.
+  static ThemeData get light => _build(Brightness.light, AppPalette.light);
+
+  static ThemeData _build(Brightness brightness, AppPalette palette) {
     final scheme = ColorScheme.fromSeed(
       seedColor: AppColors.accent,
-      brightness: Brightness.dark,
+      brightness: brightness,
     ).copyWith(
       primary: AppColors.accent,
       onPrimary: AppColors.onAccent,
-      surface: AppColors.surface,
-      onSurface: AppColors.textPrimary,
-      onSurfaceVariant: AppColors.textMuted,
-      outline: AppColors.border,
-      outlineVariant: AppColors.border,
+      surface: palette.surface,
+      onSurface: palette.textPrimary,
+      onSurfaceVariant: palette.textMuted,
+      outline: palette.border,
+      outlineVariant: palette.border,
       error: AppColors.danger,
     );
 
@@ -30,36 +38,27 @@ class AppTheme {
     final controlShape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(_controlRadius));
 
     return base.copyWith(
+      extensions: [palette],
       textTheme: GoogleFonts.interTextTheme(base.textTheme).apply(
-        bodyColor: AppColors.textPrimary,
-        displayColor: AppColors.textPrimary,
+        bodyColor: palette.textPrimary,
+        displayColor: palette.textPrimary,
       ),
-      scaffoldBackgroundColor: AppColors.background,
-      canvasColor: AppColors.surface,
-      dividerColor: AppColors.border,
-      dividerTheme: const DividerThemeData(color: AppColors.border, space: 1, thickness: 1),
-      appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.textPrimary,
+      scaffoldBackgroundColor: palette.background,
+      canvasColor: palette.surface,
+      dividerColor: palette.border,
+      dividerTheme: DividerThemeData(color: palette.border, space: 1, thickness: 1),
+      appBarTheme: AppBarTheme(
+        backgroundColor: palette.surface,
+        foregroundColor: palette.textPrimary,
         surfaceTintColor: Colors.transparent,
         centerTitle: false,
         elevation: 0,
       ),
-      drawerTheme: const DrawerThemeData(
-        backgroundColor: AppColors.surface,
+      drawerTheme: DrawerThemeData(
+        backgroundColor: palette.surface,
         surfaceTintColor: Colors.transparent,
       ),
-      cardTheme: CardThemeData(
-        color: AppColors.surface,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        margin: EdgeInsets.zero,
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(_cardRadius),
-          side: const BorderSide(color: AppColors.border),
-        ),
-      ),
+      cardTheme: _cardTheme(palette),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: AppColors.accent,
@@ -70,30 +69,42 @@ class AppTheme {
       ),
       segmentedButtonTheme: SegmentedButtonThemeData(
         style: SegmentedButton.styleFrom(
-          backgroundColor: AppColors.surface,
-          foregroundColor: AppColors.textMuted,
+          backgroundColor: palette.surface,
+          foregroundColor: palette.textMuted,
           selectedBackgroundColor: AppColors.accent,
           selectedForegroundColor: AppColors.onAccent,
-          side: const BorderSide(color: AppColors.border),
+          side: BorderSide(color: palette.border),
           shape: controlShape,
         ),
       ),
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: AppColors.surface,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(_controlRadius),
-          borderSide: const BorderSide(color: AppColors.border),
+      inputDecorationTheme: _inputTheme(palette),
+    );
+  }
+
+  static CardThemeData _cardTheme(AppPalette palette) => CardThemeData(
+        color: palette.surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(_cardRadius),
+          side: BorderSide(color: palette.border),
         ),
-        enabledBorder: OutlineInputBorder(
+      );
+
+  static InputDecorationTheme _inputTheme(AppPalette palette) {
+    OutlineInputBorder outline(Color color) => OutlineInputBorder(
           borderRadius: BorderRadius.circular(_controlRadius),
-          borderSide: const BorderSide(color: AppColors.border),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(_controlRadius),
-          borderSide: const BorderSide(color: AppColors.accent),
-        ),
-      ),
+          borderSide: BorderSide(color: color),
+        );
+
+    return InputDecorationTheme(
+      filled: true,
+      fillColor: palette.surface,
+      border: outline(palette.border),
+      enabledBorder: outline(palette.border),
+      focusedBorder: outline(AppColors.accent),
     );
   }
 }
