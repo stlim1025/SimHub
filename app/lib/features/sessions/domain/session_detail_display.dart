@@ -118,9 +118,13 @@ String formatSectorTime(int? ms) {
 }
 
 /// Laps 카드 GAP 칸(내 최고 랩 대비 `+0.418`). 최고 랩(0)·값 없음은 `-`.
+/// 최고 랩보다 빠른 무효 랩은 음수로 와서 `-0.123`(서버 확정, docs/15 §11.4).
 String lapGapText(SessionLap lap) {
   final gap = lap.gapToBestMs;
-  return gap == null || gap <= 0 || lap.isBestLap ? kNoValueText : formatGapMs(gap);
+  if (gap == null || gap == 0 || lap.isBestLap) {
+    return kNoValueText;
+  }
+  return gap < 0 ? '-${formatGapMs(-gap).substring(1)}' : formatGapMs(gap);
 }
 
 // -- 순위 변동 ---------------------------------------------------------------------

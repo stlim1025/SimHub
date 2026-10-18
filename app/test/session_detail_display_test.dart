@@ -83,6 +83,7 @@ void main() {
       expect(lapGapText(const SessionLap(lapNumber: 2, gapToBestMs: 0)), '-');
       expect(lapGapText(const SessionLap(lapNumber: 3, isBestLap: true, gapToBestMs: 10)), '-');
       expect(lapGapText(const SessionLap(lapNumber: 4)), '-');
+      expect(lapGapText(const SessionLap(lapNumber: 5, gapToBestMs: -123, isValid: false)), '-0.123');
     });
   });
 

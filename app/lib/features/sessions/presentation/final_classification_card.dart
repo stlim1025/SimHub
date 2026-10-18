@@ -17,9 +17,9 @@ const double _changeWidth = 56;
 const double _pointsWidth = 52;
 const double _gapWidth = 96;
 
-/// 순위 변동: 서버 `positionChange`, 없으면 그리드 − 순위(그리드가 없으면 null).
-int? _changeOf(SessionResult row) =>
-    row.positionChange ?? (row.gridPosition > 0 ? row.gridPosition - row.position : null);
+/// 순위 변동: 서버 `positionChange`(레이스만). 옛 서버의 레이스면 그리드 − 순위, 예선·연습은 없음(`-`).
+int? _changeOf(SessionResult row, {required bool isRace}) =>
+    row.positionChange ?? (isRace && row.gridPosition > 0 ? row.gridPosition - row.position : null);
 
 /// Final Classification 카드(docs/15 §11.3): # · DRIVER(팀 점 + 이름, 나는 "You" + 강조 행) · POSITION · CHANGE · POINTS · GAP.
 class FinalClassificationCard extends StatelessWidget {
@@ -67,7 +67,7 @@ class FinalClassificationCard extends StatelessWidget {
             label: 'Change',
             width: _changeWidth,
             compactHidden: true,
-            cell: (row) => PositionChangeText(change: _changeOf(row)),
+            cell: (row) => PositionChangeText(change: _changeOf(row, isRace: isRace)),
           ),
           CompactColumn(
             label: 'Points',
