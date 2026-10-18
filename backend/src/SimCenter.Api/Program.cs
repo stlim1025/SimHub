@@ -15,8 +15,12 @@ using SimCenter.Infrastructure.Persistence.Seed;
 var builder = WebApplication.CreateBuilder(args);
 
 // ── Serilog(헌장: Logging 필수) ──
+// ASP.NET Core 내부 로그는 Warning부터만 남긴다. Hosting 진단 로그("Request starting …")가 쿼리 문자열까지 찍어
+// RankingHub의 `?access_token=`(JWT)이 로그에 그대로 남았다. 요청 기록은 경로만 쓰는 UseSerilogRequestLogging이 맡는다.
+// 설정 파일의 Serilog 섹션이 있으면 그 값이 우선한다(아래 ReadFrom이 덮어쓴다).
 builder.Host.UseSerilog((context, config) =>
-    config.ReadFrom.Configuration(context.Configuration)
+    config.MinimumLevel.Override("Microsoft.AspNetCore", Serilog.Events.LogEventLevel.Warning)
+        .ReadFrom.Configuration(context.Configuration)
         .Enrich.FromLogContext()
         .WriteTo.Console());
 
