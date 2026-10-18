@@ -18,9 +18,10 @@ namespace SimCenter.Agent.Infrastructure.Tests;
 public sealed class OutboxTelemetrySinkLapDetailTests : IAsyncLifetime
 {
     private const int TraceResolutionM = 5;
-    private const int LargeValue = 1_000_000;            // 7자리 + 쉼표 = 칸마다 8바이트
-    private const int WireBytesPerLargeSample = 7 * 8;   // 채널 7개
-    private const int OversizedSectorCount = 5000;
+    private const int LargeValue = 1_000_000;              // 7자리 + 쉼표 = 칸마다 8바이트
+    private const int LargeExtraChannelCount = 93;         // 기본 7채널 + extra 93 = 100채널 — 768KiB 한도를 넘길 만큼(D-49)
+    private const int WireBytesPerLargeSample = (7 + LargeExtraChannelCount) * 8;
+    private const int OversizedSectorCount = 25_000;       // 섹터 1개 ≈ 42바이트 → 약 1MB
     private const int SpaLengthM = 7004;
     private const int SpaLapTimeMs = 106_000;
 
@@ -166,7 +167,7 @@ public sealed class OutboxTelemetrySinkLapDetailTests : IAsyncLifetime
     [InlineData(2_400, 20, 600)]    // 10m로도 넘고 20m면 들어간다
     public async Task OversizedTrace_IsDownsampledUntilItFits(int samples, int expectedResolutionM, int expectedSamples)
     {
-        var lap = Lap(Snapshot(), conditions: null, Trace(samples, LargeValue));
+        var lap = Lap(Snapshot(), conditions: null, Trace(samples, LargeValue, LargeExtraChannelCount));
         Assert.True(samples * WireBytesPerLargeSample > OutboxTelemetrySink.MaxEnvelopeBytes, "전제: 5m 트레이스는 한도 초과");
 
         await _sut.EmitAsync(Envelope(lap));
@@ -178,13 +179,14 @@ public sealed class OutboxTelemetrySinkLapDetailTests : IAsyncLifetime
         Assert.Equal(expectedResolutionM, trace.GetProperty("resolutionM").GetInt32());
         Assert.Equal(expectedSamples, trace.GetProperty("timeMs").GetArrayLength());
         Assert.Equal(expectedSamples, trace.GetProperty("rpm").GetArrayLength());
+        Assert.Equal(expectedSamples, trace.GetProperty("extra").GetProperty("x0").GetArrayLength());   // extra도 같이 줄었다
         Assert.DoesNotContain(_logger.Entries, e => e.Level >= LogLevel.Warning);
     }
 
     [Fact]
     public async Task OversizedTraceEvenAt20m_IsDropped_AndLapIsStillEnqueued()
     {
-        var lap = Lap(Snapshot(), new LapConditions(Weather.Clear, 21, 31, null), Trace(5_000, LargeValue));
+        var lap = Lap(Snapshot(), new LapConditions(Weather.Clear, 21, 31, null), Trace(5_000, LargeValue, LargeExtraChannelCount));
 
         await _sut.EmitAsync(Envelope(lap));
 
@@ -207,6 +209,23 @@ public sealed class OutboxTelemetrySinkLapDetailTests : IAsyncLifetime
 
         Assert.Equal(0, await _outbox.CountAsync());
         Assert.Contains(_logger.Entries, e => e.Level == LogLevel.Error);
+    }
+
+    [Fact]
+    public async Task OversizedDetailsEvenWithoutTrace_AreDropped_AndSnapshotIsKept()
+    {
+        // 상세가 비정상적으로 커서 트레이스를 빼도 넘는 경우 — 상세까지 빼고 랩·스냅샷 본체는 보낸다(D-49).
+        var huge = new Dictionary<string, object?> { ["setup"] = new Dictionary<string, object?> { ["blob"] = new string('x', OutboxTelemetrySink.MaxEnvelopeBytes) } };
+        var lap = Lap(Snapshot() with { Details = huge }, conditions: null, Trace(4, value: 1));
+
+        await _sut.EmitAsync(Envelope(lap));
+
+        using var doc = JsonDocument.Parse(await SingleOutboxJsonAsync());
+        var payload = doc.RootElement.GetProperty("payload");
+        Assert.Equal(JsonValueKind.Null, payload.GetProperty("trace").ValueKind);
+        Assert.Equal(JsonValueKind.Null, payload.GetProperty("car").GetProperty("details").ValueKind);
+        Assert.Equal(1, payload.GetProperty("car").GetProperty("teamId").GetInt32());
+        Assert.Single(_logger.Entries, e => e.Level == LogLevel.Warning);
     }
 
     [Fact]
@@ -271,10 +290,14 @@ public sealed class OutboxTelemetrySinkLapDetailTests : IAsyncLifetime
         ErsDeployedJ: 2_100_000,
         ErsHarvestedJ: 1_600_000);
 
-    private static LapTrace Trace(int samples, int value)
+    private static LapTrace Trace(int samples, int value, int extraChannels = 0)
     {
         var channel = Enumerable.Repeat(value, samples).ToArray();
-        return new LapTrace(TraceResolutionM, channel, channel, channel, channel, channel, channel, channel);
+        IReadOnlyList<double> extraChannel = channel.Select(v => (double)v).ToArray();
+        var extra = extraChannels == 0
+            ? null
+            : Enumerable.Range(0, extraChannels).ToDictionary(i => $"x{i}", _ => extraChannel);
+        return new LapTrace(TraceResolutionM, channel, channel, channel, channel, channel, channel, channel, extra);
     }
 
     /// <summary>자릿수가 실제와 비슷한 1랩 트레이스(시간 0~106초, 속도 80~340, RPM 9,000~12,500, 스티어 −100~100).</summary>
