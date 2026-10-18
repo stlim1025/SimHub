@@ -157,6 +157,8 @@ Lap.SessionKey  ·····  GameSession.SessionKey     (값으로만 이어진�
 | GameCode | string(20) | NotNull | 예: `F1_25` |
 | GameTrackId | int | NotNull | 게임 UDP가 주는 트랙 정수 ID |
 | Name | string(80) | NotNull | 예: "Silverstone" |
+| CountryCode | string(2) | nullable (P9) | ISO 3166-1 alpha-2(국기). 시드가 매번 맞춘다(D-43) |
+| DisplayOrder | int | default 0 (P9) | 트랙 목록 순서(F1 25 캘린더 → 리버스 → 그 밖, D-43) |
 | — | | Unique(GameCode, GameTrackId) | 게임별 트랙 유일성 |
 
 > Track은 마스터 데이터. Migration Seed로 F1 트랙 목록을 미리 채운다(P6에서도 유지).
@@ -178,6 +180,7 @@ Lap.SessionKey  ·····  GameSession.SessionKey     (값으로만 이어진�
 | IsRankingEligible | bool | NotNull | **파생 플래그**: IsValid && !수동무효 && SessionType=TimeTrial && !아웃/인랩 |
 | SetAt | DateTime | NotNull (UTC) | 랩 완주 시각 |
 | SessionKey | string(80) | **nullable** (P7) | 그 랩이 속한 게임 세션의 키(`GameSession.SessionKey`와 같은 규칙). **저장만 하고 P7은 조회에 쓰지 않는다**(인덱스도 P8에서). 기존 행은 null |
+| GameMode | string(30) | nullable (P9) | `LapFinished.gameMode` 그대로(앱의 MODE 열). 비었거나 30자 초과·NUL이면 null |
 | CreatedAt | | | 서버 수신 시각 |
 
 **설계 결정**
@@ -194,6 +197,31 @@ Lap.SessionKey  ·····  GameSession.SessionKey     (값으로만 이어진�
 - `(TrackId, GameCode, SessionType, IsRankingEligible, SetAt)` — 기간별 트랙 랭킹 필터.
 - `(UserId, TrackId, LapTimeMs)` — 개인 최고 기록 조회.
 - `(TrackId, LapTimeMs) WHERE IsRankingEligible = true` — 랭킹 정렬.
+
+### 3.5a LapSnapshot (신규 · P9, D-44·D-49)
+
+Lap과 1:0..1(`LapId` Unique, Cascade). 랩 끝의 차량·날씨 값. **모든 값 열이 nullable**(받지 못했거나 검증에서 버린 영역은 null).
+
+| 묶음 | 열 | 비고 |
+|---|---|---|
+| 팀·타이어 | TeamId, VisualTyreCompound, ActualTyreCompound, TyreAgeLaps | 팀 이름·색은 `TeamCatalog`(D-33) |
+| 바퀴 4개 값 | TyreWearStart*, TyreWearEnd*, TyreDamage*, BrakeDamage* (`FrontLeft`·`FrontRight`·`RearLeft`·`RearRight`) | % |
+| 손상 | FrontLeftWingDamage, FrontRightWingDamage, RearWingDamage, FloorDamage, DiffuserDamage, SidepodDamage, GearboxDamage, EngineDamage | % |
+| 연료·ERS | FuelStartKg, FuelEndKg, FuelRemainingLaps, ErsStoreStartJ, ErsStoreEndJ, ErsDeployedJ, ErsHarvestedJ | kg · J(최대 4MJ) |
+| 조건 | Weather(enum 이름), AirTempC, TrackTempC, RainForecastPercent | |
+| 그 밖 | Details (jsonb) | D-49: 셋업·엔진 부품 마모·이벤트 등 묶음 원문. 화면은 나중에 고른다 |
+
+### 3.5b LapTelemetryTrace (신규 · P9, D-45·D-49)
+
+Lap과 1:0..1(`LapId` Unique, Cascade, Lap에 내비게이션 없음 — 큰 값이라 필요할 때만 읽는다).
+
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| ResolutionM | int | 거리 칸 크기(m), 보통 5 |
+| SampleCount | int | 칸 수 |
+| Payload | bytea | 7채널 + `extra` 채널 맵의 JSON을 gzip. 보존 무기한 |
+
+> GameSession(3.10)에도 P9에서 `Details`(jsonb, D-49: 전 차량 랩 기록 `lapHistory`·랩별 순위 `lapPositions`)가 더해졌다.
 
 ### 3.6 LapSector (D-7)
 
