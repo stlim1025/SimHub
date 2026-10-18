@@ -1,7 +1,7 @@
 import 'package:country_flags/country_flags.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:simcenter_app/core/theme/app_colors.dart';
+import 'package:simcenter_app/core/theme/app_palette.dart';
 import 'package:simcenter_app/core/theme/app_theme.dart';
 import 'package:simcenter_app/core/widgets/track_flag.dart';
 import 'package:simcenter_app/core/widgets/track_picker.dart';
@@ -111,7 +111,7 @@ void main() {
       );
     });
 
-    testWidgets('목록의 폭은 280이고, 고른 트랙만 강조색 글자다', (t) async {
+    testWidgets('목록의 폭은 280이고, 고른 트랙만 링크 색 글자 + ✓다', (t) async {
       await _pump(t, selected: _tracks[1]);
 
       await _open(t);
@@ -121,8 +121,10 @@ void main() {
           .widget<Text>(find.descendant(of: find.byType(MenuItemButton), matching: find.text(name)))
           .style
           ?.color;
-      expect(colorOf('Shanghai'), AppColors.accent);
-      expect(colorOf('Melbourne'), isNot(AppColors.accent));
+      expect(colorOf('Shanghai'), AppPalette.dark.link);
+      expect(find.descendant(of: find.byKey(const ValueKey('track-option-t2')), matching: find.byIcon(Icons.check)), findsOneWidget);
+      expect(find.byIcon(Icons.check), findsOneWidget);
+      expect(colorOf('Melbourne'), isNot(AppPalette.dark.link));
     });
 
     testWidgets('항목을 누르면 그 트랙을 알리고 목록을 닫는다', (t) async {

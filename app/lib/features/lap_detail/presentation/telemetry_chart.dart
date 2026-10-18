@@ -17,6 +17,7 @@ const double _headerGap = 6;
 const double _valueGap = 12;
 const double _dotSize = 8;
 const double _dotGap = 4;
+const String _chartSemanticSuffix = '그래프';
 
 /// 그래프의 선 하나(이 랩 또는 비교 랩). 표본 i의 거리 = i × [resolutionM]. 값이 없는(null) 칸에서는 선을 끊는다.
 @immutable
@@ -190,16 +191,22 @@ class TelemetryChart extends StatelessWidget {
                   onTapDown: (details) => point(details.localPosition),
                   onHorizontalDragStart: (details) => point(details.localPosition),
                   onHorizontalDragUpdate: (details) => point(details.localPosition),
-                  child: CustomPaint(
-                    size: Size(box.maxWidth, height),
-                    painter: TelemetryChartPainter(
-                      series: series,
-                      maxDistanceM: maxDistanceM,
-                      range: range,
-                      cursor: cursor,
-                      gridColor: palette.border,
-                      cursorColor: palette.textMuted,
-                      baseline: baseline,
+                  // 십자선이 움직일 때 그래프마다 따로 다시 그리도록 경계를 둔다. 읽기 도구에는 그래프 이름을 알린다.
+                  child: Semantics(
+                    label: '$title $_chartSemanticSuffix',
+                    child: RepaintBoundary(
+                      child: CustomPaint(
+                        size: Size(box.maxWidth, height),
+                        painter: TelemetryChartPainter(
+                          series: series,
+                          maxDistanceM: maxDistanceM,
+                          range: range,
+                          cursor: cursor,
+                          gridColor: palette.border,
+                          cursorColor: palette.textMuted,
+                          baseline: baseline,
+                        ),
+                      ),
                     ),
                   ),
                 ),

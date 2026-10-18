@@ -142,6 +142,36 @@ void main() {
       expect(car.fuelStartKg, isNull);
     });
 
+    test('비교 대상의 필수 값이 빠지거나 형식이 틀리면 비교 없음으로 보고 상세는 읽는다', () {
+      for (final broken in [
+        {'lapId': 'b', 'sectors': [], 'setAt': '2026-07-26T09:00:00Z'},
+        {'lapId': 'b', 'lapTimeMs': 'fast', 'setAt': '2026-07-26T09:00:00Z'},
+        {'lapId': 'b', 'lapTimeMs': 98000, 'setAt': 'yesterday'},
+      ]) {
+        final d = LapDetail.fromJson(_detailJson({'comparison': broken}));
+
+        expect(d.comparison, isNull, reason: '$broken');
+        expect(d.car, isNotNull);
+      }
+    });
+
+    test('비교 대상의 랩타임이 실수로 와도 읽고, 잘못된 섹터는 건너뛴다', () {
+      final d = LapDetail.fromJson(_detailJson({
+        'comparison': {
+          'lapId': 'b',
+          'lapTimeMs': 98000.0,
+          'setAt': '2026-07-26T09:00:00Z',
+          'sectors': [
+            {'sectorNumber': 1, 'sectorTimeMs': 30500},
+            {'sectorNumber': 2},
+          ],
+        },
+      }));
+
+      expect(d.comparison?.lapTimeMs, 98000);
+      expect(d.comparison?.sectors, hasLength(1));
+    });
+
     test('비교 대상이 이 랩이면 isPersonalBest가 참이다', () {
       final d = LapDetail.fromJson(_detailJson({
         'comparison': {'lapId': 'l1', 'lapTimeMs': 98448, 'sectors': [], 'setAt': '2026-07-26T09:00:00Z'},
@@ -196,6 +226,12 @@ void main() {
       final t = LapTrace.fromJson(traceJson()..remove('gear'));
 
       expect(t.length, 0);
+      expect(t.isEmpty, isTrue);
+    });
+
+    test('숫자가 아닌 표본(null 등)이 있으면 0으로 채우지 않고 빈 트레이스로 본다', () {
+      final t = LapTrace.fromJson(traceJson({'speedKph': [200, null, 220]}));
+
       expect(t.isEmpty, isTrue);
     });
 

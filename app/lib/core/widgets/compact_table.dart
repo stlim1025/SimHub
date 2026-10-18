@@ -163,6 +163,17 @@ class _BodyRow<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 읽기 도구에는 칸 조각이 아니라 눌러 여는 한 줄(버튼)로 알린다.
+    return MergeSemantics(
+      child: Semantics(
+        button: onTap != null,
+        selected: highlighted,
+        child: _rowBody(),
+      ),
+    );
+  }
+
+  Widget _rowBody() {
     return Material(
       color: highlighted ? AppColors.playerRow : Colors.transparent,
       child: InkWell(

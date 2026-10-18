@@ -43,8 +43,13 @@ class TeamAvatar extends ConsumerWidget {
           ? label
           : Padding(
               padding: EdgeInsets.all(size * _logoPaddingScale),
-              // 파일을 읽지 못하면(손상 등) 코드로 대신한다.
-              child: Image.asset(logo, fit: BoxFit.contain, errorBuilder: (_, _, _) => label),
+              // 파일을 읽지 못하면(손상 등) 코드로 대신한다. 로고에는 읽기 도구용 팀 이름을 붙인다.
+              child: Image.asset(
+                logo,
+                fit: BoxFit.contain,
+                semanticLabel: team?.name,
+                errorBuilder: (_, _, _) => label,
+              ),
             ),
     );
   }

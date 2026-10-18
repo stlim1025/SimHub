@@ -13,6 +13,8 @@ int? _intOrNull(Object? value) => value is num ? value.toInt() : null;
 
 Map<String, dynamic>? _mapOrNull(Object? value) => value is Map<String, dynamic> ? value : null;
 
+String? _stringOrNull(Object? value) => value is String ? value : null;
+
 /// 바퀴 4개 값(docs/15 §3.1 `WheelSet`). 바퀴마다 null일 수 있다.
 class WheelValues {
   const WheelValues({this.frontLeft, this.frontRight, this.rearLeft, this.rearRight});
@@ -147,7 +149,7 @@ class LapConditions {
       return null;
     }
     return LapConditions(
-      weather: map['weather'] as String?,
+      weather: _stringOrNull(map['weather']),
       airTempC: _doubleOrNull(map['airTempC']),
       trackTempC: _doubleOrNull(map['trackTempC']),
       rainForecastPercent: _intOrNull(map['rainForecastPercent']),
@@ -171,20 +173,33 @@ class ComparisonLap {
   final DateTime setAt;
   final bool hasTrace;
 
+  /// 비교 대상은 덤이라, 필수 값(Id·랩타임·시각)이 빠지거나 형식이 틀리면 null(비교 없음)로 보고 랩 상세는 그대로 보인다.
   static ComparisonLap? fromJsonOrNull(Object? json) {
     final map = _mapOrNull(json);
-    if (map == null) {
+    final lapId = map?['lapId'];
+    final lapTimeMs = _intOrNull(map?['lapTimeMs']);
+    final setAt = DateTime.tryParse(_stringOrNull(map?['setAt']) ?? '');
+    if (map == null || lapId is! String || lapTimeMs == null || setAt == null) {
       return null;
     }
+    final rawSectors = map['sectors'];
     return ComparisonLap(
-      lapId: map['lapId'] as String,
-      lapTimeMs: map['lapTimeMs'] as int,
-      sectors: ((map['sectors'] as List<dynamic>?) ?? const [])
-          .map((e) => LapSector.fromJson(e as Map<String, dynamic>))
-          .toList(),
-      setAt: DateTime.parse(map['setAt'] as String),
-      hasTrace: map['hasTrace'] as bool? ?? false,
+      lapId: lapId,
+      lapTimeMs: lapTimeMs,
+      sectors: [
+        if (rawSectors is List)
+          for (final sector in rawSectors) ?_sectorOrNull(sector),
+      ],
+      setAt: setAt,
+      hasTrace: map['hasTrace'] == true,
     );
+  }
+
+  static LapSector? _sectorOrNull(Object? json) {
+    final map = _mapOrNull(json);
+    final number = _intOrNull(map?['sectorNumber']);
+    final time = _intOrNull(map?['sectorTimeMs']);
+    return number == null || time == null ? null : LapSector(sectorNumber: number, sectorTimeMs: time);
   }
 }
 
@@ -276,9 +291,11 @@ class LapTrace {
   factory LapTrace.fromJson(Map<String, dynamic> json) {
     const channels = ['timeMs', 'speedKph', 'throttle', 'brake', 'steer', 'gear', 'rpm'];
     final raw = [for (final name in channels) json[name]];
+    // 빠진 채널이나 숫자가 아닌 표본이 하나라도 있으면 그 채널을 빈 것으로 본다 → 트레이스 전체가 빈 것이 된다
+    // (0으로 채우면 속도·Delta에 가짜 급락이 그려진다).
     final lists = [
       for (final value in raw)
-        if (value is List) [for (final e in value) e is num ? e.toInt() : 0] else <int>[],
+        if (value is List && value.every((e) => e is num)) [for (final e in value) (e as num).toInt()] else <int>[],
     ];
     final length = lists.map((l) => l.length).reduce(math.min);
     List<int> channel(int i) => List.unmodifiable(lists[i].take(length));

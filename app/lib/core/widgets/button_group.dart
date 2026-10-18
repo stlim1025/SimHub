@@ -61,6 +61,7 @@ class _Segment extends StatelessWidget {
       button: true,
       selected: selected,
       excludeSemantics: true,
+      onTap: onTap,
       label: label,
       child: Material(
         color: selected ? palette.border : Colors.transparent,

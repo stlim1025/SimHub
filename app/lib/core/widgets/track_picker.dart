@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
 import '../theme/app_palette.dart';
 import 'track_flag.dart';
 
@@ -16,6 +15,7 @@ const double _titleIconGap = 4;
 const double _titleRadius = 8;
 const EdgeInsets _titlePadding = EdgeInsets.symmetric(horizontal: 4, vertical: 4);
 const String _pickerSemanticLabel = '트랙 선택';
+const double _checkIconSize = 18;
 
 /// 트랙 메뉴의 한 줄(기능 모델과 떨어진 표시용 값).
 @immutable
@@ -111,6 +111,7 @@ class _PickerTitle extends StatelessWidget {
     final style = textStyle ?? Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold);
     return Semantics(
       button: true,
+      enabled: onTap != null,
       label: _pickerSemanticLabel,
       child: InkWell(
         key: const ValueKey('track-picker'),
@@ -153,17 +154,24 @@ class _TrackMenuItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 줄 전체가 메뉴 폭을 채워야 마우스를 올린 강조가 끝까지 칠해진다.
-    return SizedBox(
-      width: kTrackMenuWidth,
-      child: MenuItemButton(
-        leadingIcon: TrackFlag(countryCode: track.countryCode),
-        onPressed: onPressed,
-        child: Text(
-          track.name,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: selected ? AppColors.accent : context.palette.textPrimary,
-            fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+    // 고른 트랙은 색만이 아니라 ✓ 아이콘·선택 상태로도 알린다. 글자색은 표면 대비가 맞는 링크 색.
+    final palette = context.palette;
+    return Semantics(
+      selected: selected,
+      child: SizedBox(
+        width: kTrackMenuWidth,
+        child: MenuItemButton(
+          leadingIcon: TrackFlag(countryCode: track.countryCode),
+          trailingIcon: selected ? Icon(Icons.check, size: _checkIconSize, color: palette.link) : null,
+          autofocus: selected,
+          onPressed: onPressed,
+          child: Text(
+            track.name,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: selected ? palette.link : palette.textPrimary,
+              fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+            ),
           ),
         ),
       ),
