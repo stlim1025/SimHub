@@ -24,7 +24,7 @@ public class SeasonCalendarTests
 
     private static IReadOnlyList<SeasonCalendarRoundDto> Build(
         IReadOnlyList<WeekendRow> weekends, IReadOnlyList<SeasonResultRow> rows, int? seasonTeamId = Ferrari)
-        => SeasonCalendar.Build(GameCode, Calendar, weekends, rows, SeasonSessionSelector.Select(rows), seasonTeamId);
+        => SeasonCalendar.Build(GameCode, Calendar, weekends, SeasonSessionSelector.Select(rows), seasonTeamId);
 
     [Fact]
     public void CalendarOf_KeepsGameCalendarTracksInDisplayOrder()
@@ -116,6 +116,20 @@ public class SeasonCalendarTests
         Assert.Null(round.Points);
         Assert.Equal(5, round.QualiPosition);
         Assert.Null(round.QualiAiDifficulty);           // 0 = 모름
+    }
+
+    [Fact]
+    public void Build_FirstSession_SkipsSupersededDuplicate()
+    {
+        WeekendRow[] weekends = [Weekend(21, 101, "Melbourne", 1, 1)];
+        SeasonResultRow[] rows =
+        [
+            Row(1, 21, "player", 9, 0, SessionType.Practice, SessionKind.Practice1, 1, isPlayer: true, isAi: false),
+            Row(2, 21, "player", 8, 0, SessionType.Practice, SessionKind.Practice1, 2, isPlayer: true, isAi: false),
+            Row(3, 21, "player", 7, 0, SessionType.Practice, SessionKind.Practice2, 3, isPlayer: true, isAi: false),
+        ];
+
+        Assert.Equal(Id(2), Build(weekends, rows)[0].FirstSessionId);   // 옛 중복 P1(1)은 빠진다
     }
 
     [Fact]

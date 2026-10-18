@@ -36,23 +36,20 @@ public static class SeasonCalendar
         string gameCode,
         IReadOnlyList<CalendarTrack> calendar,
         IReadOnlyList<WeekendRow> weekends,
-        IReadOnlyList<SeasonResultRow> rows,
         SeasonSelection selection,
         int? seasonTeamId)
     {
         ArgumentNullException.ThrowIfNull(calendar);
         ArgumentNullException.ThrowIfNull(weekends);
-        ArgumentNullException.ThrowIfNull(rows);
         ArgumentNullException.ThrowIfNull(selection);
 
         var slots = PlaceWeekends(calendar, weekends);
-        var allByWeekend = rows.ToLookup(r => r.WeekendId);
+        // 계산 대상 세션만 본다(옛 중복 세션 제외, D-31).
         var countedByWeekend = selection.CountedRows.ToLookup(r => r.WeekendId);
 
         return slots
             .Select((slot, index) => ToDto(index + 1, slot, gameCode, seasonTeamId, selection,
-                slot.Weekend is { } w ? allByWeekend[w.WeekendId] : [],
-                slot.Weekend is { } c ? countedByWeekend[c.WeekendId] : []))
+                slot.Weekend is { } w ? countedByWeekend[w.WeekendId] : []))
             .ToList();
     }
 
@@ -93,11 +90,10 @@ public static class SeasonCalendar
         string gameCode,
         int? seasonTeamId,
         SeasonSelection selection,
-        IEnumerable<SeasonResultRow> weekendRows,
         IEnumerable<SeasonResultRow> countedRows)
     {
-        var all = weekendRows.ToList();
-        var mine = countedRows.Where(r => r.IsPlayer).ToList();
+        var counted = countedRows.ToList();
+        var mine = counted.Where(r => r.IsPlayer).ToList();
 
         Guid? raceSessionId = slot.Weekend is { } w && selection.MainRaceSessionByWeekend.TryGetValue(w.WeekendId, out var id) ? id : null;
         var myRace = mine.Where(r => r.SessionId == raceSessionId).OrderBy(r => r.CarIndex).FirstOrDefault();
@@ -106,7 +102,7 @@ public static class SeasonCalendar
             .Where(r => r.SessionType == SessionType.Qualifying && r.SessionKind.IsGrandPrixQualifying())
             .OrderByDescending(r => r.ClassifiedAt).ThenByDescending(r => r.SessionId).ThenBy(r => r.CarIndex)
             .FirstOrDefault();
-        var raceHead = raceSessionId is { } race ? all.FirstOrDefault(r => r.SessionId == race) : null;
+        var raceHead = raceSessionId is { } race ? counted.FirstOrDefault(r => r.SessionId == race) : null;
 
         var teamId = myRace?.TeamId
             ?? mine.OrderByDescending(r => r.ClassifiedAt).FirstOrDefault(r => r.TeamId is not null)?.TeamId
@@ -120,7 +116,8 @@ public static class SeasonCalendar
             slot.CountryCode,
             slot.Weekend?.WeekendId,
             raceSessionId,
-            all.OrderBy(r => r.ClassifiedAt).ThenBy(r => r.SessionId).FirstOrDefault()?.SessionId,
+            // 옛 중복 세션(선별에서 빠진 것)이 아니라 계산 대상 세션 중 첫 세션.
+            counted.OrderBy(r => r.ClassifiedAt).ThenBy(r => r.SessionId).FirstOrDefault()?.SessionId,
             team?.Name,
             team?.Color,
             myRace?.Position,
