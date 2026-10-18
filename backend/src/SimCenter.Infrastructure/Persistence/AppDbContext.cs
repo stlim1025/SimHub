@@ -21,6 +21,8 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, ITransactionRunner
     public DbSet<Track> Tracks => Set<Track>();
     public DbSet<Lap> Laps => Set<Lap>();
     public DbSet<LapSector> LapSectors => Set<LapSector>();
+    public DbSet<LapSnapshot> LapSnapshots => Set<LapSnapshot>();
+    public DbSet<LapTelemetryTrace> LapTelemetryTraces => Set<LapTelemetryTrace>();
     public DbSet<ProcessedEvent> ProcessedEvents => Set<ProcessedEvent>();
     public DbSet<AgentDevice> AgentDevices => Set<AgentDevice>();
     public DbSet<AgentPairingCode> AgentPairingCodes => Set<AgentPairingCode>();

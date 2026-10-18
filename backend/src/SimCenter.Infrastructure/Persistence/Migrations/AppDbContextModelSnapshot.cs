@@ -273,6 +273,11 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(20)")
                         .HasColumnName("game_code");
 
+                    b.Property<string>("GameMode")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("game_mode");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean")
                         .HasColumnName("is_deleted");
@@ -382,6 +387,240 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_lap_sectors_lap_id_sector_number");
 
                     b.ToTable("lap_sectors", (string)null);
+                });
+
+            modelBuilder.Entity("SimCenter.Domain.Entities.LapSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int?>("ActualTyreCompound")
+                        .HasColumnType("integer")
+                        .HasColumnName("actual_tyre_compound");
+
+                    b.Property<int?>("AirTempC")
+                        .HasColumnType("integer")
+                        .HasColumnName("air_temp_c");
+
+                    b.Property<double?>("BrakeDamageFrontLeft")
+                        .HasColumnType("double precision")
+                        .HasColumnName("brake_damage_front_left");
+
+                    b.Property<double?>("BrakeDamageFrontRight")
+                        .HasColumnType("double precision")
+                        .HasColumnName("brake_damage_front_right");
+
+                    b.Property<double?>("BrakeDamageRearLeft")
+                        .HasColumnType("double precision")
+                        .HasColumnName("brake_damage_rear_left");
+
+                    b.Property<double?>("BrakeDamageRearRight")
+                        .HasColumnType("double precision")
+                        .HasColumnName("brake_damage_rear_right");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<int?>("DiffuserDamage")
+                        .HasColumnType("integer")
+                        .HasColumnName("diffuser_damage");
+
+                    b.Property<int?>("EngineDamage")
+                        .HasColumnType("integer")
+                        .HasColumnName("engine_damage");
+
+                    b.Property<double?>("ErsDeployedJ")
+                        .HasColumnType("double precision")
+                        .HasColumnName("ers_deployed_j");
+
+                    b.Property<double?>("ErsHarvestedJ")
+                        .HasColumnType("double precision")
+                        .HasColumnName("ers_harvested_j");
+
+                    b.Property<double?>("ErsStoreEndJ")
+                        .HasColumnType("double precision")
+                        .HasColumnName("ers_store_end_j");
+
+                    b.Property<double?>("ErsStoreStartJ")
+                        .HasColumnType("double precision")
+                        .HasColumnName("ers_store_start_j");
+
+                    b.Property<int?>("FloorDamage")
+                        .HasColumnType("integer")
+                        .HasColumnName("floor_damage");
+
+                    b.Property<int?>("FrontLeftWingDamage")
+                        .HasColumnType("integer")
+                        .HasColumnName("front_left_wing_damage");
+
+                    b.Property<int?>("FrontRightWingDamage")
+                        .HasColumnType("integer")
+                        .HasColumnName("front_right_wing_damage");
+
+                    b.Property<double?>("FuelEndKg")
+                        .HasColumnType("double precision")
+                        .HasColumnName("fuel_end_kg");
+
+                    b.Property<double?>("FuelRemainingLaps")
+                        .HasColumnType("double precision")
+                        .HasColumnName("fuel_remaining_laps");
+
+                    b.Property<double?>("FuelStartKg")
+                        .HasColumnType("double precision")
+                        .HasColumnName("fuel_start_kg");
+
+                    b.Property<int?>("GearboxDamage")
+                        .HasColumnType("integer")
+                        .HasColumnName("gearbox_damage");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<Guid>("LapId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("lap_id");
+
+                    b.Property<int?>("RainForecastPercent")
+                        .HasColumnType("integer")
+                        .HasColumnName("rain_forecast_percent");
+
+                    b.Property<int?>("RearWingDamage")
+                        .HasColumnType("integer")
+                        .HasColumnName("rear_wing_damage");
+
+                    b.Property<int?>("SidepodDamage")
+                        .HasColumnType("integer")
+                        .HasColumnName("sidepod_damage");
+
+                    b.Property<int?>("TeamId")
+                        .HasColumnType("integer")
+                        .HasColumnName("team_id");
+
+                    b.Property<int?>("TrackTempC")
+                        .HasColumnType("integer")
+                        .HasColumnName("track_temp_c");
+
+                    b.Property<int?>("TyreAgeLaps")
+                        .HasColumnType("integer")
+                        .HasColumnName("tyre_age_laps");
+
+                    b.Property<double?>("TyreDamageFrontLeft")
+                        .HasColumnType("double precision")
+                        .HasColumnName("tyre_damage_front_left");
+
+                    b.Property<double?>("TyreDamageFrontRight")
+                        .HasColumnType("double precision")
+                        .HasColumnName("tyre_damage_front_right");
+
+                    b.Property<double?>("TyreDamageRearLeft")
+                        .HasColumnType("double precision")
+                        .HasColumnName("tyre_damage_rear_left");
+
+                    b.Property<double?>("TyreDamageRearRight")
+                        .HasColumnType("double precision")
+                        .HasColumnName("tyre_damage_rear_right");
+
+                    b.Property<double?>("TyreWearEndFrontLeft")
+                        .HasColumnType("double precision")
+                        .HasColumnName("tyre_wear_end_front_left");
+
+                    b.Property<double?>("TyreWearEndFrontRight")
+                        .HasColumnType("double precision")
+                        .HasColumnName("tyre_wear_end_front_right");
+
+                    b.Property<double?>("TyreWearEndRearLeft")
+                        .HasColumnType("double precision")
+                        .HasColumnName("tyre_wear_end_rear_left");
+
+                    b.Property<double?>("TyreWearEndRearRight")
+                        .HasColumnType("double precision")
+                        .HasColumnName("tyre_wear_end_rear_right");
+
+                    b.Property<double?>("TyreWearStartFrontLeft")
+                        .HasColumnType("double precision")
+                        .HasColumnName("tyre_wear_start_front_left");
+
+                    b.Property<double?>("TyreWearStartFrontRight")
+                        .HasColumnType("double precision")
+                        .HasColumnName("tyre_wear_start_front_right");
+
+                    b.Property<double?>("TyreWearStartRearLeft")
+                        .HasColumnType("double precision")
+                        .HasColumnName("tyre_wear_start_rear_left");
+
+                    b.Property<double?>("TyreWearStartRearRight")
+                        .HasColumnType("double precision")
+                        .HasColumnName("tyre_wear_start_rear_right");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<int?>("VisualTyreCompound")
+                        .HasColumnType("integer")
+                        .HasColumnName("visual_tyre_compound");
+
+                    b.Property<string>("Weather")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("weather");
+
+                    b.HasKey("Id")
+                        .HasName("pk_lap_snapshots");
+
+                    b.HasIndex("LapId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_lap_snapshots_lap_id");
+
+                    b.ToTable("lap_snapshots", (string)null);
+                });
+
+            modelBuilder.Entity("SimCenter.Domain.Entities.LapTelemetryTrace", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<Guid>("LapId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("lap_id");
+
+                    b.Property<byte[]>("Payload")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("payload");
+
+                    b.Property<int>("ResolutionM")
+                        .HasColumnType("integer")
+                        .HasColumnName("resolution_m");
+
+                    b.Property<int>("SampleCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("sample_count");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_lap_telemetry_traces");
+
+                    b.HasIndex("LapId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_lap_telemetry_traces_lap_id");
+
+                    b.ToTable("lap_telemetry_traces", (string)null);
                 });
 
             modelBuilder.Entity("SimCenter.Domain.Entities.ProcessedEvent", b =>
@@ -684,9 +923,18 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("CountryCode")
+                        .HasMaxLength(2)
+                        .HasColumnType("character varying(2)")
+                        .HasColumnName("country_code");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("display_order");
 
                     b.Property<string>("GameCode")
                         .IsRequired()
@@ -915,6 +1163,26 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                     b.Navigation("Lap");
                 });
 
+            modelBuilder.Entity("SimCenter.Domain.Entities.LapSnapshot", b =>
+                {
+                    b.HasOne("SimCenter.Domain.Entities.Lap", null)
+                        .WithOne("Snapshot")
+                        .HasForeignKey("SimCenter.Domain.Entities.LapSnapshot", "LapId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_lap_snapshots_laps_lap_id");
+                });
+
+            modelBuilder.Entity("SimCenter.Domain.Entities.LapTelemetryTrace", b =>
+                {
+                    b.HasOne("SimCenter.Domain.Entities.Lap", null)
+                        .WithOne()
+                        .HasForeignKey("SimCenter.Domain.Entities.LapTelemetryTrace", "LapId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_lap_telemetry_traces_laps_lap_id");
+                });
+
             modelBuilder.Entity("SimCenter.Domain.Entities.RaceWeekend", b =>
                 {
                     b.HasOne("SimCenter.Domain.Entities.Season", "Season")
@@ -974,6 +1242,8 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("SimCenter.Domain.Entities.Lap", b =>
                 {
                     b.Navigation("Sectors");
+
+                    b.Navigation("Snapshot");
                 });
 
             modelBuilder.Entity("SimCenter.Domain.Entities.Season", b =>
