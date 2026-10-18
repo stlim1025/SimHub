@@ -2,24 +2,28 @@ using SimCenter.Application.Common;
 using SimCenter.Application.Common.Exceptions;
 using SimCenter.Application.Common.Interfaces;
 using SimCenter.Application.Rankings;
+using SimCenter.Application.Seasons.Queries.Detail;
 using SimCenter.Domain.Entities;
 using SimCenter.Domain.Enums;
 
 namespace SimCenter.Application.Seasons.Queries;
 
 /// <summary>
-/// 내 세션 조회(12 §7). 목록은 저장소가 만든 요약 행을 DTO로 옮기고, 상세는 결과 행을 정렬·매핑한다.
-/// 상세의 <c>round</c>는 시즌 상세와 같은 <see cref="RoundNumbering"/> 계산을 쓴다.
+/// 내 세션 조회(12 §7 + docs/15 §11, D-53·D-54). 목록은 저장소가 만든 요약 행을 DTO로 옮기고, 상세는 결과 행을 정렬·매핑한 뒤
+/// F1Laps 카드 재료를 <see cref="SessionDetailAssembler"/>로 만든다. 상세의 <c>round</c>는 시즌 상세와 같은 <see cref="RoundNumbering"/> 계산을 쓴다.
 /// </summary>
 public sealed class SessionQueryService : ISessionQueryService
 {
     private readonly IGameSessionQueryRepository _sessions;
     private readonly ISeasonQueryRepository _seasons;
+    private readonly ISessionDetailQueryRepository _details;
 
-    public SessionQueryService(IGameSessionQueryRepository sessions, ISeasonQueryRepository seasons)
+    public SessionQueryService(
+        IGameSessionQueryRepository sessions, ISeasonQueryRepository seasons, ISessionDetailQueryRepository details)
     {
         _sessions = sessions;
         _seasons = seasons;
+        _details = details;
     }
 
     public async Task<PagedResult<SessionSummaryDto>> GetMySessionsAsync(
@@ -30,7 +34,11 @@ public sealed class SessionQueryService : ISessionQueryService
         var (rows, total) = await _sessions.GetMyPageAsync(
             userId, sessionType, window.Skip, window.PageSize, cancellationToken);
 
-        var items = rows.Select(ToSummary).ToList();
+        var seasonNumbers = rows.Any(r => r.SeasonId.HasValue)
+            ? SeasonNumbering.Assign(await _details.GetMySeasonOrderAsync(userId, cancellationToken))
+            : new Dictionary<Guid, int>();
+
+        var items = rows.Select(row => ToSummary(row, seasonNumbers)).ToList();
         return new PagedResult<SessionSummaryDto>(window.Page, window.PageSize, total, items);
     }
 
@@ -47,8 +55,27 @@ public sealed class SessionQueryService : ISessionQueryService
             .ToList();
 
         var round = await FindRoundAsync(session, cancellationToken);
+        var seasonNumber = await FindSeasonNumberAsync(userId, session.SeasonId, cancellationToken);
 
-        return new SessionDetailDto(ToHeader(session, results, round), ToResultDtos(session.GameCode, results));
+        // docs/15 §11.4: 내 랩·스냅샷은 한 쿼리로(랩마다 따로 읽지 않는다).
+        var lapRows = await _details.GetMySessionLapsAsync(
+            userId, session.GameCode, session.TrackId, session.SessionKey, cancellationToken);
+        var weekendQualifying = session.SessionType == SessionType.Qualifying && session.RaceWeekendId is { } weekendId
+            ? await _details.GetMyWeekendQualifyingAsync(userId, weekendId, cancellationToken)
+            : [];
+
+        var extras = SessionDetailAssembler.Build(session, results, lapRows, weekendQualifying);
+
+        return new SessionDetailDto(
+            ToHeader(session, results, round, seasonNumber, extras.Weather),
+            ToResultDtos(session, results),
+            extras.QualifyingPositions,
+            extras.MyBestLap,
+            extras.Setup,
+            extras.Laps,
+            extras.EngineWear,
+            extras.TyreStints,
+            extras.Penalties);
     }
 
     /// <summary>시즌에 속한 세션이면 그 시즌의 주말 순서에서 라운드 번호를 찾는다. 아니면(또는 주말 행이 없으면) null.</summary>
@@ -64,9 +91,20 @@ public sealed class SessionQueryService : ISessionQueryService
         return rounds.TryGetValue(weekendId, out var round) ? round : null;
     }
 
+    private async Task<int?> FindSeasonNumberAsync(Guid userId, Guid? seasonId, CancellationToken cancellationToken)
+    {
+        if (seasonId is null)
+        {
+            return null;
+        }
+
+        var numbers = SeasonNumbering.Assign(await _details.GetMySeasonOrderAsync(userId, cancellationToken));
+        return SeasonNumbering.Of(numbers, seasonId);
+    }
+
     // ---- 매핑: 목록 ----
 
-    private static SessionSummaryDto ToSummary(SessionSummaryRow row) => new(
+    private static SessionSummaryDto ToSummary(SessionSummaryRow row, IReadOnlyDictionary<Guid, int> seasonNumbers) => new(
         row.SessionId,
         row.ClassifiedAt,
         row.TrackName,
@@ -79,11 +117,15 @@ public sealed class SessionQueryService : ISessionQueryService
         row.MyGridPosition,
         row.MyResultStatus?.ToString(),
         NullIfNoTime(row.MyBestLapTimeMs),
-        row.MyPoints);
+        row.MyPoints,
+        row.CountryCode,
+        row.MyPosition is null ? null : ToMyTeam(row.GameCode, row.MyTeamId),
+        SeasonNumbering.Of(seasonNumbers, row.SeasonId));
 
     // ---- 매핑: 상세 ----
 
-    private static SessionDetailHeaderDto ToHeader(GameSession session, IReadOnlyList<SessionResult> results, int? round)
+    private static SessionDetailHeaderDto ToHeader(
+        GameSession session, IReadOnlyList<SessionResult> results, int? round, int? seasonNumber, string? weather)
     {
         var me = results.FirstOrDefault(r => r.IsPlayer);
 
@@ -104,21 +146,32 @@ public sealed class SessionQueryService : ISessionQueryService
             session.TotalLaps,
             session.AiDifficulty,
             session.IsNetworkGame,
-            round);
+            round,
+            session.Track?.CountryCode,
+            me is null ? null : ToMyTeam(session.GameCode, me.TeamId),
+            seasonNumber,
+            weather);
     }
 
-    private static List<SessionResultDto> ToResultDtos(string gameCode, IReadOnlyList<SessionResult> results)
+    private static MyTeamDto ToMyTeam(string gameCode, int? teamId)
+    {
+        var team = TeamCatalog.Resolve(gameCode, teamId);
+        return new MyTeamDto(team.Name, team.Color);
+    }
+
+    private static List<SessionResultDto> ToResultDtos(GameSession session, IReadOnlyList<SessionResult> results)
     {
         // 최고 랩: 기록이 있는 행(0 초과) 중 최소값. 같으면 모두 true, 기록이 없으면 아무도 아님.
         var fastestLapMs = results
             .Where(r => r.BestLapTimeMs > 0)
             .Select(r => (int?)r.BestLapTimeMs)
             .Min();
+        var gaps = ClassificationGaps.For(session.SessionType, results);
 
-        return results.Select(r => ToResultDto(gameCode, r, fastestLapMs)).ToList();
+        return results.Select(r => ToResultDto(session.GameCode, r, fastestLapMs, gaps)).ToList();
     }
 
-    private static SessionResultDto ToResultDto(string gameCode, SessionResult result, int? fastestLapMs)
+    private static SessionResultDto ToResultDto(string gameCode, SessionResult result, int? fastestLapMs, ClassificationGaps gaps)
     {
         var team = TeamCatalog.Resolve(gameCode, result.TeamId);
         var bestLapMs = NullIfNoTime(result.BestLapTimeMs);
@@ -143,7 +196,9 @@ public sealed class SessionQueryService : ISessionQueryService
             result.NumPitStops,
             result.Points,
             result.ResultStatus.ToString(),
-            ToStintDtos(result));
+            ToStintDtos(result),
+            gaps.GapMs(result),
+            gaps.PositionChange(result));
     }
 
     private static List<TyreStintViewDto> ToStintDtos(SessionResult result)

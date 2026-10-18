@@ -9,7 +9,7 @@ public sealed record TeamInfo(string Name, string Color);
 /// 게임별 팀 이름·색 정적 카탈로그(D-33, 12 §7.4). 불변 상수 표라 헌장의 "Global Static 금지"(가변 전역 상태)에 해당하지 않는다.
 /// 시즌·세션 결과와 랩 목록·상세의 팀(15 §4.2)이 함께 쓴다.
 /// 지금은 <see cref="GameCodes.F1_25"/>만 등록한다 — 2025 팀 10개, 2024 차량 10개(ID 185~), 2026 시즌팩 팀 9개(ID 476~) + Audi·Cadillac,
-/// F1 Generic(41), My Team(104). 없는 ID는 <c>Team {id}</c> + 중립 회색, 팀이 없으면 <c>Unknown Team</c> + 중립 회색.
+/// v1.26 2026 그리드(ID 220~230, docs/15 §11.1 D-52), F1 Generic(41), My Team(104). 없는 ID는 <c>Team {id}</c> + 중립 회색, 팀이 없으면 <c>Unknown Team</c> + 중립 회색.
 /// </summary>
 public static class TeamCatalog
 {
@@ -23,6 +23,10 @@ public static class TeamCatalog
     private const int Season2026TeamCount = 9;
     private const int AudiTeamId = 485;
     private const int CadillacTeamId = 486;
+    private const int Grid2026FirstTeamId = 220;
+    private const int Grid2026BaseTeamCount = 9;
+    private const int Grid2026AudiTeamId = 229;
+    private const int Grid2026CadillacTeamId = 230;
     private const int F1GenericTeamId = 41;
     private const int MyTeamId = 104;
 
@@ -76,8 +80,18 @@ public static class TeamCatalog
             teams[Season2026FirstTeamId + i] = BaseTeams[i];
         }
 
-        teams[AudiTeamId] = new TeamInfo("Audi", "#BB0A30");
-        teams[CadillacTeamId] = new TeamInfo("Cadillac", "#B5B5B5");
+        // docs/15 §11.1 D-52: v1.26 2026 그리드 220~228 = 기본 팀 0~8 순서, 229 Audi, 230 Cadillac.
+        for (var i = 0; i < Grid2026BaseTeamCount; i++)
+        {
+            teams[Grid2026FirstTeamId + i] = BaseTeams[i];
+        }
+
+        var audi = new TeamInfo("Audi", "#BB0A30");
+        var cadillac = new TeamInfo("Cadillac", "#B5B5B5");
+        teams[AudiTeamId] = audi;
+        teams[CadillacTeamId] = cadillac;
+        teams[Grid2026AudiTeamId] = audi;
+        teams[Grid2026CadillacTeamId] = cadillac;
         teams[F1GenericTeamId] = new TeamInfo("F1 Generic", FallbackColor);
         teams[MyTeamId] = new TeamInfo("My Team", "#6366F1");
         return teams;
