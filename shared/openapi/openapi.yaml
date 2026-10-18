@@ -277,7 +277,10 @@ paths:
       summary: 내 랩 상세 조회 (Lap Details)
       description: |
         랩 + 트랙 국가 + 같은 세션 키의 내 세션(`sessionId`, 없으면 null) + 랩 끝 스냅샷(`car`·`conditions`, 없으면 null)
-        + 비교 대상(`comparison` = 같은 트랙·게임의 내 최고 유효 랩, 이 랩일 수도 있음, 없으면 null, D-46).
+        + 드라이버 어시스트(`assists`, D-51, 하나도 모르면 null)
+        + 비교 대상(`comparison`, docs/15 §10 D-51 — `compare`로 고른다, 기본 = 같은 트랙·게임의 내 최고 유효 랩, 이 랩일 수도 있음).
+        비교 대상이 없으면 `comparison` = null이고 `comparisonUnavailable`이 까닭이다(`compare=none`이면 둘 다 null).
+        남의 랩은 **랭킹 적격 랩만** 비교 대상이 된다(리더보드에 이미 공개된 기록). 이름은 랭킹과 같은 규칙(이름 비공개 = "익명 드라이버", D-39).
         남의 랩과 없는 랩은 같은 404다(D-34). `lapId`가 GUID 형식이 아니면 경로가 맞지 않아 404다.
       operationId: getMyLap
       parameters:
@@ -288,6 +291,44 @@ paths:
           schema:
             type: string
             format: uuid
+        - name: compare
+          in: query
+          required: false
+          description: |
+            비교 대상(대소문자 무시). `best` = 내 최고 유효 랩 · `leaderboard` = 같은 트랙·게임의 랭킹 적격 랩(모든 사용자, 전체 기간) 중 최고
+            · `lap` = `compareLapId`의 랩(내 랩이면 무엇이든, 남의 랩이면 랭킹 적격만) · `none` = 비교 안 함
+          schema:
+            type: string
+            enum: [best, leaderboard, lap, none]
+            default: best
+        - name: compareLapId
+          in: query
+          required: false
+          description: "`compare=lap`일 때 필수(없으면 400). 그 밖에는 무시"
+          schema:
+            type: string
+            format: uuid
+        - name: sameTeam
+          in: query
+          required: false
+          description: "`best`·`leaderboard`만: 이 랩과 같은 팀. 이 랩의 팀을 모르면 적용하지 않는다(`appliedFilters`에 빠짐)"
+          schema:
+            type: boolean
+            default: false
+        - name: sameSessionType
+          in: query
+          required: false
+          description: "`best`·`leaderboard`만: 이 랩과 같은 세션 유형"
+          schema:
+            type: boolean
+            default: false
+        - name: sameAssists
+          in: query
+          required: false
+          description: "`best`·`leaderboard`만: 이 랩과 같은 어시스트(아는 칸만 비교). 어시스트를 하나도 모르면 적용하지 않는다"
+          schema:
+            type: boolean
+            default: false
       responses:
         '200':
           description: 내 랩 상세 조회 성공
@@ -295,6 +336,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LapDetailResponse'
+        '400':
+          $ref: '#/components/responses/400ValidationError'
         '401':
           $ref: '#/components/responses/401Unauthorized'
         '404':
@@ -334,6 +377,39 @@ paths:
           $ref: '#/components/responses/401Unauthorized'
         '404':
           description: 트레이스 없음 (남의 랩·없는 랩 포함)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          $ref: '#/components/responses/500ServerError'
+
+  /laps/{lapId}/trace:
+    get:
+      summary: 비교 랩 텔레메트리 트레이스 조회 (Compare with)
+      description: |
+        랩 상세의 비교 랩 트레이스(docs/15 §10, D-51). 모양은 `/me/laps/{lapId}/trace`와 같다.
+        공개 규칙: 내 랩이거나 남의 **랭킹 적격** 랩만. 남의 비공개 랩·없는 랩·트레이스 없는 랩은 모두 같은 404다(D-34).
+      operationId: getComparableLapTrace
+      parameters:
+        - name: lapId
+          in: path
+          required: true
+          description: 랩 ID (GUID)
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 트레이스 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LapTraceResponse'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '404':
+          description: 트레이스 없음 (남의 비공개 랩·없는 랩 포함)
           content:
             application/json:
               schema:
@@ -1362,16 +1438,75 @@ components:
           nullable: true
           example: 4
 
+    LapAssists:
+      type: object
+      description: |
+        드라이버 어시스트(docs/15 §10, D-51). 랩 스냅샷 `details`의 status(TC·ABS)·session(나머지) 값. 모르는 값은 null
+      properties:
+        tractionControl:
+          type: string
+          nullable: true
+          enum: [Off, Medium, Full]
+        antiLockBrakes:
+          type: string
+          nullable: true
+          enum: [Off, On]
+        steeringAssist:
+          type: string
+          nullable: true
+          enum: [Off, On]
+        brakingAssist:
+          type: string
+          nullable: true
+          enum: [Off, Low, Medium, High]
+        gearbox:
+          type: string
+          nullable: true
+          enum: [Manual, ManualSuggested, Automatic]
+        racingLine:
+          type: string
+          nullable: true
+          enum: [Off, CornersOnly, Full]
+
     LapComparison:
       type: object
-      description: 비교 대상 = 같은 트랙·게임의 내 최고 유효 랩(D-46)
+      description: |
+        비교 대상 랩(docs/15 §10, D-51). `isMine`이면 `displayName` = null.
+        남의 랩이면 랭킹과 같은 이름 규칙(이름 비공개·지운 사용자 = "익명 드라이버", D-39)
       required:
+        - kind
         - lapId
         - lapTimeMs
         - sectors
         - setAt
         - hasTrace
+        - isMine
+        - sessionType
+        - appliedFilters
       properties:
+        kind:
+          type: string
+          enum: [best, leaderboard, lap]
+          example: leaderboard
+        isMine:
+          type: boolean
+          example: false
+        displayName:
+          type: string
+          nullable: true
+          example: "익명 드라이버"
+        team:
+          $ref: '#/components/schemas/TeamRef'
+          nullable: true
+        sessionType:
+          type: string
+          example: TimeTrial
+        appliedFilters:
+          type: array
+          description: 실제로 적용한 필터. 이 랩의 값을 모르는 필터(팀 없음·어시스트 모름)는 빠진다
+          items:
+            type: string
+            enum: [sameTeam, sameSessionType, sameAssists]
         lapId:
           type: string
           format: uuid
@@ -1416,9 +1551,19 @@ components:
         conditions:
           $ref: '#/components/schemas/LapConditions'
           nullable: true
+        assists:
+          $ref: '#/components/schemas/LapAssists'
+          nullable: true
         comparison:
           $ref: '#/components/schemas/LapComparison'
           nullable: true
+        comparisonUnavailable:
+          type: string
+          nullable: true
+          enum: [notFound, noMatch]
+          description: |
+            `comparison`이 null인 까닭. `notFound` = 고른 랩 ID가 없거나 남의 비공개(랭킹 부적격) 랩(둘을 구분하지 않는다, D-34)
+            · `noMatch` = 조건(필터 포함)에 맞는 최고 랩이 없음. `compare=none`이면 null
 
     LapTraceResponse:
       type: object
