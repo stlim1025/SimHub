@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/layout/layout_constants.dart';
+import '../../../core/layout/page_padding.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/empty_state_card.dart';
@@ -50,7 +50,7 @@ class _SeasonsPageState extends ConsumerState<SeasonsPage> {
     final seasons = ref.watch(seasonsProvider(_page));
 
     return ListView(
-      padding: kPagePadding,
+      padding: pagePadding(context),
       children: [
         Wrap(
           alignment: WrapAlignment.spaceBetween,

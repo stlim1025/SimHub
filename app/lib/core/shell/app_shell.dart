@@ -7,7 +7,7 @@ import '../../features/auth/application/sign_out.dart';
 import '../../features/live_laps/application/live_laps_controller.dart';
 import '../../features/live_laps/presentation/new_lap_snack_bar.dart';
 import '../../features/profile/presentation/team_avatar.dart';
-import '../layout/layout_constants.dart';
+import '../layout/page_padding.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_palette.dart';
 import 'nav_items.dart';
@@ -52,10 +52,10 @@ class AppShell extends ConsumerWidget {
 
     final content = Expanded(
       key: _contentKey,
-      child: Align(
-        alignment: Alignment.topCenter,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: kContentMaxWidth),
+      // 본문은 전체 폭(스크롤 영역이 화면 끝까지), 내용 정렬·최대 폭은 각 화면의 pagePadding이 맡는다.
+      child: LayoutBuilder(
+        builder: (context, constraints) => ContentAreaWidth(
+          width: constraints.maxWidth,
           child: child,
         ),
       ),

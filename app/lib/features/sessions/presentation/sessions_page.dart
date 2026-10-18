@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/layout/layout_constants.dart';
+import '../../../core/layout/page_padding.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/empty_state_card.dart';
 import '../../../core/widgets/error_retry.dart';
@@ -76,7 +76,7 @@ class _SessionsPageState extends ConsumerState<SessionsPage> {
     final sessions = ref.watch(sessionsProvider(_query));
 
     return ListView(
-      padding: kPagePadding,
+      padding: pagePadding(context),
       children: [
         Wrap(
           spacing: _titleGap,

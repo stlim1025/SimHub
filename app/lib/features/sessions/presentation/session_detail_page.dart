@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/layout/equal_height.dart';
-import '../../../core/layout/layout_constants.dart';
+import '../../../core/layout/page_padding.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/error_retry.dart';
@@ -54,7 +54,7 @@ class SessionDetailPage extends ConsumerWidget {
     final backSeasonId = from == kSessionFromSeason ? header?.seasonId : null;
 
     return ListView(
-      padding: kPagePadding,
+      padding: pagePadding(context),
       children: [
         _Header(
           header: header,

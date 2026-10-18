@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/layout/layout_constants.dart';
+import '../../../core/layout/page_padding.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/section_card.dart';
 import 'connected_devices_card.dart';
@@ -26,7 +26,7 @@ class TelemetryAppPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: kPagePadding,
+      padding: pagePadding(context),
       children: [
         Text(
           'Telemetry App',

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/layout/layout_constants.dart';
+import '../../../core/layout/page_padding.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../application/laps_providers.dart';
 import 'empty_laps_card.dart';
@@ -37,7 +37,7 @@ class _NoLaps extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: kPagePadding,
+      padding: pagePadding(context),
       children: const [
         Align(alignment: Alignment.centerLeft, child: LapsTrackPicker(trackId: null)),
         SizedBox(height: _titleGap),

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/layout/layout_constants.dart';
+import '../../../core/layout/page_padding.dart';
 import '../../../core/widgets/button_group.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/pagination_bar.dart';
@@ -80,7 +80,7 @@ class _TrackLapsViewState extends ConsumerState<TrackLapsView> {
     final shown = laps.valueOrNull ?? (laps.isLoading ? _lastData : null);
 
     return ListView(
-      padding: kPagePadding,
+      padding: pagePadding(context),
       children: [
         Align(
           alignment: Alignment.centerLeft,
