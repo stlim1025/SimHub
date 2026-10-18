@@ -52,6 +52,9 @@ public sealed class GameSessionQueryRepository : IGameSessionQueryRepository
                         .OrderBy(r => r.CarIndex)
                         .Select(r => new { r.Position, r.GridPosition, r.ResultStatus, r.BestLapTimeMs, r.Points, r.TeamId })
                         .FirstOrDefault(),
+                    // 같은 주말에 Race2가 있으면 스프린트 주말(그 주말 Race = 스프린트).
+                    IsSprintWeekend = session.RaceWeekendId != null && _context.GameSessions.Any(o =>
+                        o.UserId == userId && o.RaceWeekendId == session.RaceWeekendId && o.SessionKind == SessionKind.Race2),
                 })
             .Skip(skip)
             .Take(take)
@@ -74,7 +77,8 @@ public sealed class GameSessionQueryRepository : IGameSessionQueryRepository
                 row.Me?.Points,
                 row.GameCode,
                 row.CountryCode,
-                row.Me?.TeamId))
+                row.Me?.TeamId,
+                row.IsSprintWeekend))
             .ToList();
 
         return (items, total);

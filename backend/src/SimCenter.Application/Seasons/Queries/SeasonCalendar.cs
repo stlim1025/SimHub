@@ -103,6 +103,12 @@ public static class SeasonCalendar
             .OrderByDescending(r => r.ClassifiedAt).ThenByDescending(r => r.SessionId).ThenBy(r => r.CarIndex)
             .FirstOrDefault();
         var raceHead = raceSessionId is { } race ? counted.FirstOrDefault(r => r.SessionId == race) : null;
+        var sprintWeekend = SessionPositions.IsSprintWeekend(counted.Select(r => r.SessionKind));
+        // 스프린트 주말의 Race(본 레이스가 아닌 것) = 스프린트.
+        var mySprint = sprintWeekend
+            ? mine.Where(r => r.SessionKind == SessionKind.Race && r.SessionId != raceSessionId)
+                .OrderByDescending(r => r.ClassifiedAt).ThenBy(r => r.CarIndex).FirstOrDefault()
+            : null;
 
         var teamId = myRace?.TeamId
             ?? mine.OrderByDescending(r => r.ClassifiedAt).FirstOrDefault(r => r.TeamId is not null)?.TeamId
@@ -120,12 +126,29 @@ public static class SeasonCalendar
             counted.OrderBy(r => r.ClassifiedAt).ThenBy(r => r.SessionId).FirstOrDefault()?.SessionId,
             team?.Name,
             team?.Color,
-            myRace?.Position,
+            SessionPositions.Known(myRace?.Position),
             myRaces.Count == 0 ? null : PointTotals.ToInt(myRaces.Sum(r => (long)r.Points)),
-            myQuali?.Position,
+            SessionPositions.Known(myQuali?.Position),
             KnownDifficulty(raceHead?.AiDifficulty),
-            KnownDifficulty(myQuali?.AiDifficulty));
+            KnownDifficulty(myQuali?.AiDifficulty),
+            SessionPositions.Known(mySprint?.Position),
+            sprintWeekend,
+            WeekendSessions(counted, sprintWeekend));
     }
+
+    /// <summary>그 주말 세션(계산 대상) 표시 순서대로 + 내 순위.</summary>
+    private static List<SeasonCalendarSessionDto> WeekendSessions(IEnumerable<SeasonResultRow> counted, bool sprintWeekend)
+        => counted
+            .GroupBy(r => r.SessionId)
+            .Select(g => g.ToList())
+            .OrderBy(s => SessionPositions.WeekendOrder(s[0].SessionKind, sprintWeekend))
+            .ThenBy(s => s[0].ClassifiedAt)
+            .ThenBy(s => s[0].SessionId)
+            .Select(s => new SeasonCalendarSessionDto(
+                s[0].SessionId,
+                s[0].SessionKind.ToString(),
+                SessionPositions.Known(s.Where(r => r.IsPlayer).OrderBy(r => r.CarIndex).FirstOrDefault()?.Position)))
+            .ToList();
 
     /// <summary>AI 난이도 0 = 모름(가져온 세션 등) → null.</summary>
     private static int? KnownDifficulty(int? value) => value is > 0 ? value : null;

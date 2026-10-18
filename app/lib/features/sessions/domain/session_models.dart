@@ -1,5 +1,6 @@
 import '../../laps/domain/lap_models.dart';
 import 'session_detail_models.dart';
+import 'session_display.dart' show knownPosition;
 
 export 'session_detail_models.dart';
 
@@ -24,6 +25,7 @@ class SessionSummary {
     this.countryCode,
     this.myTeam,
     this.seasonNumber,
+    this.isSprintWeekend = false,
   });
 
   final String sessionId;
@@ -55,6 +57,9 @@ class SessionSummary {
   /// 시즌 번호(1부터). 시즌이 아니면 null.
   final int? seasonNumber;
 
+  /// 같은 주말에 Race2가 있다(스프린트 주말) — `Race` = 스프린트. 표시는 `sessionKindName(kind, sprintWeekend:)`.
+  final bool isSprintWeekend;
+
   factory SessionSummary.fromJson(Map<String, dynamic> json) => SessionSummary(
         sessionId: json['sessionId'] as String,
         classifiedAt: DateTime.parse(json['classifiedAt'] as String),
@@ -64,14 +69,16 @@ class SessionSummary {
         gameMode: json['gameMode'] as String,
         seasonId: json['seasonId'] as String?,
         carCount: json['carCount'] as int,
-        myPosition: json['myPosition'] as int?,
-        myGridPosition: json['myGridPosition'] as int?,
+        // 순위 0 = 모름(옛 서버 대비) → null.
+        myPosition: knownPosition(json['myPosition'] as int?),
+        myGridPosition: knownPosition(json['myGridPosition'] as int?),
         myResultStatus: json['myResultStatus'] as String?,
         myBestLapTimeMs: json['myBestLapTimeMs'] as int?,
         myPoints: json['myPoints'] as int?,
         countryCode: jsonString(json['countryCode']),
         myTeam: LapTeam.fromJsonOrNull(json['myTeam']),
         seasonNumber: jsonInt(json['seasonNumber']),
+        isSprintWeekend: json['isSprintWeekend'] == true,
       );
 }
 
@@ -118,6 +125,7 @@ class SessionDetailHeader extends SessionSummary {
     super.countryCode,
     super.myTeam,
     super.seasonNumber,
+    super.isSprintWeekend,
     required this.totalLaps,
     required this.aiDifficulty,
     required this.isNetworkGame,
@@ -154,6 +162,7 @@ class SessionDetailHeader extends SessionSummary {
       countryCode: summary.countryCode,
       myTeam: summary.myTeam,
       seasonNumber: summary.seasonNumber,
+      isSprintWeekend: summary.isSprintWeekend,
       totalLaps: json['totalLaps'] as int,
       aiDifficulty: json['aiDifficulty'] as int,
       isNetworkGame: json['isNetworkGame'] as bool,

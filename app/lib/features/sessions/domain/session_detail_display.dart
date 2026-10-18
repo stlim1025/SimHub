@@ -37,14 +37,17 @@ const Map<String, String> _sessionKindNames = {
   'SprintShootout3': 'Sprint Shootout 3',
   'ShortSprintShootout': 'Short Sprint Shootout',
   'OneShotSprintShootout': 'One-Shot Sprint Shootout',
+  kSprintKind: 'Sprint',
   'Race': 'Race',
   'Race2': 'Race 2',
   'Race3': 'Race 3',
   'TimeTrial': 'Time Trial',
 };
 
-/// 세션 종류 전체 이름(`Qualifying3` → `Qualifying 3`, docs/15 §11.2). 모르면 `-`.
-String sessionKindName(String kind) => _sessionKindNames[kind] ?? kNoValueText;
+/// 세션 종류 전체 이름(`Qualifying3` → `Qualifying 3`, docs/15 §11.2). 스프린트 주말이면 `Race` → `Sprint`,
+/// `Race2` → `Race`([displaySessionKind]). 모르면 `-`.
+String sessionKindName(String kind, {bool sprintWeekend = false}) =>
+    _sessionKindNames[displaySessionKind(kind, sprintWeekend: sprintWeekend)] ?? kNoValueText;
 
 /// 모드 줄(`Driver Career Season 1`, 시즌이 아니면 `Grand Prix` 등, D-54).
 String gameModeLine(String gameMode, int? seasonNumber) {

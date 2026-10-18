@@ -251,4 +251,33 @@ void main() {
       expect(seasonTitle(season), 'Grand Prix · 2026.01.05');
     });
   });
+
+  group('SeasonCalendarRound.fromJson', () {
+    test('스프린트·세션 목록을 읽고 순위 0은 null', () {
+      final r = SeasonCalendarRound.fromJson({
+        'round': 5,
+        'trackId': 't5',
+        'trackName': 'Shanghai',
+        'racePosition': 2,
+        'qualiPosition': 0,
+        'sprintPosition': 4,
+        'isSprintWeekend': true,
+        'sessions': [
+          {'sessionId': 's1', 'sessionKind': 'SprintShootout1', 'myPosition': 9},
+          {'sessionId': 's2', 'sessionKind': 'Qualifying2', 'myPosition': 0},
+        ],
+      });
+      expect((r.racePosition, r.qualiPosition, r.sprintPosition, r.isSprintWeekend), (2, null, 4, true));
+      expect(r.sessions.map((s) => (s.sessionId, s.sessionKind, s.myPosition)), [
+        ('s1', 'SprintShootout1', 9),
+        ('s2', 'Qualifying2', null),
+      ]);
+    });
+
+    test('옛 서버(필드 없음)면 스프린트 아님·빈 세션 목록', () {
+      final r = SeasonCalendarRound.fromJson({'round': 1, 'trackId': 't1', 'trackName': 'Melbourne'});
+      expect((r.sprintPosition, r.isSprintWeekend), (null, false));
+      expect(r.sessions, isEmpty);
+    });
+  });
 }

@@ -37,7 +37,10 @@ public sealed record SeasonDetailDto(
 /// <see cref="Round"/> = 표 안 순번(1부터). 달리지 않은 라운드는 <c>WeekendId</c>·세션·결과가 null이고 팀은 시즌 팀이다.
 /// <see cref="RaceSessionId"/> = 본 레이스(없으면 null), <see cref="FirstSessionId"/> = 그 주말 첫 세션.
 /// <see cref="Points"/> = 레이스(스프린트 포함) 내 점수 합, <see cref="QualiPosition"/> = 마지막 예선(슛아웃 제외) 내 순위.
-/// AI 난이도는 모르면(0) null.
+/// AI 난이도는 모르면(0) null. 순위는 모르면(0) null.
+/// <see cref="IsSprintWeekend"/> = 그 주말에 Race2가 있다(그 주말의 Race = 스프린트, Race2 = 본 레이스).
+/// <see cref="SprintPosition"/> = 스프린트 내 순위. <see cref="Sessions"/> = 그 주말 계산 대상 세션 전부(표시 순서,
+/// <see cref="SessionPositions.WeekendOrder"/> → 시각).
 /// </summary>
 public sealed record SeasonCalendarRoundDto(
     int Round,
@@ -53,7 +56,13 @@ public sealed record SeasonCalendarRoundDto(
     int? Points,
     int? QualiPosition,
     int? RaceAiDifficulty,
-    int? QualiAiDifficulty);
+    int? QualiAiDifficulty,
+    int? SprintPosition,
+    bool IsSprintWeekend,
+    IReadOnlyList<SeasonCalendarSessionDto> Sessions);
+
+/// <summary>시즌 탭 그랑프리 메뉴의 세션 1개. 내 결과가 없거나 순위를 모르면 <see cref="MyPosition"/>은 null.</summary>
+public sealed record SeasonCalendarSessionDto(Guid SessionId, string SessionKind, int? MyPosition);
 
 /// <summary>
 /// 라운드(그랑프리 주말) 한 줄. <see cref="WinnerName"/>은 본 레이스 1위(없으면 null),

@@ -2222,6 +2222,38 @@ components:
           nullable: true
           description: 그 예선의 AI 난이도. 모르면 null
           example: 105
+        sprintPosition:
+          type: integer
+          nullable: true
+          description: 스프린트(스프린트 주말의 `Race`) 내 순위. 없거나 모르면 null
+          example: 4
+        isSprintWeekend:
+          type: boolean
+          description: 그 주말에 `Race2`가 있다 — `Race` = 스프린트, `Race2` = 본 레이스(`racePosition`)
+          example: true
+        sessions:
+          type: array
+          description: 그 주말 세션(계산 대상) — 연습 → 스프린트 슛아웃 → 스프린트 → 예선 → 레이스 순, 같은 단계는 시각 순
+          items:
+            $ref: '#/components/schemas/SeasonCalendarSession'
+
+    SeasonCalendarSession:
+      type: object
+      required:
+        - sessionId
+        - sessionKind
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        sessionKind:
+          type: string
+          example: "SprintShootout1"
+        myPosition:
+          type: integer
+          nullable: true
+          description: 내 순위. 결과가 없거나 모르면(0) null
+          example: 9
 
     SeasonRound:
       type: object
@@ -2497,6 +2529,12 @@ components:
           nullable: true
           description: 시즌 번호 — 같은 게임·같은 모드의 내 시즌을 첫 세션 시각 순으로 1부터 센 값. 시즌이 아니면 null (D-54)
           example: 1
+        isSprintWeekend:
+          type: boolean
+          description: |
+            같은 그랑프리 주말에 `Race2` 세션이 있다(스프린트 주말). 그러면 `Race` = 스프린트, `Race2` = 본 레이스로 표시한다.
+            `myPosition`·`myGridPosition`은 순위를 모르면(저장값 0) null.
+          example: false
 
     SessionSummaryPage:
       type: object

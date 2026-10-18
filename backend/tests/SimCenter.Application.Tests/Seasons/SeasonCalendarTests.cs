@@ -99,6 +99,50 @@ public class SeasonCalendarTests
     }
 
     [Fact]
+    public void Build_SprintWeekend_SprintPositionAndSessionsInWeekendOrder()
+    {
+        WeekendRow[] weekends = [Weekend(21, 102, "Shanghai", 1, 2)];
+        SeasonResultRow[] rows =
+        [
+            Row(1, 21, "player", 7, 0, SessionType.Practice, SessionKind.Practice1, 1, isPlayer: true, isAi: false),
+            // 시각이 뒤섞여도 표시 순서는 연습 → 슛아웃 → 스프린트 → 예선 → 레이스.
+            Row(4, 21, "player", 0, 0, SessionType.Qualifying, SessionKind.Qualifying1, 2, isPlayer: true, isAi: false),
+            Row(2, 21, "player", 9, 0, SessionType.Qualifying, SessionKind.SprintShootout1, 3, isPlayer: true, isAi: false),
+            Row(3, 21, "player", 4, 5, SessionType.Race, SessionKind.Race, 4, isPlayer: true, isAi: false),
+            Row(6, 21, "player", 2, 18, SessionType.Race, SessionKind.Race2, 6, isPlayer: true, isAi: false),
+        ];
+
+        var round = Build(weekends, rows)[1];
+
+        Assert.True(round.IsSprintWeekend);
+        Assert.Equal(4, round.SprintPosition);
+        Assert.Equal(2, round.RacePosition);
+        Assert.Null(round.QualiPosition);               // 순위 0 = 모름
+        Assert.Equal(
+            new[] { (Id(1), "Practice1", (int?)7), (Id(2), "SprintShootout1", 9), (Id(3), "Race", 4), (Id(4), "Qualifying1", null), (Id(6), "Race2", 2) },
+            round.Sessions.Select(s => (s.SessionId, s.SessionKind, s.MyPosition)));
+    }
+
+    [Fact]
+    public void Build_NormalWeekend_NoSprint()
+    {
+        WeekendRow[] weekends = [Weekend(21, 101, "Melbourne", 1, 1)];
+        SeasonResultRow[] rows =
+        [
+            Row(2, 21, "player", 3, 15, SessionType.Race, SessionKind.Race, 2, isPlayer: true, isAi: false),
+            Row(1, 21, "player", 5, 0, SessionType.Qualifying, SessionKind.ShortQualifying, 1, isPlayer: true, isAi: false),
+        ];
+
+        var round = Build(weekends, rows)[0];
+
+        Assert.False(round.IsSprintWeekend);
+        Assert.Null(round.SprintPosition);
+        Assert.Equal(3, round.RacePosition);
+        Assert.Equal(new[] { Id(1), Id(2) }, round.Sessions.Select(s => s.SessionId));
+        Assert.Empty(Build([], [])[0].Sessions);
+    }
+
+    [Fact]
     public void Build_QualifyingOnlyRound_FirstSessionLink_AndUnknownDifficultyNull()
     {
         WeekendRow[] weekends = [Weekend(21, 101, "Melbourne", 1, 1)];

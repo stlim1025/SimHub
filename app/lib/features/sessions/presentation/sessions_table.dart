@@ -95,7 +95,7 @@ class _TrackCell extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(color: context.palette.link, fontWeight: FontWeight.w600),
             ),
-            bottom: sessionKindName(session.sessionKind),
+            bottom: sessionKindName(session.sessionKind, sprintWeekend: session.isSprintWeekend),
           ),
         ),
       ],

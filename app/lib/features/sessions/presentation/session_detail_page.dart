@@ -115,7 +115,7 @@ class _Header extends StatelessWidget {
               Text(value?.trackName ?? _fallbackTitle, style: style),
               if (value != null)
                 Text(
-                  sessionKindName(value.sessionKind),
+                  sessionKindName(value.sessionKind, sprintWeekend: value.isSprintWeekend),
                   style: style?.copyWith(fontWeight: FontWeight.w500, color: context.palette.textMuted),
                 ),
             ],

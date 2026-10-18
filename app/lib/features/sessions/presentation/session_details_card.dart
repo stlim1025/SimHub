@@ -54,7 +54,7 @@ class SessionDetailsCard extends StatelessWidget {
             DetailItem('Difficulty', text: header.aiDifficulty > 0 ? '${header.aiDifficulty}' : kNoValueText),
             DetailItem('Conditions', value: _ConditionsValue(weather: header.weather)),
             DetailItem('Team', value: _TeamValue(header: header)),
-            DetailItem('Session Type', text: sessionKindName(header.sessionKind)),
+            DetailItem('Session Type', text: sessionKindName(header.sessionKind, sprintWeekend: header.isSprintWeekend)),
             DetailItem('Game Mode', text: gameModeLine(header.gameMode, header.seasonNumber)),
             if (seasonId != null && round != null)
               DetailItem('Round', value: _LinkValue(text: 'R$round', onTap: () => context.go(seasonLocation(seasonId)))),
@@ -191,7 +191,7 @@ class _QualifyingPositions extends StatelessWidget {
               children: [
                 Text(q.label, style: muted),
                 Text(
-                  q.position == null ? kNoValueText : 'P${q.position}',
+                  switch (knownPosition(q.position)) { final p? => 'P$p', null => kNoValueText },
                   style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                 ),
               ],

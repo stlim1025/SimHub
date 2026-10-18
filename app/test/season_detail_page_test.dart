@@ -66,6 +66,37 @@ const List<SeasonCalendarRound> _calendar = [
   SeasonCalendarRound(round: 3, trackId: 't3', trackName: 'Suzuka', countryCode: 'JP', myTeamName: 'Ferrari'),
 ];
 
+/// 스프린트 주말 1라운드(Shanghai): 연습 · 슛아웃 · 스프린트 · 예선(순위 모름) · 레이스(Race2).
+SeasonDetail _sprintDetail() => seasonDetailOf(
+      'se1',
+      season: seasonOf('se1', myPoints: 23),
+      calendar: const [
+        SeasonCalendarRound(
+          round: 1,
+          trackId: 't1',
+          trackName: 'Shanghai',
+          countryCode: 'CN',
+          weekendId: 'w1',
+          raceSessionId: 'sr',
+          firstSessionId: 'sp',
+          myTeamName: 'Ferrari',
+          myTeamColor: '#E8002D',
+          racePosition: 2,
+          sprintPosition: 4,
+          points: 23,
+          raceAiDifficulty: 100,
+          isSprintWeekend: true,
+          sessions: [
+            SeasonCalendarSession(sessionId: 'sp', sessionKind: 'Practice1', myPosition: 7),
+            SeasonCalendarSession(sessionId: 'sx', sessionKind: 'SprintShootout1', myPosition: 9),
+            SeasonCalendarSession(sessionId: 'ss', sessionKind: 'Race', myPosition: 4),
+            SeasonCalendarSession(sessionId: 'sq', sessionKind: 'Qualifying1'),
+            SeasonCalendarSession(sessionId: 'sr', sessionKind: 'Race2', myPosition: 2),
+          ],
+        ),
+      ],
+    );
+
 /// 라운드 2개 · 드라이버 3명(AI 2명 + 나) · 팀 2개.
 SeasonDetail _detail({String id = 'se1', int seasonNumber = 1}) => seasonDetailOf(
       id,
@@ -222,6 +253,7 @@ void main() {
       for (final header in ['GRAND PRIX', 'TEAM', 'RACE', 'PTS (87)', 'QUALI', 'DIFF']) {
         expect(find.text(header), findsOneWidget, reason: header);
       }
+      expect(find.text('SPRINT'), findsNothing); // 스프린트 주말이 없으면 열도 없다
       expect(find.text('Bahrain'), findsOneWidget);
       expect(find.text('Jeddah'), findsOneWidget);
       expect(find.text('Suzuka'), findsOneWidget);
@@ -243,6 +275,46 @@ void main() {
       // 본 레이스로 간다. from=season은 세션 화면의 뒤로 가기가 이 시즌으로 돌아오게 하는 표시다.
       expect(_location(router), '/sessions/r1?from=season');
       expect(find.text('session:r1'), findsOneWidget);
+    });
+
+    testWidgets('SeasonDetail_Season_SprintWeekend_SprintColumn_SessionMenuNavigates', (t) async {
+      final repo = FakeSeasonsRepository(details: {'se1': _sprintDetail()});
+      final router = await _pumpPage(t, repo, size: const Size(1280, 2400));
+
+      expect(find.text('SPRINT'), findsOneWidget);
+      expect(find.text('P4'), findsOneWidget); // 스프린트
+      expect(find.text('P2'), findsOneWidget); // 본 레이스(Race2)
+      expect(find.text('P0'), findsNothing); // 예선 순위 모름은 빈칸
+
+      await t.tap(find.text('Shanghai'));
+      await t.pumpAndSettle();
+
+      // 그 주말 세션 전부(서버 순서) + 내 순위. 스프린트 주말이라 Race = Sprint, Race2 = Race.
+      for (final label in ['Practice 1', 'Sprint Shootout 1', 'Sprint', 'Qualifying 1', 'Race']) {
+        expect(find.descendant(of: find.byType(MenuItemButton), matching: find.text(label)), findsOneWidget, reason: label);
+      }
+      expect(find.text('P9'), findsOneWidget);
+      final unknownQuali = find.byKey(const ValueKey('season-calendar-session-sq'));
+      expect(find.descendant(of: unknownQuali, matching: find.text('-')), findsOneWidget);
+
+      await t.tap(find.byKey(const ValueKey('season-calendar-session-ss')));
+      await t.pumpAndSettle();
+
+      expect(_location(router), '/sessions/ss?from=season');
+    });
+
+    testWidgets('SeasonDetail_Season_1280And700_FitsCard_DiffHiddenWhenNarrow', (t) async {
+      for (final (width, diffVisible) in [(1280.0, true), (700.0, false), (375.0, false)]) {
+        final repo = FakeSeasonsRepository(details: {'se1': _sprintDetail()});
+        await _pumpPage(t, repo, size: Size(width, 2400));
+
+        expect(t.takeException(), isNull);
+        expect(find.text('DIFF'), diffVisible ? findsOneWidget : findsNothing, reason: '$width');
+        final card = t.getRect(find.byType(Card).first);
+        final last = t.getRect(find.text(diffVisible ? 'DIFF' : 'QUALI'));
+        expect(last.right, lessThanOrEqualTo(card.right), reason: '$width');
+        expect(find.text('SPRINT'), width < 600 ? findsNothing : findsOneWidget, reason: '$width');
+      }
     });
 
     testWidgets('SeasonDetail_Season_NoRace_LinksFirstSession_UndrivenNotTappable', (t) async {

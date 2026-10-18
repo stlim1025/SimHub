@@ -301,6 +301,42 @@ public class SessionQueryServiceTests
     }
 
     [Fact]
+    public async Task GetSessions_UnknownPositionZero_IsNull_TeamKept_SprintFlagPassed()
+    {
+        _sessions.Page = ([SummaryRow() with { MyPosition = 0, MyGridPosition = 0, IsSprintWeekend = true }], 1);
+
+        var item = (await _sut.GetMySessionsAsync(UserId, null, 1, 20)).Items.Single();
+
+        Assert.Null(item.MyPosition);
+        Assert.Null(item.MyGridPosition);
+        Assert.NotNull(item.MyTeam);
+        Assert.True(item.IsSprintWeekend);
+    }
+
+    [Fact]
+    public async Task GetSession_UnknownPosition_NullInHeader_SortedLast_AndSprintWeekend()
+    {
+        _details.SprintWeekends.Add(Id(22));
+        AddSession(
+            weekendId: Id(22),
+            results: [Result(carIndex: 0, position: 0, isPlayer: true), Result(carIndex: 1, position: 1)]);
+
+        var detail = await _sut.GetMySessionAsync(UserId, Id(1));
+
+        Assert.Null(detail.Session.MyPosition);
+        Assert.True(detail.Session.IsSprintWeekend);
+        Assert.Equal(new[] { 1, 0 }, detail.Results.Select(r => r.CarIndex));
+    }
+
+    [Fact]
+    public async Task GetSession_NoWeekend_NotSprintWeekend()
+    {
+        AddSession(results: [Result(carIndex: 0, position: 1)]);
+
+        Assert.False((await _sut.GetMySessionAsync(UserId, Id(1))).Session.IsSprintWeekend);
+    }
+
+    [Fact]
     public async Task GetSession_NoPlayerRow_MyFieldsNull()
     {
         AddSession(results: [Result(carIndex: 0, position: 1)]);
@@ -511,6 +547,11 @@ public class SessionQueryServiceTests
             LastWeekendId = raceWeekendId;
             return Task.FromResult<IReadOnlyList<WeekendQualifyingRow>>(WeekendQualifying);
         }
+
+        public HashSet<Guid> SprintWeekends { get; } = new();
+
+        public Task<bool> IsMySprintWeekendAsync(Guid userId, Guid raceWeekendId, CancellationToken cancellationToken = default)
+            => Task.FromResult(SprintWeekends.Contains(raceWeekendId));
 
         public Task<IReadOnlyList<SeasonOrderRow>> GetMySeasonOrderAsync(Guid userId, CancellationToken cancellationToken = default)
         {
