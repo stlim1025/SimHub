@@ -206,13 +206,13 @@ void main() {
     expect(find.text('Dashboard'), findsOneWidget); // 사이드바가 그대로 있다.
   });
 
-  testWidgets('로그아웃 상태에서 /settings는 /login으로 보낸다', (t) async {
+  testWidgets('로그아웃 상태에서 /settings는 돌아올 주소를 담아 /login으로 보낸다', (t) async {
     final router = await _pumpApp(t, user: null);
 
     router.go('/settings');
     await t.pumpAndSettle();
 
-    expect(_location(router), '/login');
+    expect(_location(router), '/login?from=%2Fsettings');
   });
 
   testWidgets('사이드바의 Sessions 메뉴로 이동한다', (t) async {

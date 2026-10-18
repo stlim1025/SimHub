@@ -18,9 +18,7 @@ import '../../features/seasons/presentation/seasons_page.dart';
 import '../../features/sessions/presentation/session_detail_page.dart';
 import '../../features/sessions/presentation/sessions_page.dart';
 import '../shell/app_shell.dart';
-
-/// 인증 화면(로그인 상태에서는 들어갈 수 없는 경로).
-const _authGatePaths = {'/login', '/splash'};
+import 'auth_redirect.dart';
 
 /// 인증 상태 변화에 라우터를 재평가시키는 리스너 + 리다이렉트 가드.
 class _RouterNotifier extends ChangeNotifier {
@@ -30,25 +28,14 @@ class _RouterNotifier extends ChangeNotifier {
 
   final Ref _ref;
 
+  /// 세션 복원·로그인으로 보낼 때 원래 주소를 `from`으로 지켜 돌아온다(공유 링크·새로고침, [resolveAuthRedirect]).
   String? redirect(BuildContext context, GoRouterState state) {
     final auth = _ref.read(authControllerProvider);
-    final loc = state.matchedLocation;
-
-    // 세션 복원 중이면 splash 유지.
-    if (auth.isLoading || !auth.hasValue) {
-      return loc == '/splash' ? null : '/splash';
-    }
-
-    final loggedIn = auth.value != null;
-
-    if (!loggedIn) {
-      return loc == '/login' ? null : '/login';
-    }
-    // 예전 홈 경로(`/home`)와 인증 화면은 모두 Dashboard(`/`)로 보낸다.
-    if (loc == '/home' || _authGatePaths.contains(loc)) {
-      return '/';
-    }
-    return null;
+    return resolveAuthRedirect(
+      loading: auth.isLoading || !auth.hasValue,
+      loggedIn: auth.value != null,
+      uri: state.uri,
+    );
   }
 }
 

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:simcenter_app/features/profile/application/team_logos_provider.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:simcenter_app/core/realtime/ranking_hub_client.dart';
@@ -209,7 +210,11 @@ void main() {
   testWidgets('프로필 사진을 고른 사용자는 사이드바에 팀 코드 원이 보인다', (t) async {
     setViewSize(t, _wide);
     final user = testUser.copyWith(preferences: testUser.preferences.copyWith(avatarTeam: 'MCL'));
-    final container = ProviderContainer(overrides: [fakeAuth(user)]);
+    // 로고 파일 유무(PC마다 다름)와 상관없이 코드 원을 본다.
+    final container = ProviderContainer(overrides: [
+      fakeAuth(user),
+      teamLogoPathsProvider.overrideWith((ref) async => const {}),
+    ]);
     addTearDown(container.dispose);
     await container.read(authControllerProvider.future);
 

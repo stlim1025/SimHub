@@ -110,14 +110,18 @@ void main() {
 
     testWidgets('로고 파일을 불러오지 못하면 코드로 대신한다', (t) async {
       await _pumpAvatar(t, overrides: [
-        teamLogoPathsProvider.overrideWith((ref) async => const {'FER': 'assets/team_logos/FER.png'}),
+        teamLogoPathsProvider.overrideWith((ref) async => const {'FER': 'assets/team_logos/missing-FER.png'}),
       ]);
 
-      expect(find.text('FER'), findsOneWidget); // 테스트 자산 묶음에는 FER.png가 없다 → errorBuilder.
+      // 없는 파일 → errorBuilder. 로고를 실제로 넣은 PC에서도 같게 없는 이름을 쓴다.
+      expect(find.text('FER'), findsOneWidget);
     });
 
     testWidgets('저장소 기본 자산(README만)으로는 로고가 없다', (t) async {
-      await _pumpAvatar(t);
+      // 실제 자산 묶음은 PC마다 다르다(로고를 넣은 PC) — 저장소 기본 상태를 흉내 낸다.
+      await _pumpAvatar(t, overrides: [
+        assetBundleProvider.overrideWithValue(_ManifestBundle(const ['assets/team_logos/README.md'])),
+      ]);
 
       expect(_logoImage(t), isNull);
       expect(find.text('FER'), findsOneWidget);
