@@ -9,6 +9,10 @@
 
 ## 1. 한 줄 상태
 
+**(추가 2026-10-18 저녁) P8 세션 목록·상세 F1Laps 맞추기(D-52~D-54) — 목록: 국기 · 내 팀(Team 221 → Ferrari: 게임 v1.26 팀 ID 220~230 매핑) · 모드 + 시즌 · P 배지.
+상세: Details · Final Classification · Laps · Engine Wear · Tyre Stints 2종 · Penalties. 게임 모드 78(2026 Driver Career) 수정 — 새 세션부터 시즌으로 묶임.
+테스트: Backend Application 603 · Domain 67 · 통합 70 · App 607 · Agent 401. 실제 세션 데이터 존재 확인(마이애미 Q1~Q3), 그 화면 육안 확인은 사용자 계정으로 해야 함.**
+
 **(추가 2026-10-18) 랩 상세 Compare with(내 최고 · 리더보드 최고 · 랩 ID · 비교 안 함)·Filter by·Driver Assists·Share(D-51), 공유 링크가 스플래시 뒤에도 유지,
 TT 플래시백 랩이 무효로 저장되던 버그 수정(랩 끝 게임 판정을 따름, 기존 13·14랩 보정), 팀 로고 8개는 로컬 `app/assets/team_logos`(저장소 밖).
 테스트: Backend 673(Domain 67 + Application 537 + 통합 69) · App 577 · Agent 400.**

@@ -432,6 +432,9 @@ invalid 랩도 우선 기록은 해두고 랭킹 집계에서는 사용하지 �
 | D-49 | 텔레메트리 전부 수집: 트레이스 `extra` 채널 맵(118채널)·스냅샷 `details`(셋업·엔진 마모·이벤트 등)·세션 `lapHistory`·`lapPositions`, 봉투 768KiB / 허브 1MiB | 06, 15, agent, backend |
 | D-50 | 새 랩 실시간 표시: RankingHub `LapRecorded`를 주인에게만(LapDto + trackId, 무효 랩 포함), 앱은 알림 + 목록 갱신(자동 이동 없음) | 05, 15, backend, app |
 | D-51 | 랩 상세 비교 대상 = 내 최고 / 리더보드 최고(전 사용자·전체 기간) / 다른 랩 ID / 비교 안 함, 필터 = 같은 팀·세션 유형·어시스트, 남의 랩은 랭킹 적격만(없음·비공개는 같은 `notFound`), Driver Assists = `lap_snapshots` 정수 열 6개 | 04, 15, backend, app |
+| D-52 | F1 25 v1.26 팀 ID 220~230(2026 그리드, 실제 결과의 드라이버 이름으로 확인)을 `TeamCatalog`에, 게임 모드 78 = DriverCareer(예전 Other 세션 키는 유지) | 12, 15, agent, backend |
+| D-53 | 세션 상세 = Details · Final Classification · Laps · Engine Wear · Tyre Stints 2종 · Penalties(D-49 수집 값으로 서버가 조립), 벌칙·침해 이름은 서버 정적 카탈로그 | 04, 15, backend, app |
+| D-54 | 세션 목록 = F1Laps 배치(국기 · 내 팀 · 모드 + 시즌 번호(같은 게임·모드 안 순서) · P 배지 · 날짜/시각) | 15, backend, app |
 
 **MVP 관련 결정은 모두 확정되어 각 문서에 반영 완료.** 본 설계 문서 세트 최종 승인 시,
 **Phase 0(계약 & 스캐폴딩)** 상세 설계로 진입합니다.
