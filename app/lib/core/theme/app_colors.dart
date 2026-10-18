@@ -71,4 +71,25 @@ class AppColors {
 
   /// 밝은 팀 색 원 위의 코드 글자색(대비 확보용 진한 남색).
   static const Color onTeamLight = Color(0xFF111827);
+
+  /// 촘촘한 표(F1Laps 배치, docs/15 §2)의 머리줄 배경 — 표면보다 살짝 어둡다.
+  static const Color tableHeader = Color(0xFF14161F);
+  static const Color lightTableHeader = Color(0xFFF1F2F6);
+
+  /// 눌러서 여는 값(랩타임)의 글자. `accent` 인디고 계열로 표면 대비 4.5:1 이상(어두운 표면은 밝게, 흰 표면은 진하게).
+  static const Color link = Color(0xFF818CF8);
+  static const Color lightLink = Color(0xFF4F46E5);
+
+  /// 표 행에 마우스를 올렸을 때의 배경(`accent` 약 8%).
+  static const Color rowHover = Color(0x146366F1);
+
+  /// 텔레메트리 비교 랩(내 최고 랩) 선 — 청록. 이 랩은 `accent`.
+  static const Color comparisonLap = Color(0xFF2DD4BF);
+  static const Color lightComparisonLap = Color(0xFF0D9488);
+
+  /// 타이어 마모 단계(docs/15 §2.3: 25% 미만 · 50% 미만 · 75% 미만 · 그 이상). 차 그림의 바퀴·앞날개를 칠한다(두 테마 공통).
+  static const Color wearLow = Color(0xFF22C55E);
+  static const Color wearMedium = Color(0xFFFACC15);
+  static const Color wearHigh = Color(0xFFF97316);
+  static const Color wearCritical = Color(0xFFEF4444);
 }

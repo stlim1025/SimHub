@@ -13,6 +13,7 @@ import 'package:simcenter_app/features/devices/data/devices_repository.dart';
 import 'package:simcenter_app/features/devices/presentation/telemetry_app_page.dart';
 import 'package:simcenter_app/features/laps/data/laps_repository.dart';
 import 'package:simcenter_app/features/laps/presentation/laps_page.dart';
+import 'package:simcenter_app/features/laps/presentation/track_laps_page.dart';
 import 'package:simcenter_app/features/profile/data/profile_repository.dart';
 import 'package:simcenter_app/features/profile/presentation/settings_page.dart';
 import 'package:simcenter_app/features/ranking/data/ranking_repository.dart';
@@ -269,7 +270,7 @@ void main() {
 
     expect(_location(router), '/laps/tracks/t1');
     expect(find.text('Dashboard'), findsOneWidget); // 사이드바가 그대로 있다.
-    expect(find.byTooltip('트랙 목록'), findsOneWidget);
+    expect(find.byType(TrackLapsPage), findsOneWidget);
   });
 
   group('화면 전환 애니메이션 없음', () {
@@ -326,7 +327,7 @@ void main() {
       await t.pump();
       await t.pump();
 
-      expect(find.byTooltip('트랙 목록'), findsOneWidget);
+      expect(find.byType(TrackLapsPage), findsOneWidget);
       expect(find.byType(LapsPage), findsNothing);
     });
 

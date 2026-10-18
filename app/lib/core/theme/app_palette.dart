@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
 
-/// 테마마다 다른 색 묶음(docs/14 §7): 배경·표면·테두리·글자, 그리고 글자로 쓰는 상태색(오류·정상)과 시상대 금·은·동.
-/// [ThemeData.extensions]에 실리고, 위젯은 `context.palette`로 읽는다. 강조색·팀 색·배경으로만 쓰는 상태색(예: 초록 저장 버튼)처럼
-/// 두 테마가 같은 색은 [AppColors]를 그대로 쓴다. 밝은 테마의 글자색은 밝은 표면 대비 약 4.5:1 이상이다.
+/// 테마마다 다른 색 묶음(docs/14 §7): 배경·표면·테두리·글자, 그리고 글자로 쓰는 상태색(오류·정상)과 시상대 금·은·동,
+/// 표 머리줄·링크 글자·비교 랩 선(docs/15 §2). [ThemeData.extensions]에 실리고, 위젯은 `context.palette`로 읽는다.
+/// 강조색·팀 색·배경으로만 쓰는 상태색(예: 초록 저장 버튼)처럼 두 테마가 같은 색은 [AppColors]를 그대로 쓴다.
+/// 밝은 테마의 글자색은 밝은 표면 대비 약 4.5:1 이상이다.
 @immutable
 class AppPalette extends ThemeExtension<AppPalette> {
   const AppPalette({
@@ -18,6 +19,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
     required this.podiumGold,
     required this.podiumSilver,
     required this.podiumBronze,
+    required this.tableHeader,
+    required this.link,
+    required this.comparison,
   });
 
   /// 어두운 테마(기존 P6 화면 그대로).
@@ -32,6 +36,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
     podiumGold: AppColors.podiumGold,
     podiumSilver: AppColors.podiumSilver,
     podiumBronze: AppColors.podiumBronze,
+    tableHeader: AppColors.tableHeader,
+    link: AppColors.link,
+    comparison: AppColors.comparisonLap,
   );
 
   /// 밝은 테마.
@@ -46,6 +53,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
     podiumGold: AppColors.lightPodiumGold,
     podiumSilver: AppColors.lightPodiumSilver,
     podiumBronze: AppColors.lightPodiumBronze,
+    tableHeader: AppColors.lightTableHeader,
+    link: AppColors.lightLink,
+    comparison: AppColors.lightComparisonLap,
   );
 
   final Color background;
@@ -64,6 +74,15 @@ class AppPalette extends ThemeExtension<AppPalette> {
   final Color podiumGold;
   final Color podiumSilver;
   final Color podiumBronze;
+
+  /// 촘촘한 표의 머리줄 배경(표면보다 살짝 어둡다, docs/15 §2.1).
+  final Color tableHeader;
+
+  /// 눌러서 여는 값(랩타임 등)의 글자. 강조색 계열이면서 표면 대비 4.5:1 이상.
+  final Color link;
+
+  /// 텔레메트리 비교 랩(내 최고 랩) 선 — 청록(docs/15 §2.3). 이 랩은 강조색.
+  final Color comparison;
 
   /// 순위 → 시상대 글자색(1·2·3위), 그 외 null.
   Color? podiumFor(int? place) => switch (place) {
@@ -85,6 +104,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
     Color? podiumGold,
     Color? podiumSilver,
     Color? podiumBronze,
+    Color? tableHeader,
+    Color? link,
+    Color? comparison,
   }) =>
       AppPalette(
         background: background ?? this.background,
@@ -97,6 +119,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
         podiumGold: podiumGold ?? this.podiumGold,
         podiumSilver: podiumSilver ?? this.podiumSilver,
         podiumBronze: podiumBronze ?? this.podiumBronze,
+        tableHeader: tableHeader ?? this.tableHeader,
+        link: link ?? this.link,
+        comparison: comparison ?? this.comparison,
       );
 
   @override
@@ -116,6 +141,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
       podiumGold: mix(podiumGold, other.podiumGold),
       podiumSilver: mix(podiumSilver, other.podiumSilver),
       podiumBronze: mix(podiumBronze, other.podiumBronze),
+      tableHeader: mix(tableHeader, other.tableHeader),
+      link: mix(link, other.link),
+      comparison: mix(comparison, other.comparison),
     );
   }
 }
