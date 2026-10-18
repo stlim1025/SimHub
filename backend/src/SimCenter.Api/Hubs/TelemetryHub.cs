@@ -13,12 +13,16 @@ namespace SimCenter.Api.Hubs;
 public sealed class TelemetryHub : Hub
 {
     /// <summary>
-    /// 허브가 받는 메시지 하나의 최대 크기(64KiB). 한도를 넘는 메시지는 Reject가 아니라 <b>연결 종료</b>라 Agent가 같은 Outbox 항목을
-    /// 끝없이 재시도하게 되므로(12 §0) 한도를 명시한다. 가장 큰 <c>SessionClassified</c>(검증 상한: 32대 × 스틴트 8개,
-    /// 비ASCII 이름 64자)는 SignalR 와이어에서 약 32~34KB다 — 허브 프로토콜은 비ASCII를 <c>\uXXXX</c>로 escape하지 않는다.
-    /// 기본 한도(32KB)를 넘기 때문에 64KiB를 명시해야 하며, Agent는 전송 전에 48KiB로 제한한다(12 §5.5).
+    /// 허브가 받는 메시지 하나의 최대 크기(1MiB, D-49). 한도를 넘는 메시지는 Reject가 아니라 <b>연결 종료</b>라 Agent가 같은 Outbox 항목을
+    /// 끝없이 재시도하게 되므로(12 §0) 한도를 명시한다(기본 32KB에 기대지 않는다).
+    /// D-49(텔레메트리 전부 수집)로 LapFinished가 트레이스 추가 채널(<c>trace.extra</c>)·<c>car.details</c>를, SessionClassified가
+    /// 랩별 기록·순위를 실어 64KiB(이전 값)를 넘을 수 있어 1MiB로 올렸다. Agent는 전송 전에 768KiB로 제한하고, 넘으면 트레이스 해상도를
+    /// 10m → 20m → 트레이스 제거 순으로 낮춘다(15 §8).
     /// </summary>
-    public const long MaxMessageBytes = 64 * 1024;
+    public const long MaxMessageBytes = MaxMessageMebibytes * BytesPerMebibyte;
+
+    private const long MaxMessageMebibytes = 1;
+    private const long BytesPerMebibyte = 1024 * 1024;
 
     /// <summary>연결에 유효한 <c>deviceId</c> 클레임이 없을 때의 Reject 사유.</summary>
     private const string MissingDeviceReason = "인증된 장치 정보가 없습니다.";

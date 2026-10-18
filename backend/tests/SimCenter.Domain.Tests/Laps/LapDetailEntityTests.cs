@@ -90,6 +90,23 @@ public class LapDetailEntityTests
     }
 
     [Fact]
+    public void LapSnapshot_DetailsOnly_CountsAsCarData()
+    {
+        var snapshot = new LapSnapshot { Details = "{\"setup\":{\"frontWing\":5}}" };
+
+        Assert.True(snapshot.HasCarData());
+        Assert.False(snapshot.HasConditionsData());
+    }
+
+    [Fact]
+    public void GameSession_Details_DefaultsToNull()
+    {
+        var session = new GameSession { GameCode = "F1_25", SessionKey = "uid:1", SessionRef = "1" };
+
+        Assert.Null(session.Details);
+    }
+
+    [Fact]
     public void LapSnapshot_ZeroValues_StillCountAsData()
     {
         // 0은 "값 없음"이 아니다(손상 0%, 기온 0°C).

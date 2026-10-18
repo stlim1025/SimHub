@@ -1,3 +1,4 @@
+using System.Text.Json;
 using SimCenter.Application.Rankings;
 
 namespace SimCenter.Application.Laps;
@@ -16,8 +17,12 @@ public sealed record LapDetailResponse(
     LapConditionsDto? Conditions,
     LapComparisonDto? Comparison);
 
-/// <summary>랩 끝의 차량 스냅샷(D-44). 바퀴 묶음은 4개 값이 모두 있을 때만 보인다. 퍼센트 0~100, 연료 kg, ERS J.</summary>
+/// <summary>
+/// 랩 끝의 차량 스냅샷(D-44). 바퀴 묶음은 4개 값이 모두 있을 때만 보인다. 퍼센트 0~100, 연료 kg, ERS J.
+/// <see cref="TeamId"/> = 게임 팀 ID(이름·색은 <c>lap.team</c>). <see cref="Details"/> = 그 밖의 값 묶음(D-49, 받은 JSON 객체 그대로, 없으면 null).
+/// </summary>
 public sealed record LapCarSnapshotDto(
+    int? TeamId,
     int? VisualTyreCompound,
     int? ActualTyreCompound,
     int? TyreAgeLaps,
@@ -39,7 +44,8 @@ public sealed record LapCarSnapshotDto(
     double? ErsStoreStartJ,
     double? ErsStoreEndJ,
     double? ErsDeployedJ,
-    double? ErsHarvestedJ);
+    double? ErsHarvestedJ,
+    JsonElement? Details);
 
 /// <summary>바퀴 4개 값.</summary>
 public sealed record WheelValuesDto(double FrontLeft, double FrontRight, double RearLeft, double RearRight);
@@ -57,6 +63,7 @@ public sealed record LapComparisonDto(
 
 /// <summary>
 /// 랩 트레이스(<c>GET /me/laps/{lapId}/trace</c>, 15 §4.2): 거리 <see cref="ResolutionM"/>m 간격 표본 7채널, 모두 <see cref="SampleCount"/> 길이.
+/// <see cref="Extra"/> = 추가 채널 맵(D-49, 이름 → 같은 길이의 실수 배열). 없으면 빈 맵(null이 아니다).
 /// </summary>
 public sealed record LapTraceResponse(
     Guid LapId,
@@ -68,4 +75,5 @@ public sealed record LapTraceResponse(
     IReadOnlyList<int> Brake,
     IReadOnlyList<int> Steer,
     IReadOnlyList<int> Gear,
-    IReadOnlyList<int> Rpm);
+    IReadOnlyList<int> Rpm,
+    IReadOnlyDictionary<string, double[]> Extra);

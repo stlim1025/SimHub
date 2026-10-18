@@ -1,3 +1,4 @@
+using System.Text.Json;
 using SimCenter.Application.Common;
 using SimCenter.Application.Rankings;
 using SimCenter.Domain.Entities;
@@ -51,6 +52,7 @@ public static class LapDtoMapper
         }
 
         return new LapCarSnapshotDto(
+            s.TeamId,
             s.VisualTyreCompound,
             s.ActualTyreCompound,
             s.TyreAgeLaps,
@@ -72,7 +74,20 @@ public static class LapDtoMapper
             s.ErsStoreStartJ,
             s.ErsStoreEndJ,
             s.ErsDeployedJ,
-            s.ErsHarvestedJ);
+            s.ErsHarvestedJ,
+            ToDetails(s.Details));
+    }
+
+    /// <summary>jsonb 원문 → JSON 값(받은 그대로). 원문은 인입 때 객체임을 확인했고 DB가 문법을 보장한다.</summary>
+    private static JsonElement? ToDetails(string? details)
+    {
+        if (details is null)
+        {
+            return null;
+        }
+
+        using var document = JsonDocument.Parse(details);
+        return document.RootElement.Clone();
     }
 
     /// <summary>스냅샷의 날씨 영역. 스냅샷이 없거나 날씨 값이 하나도 없으면 null.</summary>

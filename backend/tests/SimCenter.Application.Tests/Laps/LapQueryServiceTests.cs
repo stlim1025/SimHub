@@ -207,6 +207,41 @@ public class LapQueryServiceTests
     }
 
     [Fact]
+    public async Task Trace_ExtraChannels_AreReturned_EmptyMapWhenNone()
+    {
+        var withExtra = AddLap(Me, 97_003, hasTrace: true);
+        var plain = AddLap(Me, 97_100, hasTrace: true);
+        var extra = new Dictionary<string, double[]> { ["clutch"] = [0.5, 0.25] };
+        _laps.Traces[withExtra.LapId] = Trace(withExtra.LapId, new LapTraceChannels([0, 1], [1, 2], [0, 0], [0, 0], [0, 0], [1, 1], [1, 1], extra));
+        _laps.Traces[plain.LapId] = Trace(plain.LapId, new LapTraceChannels([0, 1], [1, 2], [0, 0], [0, 0], [0, 0], [1, 1], [1, 1]));
+
+        var a = await _sut.GetMyLapTraceAsync(Me, withExtra.LapId);
+        var b = await _sut.GetMyLapTraceAsync(Me, plain.LapId);
+
+        Assert.Equal(new[] { 0.5, 0.25 }, a.Extra["clutch"]);
+        Assert.NotNull(b.Extra);
+        Assert.Empty(b.Extra);
+    }
+
+    [Fact]
+    public async Task Detail_CarDetailsAndTeamId_AreReturned()
+    {
+        var lap = AddLap(Me, 98_448, teamId: 8);
+        _laps.Snapshots[lap.LapId] = new LapSnapshot { LapId = lap.LapId, TeamId = 8, Details = "{\"setup\":{\"frontWing\":5}}" };
+
+        var car = (await _sut.GetMyLapAsync(Me, lap.LapId)).Car;
+
+        Assert.NotNull(car);
+        Assert.Equal(8, car.TeamId);
+        Assert.Equal(5, car.Details!.Value.GetProperty("setup").GetProperty("frontWing").GetInt32());
+    }
+
+    private static LapTelemetryTrace Trace(Guid lapId, LapTraceChannels channels) => new()
+    {
+        LapId = lapId, ResolutionM = 5, SampleCount = channels.TimeMs.Length, Payload = LapTraceCodec.Encode(channels),
+    };
+
+    [Fact]
     public async Task Trace_MissingOrOtherUsers_IsNotFound()
     {
         var withoutTrace = AddLap(Me, 97_003);

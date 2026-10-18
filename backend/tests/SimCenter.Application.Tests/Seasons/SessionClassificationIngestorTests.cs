@@ -247,6 +247,56 @@ public class SessionClassificationIngestorTests
 
     // ---- 재분류(같은 키) ----
 
+    // ── D-49: lapHistory · lapPositions ──
+
+    private static JsonElement Json(string json) => JsonDocument.Parse(json).RootElement.Clone();
+
+    [Fact]
+    public async Task Apply_WithLapHistoryAndPositions_StoresDetailsOnNewSession()
+    {
+        var payload = BasePayload() with
+        {
+            LapHistory = Json("[{\"carIndex\":0,\"laps\":[{\"lapTimeMs\":83452}],\"unknownField\":true}]"),
+            LapPositions = Json("{\"positions\":[[1,2]]}"),
+        };
+
+        await ApplyStored(Envelope(payload));
+
+        using var details = JsonDocument.Parse(Assert.Single(_sessions.Items).Details!);
+        Assert.Equal(83452, details.RootElement.GetProperty("lapHistory")[0].GetProperty("laps")[0].GetProperty("lapTimeMs").GetInt32());
+        Assert.Equal(1, details.RootElement.GetProperty("lapPositions").GetProperty("positions")[0][0].GetInt32());
+    }
+
+    [Fact]
+    public async Task Apply_WithoutLapHistory_DetailsIsNull()
+    {
+        await ApplyStored(Envelope(BasePayload()));
+
+        Assert.Null(Assert.Single(_sessions.Items).Details);
+    }
+
+    [Fact]
+    public async Task Apply_ReclassifiedWithoutDetails_KeepsPreviousDetails()
+    {
+        await ApplyStored(Envelope(BasePayload() with { LapHistory = Json("[1]") }));
+        var stored = Assert.Single(_sessions.Items).Details;
+
+        await ApplyStored(Envelope(BasePayload(), Now.AddMinutes(1)), Now.AddMinutes(2));
+
+        Assert.Equal(stored, Assert.Single(_sessions.Items).Details);
+    }
+
+    [Fact]
+    public async Task Apply_UnstorableLapHistory_StoresResultsWithoutDetails()
+    {
+        var outcome = await ApplyStored(Envelope(BasePayload() with { LapHistory = Json("[\"\\u0000\"]") }));
+
+        Assert.True(outcome.IsNew);
+        var session = Assert.Single(_sessions.Items);
+        Assert.Null(session.Details);
+        Assert.NotEmpty(session.Results);
+    }
+
     [Fact]
     public async Task Apply_SameKeyNewer_MergesResults()
     {

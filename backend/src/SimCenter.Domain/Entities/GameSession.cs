@@ -57,6 +57,12 @@ public class GameSession : BaseEntity
     /// <summary>순위표가 확정된 시각(UTC).</summary>
     public DateTime ClassifiedAt { get; set; }
 
+    /// <summary>
+    /// 세션의 추가 기록 묶음(D-49): 전 차량 랩별 기록(<c>lapHistory</c>)·랩별 순위(<c>lapPositions</c>)를 받은 그대로 담은 JSON 객체(jsonb).
+    /// P8 세션 상세의 재료로 저장만 한다. 없으면 null — 재분류 때 새 값이 오면 바꾸고, 안 오면 이전 값을 둔다.
+    /// </summary>
+    public string? Details { get; set; }
+
     public ICollection<SessionResult> Results { get; set; } = new List<SessionResult>();
 
     /// <summary>

@@ -186,6 +186,99 @@ public class LapDetailExtractorTests
         Assert.Single(_logger.Warnings);
     }
 
+    // ── D-49: trace.extra · car.details ──
+
+    [Fact]
+    public void Trace_WithExtra_StoresChannelsInBlob()
+    {
+        var wire = TraceWithExtra(new Dictionary<string, object> { ["clutch"] = Repeat(0.25), ["brakeTempFL"] = Repeat(512.37) });
+
+        var trace = _sut.BuildTrace(EventId, Json(wire), LapId, Now);
+
+        var extra = LapTraceCodec.Decode(trace!.Payload).Extra;
+        Assert.NotNull(extra);
+        Assert.Equal(Repeat(0.25), extra["clutch"]);
+        Assert.Equal(Repeat(512.37), extra["brakeTempFL"]);
+        Assert.Empty(_logger.Warnings);
+    }
+
+    [Theory]
+    [InlineData("{\"bad-name\":[1,1,1,1,1,1,1,1,1,1]}")]       // 이름 규칙 위반
+    [InlineData("{\"clutch\":[1,2]}")]                           // 길이 불일치
+    [InlineData("{\"clutch\":[1,1,1,1,1,1,1,1,1,\"x\"]}")]      // 숫자가 아님
+    [InlineData("[1,2,3]")]                                      // 객체가 아님
+    public void Trace_InvalidExtra_KeepsSevenChannels_DropsExtraOnly(string extraJson)
+    {
+        var wire = TraceWithExtra(JsonDocument.Parse(extraJson).RootElement.Clone());
+
+        var trace = _sut.BuildTrace(EventId, Json(wire), LapId, Now);
+
+        Assert.NotNull(trace);
+        var restored = LapTraceCodec.Decode(trace.Payload);
+        Assert.Null(restored.Extra);
+        Assert.Equal(LapDetailSamples.ValidTrace().TimeMs, restored.TimeMs);
+        Assert.Contains("trace.extra", Assert.Single(_logger.Warnings));
+    }
+
+    [Fact]
+    public void Snapshot_CarDetails_StoredVerbatim()
+    {
+        const string details = "{\"setup\":{\"frontWing\":5},\"events\":[{\"code\":\"COLL\",\"t\":12.5}]}";
+        var car = new { teamId = 1, details = JsonDocument.Parse(details).RootElement.Clone() };
+
+        var snapshot = _sut.BuildSnapshot(EventId, Json(car), conditions: null, LapId, Now);
+
+        Assert.Equal(details, snapshot!.Details);
+        Assert.True(snapshot.HasCarData());
+        Assert.Empty(_logger.Warnings);
+    }
+
+    [Theory]
+    [InlineData("[1,2]")]                       // 객체가 아님
+    [InlineData("{\"note\":\"a\\u0000b\"}")]    // jsonb가 거부하는 NUL
+    public void Snapshot_UnstorableDetails_DropsDetailsOnly(string detailsJson)
+    {
+        var car = new { teamId = 1, engineDamage = 30, details = JsonDocument.Parse(detailsJson).RootElement.Clone() };
+
+        var snapshot = _sut.BuildSnapshot(EventId, Json(car), conditions: null, LapId, Now);
+
+        Assert.NotNull(snapshot);
+        Assert.Null(snapshot.Details);
+        Assert.Equal(30, snapshot.EngineDamage);
+        Assert.Contains("car.details", Assert.Single(_logger.Warnings));
+    }
+
+    [Fact]
+    public void Snapshot_OversizedDetails_DropsDetailsOnly()
+    {
+        var car = new { teamId = 1, engineDamage = 30, details = new { blob = new string('x', LapDetailExtractor.MaxCarDetailsBytes) } };
+
+        var snapshot = _sut.BuildSnapshot(EventId, Json(car), conditions: null, LapId, Now);
+
+        Assert.Null(snapshot!.Details);
+        Assert.Contains("크기", Assert.Single(_logger.Warnings));
+    }
+
+    private static double[] Repeat(double value) => Enumerable.Repeat(value, 10).ToArray();
+
+    /// <summary>표본 10개 트레이스 + extra.</summary>
+    private static Dictionary<string, object?> TraceWithExtra(object extra)
+    {
+        var t = LapDetailSamples.ValidTrace();
+        return new Dictionary<string, object?>
+        {
+            ["resolutionM"] = t.ResolutionM,
+            ["timeMs"] = t.TimeMs,
+            ["speedKph"] = t.SpeedKph,
+            ["throttle"] = t.Throttle,
+            ["brake"] = t.Brake,
+            ["steer"] = t.Steer,
+            ["gear"] = t.Gear,
+            ["rpm"] = t.Rpm,
+            ["extra"] = extra,
+        };
+    }
+
     private static JsonElement JsonNull() => JsonDocument.Parse("null").RootElement.Clone();
 
     private sealed class FixedIdGenerator : IIdGenerator

@@ -36,6 +36,29 @@ public class LapTraceCodecTests
     }
 
     [Fact]
+    public void Extra_RoundTrips_WithNamesAsGiven()
+    {
+        var extra = new Dictionary<string, double[]> { ["brakeTempFL"] = [512.37, 515.1], ["DRS"] = [0, 1] };
+        var channels = new LapTraceChannels([0, 1], [1, 2], [0, 0], [0, 0], [0, 0], [1, 1], [9000, 9100], extra);
+
+        var restored = LapTraceCodec.Decode(LapTraceCodec.Encode(channels));
+
+        Assert.NotNull(restored.Extra);
+        Assert.Equal(["brakeTempFL", "DRS"], restored.Extra.Keys.Order(StringComparer.Ordinal).Reverse());
+        Assert.Equal(extra["brakeTempFL"], restored.Extra["brakeTempFL"]);
+        Assert.Equal(extra["DRS"], restored.Extra["DRS"]);
+    }
+
+    [Fact]
+    public void Decode_BlobWithoutExtra_HasNullExtra()
+    {
+        // D-49 이전에 저장한 blob(extra 키 없음).
+        var old = Gzip("{\"timeMs\":[0],\"speedKph\":[1],\"throttle\":[0],\"brake\":[0],\"steer\":[0],\"gear\":[1],\"rpm\":[9000]}");
+
+        Assert.Null(LapTraceCodec.Decode(old).Extra);
+    }
+
+    [Fact]
     public void Decode_CorruptBytes_ThrowsInvalidData()
     {
         Assert.Throws<InvalidDataException>(() => LapTraceCodec.Decode([1, 2, 3, 4]));

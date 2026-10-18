@@ -71,6 +71,7 @@ public sealed class LapQueryService : ILapQueryService
             channels.Brake,
             channels.Steer,
             channels.Gear,
-            channels.Rpm);
+            channels.Rpm,
+            channels.Extra ?? new Dictionary<string, double[]>());
     }
 }

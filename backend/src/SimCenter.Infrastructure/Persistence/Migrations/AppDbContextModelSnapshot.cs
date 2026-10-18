@@ -146,6 +146,10 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<string>("Details")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("details");
+
                     b.Property<string>("GameCode")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -422,6 +426,10 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
+
+                    b.Property<string>("Details")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("details");
 
                     b.Property<int?>("DiffuserDamage")
                         .HasColumnType("integer")

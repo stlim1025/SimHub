@@ -18,6 +18,11 @@ public sealed class LapDetailExtractor
     public const string CarPart = "car";
     public const string ConditionsPart = "conditions";
     public const string TracePart = "trace";
+    public const string TraceExtraPart = "trace.extra";
+    public const string CarDetailsPart = "car.details";
+
+    /// <summary><c>car.details</c> 원문 한도(D-49). 넘으면 details만 버린다.</summary>
+    public const int MaxCarDetailsBytes = 256 * 1024;
 
     private static readonly JsonSerializerOptions PartOptions = new(JsonSerializerDefaults.Web)
     {
@@ -49,6 +54,7 @@ public sealed class LapDetailExtractor
         if (carPart is not null)
         {
             ApplyCar(snapshot, carPart);
+            snapshot.Details = CaptureDetails(eventId, carPart.Details);
         }
 
         if (conditionsPart is not null)
@@ -60,7 +66,7 @@ public sealed class LapDetailExtractor
         return hasValues ? snapshot : null;
     }
 
-    /// <summary>텔레메트리 트레이스. 없거나 틀리면 null.</summary>
+    /// <summary>텔레메트리 트레이스. 없거나 틀리면 null. 추가 채널(<c>extra</c>)만 틀리면 extra만 버린다.</summary>
     public LapTelemetryTrace? BuildTrace(Guid eventId, JsonElement? trace, Guid lapId, DateTime now)
     {
         var part = ParseValid<LapTracePayload>(eventId, TracePart, trace, LapTraceValidator.Validate);
@@ -69,8 +75,12 @@ public sealed class LapDetailExtractor
             return null;
         }
 
+        var sampleCount = part.TimeMs!.Length;
+        var extra = ParseValid<Dictionary<string, double[]?>>(
+            eventId, TraceExtraPart, part.Extra, e => LapTraceExtraValidator.Validate(e, sampleCount));
         var channels = new LapTraceChannels(
-            part.TimeMs!, part.SpeedKph!, part.Throttle!, part.Brake!, part.Steer!, part.Gear!, part.Rpm!);
+            part.TimeMs!, part.SpeedKph!, part.Throttle!, part.Brake!, part.Steer!, part.Gear!, part.Rpm!,
+            extra is { Count: > 0 } ? extra.ToDictionary(c => c.Key, c => c.Value!) : null);
 
         return new LapTelemetryTrace
         {
@@ -117,6 +127,23 @@ public sealed class LapDetailExtractor
         }
 
         return parsed;
+    }
+
+    /// <summary><c>car.details</c>를 jsonb 원문으로. 없으면(null·JSON null) 조용히 null, 저장할 수 없으면 경고 후 null(나머지 car는 저장).</summary>
+    private string? CaptureDetails(Guid eventId, JsonElement? details)
+    {
+        if (details is not { } json || json.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return null;
+        }
+
+        var raw = JsonbText.TryCaptureObject(json, MaxCarDetailsBytes, out var reason);
+        if (raw is null)
+        {
+            LogDiscarded(eventId, CarDetailsPart, reason!);
+        }
+
+        return raw;
     }
 
     private void LogDiscarded(Guid eventId, string part, string reason)

@@ -16,6 +16,9 @@ public sealed class LapSnapshotConfiguration : IEntityTypeConfiguration<LapSnaps
 
         builder.Property(x => x.Weather).HasConversion<string>().HasMaxLength(WeatherMaxLength);
 
+        // 그 밖의 값 묶음(D-49): JSON 객체 원문 그대로.
+        builder.Property(x => x.Details).HasColumnType(JsonColumns.Jsonb);
+
         // Lap과 1:0..1. 랩은 실제로 지우지 않지만, 지운다면 스냅샷도 함께 지운다.
         builder.HasOne<Lap>()
             .WithOne(x => x.Snapshot)

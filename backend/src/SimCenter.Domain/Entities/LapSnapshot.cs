@@ -59,14 +59,20 @@ public class LapSnapshot : BaseEntity
     public double? ErsDeployedJ { get; set; }
     public double? ErsHarvestedJ { get; set; }
 
+    /// <summary>
+    /// 그 밖의 차량·랩 값 묶음(D-49: 셋업·엔진 부품 마모·Car Status 나머지·타이어 세트·이벤트 등). JSON 객체 원문(jsonb).
+    /// 화면은 나중에 고르므로 구조는 검사하지 않고 그대로 둔다. 없으면 null.
+    /// </summary>
+    public string? Details { get; set; }
+
     // ── 날씨 ──
     public Weather? Weather { get; set; }
     public int? AirTempC { get; set; }
     public int? TrackTempC { get; set; }
     public int? RainForecastPercent { get; set; }
 
-    /// <summary>상세의 car 영역 값(팀 제외)이 하나라도 있는지. 없으면 상세의 <c>car</c>는 null이다.</summary>
-    public bool HasCarData() => CarValues().Any(value => value.HasValue);
+    /// <summary>상세의 car 영역 값(팀 제외, <see cref="Details"/> 포함)이 하나라도 있는지. 없으면 상세의 <c>car</c>는 null이다.</summary>
+    public bool HasCarData() => Details is not null || CarValues().Any(value => value.HasValue);
 
     /// <summary>날씨 영역 값이 하나라도 있는지. 없으면 상세의 <c>conditions</c>는 null이다.</summary>
     public bool HasConditionsData()
