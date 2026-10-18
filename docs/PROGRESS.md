@@ -9,6 +9,10 @@
 
 ## 1. 한 줄 상태
 
+**(추가 2026-10-18) 랩 상세 Compare with(내 최고 · 리더보드 최고 · 랩 ID · 비교 안 함)·Filter by·Driver Assists·Share(D-51), 공유 링크가 스플래시 뒤에도 유지,
+TT 플래시백 랩이 무효로 저장되던 버그 수정(랩 끝 게임 판정을 따름, 기존 13·14랩 보정), 팀 로고 8개는 로컬 `app/assets/team_logos`(저장소 밖).
+테스트: Backend 673(Domain 67 + Application 537 + 통합 69) · App 577 · Agent 400.**
+
 **P9 랩 상세·텔레메트리 + F1Laps 화면 맞추기(D-42~D-50, [15](./15-lap-detail-telemetry.md)) — 사용자 요청으로 P8보다 먼저. Flutter 유지(D-42).
 Laps = F1Laps 배치(국기 + 트랙 메뉴(F1 25 캘린더 순서) · TEAM·TIME·MODE·날씨·DATE 표 · 행 → 랩 상세), 랩 상세 3탭(Lap Details · Telemetry(동기화 십자선·내 최고 랩 비교·델타) · Your Best Laps),
 Agent가 랩 스냅샷(팀·타이어·손상·연료·ERS·날씨)과 5m 트레이스(7채널 + extra 118채널), 셋업·이벤트·세션 랩 기록까지 전부 수집(D-49), 새 랩은 웹에 실시간 알림(D-50).

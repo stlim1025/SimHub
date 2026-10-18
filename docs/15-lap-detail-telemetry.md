@@ -316,3 +316,5 @@ F1 25 시드(`DbSeeder`가 매번 맞춘다 — 기존 행의 국가·순서도 
 - **Comparison 표:** Delta 아래 줄에 비율(%) — `(이 랩 − 비교 랩) / 비교 랩`.
 - **Driver Assists:** Traction Control · ABS · Steering Assist · Braking Assist · Gearbox · Racing Line — 스냅샷 `details`(D-49)의 세션·상태 값에서 읽는다. 값이 없으면 영역을 숨긴다.
 - **머리줄:** `국기 + {트랙} Lap {랩타임}`, 오른쪽 [Share](주소 복사). Game Mode 줄은 "Driver Career · Race"처럼 모드와 세션을 함께.
+
+- **구현 메모(2026-10-18):** 비교 불가 사유는 `notFound`(없음·남의 비공개 — 구분하지 않음)·`noMatch` 두 가지. 이 랩의 값을 모르는 필터는 건너뛰고 `appliedFilters`에 적용한 것만 담는다. 공유 링크는 스플래시·로그인을 거쳐도 `from`으로 돌아온다.

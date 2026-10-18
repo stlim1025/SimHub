@@ -370,6 +370,13 @@ invalid 랩도 우선 기록은 해두고 랭킹 집계에서는 사용하지 �
 ### D-50. 새 랩 실시간 표시 (2026-10-18)
 - 사용자: "새 랩을 받으면 새로고침 없이 바로 띄워줬으면." 랩 저장 뒤 RankingHub로 주인에게만 `LapRecorded`(LapDto + trackId). 앱은 어느 화면이든 아래 알림 [보기] + 랩 목록·대시보드 갱신·새 행 강조. 화면을 저절로 넘기지는 않는다. 상세: [15](./15-lap-detail-telemetry.md) §9.
 
+### D-51. 랩 상세 비교 대상 선택 · 필터 · Driver Assists (2026-10-18)
+- F1Laps처럼 Compare with(내 최고 랩 · 리더보드 최고 랩 · 다른 랩 ID · 비교 안 함)와 Filter by(같은 팀 · 같은 세션 유형 · 같은 어시스트). 선택은 주소 쿼리에 남는다(공유·새로고침 유지).
+- 남의 랩은 랭킹 적격 랩만 비교·트레이스 조회(`GET /laps/{id}/trace`). 없는 랩과 남의 비공개 랩은 구분하지 않고 `notFound`(D-34와 같은 이유), 조건에 맞는 랩 없음은 `noMatch`. 이름은 랭킹 규칙(D-39).
+- 이 랩의 값을 모르는 필터는 적용하지 않는다(`appliedFilters`로 알림). 어시스트는 아는 칸만 같아야 한다.
+- Driver Assists(TC·ABS·Steering·Braking·Gearbox·Racing Line)는 SQL로 거르려고 `lap_snapshots`에 정수 열 6개로 저장(기존 행은 details에서 채움).
+- 남은 판단: 이름 비공개 사용자의 최고가 아닌 적격 랩도 ID로 비교할 수 있다 — 막으려면 남의 랩을 그 사용자의 트랙 최고 랩으로만 좁히는 결정이 필요하다. 상세: [15](./15-lap-detail-telemetry.md) §10.
+
 ---
 
 ## 결정 요약 (전체 확정 ✅ · 2026-07-06, 2026-10-17 P6 갱신, 2026-10-18 P7 갱신)
@@ -424,6 +431,7 @@ invalid 랩도 우선 기록은 해두고 랭킹 집계에서는 사용하지 �
 | D-48 | 프로필 팀 로고 = `assets/team_logos/{CODE}.png` 있으면 표시(파일은 저장소 밖), 없으면 팀 색 원 | 14, 15, app |
 | D-49 | 텔레메트리 전부 수집: 트레이스 `extra` 채널 맵(118채널)·스냅샷 `details`(셋업·엔진 마모·이벤트 등)·세션 `lapHistory`·`lapPositions`, 봉투 768KiB / 허브 1MiB | 06, 15, agent, backend |
 | D-50 | 새 랩 실시간 표시: RankingHub `LapRecorded`를 주인에게만(LapDto + trackId, 무효 랩 포함), 앱은 알림 + 목록 갱신(자동 이동 없음) | 05, 15, backend, app |
+| D-51 | 랩 상세 비교 대상 = 내 최고 / 리더보드 최고(전 사용자·전체 기간) / 다른 랩 ID / 비교 안 함, 필터 = 같은 팀·세션 유형·어시스트, 남의 랩은 랭킹 적격만(없음·비공개는 같은 `notFound`), Driver Assists = `lap_snapshots` 정수 열 6개 | 04, 15, backend, app |
 
 **MVP 관련 결정은 모두 확정되어 각 문서에 반영 완료.** 본 설계 문서 세트 최종 승인 시,
 **Phase 0(계약 & 스캐폴딩)** 상세 설계로 진입합니다.
