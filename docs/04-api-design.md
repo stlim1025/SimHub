@@ -62,13 +62,15 @@
 | GET | `/api/v1/me/agent-devices` | ✅ | 내 연결된 PC 목록 |
 | DELETE | `/api/v1/me/agent-devices/{deviceId}` | ✅ | PC 연결 해제 |
 | GET | `/api/v1/me/tracks` | ✅ | 내 기록이 있는 트랙 요약 |
-| GET | `/api/v1/me/laps` | ✅ | 내 랩 기록 (정렬 `recent`/`fastest`) |
+| GET | `/api/v1/me/laps` | ✅ | 내 랩 기록 (정렬 `recent`/`fastest`, `validOnly`) |
+| GET | `/api/v1/me/laps/{lapId}` | ✅ | 랩 상세: 차량 스냅샷·조건·비교 랩(D-46, [15](./15-lap-detail-telemetry.md)) |
+| GET | `/api/v1/me/laps/{lapId}/trace` | ✅ | 1랩 텔레메트리 트레이스(D-45) |
 | GET | `/api/v1/me/seasons` | ✅ | 내 시즌 목록(`lastSessionAt` 내림차순) |
 | GET | `/api/v1/me/seasons/{seasonId}` | ✅ | 시즌 상세: 라운드 + Standings(결과표 칸 포함) |
 | GET | `/api/v1/me/sessions` | ✅ | 내 세션 목록(`sessionType` 필터, `classifiedAt` 내림차순) |
 | GET | `/api/v1/me/sessions/{sessionId}` | ✅ | 세션 상세: 전 드라이버 결과(AI 포함) |
 | GET | `/api/v1/rankings` | ✅ | TOP10 (트랙 · 기간 daily/monthly/yearly) |
-| GET | `/api/v1/tracks` | ✅ | 트랙 목록(마스터) |
+| GET | `/api/v1/tracks` | ✅ | 트랙 목록(마스터, F1 25 캘린더 순서 · D-43) |
 
 > **Telemetry 인입은 REST가 아니라 SignalR**로 처리한다(Agent→Backend). [05](./05-signalr-design.md) 참조.
 > 제거: `POST /sessions/check-in`, `POST /sessions/{id}/check-out`, `GET /sessions/active` (D-25).
@@ -207,8 +209,10 @@ Agent가 연결 코드를 **장치 키**로 교환한다. 인증 없음(코드�
 ### 3.9 GET `/tracks`
 ```jsonc
 // 200
-{ "items": [ { "trackId": "guid", "gameCode": "F1_25", "name": "Silverstone" } ] }
+{ "items": [ { "trackId": "guid", "gameCode": "F1_25", "name": "Silverstone", "countryCode": "GB", "displayOrder": 12 } ] }
 ```
+- 순서 = `displayOrder` → 이름(D-43). F1 25는 캘린더 24개 → 리버스 3개 → Madrid → 옛 트랙([15](./15-lap-detail-telemetry.md) §4.1).
+- `countryCode`: ISO 3166-1 alpha-2 대문자(앱이 국기를 그린다). 없으면 `null`.
 
 ### 3.10 GET `/me/tracks`
 내 랩이 1개 이상 있는 트랙만, 마지막 주행일 내림차순. Laps 화면의 트랙 목록.
@@ -217,7 +221,8 @@ Agent가 연결 코드를 **장치 키**로 교환한다. 인증 없음(코드�
 {
   "items": [
     { "trackId": "guid", "trackName": "Silverstone", "gameCode": "F1_25",
-      "lapCount": 76, "bestValidLapTimeMs": 83452, "lastSetAt": "..." }
+      "lapCount": 76, "bestValidLapTimeMs": 83452, "lastSetAt": "...",
+      "countryCode": "GB", "displayOrder": 12 }
   ]
 }
 ```
@@ -243,11 +248,41 @@ My Lap Record. **모든 세션·무효 랩까지 조회 가능**(D-15/D-16). `se
           { "sectorNumber": 2, "sectorTimeMs": 30110 },
           { "sectorNumber": 3, "sectorTimeMs": 26332 }
         ],
-        "isValid": true, "isRankingEligible": true, "setAt": "..."
+        "isValid": true, "isRankingEligible": true, "setAt": "...",
+        // D-44·D-45(15 §4.2) — 옛 랩은 gameMode·team·weather가 null, hasTrace가 false
+        "lapNumber": 5, "gameMode": "DriverCareer",
+        "team": { "name": "Ferrari", "color": "#E8002D" }, "weather": "Clear", "hasTrace": true
       }
     ]
   }
 }
+```
+- `validOnly=true`: 유효 랩(`IsValid`)만. 랩 상세의 Your Best Laps가 `sort=fastest&validOnly=true&pageSize=10`으로 쓴다.
+- `team`: 랩 스냅샷의 게임 팀 ID를 `TeamCatalog`(D-33)로 푼 이름·색. 스냅샷이 없으면 `null`.
+
+### 3.11a GET `/me/laps/{lapId}` (D-46)
+랩 상세. 남의 랩·없는 랩은 404(D-34와 같다). 응답 전체 모양은 [15](./15-lap-detail-telemetry.md) §4.2.
+```jsonc
+// 200 (줄임)
+{
+  "lap": { /* 3.11의 랩 한 건 */ },
+  "trackId": "guid", "countryCode": "SA",
+  "sessionId": "guid",          // 같은 SessionKey의 내 세션(P7)이 있으면, 없으면 null
+  "car": { "teamId": 1, "tyreWearEnd": { "frontLeft": 31.0, "frontRight": 18.0, "rearLeft": 24.0, "rearRight": 18.0 }, "...": "..." },
+  "conditions": { "weather": "Clear", "airTempC": 21, "trackTempC": 31, "rainForecastPercent": 4 },
+  "comparison": { "lapId": "guid", "lapTimeMs": 97003, "sectors": [ … ], "setAt": "...", "hasTrace": true }
+}
+```
+- `car`·`conditions`: 스냅샷이 없으면 `null`, 안의 값도 각각 `null`일 수 있다.
+- `comparison`: 같은 트랙·게임의 내 **최고 유효 랩**(이 랩 자신일 수 있다). 유효 랩이 없으면 `null`.
+
+### 3.11b GET `/me/laps/{lapId}/trace` (D-45)
+1랩 텔레메트리 트레이스. 트레이스가 없거나 남의 랩이면 404. 배열 7개는 길이가 같고 `i`번째 값은 랩 거리 `i × resolutionM`(m) 지점이다.
+```jsonc
+// 200
+{ "lapId": "guid", "resolutionM": 5, "sampleCount": 1235,
+  "timeMs": [0, 61, …], "speedKph": [287, 289, …], "throttle": [100, 100, …], "brake": [0, 0, …],
+  "steer": [2, 1, …], "gear": [7, 7, …], "rpm": [11020, 11080, …] }
 ```
 
 ### 3.12 GET `/me/seasons?page=1&pageSize=20`

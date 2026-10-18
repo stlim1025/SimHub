@@ -61,10 +61,12 @@ F1(Codemasters/EA) 텔레메트리는 UDP로 여러 **패킷 타입**을 브로�
 | 3 | **Event** | `SSTA`(세션시작)/`SEND`(세션종료) 등 마커 → 세션 경계 보정 |
 | 4 | **Participants** (P7) | 차별 `Name`·`Driver`(게임 드라이버 ID, 사람이면 `NetworkHuman`)·`Team`·`RaceNumber`·`IsAiControlled` → `SessionClassified`의 드라이버 정보 (5초마다 도착) |
 | 8 | **Final Classification** (P7) | 세션 끝의 최종 순위표: 순위·그리드·랩 수·점수·피트·패널티·결과 상태·베스트 랩·총 시간·타이어 스틴트 → `SessionClassified` (세션당 도착) |
+| 6 | **Car Telemetry** (P9) | 플레이어 차의 속도·스로틀·브레이크·스티어·기어·RPM → 1랩 트레이스(`LapFinished.trace`, D-45) |
+| 7 | **Car Status** (P9) | 연료·남은 랩·ERS 저장량/이 랩 배포·회수·컴파운드·타이어 나이 → 랩 스냅샷(`LapFinished.car`, D-44) |
+| 10 | **Car Damage** (P9) | 타이어 마모·손상, 브레이크 손상, 날개·플로어·디퓨저·사이드포드·기어박스·엔진 손상 → 랩 스냅샷 |
 
-> Motion(0), CarTelemetry(6), CarStatus(7), CarDamage(10), Session History(11) 등은 현재 랭킹·시즌에 불필요 → **파싱하지 않음**(YAGNI). Session History(11)·Car Damage(10)는 P8 후보.
-> 단, 이들은 **상세 텔레메트리 조회(Future)**의 소스이므로 Agent 파이프라인은 프레임 순회 지점을
-> 확장 가능하게 유지한다. → [09-lap-telemetry-trace.md](./09-lap-telemetry-trace.md)
+> P9에서 Session은 날씨·기온·노면 온도·트랙 길이·비 예보를, Lap Data는 `m_lapDistance`·`m_currentLapTimeInMS`를 더 읽는다([15](./15-lap-detail-telemetry.md) §3).
+> Motion(0), Session History(11) 등은 아직 파싱하지 않는다(YAGNI). Session History(11)는 P8 후보.
 
 ### 2.3 Lap Data 패킷의 관심 필드 (플레이어 인덱스 기준)
 
@@ -173,6 +175,9 @@ Idle ──SessionStart──► InSession ──lapNum 증가──► LapInPro
 
 - P7 선택 필드(`gameMode`·`seasonLinkId`·`weekendLinkId`·`sessionLinkId`)는 백엔드가 `Lap.SessionKey`를 계산하는 데 쓴다(저장만, 조회는 P8). 게임 모드를 모르거나 링크가 없으면 `gameMode = "Other"`, 링크 `0`으로 간다.
 - 세션 끝에는 `SessionClassified`(최종 순위표 1건)가 따로 간다. payload·응답 규칙은 [05](./05-signalr-design.md) §2.4·§2.5.
+- **P9 선택 필드 3개**([15](./15-lap-detail-telemetry.md) §3·§4.3): `car`(팀 ID·타이어·손상·연료·ERS의 랩 시작/끝 값, D-44) · `conditions`(날씨·기온·노면 온도·비 예보) ·
+  `trace`(거리 5m 표본 — `resolutionM` + `timeMs`·`speedKph`·`throttle`·`brake`·`steer`·`gear`·`rpm` 정수 배열, D-45).
+  봉투가 48KiB를 넘으면 트레이스를 10m → 20m로 낮추고, 그래도 넘으면 트레이스만 뺀다. 백엔드는 틀린 스냅샷·트레이스만 버리고 랩은 저장한다.
 
 - `trackId`(게임 정수) → Backend가 `Track` 마스터(GameCode+GameTrackId)로 변환.
 - `eventId`는 Agent가 생성하는 **멱등키**. 재전송 시 동일 값 → Backend 중복 제거.
