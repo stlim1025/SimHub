@@ -79,12 +79,12 @@ void main() {
       );
       await repo.getLapDetail(
         'l1',
-        compare: const LapCompareSelection(kind: LapCompareKind.lap, compareLapId: 'other-lap-1', filters: {LapCompareFilter.sameTeam}),
+        compare: const LapCompareSelection(kind: LapCompareKind.lap, compareLapId: '0192f0aa-2222-7000-8000-000000000002', filters: {LapCompareFilter.sameTeam}),
       );
 
       expect(adapter.requests[0].queryParameters, {'compare': 'leaderboard', 'sameTeam': 'true', 'sameAssists': 'true'});
       // 랩 ID 비교에는 필터를 보내지 않는다.
-      expect(adapter.requests[1].queryParameters, {'compare': 'lap', 'compareLapId': 'other-lap-1'});
+      expect(adapter.requests[1].queryParameters, {'compare': 'lap', 'compareLapId': '0192f0aa-2222-7000-8000-000000000002'});
     });
 
     test('getComparisonTrace는 GET /laps/{lapId}/trace(공개 규칙 경로)를 호출하고, 404면 null', () async {

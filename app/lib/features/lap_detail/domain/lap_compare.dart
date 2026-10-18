@@ -36,8 +36,8 @@ const String kCompareQuery = 'compare';
 const String kCompareLapIdQuery = 'compareLapId';
 const String _trueText = 'true';
 
-/// 랩 ID로 보이는 글자(공백 없이 8~64자, 영숫자·하이픈). 붙여 넣은 값을 걸러 내는 데 쓴다 — 진짜 검사는 서버가 한다.
-final RegExp _lapIdPattern = RegExp(r'^[0-9A-Za-z-]{8,64}$');
+/// 랩 ID = GUID(서버 `Guid? compareLapId`). GUID가 아니면 서버가 400을 내 화면 전체가 오류가 되므로 여기서 거른다.
+final RegExp _lapIdPattern = RegExp(r'^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$');
 
 /// 붙여 넣은 랩 ID를 다듬는다. 앞뒤 공백을 빼고, 랩 상세 주소(`…/laps/{id}…`)를 붙여 넣었으면 그 안의 ID를 꺼낸다.
 /// 랩 ID로 보이지 않으면 null.

@@ -31,6 +31,8 @@ void main() {
     test('compare=lap인데 ID가 없거나 이상하면 기본(best)으로 본다', () {
       expect(LapCompareSelection.fromQuery(const {'compare': 'lap'}).kind, LapCompareKind.best);
       expect(LapCompareSelection.fromQuery(const {'compare': 'lap', 'compareLapId': 'a b'}).kind, LapCompareKind.best);
+      // GUID가 아니면 서버가 400을 내 화면이 깨지므로 기본으로 본다(리뷰 반영).
+      expect(LapCompareSelection.fromQuery(const {'compare': 'lap', 'compareLapId': 'abcdefgh'}).kind, LapCompareKind.best);
 
       final ok = LapCompareSelection.fromQuery(const {'compare': 'lap', 'compareLapId': '0192f0aa-1111-7000-8000-000000000001'});
       expect(ok.kind, LapCompareKind.lap);
@@ -61,9 +63,9 @@ void main() {
 
     test('withKind는 필터를 지키고, 랩 ID는 lap일 때만 남긴다', () {
       final selection = const LapCompareSelection(filters: {LapCompareFilter.sameTeam})
-          .withKind(LapCompareKind.lap, lapId: 'other-lap-1');
+          .withKind(LapCompareKind.lap, lapId: '0192f0aa-2222-7000-8000-000000000002');
 
-      expect(selection.compareLapId, 'other-lap-1');
+      expect(selection.compareLapId, '0192f0aa-2222-7000-8000-000000000002');
       expect(selection.filters, {LapCompareFilter.sameTeam});
       expect(selection.withKind(LapCompareKind.leaderboard).compareLapId, isNull);
     });
@@ -80,8 +82,8 @@ void main() {
 
     test('붙여 넣은 랩 ID는 다듬고, 랩 상세 주소면 그 안의 ID를 꺼낸다', () {
       expect(normalizeLapIdInput('  0192f0aa-1111-7000-8000-000000000001 '), '0192f0aa-1111-7000-8000-000000000001');
-      expect(normalizeLapIdInput('https://simcenter.test/#/laps/abcdef12-3456?tab=telemetry'), 'abcdef12-3456');
-      expect(normalizeLapIdInput('https://simcenter.test/laps/abcdef123456'), 'abcdef123456');
+      expect(normalizeLapIdInput('https://simcenter.test/#/laps/0192f0aa-1111-7000-8000-000000000001?tab=telemetry'), '0192f0aa-1111-7000-8000-000000000001');
+      expect(normalizeLapIdInput('https://simcenter.test/laps/abcdef123456'), isNull); // GUID가 아님
       expect(normalizeLapIdInput('short'), isNull);
       expect(normalizeLapIdInput('has space inside'), isNull);
       expect(normalizeLapIdInput(''), isNull);

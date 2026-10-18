@@ -19,7 +19,7 @@ LapDetail? _byCompare(String lapId, LapCompareSelection compare) => switch (comp
           comparison: comparisonOf('r1', 97000,
               kind: LapCompareKind.leaderboard, isMine: false, displayName: _leaderboardName, team: _mclaren, hasTrace: true),
         ),
-      LapCompareKind.lap when compare.compareLapId == 'missing-lap-1' =>
+      LapCompareKind.lap when compare.compareLapId == '0192f0aa-3333-7000-8000-000000000003' =>
         sampleDetail(withComparison: false, unavailable: ComparisonUnavailable.notFound),
       LapCompareKind.lap => sampleDetail(
           comparison: comparisonOf(compare.compareLapId!, 99000, kind: LapCompareKind.lap, isMine: false, displayName: '공개 라이벌'),
@@ -86,10 +86,10 @@ void main() {
       await _tapText(t, '비교');
       expect(find.text('랩 ID 형식이 아니에요'), findsOneWidget);
 
-      await t.enterText(find.byKey(const ValueKey('compare-lap-id-field')), ' other-lap-1 ');
+      await t.enterText(find.byKey(const ValueKey('compare-lap-id-field')), ' 0192f0aa-2222-7000-8000-000000000002 ');
       await _tapText(t, '비교');
 
-      expect(locationOf(router), '/laps/l1?compare=lap&compareLapId=other-lap-1');
+      expect(locationOf(router), '/laps/l1?compare=lap&compareLapId=0192f0aa-2222-7000-8000-000000000002');
       expect(find.text('비교 랩'), findsOneWidget);
       expect(find.text('공개 라이벌'), findsOneWidget);
     });
@@ -105,7 +105,7 @@ void main() {
     });
 
     testWidgets('비교할 수 없는 랩 ID(없거나 비공개)면 그 까닭을 보인다', (t) async {
-      await pumpLapDetail(t, detailRepo: _repo(), location: '/laps/l1?compare=lap&compareLapId=missing-lap-1');
+      await pumpLapDetail(t, detailRepo: _repo(), location: '/laps/l1?compare=lap&compareLapId=0192f0aa-3333-7000-8000-000000000003');
 
       expect(find.text('비교할 수 없는 랩이에요(없거나 공개되지 않은 랩)'), findsOneWidget);
     });
@@ -161,7 +161,7 @@ void main() {
     });
 
     testWidgets('랩 ID 비교·비교 안 함에서는 필터 메뉴를 쓸 수 없다', (t) async {
-      for (final location in ['/laps/l1?compare=none', '/laps/l1?compare=lap&compareLapId=other-lap-1']) {
+      for (final location in ['/laps/l1?compare=none', '/laps/l1?compare=lap&compareLapId=0192f0aa-2222-7000-8000-000000000002']) {
         await pumpLapDetail(t, detailRepo: _repo(), location: location);
 
         final menu = t.widget<PopupMenuButton<LapCompareFilter>>(find.byKey(const ValueKey('compare-filter-menu')));
