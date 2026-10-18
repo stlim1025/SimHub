@@ -49,7 +49,63 @@
       "ersStoreStartJ": 1494000,
       "ersStoreEndJ": 988000,
       "ersDeployedJ": 2100000,
-      "ersHarvestedJ": 1600000
+      "ersHarvestedJ": 1600000,
+      "details": {
+        "setup": {
+          "frontWing": 30, "rearWing": 25, "onThrottle": 70, "offThrottle": 55,
+          "frontCamber": -3.5, "rearCamber": -2, "frontToe": 0.05, "rearToe": 0.2,
+          "frontSuspension": 41, "rearSuspension": 3, "frontAntiRollBar": 10, "rearAntiRollBar": 5,
+          "frontSuspensionHeight": 20, "rearSuspensionHeight": 52, "brakePressure": 95, "brakeBias": 56, "engineBraking": 1,
+          "tyrePressureFL": 22.5, "tyrePressureFR": 22.5, "tyrePressureRL": 21.5, "tyrePressureRR": 21.5,
+          "ballast": 6, "fuelLoad": 12.5, "nextFrontWingValue": 31
+        },
+        "damage": {
+          "tyreBlistersFL": 0, "tyreBlistersFR": 0, "tyreBlistersRL": 0, "tyreBlistersRR": 0,
+          "drsFault": false, "ersFault": false,
+          "engineMguhWear": 11, "engineEsWear": 12, "engineCeWear": 13, "engineIceWear": 14, "engineMgukWear": 15, "engineTcWear": 16,
+          "engineBlown": false, "engineSeized": false
+        },
+        "status": {
+          "tractionControl": 0, "antiLockBrakes": 0, "fuelMix": 1, "frontBrakeBias": 56, "pitLimiter": false,
+          "fuelCapacity": 110, "maxRpm": 13000, "idleRpm": 4000, "maxGears": 8, "drsAllowed": true, "drsActivationDistance": 0,
+          "vehicleFiaFlag": 0, "enginePowerIce": 592123.375, "enginePowerMguk": 120000, "ersDeployMode": 2, "networkPaused": false
+        },
+        "tyreSets": {
+          "fittedIndex": 3,
+          "sets": [
+            { "actualCompound": 18, "visualCompound": 16, "wearPercent": 12, "available": true, "recommendedSession": 18, "lifeSpanLaps": 25, "usableLifeLaps": 18, "lapDeltaTimeMs": 0, "fitted": true }
+          ]
+        },
+        "timeTrial": {
+          "playerSessionBest": { "carIndex": 0, "teamId": 1, "lapTimeMs": 83452, "sector1TimeMs": 27010, "sector2TimeMs": 30110, "sector3TimeMs": 26332, "tractionControl": 0, "gearboxAssist": 1, "antiLockBrakes": 0, "equalCarPerformance": false, "customSetup": true, "valid": true },
+          "personalBest": { "carIndex": 0, "teamId": 1, "lapTimeMs": 83101, "sector1TimeMs": 26950, "sector2TimeMs": 29990, "sector3TimeMs": 26161, "tractionControl": 0, "gearboxAssist": 1, "antiLockBrakes": 0, "equalCarPerformance": false, "customSetup": true, "valid": true },
+          "rival": { "carIndex": 255, "teamId": 0, "lapTimeMs": 0, "sector1TimeMs": 0, "sector2TimeMs": 0, "sector3TimeMs": 0, "tractionControl": 0, "gearboxAssist": 0, "antiLockBrakes": 0, "equalCarPerformance": false, "customSetup": false, "valid": false }
+        },
+        "session": {
+          "trackId": 2, "sessionType": 18, "formula": 0, "weather": 0, "trackTemperature": 31, "airTemperature": 21,
+          "totalLaps": 0, "trackLength": 5451, "pitSpeedLimitKph": 80, "safetyCarStatus": 0,
+          "marshalZones": [ { "zoneStart": 0.03, "zoneFlag": 0 } ],
+          "weatherForecast": [],
+          "gearboxAssist": 1, "ruleSet": 2, "recoveryMode": 1, "flashbackLimit": 3, "weekendStructure": [18],
+          "sector2LapDistanceStart": 1810.5, "sector3LapDistanceStart": 3912.25
+        },
+        "participant": {
+          "carIndex": 0, "aiControlled": false, "driverId": 255, "networkId": 0, "teamId": 1, "myTeam": false, "raceNumber": 26,
+          "nationality": 75, "name": "Player", "telemetryPublic": true, "showOnlineNames": true, "techLevel": 0, "platform": 1
+        },
+        "lapData": {
+          "carIndex": 0, "lapDistance": 5450.1, "totalDistance": 27250.4, "carPosition": 1, "currentLapNum": 5, "pitStatus": 0,
+          "numPitStops": 0, "sector": 2, "currentLapInvalid": false, "penaltiesS": 0, "totalWarnings": 0, "cornerCuttingWarnings": 0,
+          "numUnservedDriveThroughPens": 0, "numUnservedStopGoPens": 0, "gridPosition": 1, "driverStatus": 1, "resultStatus": 2,
+          "pitLaneTimerActive": false, "pitLaneTimeInLaneMs": 0, "pitStopTimerMs": 0, "pitStopShouldServePen": false,
+          "speedTrapFastestSpeedKph": 331.5, "speedTrapFastestLap": 4, "timeTrialPbCarIndex": 255, "timeTrialRivalCarIndex": 255
+        },
+        "events": [
+          { "code": "SPTP", "lapTimeMs": 15250, "details": { "vehicleIndex": 0, "speedKph": 331.5, "overallFastestInSession": true, "driverFastestInSession": true, "fastestVehicleIndexInSession": 0, "fastestSpeedInSessionKph": 331.5 } },
+          { "code": "FLBK", "lapTimeMs": 41800, "details": { "flashbackFrameIdentifier": 12345, "flashbackSessionTimeMs": 401500 } }
+        ],
+        "sessionHistory": { "lapNumber": 5, "lapTimeMs": 0, "sector1TimeMs": 27010, "sector2TimeMs": 30110, "sector3TimeMs": 0, "lapValid": true, "sector1Valid": true, "sector2Valid": true, "sector3Valid": true }
+      }
     },
     "conditions": {
       "weather": "Clear",
@@ -65,7 +121,19 @@
       "brake": [0, 0, 0, 0, 0, 0],
       "steer": [-2, -2, -1, 0, 1, 1],
       "gear": [7, 7, 7, 7, 7, 7],
-      "rpm": [11650, 11680, 11690, 11710, 11730, 11740]
+      "rpm": [11650, 11680, 11690, 11710, 11730, 11740],
+      "extra": {
+        "clutch": [0, 0, 0, 0, 0, 0],
+        "drs": [1, 1, 1, 1, 1, 1],
+        "tyreSurfaceTempFL": [96, 96, 97, 97, 97, 98],
+        "tyrePressureFL": [23.41, 23.41, 23.42, 23.42, 23.43, 23.43],
+        "ersStoreEnergy": [2512340, 2510120, 2507980, 2505760, 2503410, 2501200],
+        "worldPosX": [-523.5, -518.7, -513.9, -509.1, -504.3, -499.5],
+        "gForceLateral": [0.12, 0.15, 0.21, 0.3, 0.41, 0.48],
+        "wheelSlipRatioPctRL": [1.25, 1.31, 1.18, 0.97, 0.88, 0.91],
+        "frontAeroHeightMm": [31.2, 30.8, 30.5, 30.1, 29.9, 29.8],
+        "deltaToCarInFrontMs": [0, 0, 0, 0, 0, 0]
+      }
     }
   }
 }
