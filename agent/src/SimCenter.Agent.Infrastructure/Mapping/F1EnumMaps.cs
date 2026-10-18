@@ -12,11 +12,19 @@ internal static class F1EnumMaps
     /// <summary>예전 연식의 Grand Prix 원시 값. 라이브러리 enum에는 이름이 없고(F1 25는 <c>GrandPrix23</c>=4) 12 §5.2가 Grand Prix로 본다.</summary>
     private const int LegacyGrandPrixValue = 3;
 
+    /// <summary>
+    /// F1 25 v1.26(2026 시즌팩) Driver Career의 원시 값. 라이브러리 enum(25.1.1·26.0.0)에 없다 — 실제 게임 랩 스냅샷으로 확인(docs/15 §11.1, D-52).
+    /// </summary>
+    private const int DriverCareer2026Value = 78;
+
     public static GameMode ToGameMode(F1Enums.GameMode mode)
     {
-        if ((int)mode == LegacyGrandPrixValue)
+        switch ((int)mode)
         {
-            return GameMode.GrandPrix;
+            case LegacyGrandPrixValue:
+                return GameMode.GrandPrix;
+            case DriverCareer2026Value:
+                return GameMode.DriverCareer;
         }
 
         return mode switch

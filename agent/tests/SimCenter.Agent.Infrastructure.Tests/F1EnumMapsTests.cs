@@ -31,6 +31,13 @@ public class F1EnumMapsTests
     }
 
     [Fact]
+    public void ToGameMode_2026SeasonPackDriverCareer_IsDriverCareer()
+    {
+        // F1 25 v1.26(2026 시즌팩) Driver Career는 라이브러리 enum에 없는 78로 온다(실제 게임 스냅샷, docs/15 §11.1, D-52).
+        Assert.Equal(GameMode.DriverCareer, F1EnumMaps.ToGameMode((F1Enums.GameMode)78));
+    }
+
+    [Fact]
     public void ToGameMode_UnknownValue_IsOther()
     {
         Assert.Equal(GameMode.Other, F1EnumMaps.ToGameMode((F1Enums.GameMode)UndefinedRawValue));
