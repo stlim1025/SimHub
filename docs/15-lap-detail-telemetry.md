@@ -384,3 +384,8 @@ F1Laps "All Sessions" 배치: 제목 + Filters(세션 종류) · 표 열 **TRACK
 - **게임 시즌 연결:** 미리보기가 사용자의 기록 세션 중 같은 게임·커리어 계열(DriverCareer 또는 예전 `Other`)이면서 시즌 링크 ID가 있는 가장 최근 값을 제안한다(지금: 2160041047, 마이애미 Q1~Q3). 가져오기 때 Season.SeasonLinkId에 넣고,
   그 링크의 세션들을 이 시즌으로 옮긴다: `game_mode = DriverCareer`, 세션 키 `uid:` → `link:`(D-29 규칙), 시즌·주말 연결, 그 세션의 내 랩 `SessionKey`도 같이. 앞으로 오는 세션은 같은 링크라 자동으로 붙는다.
 - 같은 사용자가 같은 링크로 두 번 가져오면 409(덮어쓰지 않음). 가져온 시즌 삭제는 범위 밖.
+
+### 12.1 시즌 화면 F1Laps 배치 (2026-10-18)
+- 머리줄 "Driver Career Season N ⇅"(내 시즌 메뉴, 최근 20개) + 내 드라이버 이름. 탭 Season · Results · Standings.
+- Season 탭 = 게임 캘린더 전 라운드(달리지 않은 라운드 포함, 서버가 `calendar[]`로 줌): GRAND PRIX(국기·이름 → 본 레이스/첫 세션) · TEAM · RACE · PTS(머리글 = Standings의 내 점수) · QUALI(마지막 GP 예선) · DIFF(레이스/예선 AI, 0 = 모름).
+- 캘린더 밖·같은 트랙 두 번째 주말은 시간상 직전 줄 뒤에 끼운다. 트랙 이름은 그대로(D-43).
