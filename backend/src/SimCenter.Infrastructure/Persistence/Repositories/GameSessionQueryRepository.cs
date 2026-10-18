@@ -40,6 +40,8 @@ public sealed class GameSessionQueryRepository : IGameSessionQueryRepository
                     session.Id,
                     session.ClassifiedAt,
                     TrackName = track.Name,
+                    track.CountryCode,
+                    session.GameCode,
                     session.SessionType,
                     session.SessionKind,
                     session.GameMode,
@@ -48,7 +50,7 @@ public sealed class GameSessionQueryRepository : IGameSessionQueryRepository
                     Me = session.Results
                         .Where(r => r.IsPlayer)
                         .OrderBy(r => r.CarIndex)
-                        .Select(r => new { r.Position, r.GridPosition, r.ResultStatus, r.BestLapTimeMs, r.Points })
+                        .Select(r => new { r.Position, r.GridPosition, r.ResultStatus, r.BestLapTimeMs, r.Points, r.TeamId })
                         .FirstOrDefault(),
                 })
             .Skip(skip)
@@ -69,7 +71,10 @@ public sealed class GameSessionQueryRepository : IGameSessionQueryRepository
                 row.Me?.GridPosition,
                 row.Me?.ResultStatus,
                 row.Me?.BestLapTimeMs,
-                row.Me?.Points))
+                row.Me?.Points,
+                row.GameCode,
+                row.CountryCode,
+                row.Me?.TeamId))
             .ToList();
 
         return (items, total);

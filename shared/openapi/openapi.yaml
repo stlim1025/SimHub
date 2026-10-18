@@ -2124,6 +2124,21 @@ components:
           type: integer
           nullable: true
           example: 12
+        countryCode:
+          type: string
+          nullable: true
+          description: 트랙 국가 코드(ISO 3166-1 alpha-2 대문자, 국기용). 모르면 null (docs/15 §11.4, D-53)
+          example: "SA"
+        myTeam:
+          nullable: true
+          description: 내 결과의 팀(이름·색, D-33·D-52). 내 차 결과가 없으면 null
+          allOf:
+            - $ref: '#/components/schemas/TeamRef'
+        seasonNumber:
+          type: integer
+          nullable: true
+          description: 시즌 번호 — 같은 게임·같은 모드의 내 시즌을 첫 세션 시각 순으로 1부터 센 값. 시즌이 아니면 null (D-54)
+          example: 1
 
     SessionSummaryPage:
       type: object
@@ -2149,9 +2164,17 @@ components:
 
     SessionDetail:
       type: object
+      description: |
+        세션 헤더 + 결과 + F1Laps 카드 재료(docs/15 §11.3·§11.4, D-53). 카드 재료는 서버가 D-49로 저장한 값
+        (`GameSession.details`의 lapHistory·lapPositions, 세션에 연결된 내 랩의 스냅샷 `details`)에서 만든다.
+        데이터가 없으면 null 또는 빈 목록이다(오류가 아니다 — 예전 Agent로 기록한 세션).
       required:
         - session
         - results
+        - qualifyingPositions
+        - laps
+        - tyreStints
+        - penalties
       properties:
         session:
           $ref: '#/components/schemas/SessionDetailHeader'
@@ -2160,6 +2183,219 @@ components:
           description: '`position` 오름차순, 같으면 `carIndex` 오름차순'
           items:
             $ref: '#/components/schemas/SessionResult'
+        qualifyingPositions:
+          type: array
+          description: 예선 세션일 때만 — 같은 주말 예선 세션들의 내 순위(`sessionKind` 순서). 주말이 없으면 이 세션만, 예선이 아니면 빈 목록
+          items:
+            $ref: '#/components/schemas/QualifyingPosition'
+        myBestLap:
+          nullable: true
+          description: 이 세션에 연결된 내 저장 랩 중 최고(유효 랩 우선, 없으면 가장 빠른 랩). 저장 랩이 없으면 null
+          allOf:
+            - $ref: '#/components/schemas/SessionBestLap'
+        setup:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: 마지막 내 랩 스냅샷의 `details.setup`(받은 그대로, 키는 f1_25_udp_spec §7). 없으면 null
+          example: { frontWing: 8, rearWing: 6, brakeBias: 56, tyrePressure: { FL: 23.5, FR: 23.5, RL: 21.5, RR: 21.5 } }
+        laps:
+          type: array
+          description: 내 차 랩별 기록(랩 번호 순). 세션 기록(lapHistory)이 없으면 저장된 내 랩으로 대신한다
+          items:
+            $ref: '#/components/schemas/SessionLap'
+        engineWear:
+          nullable: true
+          description: 마지막 내 랩의 엔진 부품 마모·손상(%). 값이 하나도 없으면 null
+          allOf:
+            - $ref: '#/components/schemas/EngineWear'
+        tyreStints:
+          type: array
+          description: 내 스틴트별 랩 점(Tyre Life Remaining · Lap Times 그래프). 랩 기록이 없으면 빈 목록
+          items:
+            $ref: '#/components/schemas/TyreStintSeries'
+        penalties:
+          type: array
+          description: 내 랩들의 이벤트 중 PENA(랩 순서, 같은 (랩, 차, 침해, 벌칙)은 한 번)
+          items:
+            $ref: '#/components/schemas/SessionPenalty'
+
+    QualifyingPosition:
+      type: object
+      required: [sessionId, sessionKind, position]
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        sessionKind:
+          $ref: '#/components/schemas/SessionKindName'
+        position:
+          type: integer
+          example: 7
+
+    SessionBestLap:
+      type: object
+      required: [lapId, lapTimeMs]
+      properties:
+        lapId:
+          type: string
+          format: uuid
+          description: 랩 상세(`/me/laps/{lapId}`)로 가는 ID
+        lapTimeMs:
+          type: integer
+          example: 89500
+
+    SessionLap:
+      type: object
+      description: |
+        Laps 카드 한 줄. `positionChange` = 이전 랩 순위 − 이 랩 순위(양수 = 올라감, 1랩은 그리드 대비, 모르면 null).
+        `gapToBestMs` = 이 랩 − 내 최고 랩(유효 랩 중 최소, 유효 랩이 없으면 전체 최소). `bestSectors[i]` = 그 섹터가 이 세션 내 유효 섹터 중 최고(보라).
+        `inPit` = 내 랩 스냅샷 `lapData.pitStatus != 0` 또는 스틴트가 바뀐 랩. `lapId`는 같은 랩 번호의 저장된 내 랩(없으면 null).
+      required: [lapNumber, inPit, lapTimeMs, sectors, isValid, isBestLap, bestSectors]
+      properties:
+        lapNumber:
+          type: integer
+          example: 3
+        position:
+          type: integer
+          nullable: true
+          example: 4
+        positionChange:
+          type: integer
+          nullable: true
+          example: -1
+        visualCompound:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/TyreCompoundName'
+        inPit:
+          type: boolean
+        lapTimeMs:
+          type: integer
+          example: 91500
+        gapToBestMs:
+          type: integer
+          nullable: true
+          example: 544
+        sectors:
+          type: array
+          minItems: 3
+          maxItems: 3
+          description: 섹터 1·2·3(ms). 모르면 null
+          items:
+            type: integer
+            nullable: true
+          example: [30700, 31900, 28900]
+        isValid:
+          type: boolean
+        isBestLap:
+          type: boolean
+        bestSectors:
+          type: array
+          minItems: 3
+          maxItems: 3
+          items:
+            type: boolean
+          example: [true, false, true]
+        lapId:
+          type: string
+          format: uuid
+          nullable: true
+
+    EngineWear:
+      type: object
+      description: 엔진 부품 마모(`details.damage.engine*Wear`)와 스냅샷 기어박스·엔진 손상(%). 모르는 칸은 null
+      properties:
+        ice: { type: integer, nullable: true, example: 14 }
+        turboCharger: { type: integer, nullable: true, example: 10 }
+        mguH: { type: integer, nullable: true, example: 9 }
+        mguK: { type: integer, nullable: true, example: 8 }
+        energyStore: { type: integer, nullable: true, example: 7 }
+        controlElectronics: { type: integer, nullable: true, example: 6 }
+        gearbox: { type: integer, nullable: true, example: 10 }
+        engineDamage: { type: integer, nullable: true, example: 30 }
+
+    TyreStintSeries:
+      type: object
+      description: 스틴트 1개. 첫 스틴트는 1랩부터, 다음은 이전 끝 랩 + 1부터. `endLap`은 기록이 있는 마지막 랩으로 자른 값(마지막 스틴트는 기록 끝까지)
+      required: [visualCompound, startLap, endLap, laps]
+      properties:
+        visualCompound:
+          $ref: '#/components/schemas/TyreCompoundName'
+        startLap:
+          type: integer
+          example: 1
+        endLap:
+          type: integer
+          example: 12
+        laps:
+          type: array
+          items:
+            $ref: '#/components/schemas/TyreStintLap'
+
+    TyreStintLap:
+      type: object
+      description: 스틴트 안 랩 1개. 랩타임·남은 수명 둘 다 모르는 랩은 빠진다
+      required: [lapNumber, lapInStint]
+      properties:
+        lapNumber:
+          type: integer
+          example: 3
+        lapInStint:
+          type: integer
+          example: 3
+        lapTimeMs:
+          type: integer
+          nullable: true
+          example: 91500
+        tyreLifeRemaining:
+          type: number
+          nullable: true
+          description: 100 − 그 랩 끝 네 바퀴 평균 마모(%, 소수 첫째 자리)
+          example: 77.1
+
+    SessionPenalty:
+      type: object
+      description: |
+        패널티 한 건(F1 25 Event PENA). 이름은 서버 정적 카탈로그(F1 25 UDP 스펙 표의 영어 이름, 모르면 `Unknown ({n})`).
+        드라이버는 순위표의 같은 `carIndex` 행(나는 `isPlayer` = true). `timeS`는 0·255(해당 없음)면 null.
+      required: [lap, carIndex, driverName, isPlayer, teamColor, infringement, penalty]
+      properties:
+        lap:
+          type: integer
+          example: 2
+        carIndex:
+          type: integer
+          example: 0
+        driverName:
+          type: string
+          example: "Player"
+        isPlayer:
+          type: boolean
+        teamColor:
+          type: string
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          example: "#E8002D"
+        infringement:
+          type: string
+          example: "Small Collision"
+        penalty:
+          type: string
+          example: "Warning"
+        timeS:
+          type: integer
+          nullable: true
+          example: 5
+        infringementType:
+          type: integer
+          nullable: true
+          description: 원시 침해 종류(0~54)
+          example: 4
+        penaltyType:
+          type: integer
+          nullable: true
+          description: 원시 벌칙 종류(0~17)
+          example: 5
 
     SessionDetailHeader:
       description: 세션 요약의 모든 필드 + 세션 설정. 시즌에 속하지 않은 세션이면 `round`가 null이다.
@@ -2185,6 +2421,11 @@ components:
               nullable: true
               description: 시즌 상세의 라운드 번호와 같은 계산. 시즌에 속하지 않으면 null
               example: 7
+            weather:
+              nullable: true
+              description: 세션 마지막 내 랩 스냅샷의 날씨(Conditions 카드). 없으면 null (docs/15 §11.3)
+              allOf:
+                - $ref: '#/components/schemas/WeatherName'
 
     SessionResult:
       type: object
@@ -2278,6 +2519,18 @@ components:
           description: 스틴트 번호 순서
           items:
             $ref: '#/components/schemas/TyreStint'
+        gapMs:
+          type: integer
+          nullable: true
+          description: |
+            1위 대비 차(ms, docs/15 §11.4). 레이스 = (총 시간 + 패널티) − 1위의 (총 시간 + 패널티), 1위는 0.
+            예선·연습 = 최고 랩 − 세션 최고 랩. 시간이 없으면 null
+          example: 2309
+        positionChange:
+          type: integer
+          nullable: true
+          description: 그리드 − 순위(양수 = 올라감). 레이스만, 그리드 0이면 null
+          example: 2
 
     TyreStint:
       type: object

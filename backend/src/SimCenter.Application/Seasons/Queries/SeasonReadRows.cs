@@ -29,6 +29,7 @@ public sealed record WeekendRow(Guid WeekendId, Guid SeasonId, string TrackName,
 /// <summary>
 /// 세션 목록 한 줄(12 §7.2). <c>My*</c>는 내 차 결과(<c>IsPlayer</c> 행)에서 읽고, 없으면 null이다.
 /// <see cref="MyBestLapTimeMs"/>는 저장 값 그대로(0 = 기록 없음)이며, null 변환은 서비스가 한다.
+/// <see cref="CountryCode"/>는 트랙의 국가 코드, <see cref="MyTeamId"/>는 내 결과의 팀(docs/15 §11.2, 이름·색은 서비스가 푼다).
 /// </summary>
 public sealed record SessionSummaryRow(
     Guid SessionId,
@@ -43,4 +44,7 @@ public sealed record SessionSummaryRow(
     int? MyGridPosition,
     ResultStatus? MyResultStatus,
     int? MyBestLapTimeMs,
-    int? MyPoints);
+    int? MyPoints,
+    string GameCode,
+    string? CountryCode,
+    int? MyTeamId);

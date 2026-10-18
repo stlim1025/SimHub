@@ -41,6 +41,7 @@ public static class DependencyInjection
         services.AddScoped<IGameSessionRepository, GameSessionRepository>();
         services.AddScoped<ISeasonQueryRepository, SeasonQueryRepository>();
         services.AddScoped<IGameSessionQueryRepository, GameSessionQueryRepository>();
+        services.AddScoped<ISessionDetailQueryRepository, SessionDetailQueryRepository>();
         services.AddScoped<DbSeeder>();
 
         // ── 어댑터 ──
