@@ -312,6 +312,7 @@ paths:
       description: |
         거리 기준 표본(`resolutionM` m 간격, D-45) 7채널. 배열은 모두 `sampleCount` 길이의 정수 배열이다.
         `timeMs` 랩 시작부터 ms · `speedKph` · `throttle`/`brake` 0~100 · `steer` −100~100 · `gear` −1~8(0=N, −1=R) · `rpm`.
+        `extra`는 추가 채널 맵(D-49, 같은 길이의 실수 배열)이며 없으면 `{}`다.
         트레이스가 없는 랩(이전 Agent로 기록)·남의 랩·없는 랩은 404다.
       operationId: getMyLapTrace
       parameters:
@@ -1239,6 +1240,11 @@ components:
         시작 값(`*Start*`)은 랩 시작 직후 값, 끝 값은 랩 끝 값 — "이 랩 사용량"은 앱이 계산한다(ERS 배터리 최대 4,000,000J).
         손상은 퍼센트(0~100), 연료 kg, ERS J. `fuelRemainingLaps`는 MFD 값이라 음수일 수 있다.
       properties:
+        teamId:
+          type: integer
+          nullable: true
+          description: 게임 팀 ID(이름·색은 `lap.team`)
+          example: 1
         visualTyreCompound:
           type: integer
           nullable: true
@@ -1325,6 +1331,16 @@ components:
           type: number
           nullable: true
           example: 1600000
+        details:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: |
+            그 밖의 값 묶음(D-49, 15 §8): 셋업·엔진 부품 마모·Car Status 나머지·타이어 세트·타임 트라이얼·그 랩의 이벤트 등.
+            Agent가 보낸 JSON 객체를 그대로 돌려준다(백엔드는 구조를 해석하지 않는다, 키 순서는 보장하지 않는다). 없으면 null.
+          example:
+            setup: { frontWing: 5, brakeBias: 56.5 }
+            events: [ { code: "FLBK", t: 12.25 } ]
 
     LapConditions:
       type: object
@@ -1418,6 +1434,7 @@ components:
         - steer
         - gear
         - rpm
+        - extra
       properties:
         lapId:
           type: string
@@ -1461,6 +1478,18 @@ components:
           type: array
           items:
             type: integer
+        extra:
+          type: object
+          description: |
+            추가 채널 맵(D-49): 채널 이름(`^[A-Za-z0-9]{1,40}$`, 최대 150개) → 같은 길이(`sampleCount`)의 실수 배열.
+            채널 목록·단위는 `shared/telemetry/f1_25_udp_spec.md` 카탈로그. 추가 채널이 없으면 빈 객체 `{}`.
+          additionalProperties:
+            type: array
+            items:
+              type: number
+          example:
+            clutch: [0, 0, 12.5]
+            brakeTempFL: [512.37, 515.1, 520.0]
 
     PairingCodeResponse:
       type: object
