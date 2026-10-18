@@ -17,6 +17,10 @@ class AppUser {
   /// 프로필 설정(공개 여부·프로필 사진·게임 환경·타임존·테마, docs/14 §3).
   final UserPreferences preferences;
 
+  /// `GET /me`에서 읽은 전체 프로필인지. 로그인 응답의 요약(이메일 없음)이면 false — [preferences]는 실제 값이 아니라 기본값이라
+  /// 그대로 저장하면 사용자의 설정(예: 랭킹 이름 비공개)을 덮어쓴다. 설정 화면은 false면 프로필을 다시 읽고, 읽기 전에는 저장을 막는다.
+  bool get isProfileLoaded => email != null;
+
   factory AppUser.fromJson(Map<String, dynamic> json) => AppUser(
         userId: json['userId'] as String,
         displayName: json['displayName'] as String,

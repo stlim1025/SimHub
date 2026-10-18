@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exception.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/time/clock_provider.dart';
 import '../../../core/util/relative_time.dart';
@@ -100,7 +99,7 @@ class _IssueError extends StatelessWidget {
     final message = error is ApiException ? (error as ApiException).message : _issueFailedText;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Text(message, style: const TextStyle(color: AppColors.danger)),
+      child: Text(message, style: TextStyle(color: context.palette.danger)),
     );
   }
 }
@@ -185,7 +184,7 @@ class _IssuedCodeState extends ConsumerState<_IssuedCode> {
               style: theme.textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w600,
                 fontFeatures: const [FontFeature.tabularFigures()],
-                color: expired ? AppColors.danger : null,
+                color: expired ? context.palette.danger : null,
               ),
             ),
           ],

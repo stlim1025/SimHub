@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/layout/layout_constants.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/util/lap_time.dart';
 import '../../../core/widgets/error_retry.dart';
@@ -125,7 +124,7 @@ class _RecentLapRow extends StatelessWidget {
             ),
           ),
           if (!lap.isValid) ...[
-            Text('무효', style: theme.textTheme.bodySmall?.copyWith(color: AppColors.danger)),
+            Text('무효', style: theme.textTheme.bodySmall?.copyWith(color: context.palette.danger)),
             const SizedBox(width: 12),
           ],
           Text(

@@ -18,7 +18,14 @@ class AppColors {
   static const Color lightSurface = Color(0xFFFFFFFF);
   static const Color lightBorder = Color(0xFFE2E5EC);
   static const Color lightTextPrimary = Color(0xFF111827);
-  static const Color lightTextMuted = Color(0xFF6B7280);
+  static const Color lightTextMuted = Color(0xFF646B78);
+
+  /// 밝은 표면 위 상태·시상대 글자색. 흰 표면 대비 약 4.5:1 이상(어두운 테마는 아래 `danger`·`success`·`podium*`을 그대로 쓴다).
+  static const Color lightDanger = Color(0xFFB91C1C);
+  static const Color lightSuccess = Color(0xFF15803D);
+  static const Color lightPodiumGold = Color(0xFF8A6500);
+  static const Color lightPodiumSilver = Color(0xFF5B6472);
+  static const Color lightPodiumBronze = Color(0xFF8C4A12);
 
   /// 강조색 위에 올리는 글자색.
   static const Color onAccent = Color(0xFFFFFFFF);

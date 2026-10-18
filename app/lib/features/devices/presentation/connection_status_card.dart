@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/time/clock_provider.dart';
 import '../../../core/widgets/error_retry.dart';
@@ -61,7 +60,7 @@ class _StatusRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final kind = connectionKindOf(devices, now);
-    final dotColor = kind == ConnectionKind.receiving ? AppColors.success : context.palette.textMuted;
+    final dotColor = kind == ConnectionKind.receiving ? context.palette.success : context.palette.textMuted;
 
     return Row(
       children: [

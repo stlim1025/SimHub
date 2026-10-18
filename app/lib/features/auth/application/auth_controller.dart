@@ -54,13 +54,23 @@ class AuthController extends AsyncNotifier<AppUser?> {
     state = AsyncData(user);
   }
 
+  /// 전체 프로필(`GET /me`)을 다시 읽는다 — 로그인 직후 조회가 실패해 요약 사용자만 있을 때 설정 화면이 부른다.
+  /// 인증 상태를 로딩으로 바꾸지 않는다(라우터가 스플래시로 튀지 않게). 실패하면 [ApiException] 등을 그대로 던진다.
+  Future<void> reloadProfile() async {
+    if (state.valueOrNull == null) {
+      return;
+    }
+    applyProfile(await ref.read(authRepositoryProvider).me());
+  }
+
   Future<void> logout() async {
     await ref.read(tokenStoreProvider).clear();
     state = const AsyncData(null);
   }
 
   /// 로그인 직후 전체 프로필(`GET /me`)을 읽는다. 로그인 응답에는 이메일·설정이 없다.
-  /// 이미 로그인은 성공했으므로 프로필 조회가 실패해도 요약 사용자(기본 설정)로 진행하고, 다음 세션 복원 때 다시 읽는다.
+  /// 이미 로그인은 성공했으므로 프로필 조회가 실패해도 요약 사용자로 진행한다. 요약 사용자는 [AppUser.isProfileLoaded]가 false라
+  /// 설정 화면이 프로필을 다시 읽기 전에는 저장할 수 없다(기본값으로 실제 설정을 덮어쓰지 않게).
   Future<AppUser> _profileOr(AuthRepository repo, AppUser summary) async {
     try {
       return await repo.me();

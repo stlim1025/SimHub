@@ -31,7 +31,7 @@ class AppTheme {
       onSurfaceVariant: palette.textMuted,
       outline: palette.border,
       outlineVariant: palette.border,
-      error: AppColors.danger,
+      error: palette.danger,
     );
 
     final base = ThemeData(colorScheme: scheme, useMaterial3: true);

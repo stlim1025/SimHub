@@ -19,13 +19,6 @@ const double _positionWidth = 28;
 
 const double _cellPadding = 12;
 
-/// 순위 숫자 → 시상대 색(1·2·3위).
-const Map<int, Color> _podiumColors = {
-  1: AppColors.podiumGold,
-  2: AppColors.podiumSilver,
-  3: AppColors.podiumBronze,
-};
-
 /// 행 하나의 배경: 내 행은 강조색, 아래에는 가는 구분선.
 BoxDecoration _rowDecoration(BuildContext context, {required bool highlighted}) => BoxDecoration(
       color: highlighted ? AppColors.playerRow : null,
@@ -219,7 +212,7 @@ class _ResultCell extends StatelessWidget {
     final podium = standingCellPodiumPlace(cell);
     // 순위 칸은 기본 글자색, 상태 칸·기록 없음은 textMuted.
     final color = podium != null
-        ? _podiumColors[podium]
+        ? context.palette.podiumFor(podium) // 시상대 금·은·동 글자(테마별, 밝은 테마는 대비를 높인 색).
         : (standingCellShowsPosition(cell) ? null : context.palette.textMuted);
 
     return SizedBox(

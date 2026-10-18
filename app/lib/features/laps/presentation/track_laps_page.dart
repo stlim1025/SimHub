@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/layout/layout_constants.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/util/lap_time.dart';
 import '../../../core/widgets/error_retry.dart';
@@ -213,9 +212,9 @@ class _LapTimeCell extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         if (lap.isValid)
-          const Icon(Icons.check, size: 16, color: AppColors.success, semanticLabel: '유효')
+          Icon(Icons.check, size: 16, color: context.palette.success, semanticLabel: '유효')
         else
-          Text('무효', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.danger)),
+          Text('무효', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: context.palette.danger)),
       ],
     );
   }

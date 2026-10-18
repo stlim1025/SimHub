@@ -10,13 +10,17 @@ class ApiException implements Exception {
   /// 검증 실패(400)의 필드별 첫 메시지(`errors.<필드>[0]`, 04 §1). 예: `{'currentPassword': '현재 비밀번호가 올바르지 않습니다.'}`.
   final Map<String, String> fieldErrors;
 
-  /// DioException을 사용자 메시지로 매핑한다. RFC7807 Problem Details의 필드 오류 → `detail` → `title` 순으로 쓴다
+  /// 우리 서버 예외 미들웨어가 만든 Problem Details의 `type` 접두사(04 §1). 이 문서만 사용자에게 보일 문구로 믿는다.
+  static const _problemTypePrefix = 'https://simcenter/errors/';
+
+  /// DioException을 사용자 메시지로 매핑한다. 우리 서버의 RFC7807 Problem Details면 필드 오류 → `detail` → `title` 순으로 쓴다
   /// (검증 실패의 `detail`은 늘 "Validation failed."라 필드 메시지가 더 쓸모 있다).
+  /// 그 밖의 오류 본문(예: ASP.NET 모델 바인딩의 `$.field` 키·.NET 타입 이름이 든 메시지)은 보이지 않고 상태 코드별 일반 메시지를 쓴다.
   factory ApiException.fromDio(DioException error) {
     final status = error.response?.statusCode;
     final data = error.response?.data;
 
-    if (data is Map) {
+    if (data is Map && _isSimCenterProblem(data)) {
       final fields = _fieldErrors(data['errors']);
       final detail = data['detail'] ?? data['title'];
       final message = fields.isNotEmpty ? fields.values.first : detail;
@@ -44,6 +48,11 @@ class ApiException implements Exception {
     };
 
     return ApiException(message, statusCode: status);
+  }
+
+  static bool _isSimCenterProblem(Map<dynamic, dynamic> data) {
+    final type = data['type'];
+    return type is String && type.startsWith(_problemTypePrefix);
   }
 
   /// `errors` 객체 → 필드별 첫 메시지. 형식이 다르면 빈 맵.

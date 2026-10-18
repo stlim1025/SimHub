@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/network/api_exception.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/time/clock_provider.dart';
 import '../../../core/util/relative_time.dart';
@@ -130,7 +129,7 @@ class _DeviceRow extends StatelessWidget {
           OutlinedButton(
             onPressed: onRevoke,
             style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.danger,
+              foregroundColor: context.palette.danger,
               minimumSize: const Size(96, 40),
             ),
             child: const Text(_revokeLabel),

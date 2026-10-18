@@ -190,7 +190,7 @@ void main() {
   });
 
   testWidgets('사이드바 하단 프로필을 누르면 셸 안에서 계정 설정(/settings)이 열린다', (t) async {
-    final router = await _pumpApp(t);
+    final router = await _pumpApp(t, user: settingsUser);
 
     await t.tap(find.byKey(const ValueKey('account-settings')));
     await t.pumpAndSettle();

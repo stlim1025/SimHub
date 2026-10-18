@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/network/api_exception.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../auth/domain/user_input_rules.dart';
 
@@ -88,6 +87,7 @@ class _ChangeEmailDialog extends StatefulWidget {
 class _ChangeEmailDialogState extends State<_ChangeEmailDialog> {
   static const _newEmailField = 'newEmail';
   static const _currentPasswordField = 'currentPassword';
+  static const _knownFields = [_newEmailField, _currentPasswordField];
 
   final _formKey = GlobalKey<FormState>();
   final _email = TextEditingController();
@@ -119,7 +119,12 @@ class _ChangeEmailDialogState extends State<_ChangeEmailDialog> {
         Navigator.of(context).pop(true);
       }
     } on ApiException catch (e) {
-      _showError(fieldErrors: e.fieldErrors, general: e.fieldErrors.isEmpty ? e.message : null);
+      // 이 대화상자의 칸(새 이메일·현재 비밀번호)에 해당하는 오류만 칸 아래에 보이고, 아니면 일반 메시지를 아래에 보인다.
+      final known = {
+        for (final field in _knownFields)
+          field: ?e.fieldErrors[field],
+      };
+      _showError(fieldErrors: known, general: known.isEmpty ? e.message : null);
     } catch (e) {
       debugPrint('이메일 변경 실패: $e');
       _showError(general: _unexpectedError);
@@ -170,7 +175,7 @@ class _ChangeEmailDialogState extends State<_ChangeEmailDialog> {
             ),
             if (_generalError != null) ...[
               const SizedBox(height: 12),
-              Text(_generalError!, style: const TextStyle(color: AppColors.danger)),
+              Text(_generalError!, style: TextStyle(color: context.palette.danger)),
             ],
           ],
         ),

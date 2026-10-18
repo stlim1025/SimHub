@@ -203,7 +203,7 @@ class _RankingList extends StatelessWidget {
               style: theme.textTheme.bodySmall?.copyWith(color: context.palette.textMuted),
             ),
             const Spacer(),
-            const Icon(Icons.circle, size: 10, color: AppColors.success),
+            Icon(Icons.circle, size: 10, color: context.palette.success),
             const SizedBox(width: 6),
             Text('실시간', style: theme.textTheme.bodySmall?.copyWith(color: context.palette.textMuted)),
           ],

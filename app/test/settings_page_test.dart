@@ -5,6 +5,7 @@ import 'package:simcenter_app/core/network/api_exception.dart';
 import 'package:simcenter_app/core/realtime/ranking_hub_client.dart';
 import 'package:simcenter_app/core/theme/app_colors.dart';
 import 'package:simcenter_app/features/auth/application/auth_controller.dart';
+import 'package:simcenter_app/features/auth/data/auth_repository.dart';
 import 'package:simcenter_app/features/auth/domain/auth_models.dart';
 import 'package:simcenter_app/features/auth/domain/user_preferences.dart';
 import 'package:simcenter_app/features/profile/data/profile_repository.dart';
@@ -15,18 +16,43 @@ import 'support/fakes.dart';
 const _wide = Size(1000, 1600);
 const _phone = Size(375, 1600);
 
+/// `me()`가 [results]를 차례로 돌려주는(오류면 던지는) 인증 저장소.
+class _SequenceAuthRepository implements AuthRepository {
+  _SequenceAuthRepository({required this.results});
+
+  final List<Object> results;
+  int calls = 0;
+
+  @override
+  Future<AppUser> me() async {
+    final result = results[calls++];
+    if (result is AppUser) {
+      return result;
+    }
+    throw result;
+  }
+
+  @override
+  Future<LoginResult> login(String email, String password) => throw UnimplementedError();
+
+  @override
+  Future<void> register(String email, String password, String displayName) => throw UnimplementedError();
+}
+
 Future<ProviderContainer> _pumpSettings(
   WidgetTester tester, {
   FakeProfileRepository? repo,
   FakeRankingHub? hub,
   AppUser user = settingsUser,
   Size size = _wide,
+  List<Override> extraOverrides = const [],
 }) async {
   setViewSize(tester, size);
   final container = ProviderContainer(overrides: [
     fakeAuth(user),
     profileRepositoryProvider.overrideWithValue(repo ?? FakeProfileRepository(user: user)),
     rankingHubClientProvider.overrideWithValue(hub ?? FakeRankingHub()),
+    ...extraOverrides,
   ]);
   addTearDown(container.dispose);
   await container.read(authControllerProvider.future);
@@ -116,19 +142,19 @@ void main() {
 
     await _tap(t, find.byKey(const ValueKey('privacy-checkbox')));
     await _tap(t, find.byKey(const ValueKey('choice-gamepad')));
-    await _tap(t, find.byKey(const ValueKey('choice-dark')));
+    await _tap(t, find.byKey(const ValueKey('choice-light')));
     await _tap(t, _save);
 
     final sent = repo.updates.single;
     expect(sent.preferences.avatarTeam, 'MCL');
     expect(sent.preferences.showOnLeaderboard, isFalse);
     expect(sent.preferences.controller, ControllerType.gamepad);
-    expect(sent.preferences.theme, ThemePreference.dark);
+    expect(sent.preferences.theme, ThemePreference.light);
     expect(sent.toJson()['controller'], 'Gamepad');
 
     final user = container.read(authControllerProvider).value!;
     expect(user.preferences.avatarTeam, 'MCL');
-    expect(user.preferences.theme, ThemePreference.dark);
+    expect(user.preferences.theme, ThemePreference.light);
     expect(_enabled(t, _save), isFalse);
     expect(find.text('변경 사항을 저장했어요.'), findsOneWidget);
   });
@@ -246,6 +272,43 @@ void main() {
     expect(find.text('지원하지 않는 값입니다.'), findsOneWidget);
     expect(_privacyChecked(t), isFalse);
     expect(_enabled(t, _save), isTrue);
+  });
+
+  testWidgets('이 대화상자에 없는 필드 오류는 칸 대신 일반 메시지로 보인다', (t) async {
+    final repo = FakeProfileRepository(
+      emailError: ApiException('요청을 처리하지 못했어요.', statusCode: 400, fieldErrors: const {'request': '알 수 없는 필드'}),
+    );
+    await _pumpSettings(t, repo: repo);
+
+    await _tap(t, find.byKey(const ValueKey('change-email')));
+    await t.enterText(find.byKey(const ValueKey('email-new')), 'new@simcenter.test');
+    await t.enterText(find.byKey(const ValueKey('email-password')), 'P@ssw0rd!');
+    await _tap(t, find.byKey(const ValueKey('email-submit')));
+
+    expect(find.text('요청을 처리하지 못했어요.'), findsOneWidget);
+    expect(find.text('알 수 없는 필드'), findsNothing);
+  });
+
+  testWidgets('로그인 직후 프로필 조회가 실패한 요약 사용자는 다시 읽기 전까지 저장할 수 없고, 다시 시도하면 실제 설정이 열린다', (t) async {
+    const partial = AppUser(userId: 'u1', displayName: '홍길동'); // 이메일 없음 = 요약.
+    final auth = _SequenceAuthRepository(
+      results: [
+        ApiException('서버가 아파요.', statusCode: 500),
+        settingsUser.copyWith(preferences: settingsUser.preferences.copyWith(showOnLeaderboard: false)),
+      ],
+    );
+    await _pumpSettings(t, user: partial, extraOverrides: [authRepositoryProvider.overrideWithValue(auth)]);
+
+    expect(find.text('서버가 아파요.'), findsOneWidget);
+    expect(_save, findsNothing); // 기본값으로 실제 설정을 덮어쓰지 않도록 저장 바가 없다.
+    expect(find.byKey(const ValueKey('privacy-checkbox')), findsNothing);
+
+    await _tap(t, find.text('다시 시도'));
+
+    expect(auth.calls, 2);
+    expect(find.text('driver@simcenter.test'), findsOneWidget);
+    expect(_privacyChecked(t), isFalse); // 서버의 실제 값(비공개).
+    expect(_enabled(t, _save), isFalse);
   });
 
   testWidgets('로그아웃 버튼은 허브를 끊고 인증을 해제한다', (t) async {

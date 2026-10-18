@@ -44,7 +44,7 @@ enum UnitSystem {
   static UnitSystem fromWire(String? value) => _fromWire(values, value, (e) => e.wire, UserPreferences.defaults.units);
 }
 
-/// 화면 테마. [system]은 기기 밝기 설정을 따른다.
+/// 화면 테마. 기본은 [dark](D-40). [system]을 고르면 기기 밝기 설정을 따른다.
 enum ThemePreference {
   light('Light', 'Light'),
   dark('Dark', 'Dark'),
@@ -84,7 +84,7 @@ class UserPreferences {
     required this.theme,
   });
 
-  /// 새 사용자 기본값(백엔드 `UserProfileDefaults`와 같다).
+  /// 새 사용자 기본값(백엔드 `UserProfileDefaults`와 같다). 테마는 Dark(D-40, 기존 어두운 화면 유지).
   static const defaults = UserPreferences(
     showOnLeaderboard: true,
     avatarTeam: null,
@@ -93,7 +93,7 @@ class UserPreferences {
     console: ConsolePlatform.pc,
     units: UnitSystem.metric,
     timeZoneId: 'Asia/Seoul',
-    theme: ThemePreference.system,
+    theme: ThemePreference.dark,
   );
 
   /// false면 랭킹에 "익명 드라이버"로 보인다.

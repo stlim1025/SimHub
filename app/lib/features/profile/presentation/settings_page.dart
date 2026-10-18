@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/layout/layout_constants.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../core/widgets/error_retry.dart';
+import '../../auth/application/auth_controller.dart';
 import '../../auth/application/sign_out.dart';
 import '../application/profile_form_controller.dart';
 import 'settings_sections.dart';
@@ -15,11 +17,17 @@ const double _buttonMinWidth = 96;
 
 /// 계정 설정(Edit Profile, docs/14 §8): 프로필 · 설정 · 프로필 사진 + 아래에 고정된 저장/취소 바.
 /// 사이드바 하단 프로필(사진·이름·"계정 설정")을 누르면 열린다. 결제·비밀번호 변경·계정 삭제는 없다(범위 밖).
+/// 로그인 직후 프로필 조회가 실패해 요약 사용자만 있으면, 폼 대신 프로필을 다시 읽는다(읽기 전에는 저장 바가 없다).
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // null = 로그아웃(라우터가 로그인 화면으로 보낸다), false = 요약 사용자(프로필을 다시 읽는다), true = 폼.
+    final loaded = ref.watch(authControllerProvider.select((auth) => auth.valueOrNull?.isProfileLoaded));
+    if (loaded == null) {
+      return const SizedBox.shrink();
+    }
     return Column(
       children: [
         Expanded(
@@ -43,16 +51,45 @@ class SettingsPage extends ConsumerWidget {
                 ],
               ),
               const SizedBox(height: 24),
-              const ProfileSection(),
-              const SizedBox(height: _sectionGap),
-              const PreferencesSection(),
-              const SizedBox(height: _sectionGap),
-              const AvatarSection(),
+              if (loaded) ...const [
+                ProfileSection(),
+                SizedBox(height: _sectionGap),
+                PreferencesSection(),
+                SizedBox(height: _sectionGap),
+                AvatarSection(),
+              ] else
+                const _ProfileLoader(),
             ],
           ),
         ),
-        const _SaveBar(),
+        if (loaded) const _SaveBar(),
       ],
+    );
+  }
+}
+
+/// 전체 프로필을 다시 읽는 동안의 진행 표시, 실패하면 오류 + 다시 시도. 성공하면 인증 상태가 바뀌어 폼이 열린다.
+class _ProfileLoader extends ConsumerWidget {
+  const _ProfileLoader();
+
+  static const _fallbackMessage = '프로필을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.';
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final reload = ref.watch(profileReloadProvider);
+    return reload.when(
+      error: (error, _) => ErrorRetry(
+        key: const ValueKey('profile-reload-error'),
+        error: error,
+        fallbackMessage: _fallbackMessage,
+        onRetry: () => ref.invalidate(profileReloadProvider),
+      ),
+      loading: () => const Padding(
+        padding: EdgeInsets.all(24),
+        child: Center(child: CircularProgressIndicator(key: ValueKey('profile-reload-progress'))),
+      ),
+      // 성공하면 인증 상태가 전체 프로필로 바뀌어 이 위젯 대신 폼이 그려진다.
+      data: (_) => const SizedBox.shrink(),
     );
   }
 }
@@ -66,10 +103,10 @@ class _SaveBar extends ConsumerWidget {
     final state = ref.watch(profileFormControllerProvider);
     final form = ref.read(profileFormControllerProvider.notifier);
     final palette = context.palette;
-    final canAct = state.isDirty && !state.saving;
+    final canAct = state.canSave;
 
     final status = state.error != null
-        ? Text(state.error!, style: const TextStyle(color: AppColors.danger))
+        ? Text(state.error!, style: TextStyle(color: context.palette.danger))
         : Text(
             state.isDirty ? '저장하지 않은 변경 사항이 있어요.' : '모든 변경 사항이 저장됐어요.',
             style: TextStyle(color: palette.textMuted),
