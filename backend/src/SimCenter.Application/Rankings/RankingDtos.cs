@@ -56,8 +56,9 @@ public sealed record PersonalBestDto(Guid TrackId, int LapTimeMs, DateTime SetAt
 /// <summary>
 /// 개별 랩(무효 랩 포함, D-15/D-16). 15 §4.2 추가 필드: 랩 번호, 게임 모드(옛 랩 null), 팀(스냅샷의 팀 ID → <c>TeamCatalog</c>, 없으면 null),
 /// 날씨(<c>Weather</c> 이름, 모르면 null), 트레이스 유무.
+/// 봉인하지 않는다 — 실시간 <c>LapRecorded</c>가 같은 필드에 trackId만 더해 평평하게 보낸다(docs/15 §9, D-50).
 /// </summary>
-public sealed record LapDto(
+public record LapDto(
     Guid LapId,
     string TrackName,
     string GameCode,

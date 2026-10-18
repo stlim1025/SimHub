@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging.Abstractions;
 using SimCenter.Application.Common.Interfaces;
+using SimCenter.Application.Laps;
 using SimCenter.Application.Laps.Ingest;
 using SimCenter.Application.Rankings;
 using SimCenter.Application.Rankings.Notifications;
@@ -31,6 +32,7 @@ public class TelemetryIngestServiceTests
     private readonly FakeUnitOfWork _uow = new();
     private readonly FakeRankingService _ranking = new();
     private readonly FakeRankingNotifier _notifier = new();
+    private readonly LapsBackedQueryRepository _lapQueries;
 
     private readonly Guid _ownerId = Guid.Parse("00000000-0000-0000-0000-0000000000a1");
     private readonly Guid _deviceId = Guid.Parse("00000000-0000-0000-0000-0000000000e1");
@@ -45,10 +47,12 @@ public class TelemetryIngestServiceTests
         _devices.Items.Add(_device);
         _tracks.Items.Add(new Track { Id = _trackId, GameCode = GameCode, GameTrackId = GameTrackId, Name = "Silverstone" });
 
+        _lapQueries = new LapsBackedQueryRepository(_laps, _tracks);
+
         var ids = new SequentialIdGenerator();
         _sut = new TelemetryIngestService(
             _processed, _devices, _tracks, _laps, _classification, _uow,
-            ids, new FakeClock(Now), _ranking, _notifier,
+            ids, new FakeClock(Now), _ranking, _notifier, _lapQueries,
             new LapDetailExtractor(ids, NullLogger<LapDetailExtractor>.Instance),
             NullLogger<TelemetryIngestService>.Instance);
     }
@@ -271,8 +275,8 @@ public class TelemetryIngestServiceTests
 
         var recorded = Assert.Single(_notifier.LapRecords);
         Assert.Equal(_ownerId, recorded.UserId);
-        Assert.Equal(_trackId, recorded.TrackId);
-        Assert.True(recorded.IsRankingEligible);
+        Assert.Equal(_trackId, recorded.Notice.TrackId);
+        Assert.True(recorded.Notice.IsRankingEligible);
 
         var pb = Assert.Single(_notifier.PersonalBests);
         Assert.Equal(_ownerId, pb.UserId);
@@ -323,12 +327,79 @@ public class TelemetryIngestServiceTests
     }
 
     [Fact]
-    public async Task InvalidLap_DoesNotBroadcastLapRecorded()
+    public async Task InvalidLap_StillSendsLapRecorded_ButNotRanking()
     {
+        // D-50: 내 랩 목록은 무효 랩도 보이므로 무효 랩도 주인에게 알린다(랭킹은 아님).
         await _sut.IngestAsync(LapFinished(isValid: false), _deviceId);
 
-        Assert.Empty(_notifier.LapRecords);
+        var recorded = Assert.Single(_notifier.LapRecords);
+        Assert.False(recorded.Notice.IsValid);
         Assert.Empty(_notifier.RankingUpdates);
+    }
+
+    [Fact]
+    public async Task SavedLap_SendsLapRecorded_ToOwner_WithSameLapDtoAsMyLaps()
+    {
+        await _sut.IngestAsync(LapFinished(), _deviceId);
+
+        var lap = Assert.Single(_laps.Items);
+        var (userId, notice) = Assert.Single(_notifier.LapRecords);
+        Assert.Equal(_ownerId, userId);
+
+        // GET /me/laps와 같은 매퍼 결과 + trackId(docs/15 §9, D-50).
+        var expected = LapDtoMapper.ToLapDto((await _lapQueries.GetMineAsync(_ownerId, lap.Id))!);
+        Assert.Equal(expected.Sectors, notice.Sectors);
+        Assert.Equal(expected.Team, notice.Team);
+        Assert.Equal(expected.Weather, notice.Weather);
+        Assert.Equal(expected.IsRankingEligible, notice.IsRankingEligible);
+        Assert.Equal(lap.Id, notice.LapId);
+        Assert.Equal("Silverstone", notice.TrackName);
+        Assert.Equal(GameCode, notice.GameCode);
+        Assert.Equal(nameof(SessionType.TimeTrial), notice.SessionType);
+        Assert.Equal(83452, notice.LapTimeMs);
+        Assert.Equal(3, notice.Sectors.Count);
+        Assert.Equal(4, notice.LapNumber);
+        Assert.Equal(Now, notice.SetAt);
+        Assert.False(notice.HasTrace);
+        Assert.Equal(_trackId, notice.TrackId);
+    }
+
+    [Fact]
+    public async Task DuplicateOrRejectedLap_DoesNotSendLapRecorded()
+    {
+        var envelope = LapFinished(eventId: Guid.Parse("22222222-2222-2222-2222-222222222222"));
+        await _sut.IngestAsync(envelope, _deviceId);
+        await _sut.IngestAsync(envelope, _deviceId);                   // 중복
+        await _sut.IngestAsync(LapFinished(trackId: 999), _deviceId);  // 트랙 매핑 없음 → Reject
+
+        Assert.Single(_notifier.LapRecords);
+        Assert.Equal(1, _lapQueries.GetMineCalls);
+    }
+
+    [Fact]
+    public async Task LapRecordedFailure_DoesNotBreakIngest_OrOtherBroadcasts()
+    {
+        _notifier.ThrowOnLapRecorded = true;
+
+        var result = await _sut.IngestAsync(LapFinished(), _deviceId);
+
+        Assert.True(result.Acknowledged);
+        Assert.Single(_laps.Items);
+        Assert.Single(_processed.Items);
+        Assert.Single(_notifier.PersonalBests);   // 다른 브로드캐스트는 그대로.
+        Assert.Single(_notifier.RankingUpdates);
+    }
+
+    [Fact]
+    public async Task LapRowLookupFailure_DoesNotBreakIngest()
+    {
+        _lapQueries.ThrowOnGetMine = true;
+
+        var result = await _sut.IngestAsync(LapFinished(), _deviceId);
+
+        Assert.True(result.Acknowledged);
+        Assert.Empty(_notifier.LapRecords);
+        Assert.Single(_notifier.RankingUpdates);
     }
 
     [Fact]
@@ -706,7 +777,8 @@ public class TelemetryIngestServiceTests
     private sealed class FakeRankingNotifier : IRankingNotifier
     {
         public List<RankingSnapshotDto> RankingUpdates { get; } = new();
-        public List<LapRecordedNotice> LapRecords { get; } = new();
+        public List<(Guid UserId, LapRecordedNotice Notice)> LapRecords { get; } = new();
+        public bool ThrowOnLapRecorded { get; set; }
         public List<PersonalBestNotice> PersonalBests { get; } = new();
 
         public Task RankingUpdatedAsync(RankingSnapshotDto snapshot, CancellationToken ct = default)
@@ -715,9 +787,14 @@ public class TelemetryIngestServiceTests
             return Task.CompletedTask;
         }
 
-        public Task LapRecordedAsync(LapRecordedNotice notice, CancellationToken ct = default)
+        public Task LapRecordedAsync(Guid userId, LapRecordedNotice notice, CancellationToken ct = default)
         {
-            LapRecords.Add(notice);
+            if (ThrowOnLapRecorded)
+            {
+                throw new InvalidOperationException("hub down");
+            }
+
+            LapRecords.Add((userId, notice));
             return Task.CompletedTask;
         }
 
@@ -726,6 +803,57 @@ public class TelemetryIngestServiceTests
             PersonalBests.Add(notice);
             return Task.CompletedTask;
         }
+    }
+
+    /// <summary>저장된 랩 엔티티를 읽기 행으로 비추는 조회 저장소(실제 구현의 프로젝션을 흉내 낸다).</summary>
+    private sealed class LapsBackedQueryRepository : ILapQueryRepository
+    {
+        private readonly FakeLapRepository _laps;
+        private readonly FakeTrackRepository _tracks;
+
+        public LapsBackedQueryRepository(FakeLapRepository laps, FakeTrackRepository tracks)
+        {
+            _laps = laps;
+            _tracks = tracks;
+        }
+
+        public int GetMineCalls { get; private set; }
+        public bool ThrowOnGetMine { get; set; }
+
+        public Task<LapRow?> GetMineAsync(Guid userId, Guid lapId, CancellationToken ct = default)
+        {
+            if (ThrowOnGetMine)
+            {
+                throw new InvalidOperationException("db down");
+            }
+
+            GetMineCalls++;
+            var lap = _laps.Items.FirstOrDefault(l => l.Id == lapId && l.UserId == userId);
+            if (lap is null)
+            {
+                return Task.FromResult<LapRow?>(null);
+            }
+
+            var track = _tracks.Items.Single(t => t.Id == lap.TrackId);
+            return Task.FromResult<LapRow?>(new LapRow(
+                lap.Id, lap.TrackId, track.Name, track.CountryCode, lap.GameCode, lap.SessionType, lap.LapNumber, lap.LapTimeMs,
+                lap.IsValid, lap.IsRankingEligible, lap.SetAt, lap.GameMode, lap.SessionKey, lap.Snapshot?.TeamId,
+                lap.Snapshot?.Weather, _laps.Traces.Any(t => t.LapId == lap.Id),
+                lap.Sectors.OrderBy(s => s.SectorNumber).Select(s => new LapSectorDto(s.SectorNumber, s.SectorTimeMs)).ToList()));
+        }
+
+        public Task<(IReadOnlyList<LapRow> Items, int Total)> GetMyPageAsync(
+            Guid userId, MyLapsFilter filter, MyLapsSort sort, int skip, int take, CancellationToken ct = default)
+            => throw new NotImplementedException();
+
+        public Task<LapRow?> GetMyFastestValidAsync(Guid userId, Guid trackId, string gameCode, CancellationToken ct = default)
+            => throw new NotImplementedException();
+
+        public Task<LapSnapshot?> GetSnapshotAsync(Guid lapId, CancellationToken ct = default)
+            => throw new NotImplementedException();
+
+        public Task<LapTelemetryTrace?> GetMyTraceAsync(Guid userId, Guid lapId, CancellationToken ct = default)
+            => throw new NotImplementedException();
     }
 
     private sealed class FakeUnitOfWork : IUnitOfWork

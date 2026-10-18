@@ -100,6 +100,25 @@ internal static class TestApi
     }
 
     /// <summary>
+    /// 웹 앱과 같은 방식으로 RankingHub에 접속하는 연결을 만든다(시작은 호출자가 한다). 브라우저 WebSocket은 헤더를 못 실으므로
+    /// JWT를 쿼리 <c>access_token</c>으로 보낸다(docs/15 §9, D-50).
+    /// </summary>
+    public static HubConnection BuildRankingConnectionWithQueryToken(ApiFactory factory, string accessToken)
+    {
+        var url = new Uri(factory.Server.BaseAddress, $"hubs/ranking?access_token={Uri.EscapeDataString(accessToken)}");
+        return new HubConnectionBuilder()
+            .WithUrl(url, options =>
+            {
+                options.Transports = HttpTransportType.WebSockets;
+                options.SkipNegotiation = true;
+                options.WebSocketFactory = async (context, cancellationToken)
+                    => await factory.Server.CreateWebSocketClient().ConnectAsync(context.Uri, cancellationToken);
+            })
+            .AddJsonProtocol(ConfigureJsonProtocol)
+            .Build();
+    }
+
+    /// <summary>
     /// <c>SubmitEvent</c> 호출 한 건이 와이어에서 차지하는 바이트 수. <see cref="BuildTelemetryConnection"/>과 같은 설정으로 직렬화하므로
     /// 허브 수신 한도(<c>MaximumReceiveMessageSize</c>)에 실제로 걸리는 크기다.
     /// </summary>

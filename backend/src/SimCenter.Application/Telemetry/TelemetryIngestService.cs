@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using SimCenter.Application.Common;
 using SimCenter.Application.Common.Interfaces;
+using SimCenter.Application.Laps;
 using SimCenter.Application.Laps.Ingest;
 using SimCenter.Application.Rankings;
 using SimCenter.Application.Rankings.Notifications;
@@ -59,6 +60,7 @@ public sealed class TelemetryIngestService : ITelemetryIngestService
     private readonly IClock _clock;
     private readonly IRankingService _ranking;
     private readonly IRankingNotifier _notifier;
+    private readonly ILapQueryRepository _lapQueries;
     private readonly LapDetailExtractor _lapDetails;
     private readonly ILogger<TelemetryIngestService> _logger;
 
@@ -73,6 +75,7 @@ public sealed class TelemetryIngestService : ITelemetryIngestService
         IClock clock,
         IRankingService ranking,
         IRankingNotifier notifier,
+        ILapQueryRepository lapQueries,
         LapDetailExtractor lapDetails,
         ILogger<TelemetryIngestService> logger)
     {
@@ -86,6 +89,7 @@ public sealed class TelemetryIngestService : ITelemetryIngestService
         _clock = clock;
         _ranking = ranking;
         _notifier = notifier;
+        _lapQueries = lapQueries;
         _lapDetails = lapDetails;
         _logger = logger;
     }
@@ -337,19 +341,16 @@ public sealed class TelemetryIngestService : ITelemetryIngestService
             : gameMode;
 
     /// <summary>
-    /// 저장된 랩에 대한 실시간 이벤트를 발행한다(05 §3). 유효 랩→LapRecorded, PB 갱신→PersonalBestAchieved(user 그룹),
+    /// 저장된 랩에 대한 실시간 이벤트를 발행한다(05 §3). 모든 랩→LapRecorded(주인에게만, D-50), PB 갱신→PersonalBestAchieved(user 그룹),
     /// 랭킹적격→월별 TOP N 재조회 후 RankingUpdated(track 그룹, D-8a). 어떤 실패도 Ack에 영향을 주지 않는다.
     /// </summary>
     private async Task BroadcastAsync(Lap lap, bool isPersonalBest, int? previousBestMs)
     {
+        // LapRecorded가 실패해도 랭킹 갱신은 나가도록 따로 감싼다.
+        await SendLapRecordedAsync(lap);
+
         try
         {
-            if (lap.IsValid)
-            {
-                await _notifier.LapRecordedAsync(new LapRecordedNotice(
-                    lap.Id, lap.UserId, lap.TrackId, lap.SessionType.ToString(), lap.LapTimeMs, lap.IsValid, lap.IsRankingEligible));
-            }
-
             if (isPersonalBest)
             {
                 await _notifier.PersonalBestAchievedAsync(
@@ -365,6 +366,29 @@ public sealed class TelemetryIngestService : ITelemetryIngestService
         catch (Exception ex)
         {
             _logger.LogError(ex, "랩 저장 후 브로드캐스트 실패 lapId={LapId} track={TrackId}", lap.Id, lap.TrackId);
+        }
+    }
+
+    /// <summary>
+    /// 새 랩을 주인에게 보낸다(docs/15 §9, D-50). 무효 랩도 보낸다 — 내 랩 목록이 무효 랩도 보이기 때문이다.
+    /// 페이로드는 커밋된 랩을 <c>GET /me/laps</c>와 같은 조회·매퍼로 다시 읽어 만든다(필드 규칙 한 곳, 쿼리 1번).
+    /// </summary>
+    private async Task SendLapRecordedAsync(Lap lap)
+    {
+        try
+        {
+            var row = await _lapQueries.GetMineAsync(lap.UserId, lap.Id);
+            if (row is null)
+            {
+                _logger.LogWarning("방금 저장한 랩을 다시 읽지 못해 LapRecorded 생략 lapId={LapId} user={User}", lap.Id, lap.UserId);
+                return;
+            }
+
+            await _notifier.LapRecordedAsync(lap.UserId, new LapRecordedNotice(LapDtoMapper.ToLapDto(row), row.TrackId));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "LapRecorded 전송 실패 lapId={LapId} user={User}", lap.Id, lap.UserId);
         }
     }
 }
