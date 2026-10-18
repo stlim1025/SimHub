@@ -426,6 +426,9 @@ public class SeasonQueryServiceTests
             Guid userId, Guid raceWeekendId, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
+        public Task<bool> IsMySprintWeekendAsync(Guid userId, Guid raceWeekendId, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
         public Task<IReadOnlyList<SimCenter.Application.Seasons.Queries.Detail.SeasonOrderRow>> GetMySeasonOrderAsync(
             Guid userId, CancellationToken cancellationToken = default)
         {

@@ -49,13 +49,16 @@ public sealed class SessionQueryService : ISessionQueryService
         var session = await _sessions.GetMineDetailAsync(userId, sessionId, cancellationToken)
             ?? throw new NotFoundException("세션을 찾을 수 없습니다.");
 
+        // 순위 모름(0)은 맨 뒤.
         var results = session.Results
             .Where(r => !r.IsDeleted)
-            .OrderBy(r => r.Position)
+            .OrderBy(r => r.Position > 0 ? r.Position : int.MaxValue)
             .ThenBy(r => r.CarIndex)
             .ToList();
 
         var round = await FindRoundAsync(session, cancellationToken);
+        var sprintWeekend = session.RaceWeekendId is { } sprintWeekendId
+            && await _details.IsMySprintWeekendAsync(userId, sprintWeekendId, cancellationToken);
         var seasonNumber = await FindSeasonNumberAsync(userId, session.SeasonId, cancellationToken);
 
         // docs/15 §11.4: 내 랩·스냅샷은 한 쿼리로(랩마다 따로 읽지 않는다).
@@ -69,7 +72,7 @@ public sealed class SessionQueryService : ISessionQueryService
 
         return new SessionDetailDto(
             // 가져온 세션(D-55)은 랩이 없어 세션에 저장한 날씨를 쓴다.
-            ToHeader(session, results, round, seasonNumber, extras.Weather ?? session.Weather?.ToString()),
+            ToHeader(session, results, round, seasonNumber, extras.Weather ?? session.Weather?.ToString(), sprintWeekend),
             ToResultDtos(session, results),
             extras.QualifyingPositions,
             extras.MyBestLap,
@@ -115,19 +118,21 @@ public sealed class SessionQueryService : ISessionQueryService
         row.GameMode.ToString(),
         row.SeasonId,
         row.CarCount,
-        row.MyPosition,
-        row.MyGridPosition,
+        SessionPositions.Known(row.MyPosition),
+        SessionPositions.Known(row.MyGridPosition),
         row.MyResultStatus?.ToString(),
         NullIfNoTime(row.MyBestLapTimeMs),
         row.MyPoints,
         row.CountryCode,
+        // 행의 저장 순위(0 포함)가 있으면 = 내 결과 행이 있다 → 팀을 낸다.
         row.MyPosition is null ? null : ToMyTeam(row.GameCode, row.MyTeamId),
-        SeasonNumbering.Of(seasonNumbers, row.SeasonId));
+        SeasonNumbering.Of(seasonNumbers, row.SeasonId),
+        row.IsSprintWeekend);
 
     // ---- 매핑: 상세 ----
 
     private static SessionDetailHeaderDto ToHeader(
-        GameSession session, IReadOnlyList<SessionResult> results, int? round, int? seasonNumber, string? weather)
+        GameSession session, IReadOnlyList<SessionResult> results, int? round, int? seasonNumber, string? weather, bool sprintWeekend)
     {
         var me = results.FirstOrDefault(r => r.IsPlayer);
 
@@ -140,8 +145,8 @@ public sealed class SessionQueryService : ISessionQueryService
             session.GameMode.ToString(),
             session.SeasonId,
             results.Count,
-            me?.Position,
-            me?.GridPosition,
+            SessionPositions.Known(me?.Position),
+            SessionPositions.Known(me?.GridPosition),
             me?.ResultStatus.ToString(),
             NullIfNoTime(me?.BestLapTimeMs),
             me?.Points,
@@ -152,7 +157,8 @@ public sealed class SessionQueryService : ISessionQueryService
             session.Track?.CountryCode,
             me is null ? null : ToMyTeam(session.GameCode, me.TeamId),
             seasonNumber,
-            weather);
+            weather,
+            sprintWeekend);
     }
 
     private static MyTeamDto ToMyTeam(string gameCode, int? teamId)

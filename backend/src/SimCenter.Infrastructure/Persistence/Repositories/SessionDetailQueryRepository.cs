@@ -88,9 +88,15 @@ public sealed class SessionDetailQueryRepository : ISessionDetailQueryRepository
                 s.Results
                     .Where(r => r.IsPlayer)
                     .OrderBy(r => r.CarIndex)
-                    .Select(r => (int?)r.Position)
+                    // 순위 0 = 모름 → null.
+                    .Select(r => r.Position > 0 ? (int?)r.Position : null)
                     .FirstOrDefault()))
             .ToListAsync(cancellationToken);
+
+    public Task<bool> IsMySprintWeekendAsync(Guid userId, Guid raceWeekendId, CancellationToken cancellationToken = default)
+        => _context.GameSessions
+            .AsNoTracking()
+            .AnyAsync(s => s.UserId == userId && s.RaceWeekendId == raceWeekendId && s.SessionKind == SessionKind.Race2, cancellationToken);
 
     public async Task<IReadOnlyList<SeasonOrderRow>> GetMySeasonOrderAsync(Guid userId, CancellationToken cancellationToken = default)
         => await _context.Seasons

@@ -21,6 +21,9 @@ public interface ISessionDetailQueryRepository
     Task<IReadOnlyList<WeekendQualifyingRow>> GetMyWeekendQualifyingAsync(
         Guid userId, Guid raceWeekendId, CancellationToken cancellationToken = default);
 
+    /// <summary>그 그랑프리 주말에 내 Race2 세션이 있는지(스프린트 주말, <see cref="SimCenter.Application.Seasons.Queries.SessionPositions"/>).</summary>
+    Task<bool> IsMySprintWeekendAsync(Guid userId, Guid raceWeekendId, CancellationToken cancellationToken = default);
+
     /// <summary>내 시즌 전부의 번호 매기기 재료(<see cref="SeasonNumbering"/>).</summary>
     Task<IReadOnlyList<SeasonOrderRow>> GetMySeasonOrderAsync(Guid userId, CancellationToken cancellationToken = default);
 }

@@ -56,4 +56,5 @@ public sealed record SessionSummaryRow(
     int? MyPoints,
     string GameCode,
     string? CountryCode,
-    int? MyTeamId);
+    int? MyTeamId,
+    bool IsSprintWeekend = false);

@@ -172,7 +172,7 @@ public sealed class SeasonQueryService : ISeasonQueryService
                     head.SessionId,
                     head.SessionType.ToString(),
                     head.SessionKind.ToString(),
-                    mine?.Position,
+                    SessionPositions.Known(mine?.Position),
                     mine?.ResultStatus.ToString());
             })
             .ToList();

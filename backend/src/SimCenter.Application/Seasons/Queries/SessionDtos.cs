@@ -7,6 +7,7 @@ namespace SimCenter.Application.Seasons.Queries;
 /// 세션 목록 한 줄(12 §7.2 + docs/15 §11.4 D-53). 내 차 결과가 없으면 <c>My*</c> 전부 null, 시즌이 없으면 <see cref="SeasonId"/>·<see cref="SeasonNumber"/>가 null.
 /// <see cref="MyBestLapTimeMs"/>는 0(기록 없음)이면 null이다. 열거형은 문자열로 직렬화한다.
 /// <see cref="SeasonNumber"/> = 같은 게임·모드의 내 시즌 순번(1부터, <see cref="SeasonNumbering"/>).
+/// <c>My*</c> 순위는 모르면(0) null. <see cref="IsSprintWeekend"/> = 같은 주말에 Race2가 있다 — 그러면 Race = 스프린트(<see cref="SessionPositions"/>).
 /// </summary>
 public sealed record SessionSummaryDto(
     Guid SessionId,
@@ -24,7 +25,8 @@ public sealed record SessionSummaryDto(
     int? MyPoints,
     string? CountryCode,
     MyTeamDto? MyTeam,
-    int? SeasonNumber);
+    int? SeasonNumber,
+    bool IsSprintWeekend);
 
 /// <summary>
 /// 세션 상세: 헤더 + 결과(<c>Position</c> 오름차순, 같으면 <c>CarIndex</c>) + F1Laps 카드 재료(docs/15 §11.4 D-53).
@@ -67,7 +69,8 @@ public sealed record SessionDetailHeaderDto(
     string? CountryCode,
     MyTeamDto? MyTeam,
     int? SeasonNumber,
-    string? Weather);
+    string? Weather,
+    bool IsSprintWeekend);
 
 /// <summary>
 /// 세션 결과 한 줄(차 1대). <see cref="BestLapTimeMs"/>·<see cref="TotalRaceTimeMs"/>는 0이면 null,
