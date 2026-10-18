@@ -35,6 +35,9 @@ dependencies:
   freezed_annotation: ^2.4.4
   flutter_secure_storage: ^9.2.4
 
+  # 트랙 국기(D-43, docs/15 §2.2). ISO 3166-1 alpha-2 SVG 내장
+  country_flags: ^4.1.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
