@@ -7,6 +7,7 @@ namespace SimCenter.Agent.Core.Analysis;
 /// <summary>
 /// 세션의 최종 순위표를 <see cref="SessionClassified"/> 1건으로 만든다(D-28, 12 §5.3).
 /// 세션 맥락(<see cref="SessionFrame"/>)과 참가자(<see cref="ParticipantsFrame"/>)를 carIndex로 순위표(<see cref="ClassificationFrame"/>)에 결합한다.
+/// 세션 동안 받은 Session History·Lap Positions(D-49, docs/15 §8)도 <see cref="SessionLapRecords"/>에 모아 <c>lapHistory</c>·<c>lapPositions</c>로 싣는다.
 /// <see cref="LapAnalyzer"/>와 상태를 공유하지 않는다 — 그래서 <c>SessionEnded</c>(세션 종료 마커)로 리셋되지 않는다
 /// (종료 마커 뒤에 최종 순위표가 올 수 있다). 상태 저장이므로 스레드 안전하지 않다(파이프라인이 순차 처리).
 /// </summary>
@@ -15,6 +16,7 @@ public sealed class SessionResultTracker : ITelemetryAnalyzer
     private SessionFrame? _context;
     private IReadOnlyDictionary<int, ParticipantInfo> _participants = new Dictionary<int, ParticipantInfo>();
     private string? _lastSentSessionRef;
+    private readonly SessionLapRecords _lapRecords = new();
 
     /// <summary>프레임 1개를 처리하고 그로 인해 발생한 도메인 이벤트(0..N)를 순서대로 반환한다.</summary>
     public IReadOnlyList<TelemetryEvent> Process(ITelemetryFrame frame)
@@ -24,6 +26,8 @@ public sealed class SessionResultTracker : ITelemetryAnalyzer
             SessionFrame sf => OnSession(sf),
             ParticipantsFrame pf => OnParticipants(pf),
             ClassificationFrame cf => OnClassification(cf),
+            SessionHistoryFrame history => OnLapRecords(history, _lapRecords.OnSessionHistory),
+            LapPositionsFrame positions => OnLapRecords(positions, _lapRecords.OnLapPositions),
             _ => Array.Empty<TelemetryEvent>(),
         };
     }
@@ -34,6 +38,7 @@ public sealed class SessionResultTracker : ITelemetryAnalyzer
         if (_context?.SessionRef != sf.SessionRef)
         {
             _participants = new Dictionary<int, ParticipantInfo>();
+            _lapRecords.Reset();
         }
 
         _context = sf;
@@ -55,6 +60,18 @@ public sealed class SessionResultTracker : ITelemetryAnalyzer
         }
 
         _participants = byCar;
+        return Array.Empty<TelemetryEvent>();
+    }
+
+    /// <summary>지금 세션의 Session History·Lap Positions만 모은다(D-49, docs/15 §8). 이벤트는 만들지 않는다.</summary>
+    private IReadOnlyList<TelemetryEvent> OnLapRecords<TFrame>(TFrame frame, Action<TFrame> record)
+        where TFrame : ITelemetryFrame
+    {
+        if (_context is not null && _context.SessionRef == frame.SessionRef)
+        {
+            record(frame);
+        }
+
         return Array.Empty<TelemetryEvent>();
     }
 
@@ -91,7 +108,8 @@ public sealed class SessionResultTracker : ITelemetryAnalyzer
                 TotalLaps: context.TotalLaps,
                 AiDifficulty: context.AiDifficulty,
                 IsNetworkGame: context.IsNetworkGame,
-                Results: results),
+                Results: results,
+                LapPositions: _lapRecords.BuildLapPositions()),
         };
     }
 
@@ -118,6 +136,7 @@ public sealed class SessionResultTracker : ITelemetryAnalyzer
             TeamId: participant?.TeamId,
             RaceNumber: participant?.RaceNumber,
             IsAiControlled: participant?.IsAiControlled ?? false,
-            TyreStints: row.TyreStints);
+            TyreStints: row.TyreStints,
+            LapHistory: _lapRecords.HistoryFor(row.CarIndex));
     }
 }

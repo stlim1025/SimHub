@@ -64,7 +64,7 @@ public sealed record SessionEnded(string SessionRef) : TelemetryEvent(SessionRef
 
 /// <summary>
 /// 순위표의 차 1대(12 §5.5 <c>results[]</c>). 이름·드라이버·팀·번호는 참가자 정보를 받지 못한 차에서 null,
-/// <paramref name="IsAiControlled"/>는 false다.
+/// <paramref name="IsAiControlled"/>는 false다. <paramref name="LapHistory"/>(D-49, docs/15 §8)는 그 차의 Session History 랩 기록 — 받지 못했으면 null.
 /// </summary>
 public sealed record ClassifiedResult(
     int CarIndex,
@@ -84,10 +84,12 @@ public sealed record ClassifiedResult(
     int? TeamId,
     int? RaceNumber,
     bool IsAiControlled,
-    IReadOnlyList<TyreStint> TyreStints);
+    IReadOnlyList<TyreStint> TyreStints,
+    IReadOnlyList<LapHistoryEntry>? LapHistory = null);
 
 /// <summary>
 /// 세션 최종 순위표(D-28). 세션 맥락 + 참가자 정보 + 최종 순위를 한 이벤트에 담은 자기 완결 페이로드다.
+/// <paramref name="LapPositions"/>(D-49, docs/15 §8)는 랩별 순위(Lap Positions) — 받지 못했으면 null. 둘 다 P8 세션 상세의 재료다.
 /// shared/schema/session_classified.json.
 /// </summary>
 public sealed record SessionClassified(
@@ -102,7 +104,8 @@ public sealed record SessionClassified(
     int TotalLaps,
     int AiDifficulty,
     bool IsNetworkGame,
-    IReadOnlyList<ClassifiedResult> Results) : TelemetryEvent(SessionRef)
+    IReadOnlyList<ClassifiedResult> Results,
+    IReadOnlyList<LapPositionsEntry>? LapPositions = null) : TelemetryEvent(SessionRef)
 {
     public override TelemetryEventType Type => TelemetryEventType.SessionClassified;
 }

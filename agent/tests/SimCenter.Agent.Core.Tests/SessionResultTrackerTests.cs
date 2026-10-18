@@ -346,7 +346,7 @@ public class SessionResultTrackerTests
 
         // 봉투 직렬화(OutboxTelemetrySink)와 같은 옵션: Web 기본값(camelCase) + 문자열 enum. "type"은 기존 이벤트와 같이 베이스 속성이 함께 실린다.
         Assert.Equal(
-            new[] { "sessionRef", "trackId", "sessionType", "sessionKind", "gameMode", "seasonLinkId", "weekendLinkId", "sessionLinkId", "totalLaps", "aiDifficulty", "isNetworkGame", "results" }.Order(),
+            new[] { "sessionRef", "trackId", "sessionType", "sessionKind", "gameMode", "seasonLinkId", "weekendLinkId", "sessionLinkId", "totalLaps", "aiDifficulty", "isNetworkGame", "results", "lapPositions" }.Order(),
             root.EnumerateObject().Select(p => p.Name).Where(n => n != "type").Order());
         Assert.Equal("A", root.GetProperty("sessionRef").GetString());
         Assert.Equal("Race", root.GetProperty("sessionType").GetString());
@@ -358,7 +358,7 @@ public class SessionResultTrackerTests
 
         var player = root.GetProperty("results")[1];
         Assert.Equal(
-            new[] { "carIndex", "isPlayer", "position", "gridPosition", "numLaps", "points", "numPitStops", "numPenalties", "resultStatus", "bestLapTimeMs", "totalRaceTimeMs", "penaltiesTimeMs", "driverName", "gameDriverId", "teamId", "raceNumber", "isAiControlled", "tyreStints" }.Order(),
+            new[] { "carIndex", "isPlayer", "position", "gridPosition", "numLaps", "points", "numPitStops", "numPenalties", "resultStatus", "bestLapTimeMs", "totalRaceTimeMs", "penaltiesTimeMs", "driverName", "gameDriverId", "teamId", "raceNumber", "isAiControlled", "tyreStints", "lapHistory" }.Order(),
             player.EnumerateObject().Select(p => p.Name).Order());
         Assert.True(player.GetProperty("isPlayer").GetBoolean());
         Assert.Equal("Finished", player.GetProperty("resultStatus").GetString());
@@ -370,6 +370,66 @@ public class SessionResultTrackerTests
         Assert.Equal("Medium", stints[0].GetProperty("visualCompound").GetString());
         Assert.Equal("C3", stints[0].GetProperty("actualCompound").GetString());
         Assert.Equal(JsonValueKind.Null, stints[1].GetProperty("actualCompound").ValueKind);
+    }
+
+    // ---- D-49: 전 차량 랩 기록·랩별 순위 ----
+
+    private static LapHistoryEntry HistoryLap(int lap, int ms) => new(lap, ms, 27_000, 30_000, ms - 57_000, true, true, true, true);
+
+    [Fact]
+    public void Classified_CarriesLapHistoryPerCar_LatestPacketWins()
+    {
+        _sut.Process(Session("A"));
+        _sut.Process(new SessionHistoryFrame("A", 0, IsPlayer: true, [HistoryLap(1, 90_000)]));
+        _sut.Process(new SessionHistoryFrame("A", 0, IsPlayer: true, [HistoryLap(1, 90_000), HistoryLap(2, 89_000)]));
+        _sut.Process(new SessionHistoryFrame("A", 1, IsPlayer: false, [HistoryLap(1, 91_000)]));
+
+        var classified = Assert.IsType<SessionClassified>(Assert.Single(_sut.Process(Classification("A", 3))));
+
+        Assert.Equal(new[] { HistoryLap(1, 90_000), HistoryLap(2, 89_000) }, classified.Results[0].LapHistory);
+        Assert.Equal(new[] { HistoryLap(1, 91_000) }, classified.Results[1].LapHistory);
+        Assert.Null(classified.Results[2].LapHistory);   // 받지 못한 차
+    }
+
+    [Fact]
+    public void Classified_MergesLapPositionsAcrossPackets_InLapOrder()
+    {
+        _sut.Process(Session("A"));
+        _sut.Process(new LapPositionsFrame("A", FirstLapNumber: 3, [new[] { 2, 1 }, new[] { 1, 2 }]));
+        _sut.Process(new LapPositionsFrame("A", FirstLapNumber: 1, [new[] { 1, 2 }, new[] { 1, 2 }, new[] { 9, 9 }]));   // 랩 3은 나중 값
+
+        var classified = Assert.IsType<SessionClassified>(Assert.Single(_sut.Process(Classification("A", 2))));
+
+        var positions = Assert.IsAssignableFrom<IReadOnlyList<LapPositionsEntry>>(classified.LapPositions);
+        Assert.Equal(new[] { 1, 2, 3, 4 }, positions.Select(lap => lap.LapNumber));
+        Assert.Equal(new[] { 9, 9 }, positions[2].Positions);
+        Assert.Equal(new[] { 1, 2 }, positions[3].Positions);
+    }
+
+    [Fact]
+    public void LapRecords_FromOtherSession_OrBeforeSession_AreIgnored_AndNewSessionClears()
+    {
+        _sut.Process(new SessionHistoryFrame("A", 0, IsPlayer: true, [HistoryLap(1, 90_000)]));   // 세션 맥락 전
+        _sut.Process(Session("A"));
+        _sut.Process(new LapPositionsFrame("B", 1, [new[] { 1 }]));                               // 다른 세션
+        _sut.Process(new SessionHistoryFrame("A", 1, IsPlayer: false, [HistoryLap(1, 91_000)]));
+        _sut.Process(Session("B"));                                                               // 세션 변경 = 비움
+
+        var classified = Assert.IsType<SessionClassified>(Assert.Single(_sut.Process(Classification("B", 2))));
+
+        Assert.All(classified.Results, result => Assert.Null(result.LapHistory));
+        Assert.Null(classified.LapPositions);
+    }
+
+    [Fact]
+    public void LapPositions_OutOfRangeLapNumbers_AreDropped()
+    {
+        _sut.Process(Session("A"));
+        _sut.Process(new LapPositionsFrame("A", FirstLapNumber: SessionLapRecords.MaxLapNumber, [new[] { 1 }, new[] { 2 }]));
+
+        var classified = Assert.IsType<SessionClassified>(Assert.Single(_sut.Process(Classification("A", 1))));
+
+        Assert.Equal(new[] { SessionLapRecords.MaxLapNumber }, classified.LapPositions!.Select(lap => lap.LapNumber));
     }
 
     private static readonly JsonSerializerOptions WireJson = new(JsonSerializerDefaults.Web)
