@@ -19,6 +19,9 @@ public sealed class LapConfiguration : IEntityTypeConfiguration<Lap>
         // 세션 연결 키(P7, 12 §4.6): 저장만 하고 P7은 조회에 쓰지 않는다(인덱스도 P8에서). 기존 행은 null.
         builder.Property(x => x.SessionKey).HasMaxLength(80);
 
+        // 게임 모드(15 §5): 페이로드 문자열 그대로. 기존 행은 null.
+        builder.Property(x => x.GameMode).HasMaxLength(Lap.GameModeMaxLength);
+
         // 랩을 보낸 장치(D-25). 장치 해제는 soft delete라 랩이 남고, 실제 삭제로 랩이 연쇄 삭제되지 않도록 Restrict.
         // 주의(Ruling R10): AgentDevice는 soft-delete 필터 대상이고 이 관계는 필수라, Lap.AgentDevice를 거치는
         // Include·프로젝션은 inner join이 되어 연결 해제된 장치의 랩을 숨긴다. 장치 정보가 필요하면

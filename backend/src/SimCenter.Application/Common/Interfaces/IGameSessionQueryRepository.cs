@@ -21,4 +21,10 @@ public interface IGameSessionQueryRepository
     /// 내 세션 1건과 <see cref="GameSession.Track"/>·활성 <see cref="GameSession.Results"/>·활성 스틴트. 남의 것·없는 것은 null.
     /// </summary>
     Task<GameSession?> GetMineDetailAsync(Guid userId, Guid sessionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 같은 세션 키(<c>Lap.SessionKey</c>, D-29)의 내 세션 ID(랩 상세의 "세션 보기", 15 §4.2). 없으면 null.
+    /// </summary>
+    Task<Guid?> FindMySessionIdAsync(
+        Guid userId, string gameCode, string sessionKey, CancellationToken cancellationToken = default);
 }

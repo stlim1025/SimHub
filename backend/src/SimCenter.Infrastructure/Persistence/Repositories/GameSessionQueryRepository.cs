@@ -88,4 +88,13 @@ public sealed class GameSessionQueryRepository : IGameSessionQueryRepository
             .ThenInclude(r => r.TyreStints)
             .AsSingleQuery()
             .FirstOrDefaultAsync(s => s.UserId == userId && s.Id == sessionId, cancellationToken);
+
+    /// <remarks>(UserId, GameCode, SessionKey) unique index(활성 행)를 그대로 탄다.</remarks>
+    public Task<Guid?> FindMySessionIdAsync(
+        Guid userId, string gameCode, string sessionKey, CancellationToken cancellationToken = default)
+        => _context.GameSessions
+            .AsNoTracking()
+            .Where(s => s.UserId == userId && s.GameCode == gameCode && s.SessionKey == sessionKey)
+            .Select(s => (Guid?)s.Id)
+            .FirstOrDefaultAsync(cancellationToken);
 }

@@ -24,8 +24,8 @@ public sealed record RankingLapRow(
     DateTime SetAt,
     bool ShowOnLeaderboard);
 
-/// <summary>트랙 마스터 항목(04 §3.8).</summary>
-public sealed record TrackDto(Guid TrackId, string GameCode, string Name);
+/// <summary>트랙 마스터 항목(04 §3.8). 국가(ISO 3166-1 alpha-2, 모르면 null)·표시 순서(D-43)를 함께 내린다.</summary>
+public sealed record TrackDto(Guid TrackId, string GameCode, string Name, string? CountryCode, int DisplayOrder);
 
 /// <summary>트랙 목록 응답.</summary>
 public sealed record TrackListResponse(IReadOnlyList<TrackDto> Items);
@@ -33,14 +33,19 @@ public sealed record TrackListResponse(IReadOnlyList<TrackDto> Items);
 /// <summary>내 랩 기록 응답(04 §3.9).</summary>
 public sealed record MyLapsResponse(PersonalBestDto? PersonalBest, PagedResult<LapDto> Laps);
 
-/// <summary>내 트랙별 요약 한 줄(11 §8). 최고 기록은 유효 랩 기준이며 유효 랩이 없으면 null.</summary>
+/// <summary>
+/// 내 트랙별 요약 한 줄(11 §8). 최고 기록은 유효 랩 기준이며 유효 랩이 없으면 null.
+/// 국가·표시 순서(D-43)는 트랙 메뉴용이며, 목록 순서는 그대로 마지막 주행 순이다.
+/// </summary>
 public sealed record MyTrackDto(
     Guid TrackId,
     string TrackName,
     string GameCode,
     int LapCount,
     int? BestValidLapTimeMs,
-    DateTime LastSetAt);
+    DateTime LastSetAt,
+    string? CountryCode,
+    int DisplayOrder);
 
 /// <summary>내 트랙 요약 응답(마지막으로 랩을 세운 트랙 우선).</summary>
 public sealed record MyTracksResponse(IReadOnlyList<MyTrackDto> Items);
@@ -48,7 +53,10 @@ public sealed record MyTracksResponse(IReadOnlyList<MyTrackDto> Items);
 /// <summary>개인 최고 기록(랭킹 적격 기준).</summary>
 public sealed record PersonalBestDto(Guid TrackId, int LapTimeMs, DateTime SetAt);
 
-/// <summary>개별 랩(무효 랩 포함, D-15/D-16).</summary>
+/// <summary>
+/// 개별 랩(무효 랩 포함, D-15/D-16). 15 §4.2 추가 필드: 랩 번호, 게임 모드(옛 랩 null), 팀(스냅샷의 팀 ID → <c>TeamCatalog</c>, 없으면 null),
+/// 날씨(<c>Weather</c> 이름, 모르면 null), 트레이스 유무.
+/// </summary>
 public sealed record LapDto(
     Guid LapId,
     string TrackName,
@@ -58,7 +66,15 @@ public sealed record LapDto(
     IReadOnlyList<LapSectorDto> Sectors,
     bool IsValid,
     bool IsRankingEligible,
-    DateTime SetAt);
+    DateTime SetAt,
+    int LapNumber,
+    string? GameMode,
+    TeamRefDto? Team,
+    string? Weather,
+    bool HasTrace);
+
+/// <summary>팀 표시 이름과 색(<c>#RRGGBB</c>, D-33).</summary>
+public sealed record TeamRefDto(string Name, string Color);
 
 /// <summary>가변 섹터(D-7).</summary>
 public sealed record LapSectorDto(int SectorNumber, int SectorTimeMs);

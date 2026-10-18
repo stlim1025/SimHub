@@ -1,6 +1,8 @@
 using SimCenter.Application.Common.Exceptions;
 using SimCenter.Application.Common.Interfaces;
+using SimCenter.Application.Laps;
 using SimCenter.Application.Rankings;
+using SimCenter.Application.Tests.Laps;
 using SimCenter.Domain.Entities;
 using SimCenter.Domain.Enums;
 
@@ -14,6 +16,7 @@ public class RankingServiceTests
     private static readonly Guid UserId = Guid.Parse("00000000-0000-0000-0000-0000000000a1");
 
     private readonly FakeLapRepository _laps = new();
+    private readonly FakeLapQueryRepository _lapQueries = new();
     private readonly FakeTrackRepository _tracks = new();
     private readonly RankingService _sut;
 
@@ -24,7 +27,7 @@ public class RankingServiceTests
     }
 
     private RankingService CreateSut(string timeZoneId, DateTime now)
-        => new(_laps, _tracks, new FakeTimeZoneProvider(timeZoneId), new FakeClock(now));
+        => new(_laps, _lapQueries, _tracks, new FakeTimeZoneProvider(timeZoneId), new FakeClock(now));
 
     [Fact]
     public async Task GetRankingAsync_AssignsSequentialRanks_AndMapsSnapshot()
@@ -103,9 +106,10 @@ public class RankingServiceTests
             SessionType = SessionType.TimeTrial, LapTimeMs = 83452, IsValid = true,
             IsRankingEligible = true, SetAt = Now,
         };
-        _laps.MyLaps = ([_laps.PersonalBest], 1);
+        _lapQueries.Laps.Add((UserId, FakeLapQueryRepository.Row(_laps.PersonalBest.Id, TrackId, 83452)));
 
-        var result = await _sut.GetMyLapsAsync(UserId, TrackId, sessionType: null, MyLapsSort.Recent, page: 1, pageSize: 20);
+        var result = await _sut.GetMyLapsAsync(
+            UserId, TrackId, sessionType: null, validOnly: false, MyLapsSort.Recent, page: 1, pageSize: 20);
 
         Assert.NotNull(result.PersonalBest);
         Assert.Equal(83452, result.PersonalBest!.LapTimeMs);
@@ -117,21 +121,67 @@ public class RankingServiceTests
     [Fact]
     public async Task GetMyLapsAsync_WithoutTrack_OmitsPersonalBest()
     {
-        _laps.MyLaps = ([], 0);
-
-        var result = await _sut.GetMyLapsAsync(UserId, trackId: null, sessionType: null, MyLapsSort.Recent, page: 1, pageSize: 20);
+        var result = await _sut.GetMyLapsAsync(
+            UserId, trackId: null, sessionType: null, validOnly: false, MyLapsSort.Recent, page: 1, pageSize: 20);
 
         Assert.Null(result.PersonalBest);
     }
 
     [Fact]
-    public async Task GetMyLaps_PassesSortToRepository()
+    public async Task GetMyLaps_PassesSortAndFiltersToRepository()
     {
-        _laps.MyLaps = ([], 0);
+        await _sut.GetMyLapsAsync(
+            UserId, TrackId, SessionType.TimeTrial, validOnly: true, MyLapsSort.Fastest, page: 1, pageSize: 20);
 
-        await _sut.GetMyLapsAsync(UserId, TrackId, sessionType: null, MyLapsSort.Fastest, page: 1, pageSize: 20);
+        Assert.Equal(MyLapsSort.Fastest, _lapQueries.LastSort);
+        Assert.Equal(new MyLapsFilter(TrackId, SessionType.TimeTrial, ValidOnly: true), _lapQueries.LastFilter);
+    }
 
-        Assert.Equal(MyLapsSort.Fastest, _laps.LastSort);
+    [Fact]
+    public async Task GetMyLaps_ValidOnly_ReturnsOnlyValidLaps()
+    {
+        _lapQueries.Laps.Add((UserId, FakeLapQueryRepository.Row(Guid.NewGuid(), TrackId, 90_000, isValid: false)));
+        _lapQueries.Laps.Add((UserId, FakeLapQueryRepository.Row(Guid.NewGuid(), TrackId, 91_000)));
+
+        var all = await _sut.GetMyLapsAsync(UserId, TrackId, null, validOnly: false, MyLapsSort.Recent, 1, 20);
+        var valid = await _sut.GetMyLapsAsync(UserId, TrackId, null, validOnly: true, MyLapsSort.Recent, 1, 20);
+
+        Assert.Equal(2, all.Laps.Total);
+        Assert.Equal(91_000, Assert.Single(valid.Laps.Items).LapTimeMs);
+        Assert.Equal(1, valid.Laps.Total);
+    }
+
+    [Fact]
+    public async Task GetMyLaps_MapsDetailFields_TeamWeatherTraceModeLapNumber()
+    {
+        var withSnapshot = FakeLapQueryRepository.Row(
+            Guid.NewGuid(), TrackId, 98_448, teamId: 1, weather: Weather.LightRain, hasTrace: true, gameMode: "DriverCareer");
+        var oldLap = FakeLapQueryRepository.Row(Guid.NewGuid(), TrackId, 99_000);
+        _lapQueries.Laps.Add((UserId, withSnapshot));
+        _lapQueries.Laps.Add((UserId, oldLap));
+
+        var result = await _sut.GetMyLapsAsync(UserId, null, null, validOnly: false, MyLapsSort.Recent, 1, 20);
+
+        Assert.Collection(result.Laps.Items,
+            lap =>
+            {
+                Assert.Equal(5, lap.LapNumber);
+                Assert.Equal("DriverCareer", lap.GameMode);
+                Assert.Equal(new TeamRefDto("Ferrari", "#E8002D"), lap.Team);
+                Assert.Equal("LightRain", lap.Weather);
+                Assert.True(lap.HasTrace);
+                Assert.Equal("Jeddah", lap.TrackName);
+                Assert.Equal("TimeTrial", lap.SessionType);
+                Assert.Equal(2, lap.Sectors.Count);
+            },
+            lap =>
+            {
+                // 옛 랩(스냅샷·트레이스·모드 없음).
+                Assert.Null(lap.GameMode);
+                Assert.Null(lap.Team);
+                Assert.Null(lap.Weather);
+                Assert.False(lap.HasTrace);
+            });
     }
 
     [Fact]
@@ -142,8 +192,8 @@ public class RankingServiceTests
         var older = new DateTime(2026, 7, 10, 10, 0, 0, DateTimeKind.Utc);
         _laps.TrackSummaries =
         [
-            new MyTrackSummaryRow(TrackId, "Silverstone", GameCode, 5, 83452, newer),
-            new MyTrackSummaryRow(otherTrackId, "Suzuka", GameCode, 2, null, older),
+            new MyTrackSummaryRow(TrackId, "Silverstone", GameCode, 5, 83452, newer, "GB", 12),
+            new MyTrackSummaryRow(otherTrackId, "Suzuka", GameCode, 2, null, older, null, 0),
         ];
 
         var result = await _sut.GetMyTracksAsync(UserId);
@@ -158,6 +208,8 @@ public class RankingServiceTests
                 Assert.Equal(5, t.LapCount);
                 Assert.Equal(83452, t.BestValidLapTimeMs);
                 Assert.Equal(newer, t.LastSetAt);
+                Assert.Equal("GB", t.CountryCode);
+                Assert.Equal(12, t.DisplayOrder);
             },
             t =>
             {
@@ -166,6 +218,36 @@ public class RankingServiceTests
                 Assert.Equal(2, t.LapCount);
                 Assert.Null(t.BestValidLapTimeMs);
                 Assert.Equal(older, t.LastSetAt);
+                Assert.Null(t.CountryCode);
+                Assert.Equal(0, t.DisplayOrder);
+            });
+    }
+
+    [Fact]
+    public async Task GetTracks_MapsCountryAndDisplayOrder_InRepositoryOrder()
+    {
+        // 순서(표시 순서 → 이름)는 리포지토리가 보장한다 — 서비스는 다시 정렬하지 않는다(D-43).
+        _tracks.Items.Clear();
+        var melbourne = new Track { Id = Guid.NewGuid(), GameCode = GameCode, GameTrackId = 0, Name = "Melbourne", CountryCode = "AU", DisplayOrder = 1 };
+        var shanghai = new Track { Id = Guid.NewGuid(), GameCode = GameCode, GameTrackId = 2, Name = "Shanghai", CountryCode = "CN", DisplayOrder = 2 };
+        _tracks.Items.AddRange([melbourne, shanghai]);
+
+        var result = await _sut.GetTracksAsync();
+
+        Assert.Collection(result.Items,
+            t =>
+            {
+                Assert.Equal(melbourne.Id, t.TrackId);
+                Assert.Equal("Melbourne", t.Name);
+                Assert.Equal(GameCode, t.GameCode);
+                Assert.Equal("AU", t.CountryCode);
+                Assert.Equal(1, t.DisplayOrder);
+            },
+            t =>
+            {
+                Assert.Equal("Shanghai", t.Name);
+                Assert.Equal("CN", t.CountryCode);
+                Assert.Equal(2, t.DisplayOrder);
             });
     }
 
@@ -184,9 +266,7 @@ public class RankingServiceTests
     [InlineData(1, 1000)]   // pageSize 상한 100.
     public async Task GetMyLapsAsync_ClampsPaging(int page, int pageSize)
     {
-        _laps.MyLaps = ([], 0);
-
-        var result = await _sut.GetMyLapsAsync(UserId, null, null, MyLapsSort.Recent, page, pageSize);
+        var result = await _sut.GetMyLapsAsync(UserId, null, null, validOnly: false, MyLapsSort.Recent, page, pageSize);
 
         Assert.True(result.Laps.Page >= 1);
         Assert.True(result.Laps.PageSize is >= 1 and <= 100);
@@ -197,15 +277,15 @@ public class RankingServiceTests
     private sealed class FakeLapRepository : ILapRepository
     {
         public IReadOnlyList<RankingLapRow> RankingRows { get; set; } = new List<RankingLapRow>();
-        public (IReadOnlyList<Lap> Items, int Total) MyLaps { get; set; } = (new List<Lap>(), 0);
         public Lap? PersonalBest { get; set; }
         public IReadOnlyList<MyTrackSummaryRow> TrackSummaries { get; set; } = new List<MyTrackSummaryRow>();
         public SessionType LastSessionType { get; private set; }
         public int LastTop { get; private set; }
-        public MyLapsSort LastSort { get; private set; }
         public Guid LastSummaryUserId { get; private set; }
 
         public Task AddAsync(Lap lap, CancellationToken ct = default) => Task.CompletedTask;
+
+        public Task AddTraceAsync(LapTelemetryTrace trace, CancellationToken ct = default) => Task.CompletedTask;
 
         public Task<IReadOnlyList<RankingLapRow>> GetRankingAsync(
             Guid trackId, string gameCode, SessionType sessionType, DateTime fromUtc, DateTime toUtc, int top, CancellationToken ct = default)
@@ -213,13 +293,6 @@ public class RankingServiceTests
             LastSessionType = sessionType;
             LastTop = top;
             return Task.FromResult(RankingRows);
-        }
-
-        public Task<(IReadOnlyList<Lap> Items, int Total)> GetMyLapsAsync(
-            Guid userId, Guid? trackId, SessionType? sessionType, MyLapsSort sort, int skip, int take, CancellationToken ct = default)
-        {
-            LastSort = sort;
-            return Task.FromResult(MyLaps);
         }
 
         public Task<IReadOnlyList<MyTrackSummaryRow>> GetMyTrackSummariesAsync(Guid userId, CancellationToken ct = default)

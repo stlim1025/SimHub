@@ -19,6 +19,9 @@ public sealed class GameSessionConfiguration : IEntityTypeConfiguration<GameSess
         builder.Property(x => x.GameMode).IsRequired().HasConversion<string>().HasMaxLength(20);
         builder.Property(x => x.ClassifiedAt).IsRequired();
 
+        // 랩별 기록·순위 묶음(D-49): JSON 객체 원문 그대로.
+        builder.Property(x => x.Details).HasColumnType(JsonColumns.Jsonb);
+
         // 세션 주인. 내비게이션 없이 FK만 건다.
         builder.HasOne<User>()
             .WithMany()

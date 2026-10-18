@@ -83,9 +83,10 @@ public sealed class SessionClassificationIngestor : ISessionClassificationIngest
             return new ClassificationOutcome.Rejected($"트랙 매핑 없음(gameCode={envelope.GameCode}, trackId={payload.TrackId})");
         }
 
-        // 5. 분류 시각.
+        // 5. 분류 시각. 랩별 기록·순위 묶음(D-49)은 저장할 수 없으면 묶음만 버린다.
         var request = new StoreRequest(
-            device, envelope.GameCode, payload, classification, track, ResolveClassifiedAt(envelope.OccurredAt, now), now);
+            device, envelope.GameCode, payload, classification, track, ResolveClassifiedAt(envelope.OccurredAt, now), now,
+            CaptureDetails(envelope.EventId, payload));
 
         return await StoreAsync(request, cancellationToken);
     }
@@ -126,6 +127,18 @@ public sealed class SessionClassificationIngestor : ISessionClassificationIngest
             request.Device.Id, request.Device.UserId, target.SessionKey, request.Track.Name, request.Results.Count, isNew ? "신규" : "병합");
 
         return new ClassificationOutcome.Stored(target.SessionKey, isNew);
+    }
+
+    private string? CaptureDetails(Guid eventId, SessionClassifiedPayloadDto payload)
+    {
+        var details = SessionDetailsCapture.Build(payload.LapHistory, payload.LapPositions, out var reason);
+        if (reason is not null)
+        {
+            _logger.LogWarning(
+                "SessionClassified lapHistory·lapPositions 버림(순위표는 저장) eventId={EventId} reason={Reason}", eventId, reason);
+        }
+
+        return details;
     }
 
     /// <summary>payload를 해석·검증한다. 실패하면 false와 Reject 결과를 돌려준다.</summary>
@@ -332,6 +345,7 @@ public sealed class SessionClassificationIngestor : ISessionClassificationIngest
             AiDifficulty = request.Payload.AiDifficulty,
             IsNetworkGame = request.Payload.IsNetworkGame,
             ClassifiedAt = request.ClassifiedAt,
+            Details = request.Details,
             CreatedAt = request.Now,
             Results = BuildResults(sessionId, request),
         };
@@ -357,6 +371,12 @@ public sealed class SessionClassificationIngestor : ISessionClassificationIngest
         existing.AiDifficulty = request.Payload.AiDifficulty;
         existing.IsNetworkGame = request.Payload.IsNetworkGame;
         existing.UpdatedAt = request.Now;
+
+        // 새 묶음이 왔을 때만 바꾼다(옛 Agent의 재분류가 이미 받은 기록을 지우지 않게).
+        if (request.Details is not null)
+        {
+            existing.Details = request.Details;
+        }
 
         if (membership is not null)
         {
@@ -466,7 +486,8 @@ public sealed class SessionClassificationIngestor : ISessionClassificationIngest
         ClassificationKinds Classification,
         Track Track,
         DateTime ClassifiedAt,
-        DateTime Now)
+        DateTime Now,
+        string? Details)
     {
         /// <summary>검증을 통과했으므로 null이 아니다.</summary>
         public IReadOnlyList<ClassifiedResultDto> Results => Payload.Results!;

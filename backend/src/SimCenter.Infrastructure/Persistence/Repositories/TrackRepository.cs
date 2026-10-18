@@ -22,6 +22,7 @@ public sealed class TrackRepository : ITrackRepository
         => await _context.Tracks
             .AsNoTracking()
             .OrderBy(x => x.GameCode)
+            .ThenBy(x => x.DisplayOrder)
             .ThenBy(x => x.Name)
             .ToListAsync(cancellationToken);
 }

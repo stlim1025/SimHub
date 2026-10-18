@@ -28,7 +28,7 @@ public sealed class SessionClassifiedIngestE2ETests : IClassFixture<ApiFactory>
     private const int MaxActualCompoundLength = 10;
     private const char NonAsciiChar = '가';
 
-    /// <summary>SignalR 기본 수신 한도(32KB) — 검증 상한 payload가 이 값을 넘어야 64KiB 한도 회귀를 잡는다.</summary>
+    /// <summary>SignalR 기본 수신 한도(32KB) — 검증 상한 payload가 이 값을 넘어야 명시 한도(1MiB, D-49) 회귀를 잡는다.</summary>
     private const int DefaultHubLimitBytes = 32 * 1024;
 
     private static readonly DateTime FirstOccurredAt = DateTime.UtcNow.AddMinutes(-30);

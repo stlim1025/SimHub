@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using SimCenter.Application.Common;
 using SimCenter.Application.Common.Interfaces;
+using SimCenter.Application.Laps.Ingest;
 using SimCenter.Application.Rankings;
 using SimCenter.Application.Rankings.Notifications;
 using SimCenter.Application.Seasons.Ingest;
@@ -17,7 +18,8 @@ namespace SimCenter.Application.Telemetry;
 /// 나머지 이벤트는 Ack만 한다(YAGNI).
 /// 공통 단계: 멱등 → 장치 확인 → LastSeenAt. 이어서 유형별로 갈린다:
 /// <list type="bullet">
-/// <item><c>LapFinished</c>: payload 파싱 → 트랙 매핑 → 랭킹 적격 → PB → 저장(랩 + 멱등 기록) → 브로드캐스트.</item>
+/// <item><c>LapFinished</c>: payload 파싱 → 트랙 매핑 → 스냅샷·트레이스(틀리면 그 부분만 버림, 15 §5) → 랭킹 적격 → PB
+/// → 저장(랩 + 스냅샷 + 트레이스 + 멱등 기록 한 커밋) → 브로드캐스트.</item>
 /// <item><c>SessionClassified</c>: <see cref="ISessionClassificationIngestor"/>가 변경을 추적만 하고, Stored·Ignored면 멱등 기록을 더해
 /// 커밋 1회(결과 저장과 멱등 기록이 한 트랜잭션)로 Ack. Rejected는 LastSeenAt만 저장하고 Reject.</item>
 /// </list>
@@ -57,6 +59,7 @@ public sealed class TelemetryIngestService : ITelemetryIngestService
     private readonly IClock _clock;
     private readonly IRankingService _ranking;
     private readonly IRankingNotifier _notifier;
+    private readonly LapDetailExtractor _lapDetails;
     private readonly ILogger<TelemetryIngestService> _logger;
 
     public TelemetryIngestService(
@@ -70,6 +73,7 @@ public sealed class TelemetryIngestService : ITelemetryIngestService
         IClock clock,
         IRankingService ranking,
         IRankingNotifier notifier,
+        LapDetailExtractor lapDetails,
         ILogger<TelemetryIngestService> logger)
     {
         _processed = processed;
@@ -82,6 +86,7 @@ public sealed class TelemetryIngestService : ITelemetryIngestService
         _clock = clock;
         _ranking = ranking;
         _notifier = notifier;
+        _lapDetails = lapDetails;
         _logger = logger;
     }
 
@@ -206,7 +211,7 @@ public sealed class TelemetryIngestService : ITelemetryIngestService
         }
     }
 
-    /// <summary>트랙 매핑 → 랭킹 적격 → PB 판정 → 저장(랩 + 멱등 기록 + LastSeenAt 한 커밋) → 브로드캐스트.</summary>
+    /// <summary>트랙 매핑 → 스냅샷·트레이스 → 랭킹 적격 → PB 판정 → 저장(랩 + 트레이스 + 멱등 기록 + LastSeenAt 한 커밋) → 브로드캐스트.</summary>
     private async Task<IngestResult> IngestLapAsync(
         TelemetryEnvelopeDto envelope, LapFinishedPayloadDto payload, AgentDevice device, DateTime now, bool lastSeenChanged,
         CancellationToken cancellationToken)
@@ -224,30 +229,45 @@ public sealed class TelemetryIngestService : ITelemetryIngestService
 
         var lap = CreateLap(envelope, payload, device, track.Id, now);
 
+        // 6-1. 스냅샷·트레이스(D-44, D-45): 틀린 부분만 버리고 경고 — 랩은 그대로 저장한다.
+        lap.Snapshot = _lapDetails.BuildSnapshot(envelope.EventId, payload.Car, payload.Conditions, lap.Id, now);
+        var trace = _lapDetails.BuildTrace(envelope.EventId, payload.Trace, lap.Id, now);
+
         // 7. PB 판정: 저장 커밋 전에 이전 최고(랭킹적격)를 조회한다. 현재 랩은 아직 미저장이라 자기비교가 없다.
-        int? previousBestMs = null;
-        var isPersonalBest = false;
-        if (lap.IsRankingEligible)
+        var (isPersonalBest, previousBestMs) = await CheckPersonalBestAsync(lap, cancellationToken);
+
+        // 8. Lap(+섹터·스냅샷) + 트레이스 + 멱등 기록 + 장치 LastSeenAt을 한 트랜잭션으로 커밋.
+        await _laps.AddAsync(lap, cancellationToken);
+        if (trace is not null)
         {
-            var previousBest = await _laps.GetPersonalBestLapAsync(lap.UserId, lap.TrackId, lap.GameCode, cancellationToken);
-            previousBestMs = previousBest?.LapTimeMs;
-            isPersonalBest = previousBest is null || lap.LapTimeMs < previousBest.LapTimeMs;
+            await _laps.AddTraceAsync(trace, cancellationToken);
         }
 
-        // 8. Lap + 멱등 기록 + 장치 LastSeenAt을 한 트랜잭션으로 커밋.
-        await _laps.AddAsync(lap, cancellationToken);
         await AddProcessedEventAsync(envelope, now, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(
-            "랩 저장 device={Device} user={User} track={Track} lapMs={LapMs} eligible={Eligible} eventId={EventId}",
-            device.Id, lap.UserId, track.Name, lap.LapTimeMs, lap.IsRankingEligible, envelope.EventId);
+            "랩 저장 device={Device} user={User} track={Track} lapMs={LapMs} eligible={Eligible} snapshot={HasSnapshot} trace={HasTrace} eventId={EventId}",
+            device.Id, lap.UserId, track.Name, lap.LapTimeMs, lap.IsRankingEligible, lap.Snapshot is not null, trace is not null,
+            envelope.EventId);
 
         // 9. 실시간 브로드캐스트(커밋 이후 best-effort). 랩은 이미 저장됐으므로 실패해도 Ack를 유지한다.
         //    Agent 연결 취소와 앱 브로드캐스트를 분리하기 위해 CancellationToken.None을 사용한다.
         await BroadcastAsync(lap, isPersonalBest, previousBestMs);
 
         return IngestResult.Ack();
+    }
+
+    /// <summary>랭킹 적격 랩이면 이전 최고와 비교한다. 비적격 랩은 PB가 아니다(조회하지 않는다).</summary>
+    private async Task<(bool IsPersonalBest, int? PreviousBestMs)> CheckPersonalBestAsync(Lap lap, CancellationToken cancellationToken)
+    {
+        if (!lap.IsRankingEligible)
+        {
+            return (false, null);
+        }
+
+        var previousBest = await _laps.GetPersonalBestLapAsync(lap.UserId, lap.TrackId, lap.GameCode, cancellationToken);
+        return (previousBest is null || lap.LapTimeMs < previousBest.LapTimeMs, previousBest?.LapTimeMs);
     }
 
     /// <summary>
@@ -270,6 +290,7 @@ public sealed class TelemetryIngestService : ITelemetryIngestService
             IsRankingEligible = payload.IsValid && !payload.IsOutOrInLap && payload.SessionType == SessionType.TimeTrial,
             SetAt = envelope.OccurredAt,
             SessionKey = BuildSessionKey(payload),
+            GameMode = StorableGameMode(payload.GameMode),
             CreatedAt = now,
             Sectors = payload.Sectors
                 .Select(s => new LapSector
@@ -305,6 +326,15 @@ public sealed class TelemetryIngestService : ITelemetryIngestService
             payload.SessionLinkId,
             sessionRef);
     }
+
+    /// <summary>
+    /// 랩에 저장할 게임 모드(15 §5): 페이로드 문자열 그대로(모르는 이름도). 비었거나 열 길이(<see cref="Lap.GameModeMaxLength"/>)를 넘거나
+    /// NUL을 품으면 null — 저장 시 예외가 되어 같은 랩이 끝없이 재시도되는 일을 막는다(<see cref="BuildSessionKey"/>와 같은 이유).
+    /// </summary>
+    private static string? StorableGameMode(string? gameMode)
+        => string.IsNullOrEmpty(gameMode) || gameMode.Length > Lap.GameModeMaxLength || gameMode.Contains(NulCharacter)
+            ? null
+            : gameMode;
 
     /// <summary>
     /// 저장된 랩에 대한 실시간 이벤트를 발행한다(05 §3). 유효 랩→LapRecorded, PB 갱신→PersonalBestAchieved(user 그룹),

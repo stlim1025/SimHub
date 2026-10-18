@@ -9,6 +9,9 @@ namespace SimCenter.Domain.Entities;
 /// </summary>
 public class Lap : BaseEntity
 {
+    /// <summary><see cref="GameMode"/> 저장 열 길이. 넘는 값은 저장하지 않는다(null).</summary>
+    public const int GameModeMaxLength = 30;
+
     /// <summary>랩을 보낸 Agent 장치(D-25). 해제된 장치의 랩도 기록으로 남는다.</summary>
     public Guid AgentDeviceId { get; set; }
 
@@ -59,6 +62,15 @@ public class Lap : BaseEntity
     /// 키를 만들지 못한 랩은 null이다.
     /// </summary>
     public string? SessionKey { get; set; }
+
+    /// <summary>
+    /// 게임 모드(15 §5). 페이로드 <c>gameMode</c> 문자열을 그대로 저장한다(모르는 값도). 옛 랩·값 없음은 null.
+    /// 세션 키 계산은 이 값과 별개로 <c>GameMode</c> enum 해석을 쓴다.
+    /// </summary>
+    public string? GameMode { get; set; }
+
+    /// <summary>랩 끝의 차량·날씨 스냅샷(D-44, 1:0..1). 이전 Agent로 기록한 랩은 null.</summary>
+    public LapSnapshot? Snapshot { get; set; }
 
     public ICollection<LapSector> Sectors { get; set; } = new List<LapSector>();
 }

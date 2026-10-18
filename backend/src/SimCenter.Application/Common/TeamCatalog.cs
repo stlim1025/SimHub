@@ -1,12 +1,13 @@
 using SimCenter.Domain.Constants;
 
-namespace SimCenter.Application.Seasons.Queries;
+namespace SimCenter.Application.Common;
 
 /// <summary>팀의 표시 이름과 색(<c>#RRGGBB</c>).</summary>
 public sealed record TeamInfo(string Name, string Color);
 
 /// <summary>
 /// 게임별 팀 이름·색 정적 카탈로그(D-33, 12 §7.4). 불변 상수 표라 헌장의 "Global Static 금지"(가변 전역 상태)에 해당하지 않는다.
+/// 시즌·세션 결과와 랩 목록·상세의 팀(15 §4.2)이 함께 쓴다.
 /// 지금은 <see cref="GameCodes.F1_25"/>만 등록한다 — 2025 팀 10개, 2024 차량 10개(ID 185~), 2026 시즌팩 팀 9개(ID 476~) + Audi·Cadillac,
 /// F1 Generic(41), My Team(104). 없는 ID는 <c>Team {id}</c> + 중립 회색, 팀이 없으면 <c>Unknown Team</c> + 중립 회색.
 /// </summary>

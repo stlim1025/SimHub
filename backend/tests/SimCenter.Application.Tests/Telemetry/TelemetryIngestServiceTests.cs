@@ -2,10 +2,12 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging.Abstractions;
 using SimCenter.Application.Common.Interfaces;
+using SimCenter.Application.Laps.Ingest;
 using SimCenter.Application.Rankings;
 using SimCenter.Application.Rankings.Notifications;
 using SimCenter.Application.Seasons.Ingest;
 using SimCenter.Application.Telemetry;
+using SimCenter.Application.Tests.Laps;
 using SimCenter.Domain.Entities;
 using SimCenter.Domain.Enums;
 
@@ -43,10 +45,44 @@ public class TelemetryIngestServiceTests
         _devices.Items.Add(_device);
         _tracks.Items.Add(new Track { Id = _trackId, GameCode = GameCode, GameTrackId = GameTrackId, Name = "Silverstone" });
 
+        var ids = new SequentialIdGenerator();
         _sut = new TelemetryIngestService(
             _processed, _devices, _tracks, _laps, _classification, _uow,
-            new SequentialIdGenerator(), new FakeClock(Now), _ranking, _notifier,
+            ids, new FakeClock(Now), _ranking, _notifier,
+            new LapDetailExtractor(ids, NullLogger<LapDetailExtractor>.Instance),
             NullLogger<TelemetryIngestService>.Instance);
+    }
+
+    /// <summary>랩 + 선택 영역(15 §4.3). null인 영역은 싣지 않는다(옛 Agent).</summary>
+    private static TelemetryEnvelopeDto LapFinishedWithDetail(
+        object? car = null, object? conditions = null, object? trace = null, string? gameMode = null)
+    {
+        var payload = new Dictionary<string, object?>
+        {
+            ["sessionRef"] = "0xSESSION",
+            ["lapNumber"] = 4,
+            ["lapTimeMs"] = 83452,
+            ["sectors"] = new[] { new { sectorNumber = 1, sectorTimeMs = 83452 } },
+            ["isValid"] = true,
+            ["isOutOrInLap"] = false,
+            ["trackId"] = GameTrackId,
+            ["sessionType"] = nameof(SessionType.TimeTrial),
+        };
+        AddIfPresent(payload, "car", car);
+        AddIfPresent(payload, "conditions", conditions);
+        AddIfPresent(payload, "trace", trace);
+        AddIfPresent(payload, "gameMode", gameMode);
+
+        return new TelemetryEnvelopeDto(
+            Guid.NewGuid(), GameCode, Now, "LapFinished", JsonSerializer.SerializeToElement(payload, WireOptions));
+    }
+
+    private static void AddIfPresent(Dictionary<string, object?> payload, string key, object? value)
+    {
+        if (value is not null)
+        {
+            payload[key] = value;
+        }
     }
 
     private TelemetryEnvelopeDto LapFinished(
@@ -480,6 +516,68 @@ public class TelemetryIngestServiceTests
         Assert.Null(Assert.Single(_laps.Items).SessionKey);
     }
 
+    // ── 스냅샷·트레이스·게임 모드(15 §5) ──
+
+    [Fact]
+    public async Task LapFinished_WithCarConditionsTrace_SavesAllInOneCommit()
+    {
+        var result = await _sut.IngestAsync(
+            LapFinishedWithDetail(LapDetailSamples.CarWire(), LapDetailSamples.ConditionsWire(), LapDetailSamples.TraceWire(20)),
+            _deviceId);
+
+        Assert.True(result.Acknowledged);
+        var lap = Assert.Single(_laps.Items);
+        Assert.NotNull(lap.Snapshot);
+        Assert.Equal(lap.Id, lap.Snapshot.LapId);
+        Assert.Equal(1, lap.Snapshot.TeamId);
+        Assert.Equal(Weather.Clear, lap.Snapshot.Weather);
+        var trace = Assert.Single(_laps.Traces);
+        Assert.Equal(lap.Id, trace.LapId);
+        Assert.Equal(20, trace.SampleCount);
+        Assert.Equal(1, _uow.SaveCount); // 랩·스냅샷·트레이스·멱등 기록이 한 커밋.
+        Assert.Single(_processed.Items);
+    }
+
+    [Fact]
+    public async Task LapFinished_WithInvalidSnapshotAndTrace_StillSavesLap()
+    {
+        var badCar = new { engineDamage = 999 };
+        var badTrace = new { resolutionM = 5, timeMs = new[] { 1, 2 } };
+
+        var result = await _sut.IngestAsync(LapFinishedWithDetail(badCar, conditions: null, badTrace), _deviceId);
+
+        Assert.True(result.Acknowledged); // 랩은 절대 거부하지 않는다.
+        var lap = Assert.Single(_laps.Items);
+        Assert.Null(lap.Snapshot);
+        Assert.Empty(_laps.Traces);
+        Assert.Single(_notifier.RankingUpdates);
+    }
+
+    [Fact]
+    public async Task LapFinished_WithoutDetailParts_SavesLapWithoutSnapshotOrTrace()
+    {
+        await _sut.IngestAsync(LapFinished(), _deviceId); // 옛 Agent 페이로드
+
+        var lap = Assert.Single(_laps.Items);
+        Assert.Null(lap.Snapshot);
+        Assert.Null(lap.GameMode);
+        Assert.Empty(_laps.Traces);
+    }
+
+    [Theory]
+    [InlineData("DriverCareer", "DriverCareer")]
+    [InlineData("SomeFutureMode", "SomeFutureMode")]   // 모르는 값도 그대로
+    [InlineData("", null)]
+    [InlineData("1234567890123456789012345678901", null)] // 31자 > 열 길이 30
+    [InlineData("Driver\u0000Career", null)]            // NUL은 PostgreSQL에 저장할 수 없다
+    public async Task LapFinished_GameMode_StoredAsReceivedWhenStorable(string gameMode, string? expected)
+    {
+        var result = await _sut.IngestAsync(LapFinishedWithDetail(gameMode: gameMode), _deviceId);
+
+        Assert.True(result.Acknowledged);
+        Assert.Equal(expected, Assert.Single(_laps.Items).GameMode);
+    }
+
     // ── Fakes ──
 
     private sealed class FakeProcessedEventRepository : IProcessedEventRepository
@@ -535,6 +633,7 @@ public class TelemetryIngestServiceTests
     private sealed class FakeLapRepository : ILapRepository
     {
         public List<Lap> Items { get; } = new();
+        public List<LapTelemetryTrace> Traces { get; } = new();
 
         public Task AddAsync(Lap lap, CancellationToken ct = default)
         {
@@ -542,13 +641,15 @@ public class TelemetryIngestServiceTests
             return Task.CompletedTask;
         }
 
+        public Task AddTraceAsync(LapTelemetryTrace trace, CancellationToken ct = default)
+        {
+            Traces.Add(trace);
+            return Task.CompletedTask;
+        }
+
         public Task<IReadOnlyList<RankingLapRow>> GetRankingAsync(
             Guid trackId, string gameCode, SessionType sessionType, DateTime fromUtc, DateTime toUtc, int top, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<RankingLapRow>>(new List<RankingLapRow>());
-
-        public Task<(IReadOnlyList<Lap> Items, int Total)> GetMyLapsAsync(
-            Guid userId, Guid? trackId, SessionType? sessionType, MyLapsSort sort, int skip, int take, CancellationToken ct = default)
-            => Task.FromResult(((IReadOnlyList<Lap>)Items, Items.Count));
 
         public Task<IReadOnlyList<MyTrackSummaryRow>> GetMyTrackSummariesAsync(Guid userId, CancellationToken ct = default)
             => throw new NotImplementedException();
@@ -594,7 +695,8 @@ public class TelemetryIngestServiceTests
             => throw new NotImplementedException();
 
         public Task<MyLapsResponse> GetMyLapsAsync(
-            Guid userId, Guid? trackId, SessionType? sessionType, MyLapsSort sort, int page, int pageSize, CancellationToken ct = default)
+            Guid userId, Guid? trackId, SessionType? sessionType, bool validOnly, MyLapsSort sort, int page, int pageSize,
+            CancellationToken ct = default)
             => throw new NotImplementedException();
 
         public Task<MyTracksResponse> GetMyTracksAsync(Guid userId, CancellationToken ct = default)

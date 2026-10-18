@@ -392,6 +392,10 @@ public class SessionQueryServiceTests
 
         public Task<GameSession?> GetMineDetailAsync(Guid userId, Guid sessionId, CancellationToken cancellationToken = default)
             => Task.FromResult(Detail is { } d && d.UserId == userId && d.Id == sessionId ? d : null);
+
+        public Task<Guid?> FindMySessionIdAsync(
+            Guid userId, string gameCode, string sessionKey, CancellationToken cancellationToken = default)
+            => throw new NotImplementedException();
     }
 
     /// <summary>세션 서비스가 쓰는 주말 조회만 구현한다.</summary>

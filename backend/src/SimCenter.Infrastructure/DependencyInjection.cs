@@ -33,6 +33,7 @@ public static class DependencyInjection
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<ITrackRepository, TrackRepository>();
         services.AddScoped<ILapRepository, LapRepository>();
+        services.AddScoped<ILapQueryRepository, LapQueryRepository>();
         services.AddScoped<IProcessedEventRepository, ProcessedEventRepository>();
         services.AddScoped<IAgentDeviceRepository, AgentDeviceRepository>();
         services.AddScoped<IAgentPairingCodeRepository, AgentPairingCodeRepository>();

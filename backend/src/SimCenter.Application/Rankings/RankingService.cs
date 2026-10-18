@@ -1,7 +1,7 @@
 using SimCenter.Application.Common.Exceptions;
 using SimCenter.Application.Common.Interfaces;
+using SimCenter.Application.Laps;
 using SimCenter.Domain.Constants;
-using SimCenter.Domain.Entities;
 using SimCenter.Domain.Enums;
 
 namespace SimCenter.Application.Rankings;
@@ -17,13 +17,20 @@ public sealed class RankingService : IRankingService
     private const int MaxPageSize = 100;
 
     private readonly ILapRepository _laps;
+    private readonly ILapQueryRepository _lapQueries;
     private readonly ITrackRepository _tracks;
     private readonly IRankingTimeZoneProvider _timeZone;
     private readonly IClock _clock;
 
-    public RankingService(ILapRepository laps, ITrackRepository tracks, IRankingTimeZoneProvider timeZone, IClock clock)
+    public RankingService(
+        ILapRepository laps,
+        ILapQueryRepository lapQueries,
+        ITrackRepository tracks,
+        IRankingTimeZoneProvider timeZone,
+        IClock clock)
     {
         _laps = laps;
+        _lapQueries = lapQueries;
         _tracks = tracks;
         _timeZone = timeZone;
         _clock = clock;
@@ -59,9 +66,10 @@ public sealed class RankingService : IRankingService
 
     public async Task<TrackListResponse> GetTracksAsync(CancellationToken cancellationToken = default)
     {
+        // 순서(게임 → 표시 순서 → 이름, D-43)는 리포지토리가 보장한다 — 그대로 매핑한다.
         var tracks = await _tracks.GetAllAsync(cancellationToken);
         var items = tracks
-            .Select(t => new TrackDto(t.Id, t.GameCode, t.Name))
+            .Select(t => new TrackDto(t.Id, t.GameCode, t.Name, t.CountryCode, t.DisplayOrder))
             .ToList();
 
         return new TrackListResponse(items);
@@ -71,6 +79,7 @@ public sealed class RankingService : IRankingService
         Guid userId,
         Guid? trackId,
         SessionType? sessionType,
+        bool validOnly,
         MyLapsSort sort,
         int page,
         int pageSize,
@@ -84,10 +93,11 @@ public sealed class RankingService : IRankingService
             _ => pageSize,
         };
 
-        var (laps, total) = await _laps.GetMyLapsAsync(
-            userId, trackId, sessionType, sort, (page - 1) * pageSize, pageSize, cancellationToken);
+        // 팀·날씨·트레이스 유무까지 한 쿼리 프로젝션으로 읽는다(15 §4.2, N+1 없음).
+        var (rows, total) = await _lapQueries.GetMyPageAsync(
+            userId, new MyLapsFilter(trackId, sessionType, validOnly), sort, (page - 1) * pageSize, pageSize, cancellationToken);
 
-        var items = laps.Select(ToLapDto).ToList();
+        var items = rows.Select(LapDtoMapper.ToLapDto).ToList();
 
         // 개인 최고는 트랙이 지정된 경우에만 의미가 있다(랭킹적격 기준). MVP 단일 게임(F1_25) 기준.
         PersonalBestDto? personalBest = null;
@@ -109,23 +119,10 @@ public sealed class RankingService : IRankingService
 
         // 순서(마지막 세운 시각 내림차순)는 리포지토리가 보장한다 — 그대로 매핑한다.
         var items = rows
-            .Select(r => new MyTrackDto(r.TrackId, r.TrackName, r.GameCode, r.LapCount, r.BestValidLapTimeMs, r.LastSetAt))
+            .Select(r => new MyTrackDto(
+                r.TrackId, r.TrackName, r.GameCode, r.LapCount, r.BestValidLapTimeMs, r.LastSetAt, r.CountryCode, r.DisplayOrder))
             .ToList();
 
         return new MyTracksResponse(items);
     }
-
-    private static LapDto ToLapDto(Lap lap) => new(
-        lap.Id,
-        lap.Track?.Name ?? string.Empty,
-        lap.GameCode,
-        lap.SessionType.ToString(),
-        lap.LapTimeMs,
-        lap.Sectors
-            .OrderBy(s => s.SectorNumber)
-            .Select(s => new LapSectorDto(s.SectorNumber, s.SectorTimeMs))
-            .ToList(),
-        lap.IsValid,
-        lap.IsRankingEligible,
-        lap.SetAt);
 }
