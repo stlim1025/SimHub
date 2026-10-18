@@ -31,6 +31,7 @@ class _FlakyLapsRepository extends FakeLapsRepository {
     String? trackId,
     String? sessionType,
     String sort = kLapSortRecent,
+    bool validOnly = false,
     int page = 1,
     int pageSize = 20,
   }) async {
@@ -39,6 +40,7 @@ class _FlakyLapsRepository extends FakeLapsRepository {
       trackId: trackId,
       sessionType: sessionType,
       sort: sort,
+      validOnly: validOnly,
       page: page,
       pageSize: pageSize,
     );
@@ -141,7 +143,7 @@ void main() {
       await _pump(t, repo, initialLocation: trackPath);
 
       expect(repo.requests, [
-        (trackId: 't1', sort: 'recent', page: 1, pageSize: _trackPageSize),
+        (trackId: 't1', sort: 'recent', validOnly: false, page: 1, pageSize: _trackPageSize),
       ]);
     });
 
@@ -196,7 +198,7 @@ void main() {
       await t.tap(find.text('Fastest'));
       await t.pumpAndSettle();
 
-      expect(repo.requests.last, (trackId: 't1', sort: 'fastest', page: 1, pageSize: _trackPageSize));
+      expect(repo.requests.last, (trackId: 't1', sort: 'fastest', validOnly: false, page: 1, pageSize: _trackPageSize));
       expect(top('1:20.000'), lessThan(top('1:30.000')));
 
       await t.tap(find.text('Recent'));
@@ -243,7 +245,7 @@ void main() {
       await t.tap(find.text('Fastest'));
       await t.pumpAndSettle();
 
-      expect(repo.requests.last, (trackId: 't1', sort: 'fastest', page: 1, pageSize: _trackPageSize));
+      expect(repo.requests.last, (trackId: 't1', sort: 'fastest', validOnly: false, page: 1, pageSize: _trackPageSize));
       expect(find.text('Showing 1 to 15 of 20'), findsOneWidget);
     });
 
