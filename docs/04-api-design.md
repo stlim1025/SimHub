@@ -43,7 +43,7 @@
 | 403 | 권한 없음 (남의 장치 해제 시도 등) |
 | 404 | 리소스 없음 (시즌·세션은 **남의 것도 없는 것과 똑같이 404** — 존재 여부를 알려 주지 않는다, D-34. GUID가 아닌 Id는 라우트가 맞지 않아 404) |
 | 409 | 상태 충돌 (예: 이미 가입된 이메일, 이메일 변경 시 다른 계정이 쓰는 이메일) |
-| 429 | 요청 제한 초과 (`POST /agent/pair` IP당 분당 10회, 코드 발급 사용자당 분당 10회) |
+| 429 | 요청 제한 초과 (`POST /agent/pair` IP당 분당 10회, 코드 발급·이메일 변경 사용자당 분당 10회) |
 | 500 | 서버 오류 (상세 미노출, traceId만) |
 
 ---
@@ -112,7 +112,7 @@
   "console": "Pc",                // Pc|Xbox|PlayStation  (저장만)
   "units": "Metric",              // Metric|Imperial      (저장만)
   "timeZoneId": "Asia/Seoul",     // IANA                 (저장만 — 랭킹 경계는 D-27)
-  "theme": "System"               // Light|Dark|System
+  "theme": "Dark"                 // Light|Dark|System (기본 Dark, D-40)
 }
 ```
 > 로그인 응답의 `user`는 요약(`userId`·`displayName`)뿐이라 앱은 로그인 직후 `GET /me`를 부른다.
@@ -126,7 +126,7 @@
 // 200 → §3.3과 같은 프로필
 ```
 검증(틀린 필드를 모두 모아 400, `errors.<필드>[0]`): `displayName` trim 후 1~50자(가입과 같은 규칙) · enum은 이름만(대소문자 무시, 숫자·모르는 값 거부) ·
-`avatarTeam`은 trim + 대문자 후 목록에 있어야 함 · `preferredGame`은 지원 게임(`F1_25`) · `timeZoneId`는 서버가 찾을 수 있는 IANA ID(Windows ID 거부, 64자 이하).
+`avatarTeam`은 trim + 대문자 후 목록에 있어야 함 · `preferredGame`은 지원 게임(`F1_25`) · `timeZoneId`는 서버가 찾을 수 있는 IANA ID(Windows ID 거부, 64자 이하) — 저장·응답은 정식 표기(`asia/seoul` → `Asia/Seoul`).
 
 ### 3.3b POST `/me/email`
 ```jsonc
@@ -137,6 +137,7 @@
 - 새 이메일은 가입과 같이 정규화(trim + 소문자)·검증(`errors.newEmail`). 같은 이메일이면 그대로 200.
 - 현재 비밀번호가 틀리면 **400**(`errors.currentPassword`) — 401은 앱이 세션 만료로 보고 로그아웃시키므로 쓰지 않는다.
 - 다른 계정이 쓰는 이메일은 **409**(가입과 같은 메시지). 발급된 JWT의 email 클레임은 다음 로그인 때 바뀐다.
+- 사용자당 분당 10회 제한(초과 시 429, `RateLimitPolicies.EmailChange`) — 현재 비밀번호를 맞히려는 반복 시도를 늦춘다.
 
 ### 3.4 POST `/me/agent-pairing-codes`
 웹 Telemetry App에서 Agent 연결 코드를 발급한다(D-26). 요청 본문 없음.
@@ -346,7 +347,8 @@ My Lap Record. **모든 세션·무효 랩까지 조회 가능**(D-15/D-16). `se
 
 ## 6. 확정된 결정 (반영 완료)
 
-- **D-39 ✅** 프로필·설정 = `GET /me` 설정 포함 + `PUT /me/profile`(전체 교체) + `POST /me/email`(비밀번호 틀림 400, 중복 409), 이름 비공개 = 랭킹에서 "익명 드라이버"
+- **D-39 ✅** 프로필·설정 = `GET /me` 설정 포함 + `PUT /me/profile`(전체 교체) + `POST /me/email`(비밀번호 틀림 400, 중복 409), 이름 비공개 = 랭킹에서 "익명 드라이버", 이메일 변경 사용자당 분당 10회
+- **D-40 ✅** 기본 테마 = `Dark`(`GET /me`의 `theme` 기본값, 기존 사용자 백필 포함)
 - **D-25 ✅** 개인 모드 — 체크인 API 제거 (~~D-10 중복 세션 정책~~ 불필요)
 - **D-26 ✅** Agent 연결 = 1회용 코드 → 장치 키 (`/me/agent-pairing-codes`, `/agent/pair`)
 - **D-27 ✅** 랭킹 타임존 = 서버 설정 `Ranking:TimeZoneId`

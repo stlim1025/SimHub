@@ -1,6 +1,6 @@
 # 08 · Open Decisions — 승인 필요 결정사항
 
-> Status: **Design** · Last Updated: 2026-10-18 (프로필·설정: D-39 추가. P7 시즌·세션: D-28~34 추가. P6 개인 모드: D-25~27 추가·대체된 결정 표기는 2026-10-17)
+> Status: **Design** · Last Updated: 2026-10-18 (프로필·설정: D-39·D-40 추가. P7 시즌·세션: D-28~34 추가. P6 개인 모드: D-25~27 추가·대체된 결정 표기는 2026-10-17)
 > AI 작업 규칙("추측 금지, 필요 시 질문") 준수를 위해, **추측 없이 사용자 승인이 필요한 결정**을 모은다.
 > 각 항목: 배경 / 선택지 / **권장안** / 영향 문서. 승인 시 각 문서에 반영한다.
 
@@ -294,14 +294,23 @@ invalid 랩도 우선 기록은 해두고 랭킹 집계에서는 사용하지 �
 - **범위:** 이메일·닉네임 변경, 랭킹 이름 공개 여부, 게임·컨트롤러·플랫폼·단위·타임존·테마, 프로필 사진, 저장/취소, 로그아웃.
   결제·구독(헌장 제외)·비밀번호 변경·계정 삭제는 하지 않는다.
 - **저장:** `User`에 `ShowOnLeaderboard`(기본 true)·`AvatarTeam`(null)·`PreferredGame`(`F1_25`)·`Controller`(`Wheel`)·`Console`(`Pc`)·`Units`(`Metric`)·
-  `TimeZoneId`(`Asia/Seoul`, IANA만)·`Theme`(`System`). enum은 문자열. 마이그레이션 `AddUserProfileSettings`가 기존 사용자를 기본값으로 백필한다.
+  `TimeZoneId`(`Asia/Seoul`, IANA만 — 정식 표기로 저장)·`Theme`(~~`System`~~ → `Dark`, D-40). enum은 문자열. 마이그레이션 `AddUserProfileSettings`가 기존 사용자를 기본값으로 백필한다.
   게임·컨트롤러·플랫폼·단위·타임존은 **저장만** 하고 이후 Phase에서 쓴다(랭킹 기간 경계는 계속 D-27의 서버 설정).
 - **API:** `GET /me`가 설정을 함께 돌려주고, `PUT /me/profile`(전체 교체, 필드별 400)·`POST /me/email`(현재 비밀번호 확인 — 틀리면 401이 아니라 400, 중복 409).
   닉네임은 폼에서 함께 저장하고, 이메일은 대화상자에서 바로 저장한다.
+  이메일 변경은 사용자당 분당 10회로 제한한다(비밀번호 추측 완화). 로그인 직후 `GET /me`가 실패한 요약 사용자는 프로필을 다시 읽기 전에는 저장할 수 없다(기본값 덮어쓰기 방지).
 - **랭킹 비공개:** `ShowOnLeaderboard = false`면 `/rankings`와 RankingHub `RankingUpdated`의 표시 이름이 `익명 드라이버`(순위·기록은 그대로). `/me/*`는 영향 없음.
+  설정을 바꿔도 이미 열린 랭킹은 다음 갱신·재조회 때 바뀐다(브로드캐스트 없음). "익명 드라이버"는 예약하지 않는다(닉네임으로 쓸 수 있다).
 - **프로필 사진:** 실제 팀 로고(상표) 대신 팀 색 원 + 코드 `MER FER RBR MCL AST ALP WIL RB SAU HAA`. 코드 목록은 백엔드 `AvatarTeamCodes`·앱 `kAvatarTeams`·OpenAPI enum이 같다.
-- **테마:** 밝은 팔레트 추가(`AppColors.light*` + `AppPalette` 테마 확장), System은 기기 밝기를 따른다. 로그인·스플래시는 System. 어두운 화면은 그대로.
+- **테마:** 밝은 팔레트 추가(`AppColors.light*` + `AppPalette` 테마 확장, 밝은 글자 대비 4.5:1 이상), System을 고르면 기기 밝기를 따른다. 어두운 화면은 그대로. 기본값은 D-40.
 - 영향: [03](./03-entity-design.md), [04](./04-api-design.md), [05](./05-signalr-design.md), [14](./14-profile-settings.md), backend, app, shared/openapi
+
+### D-40. 기본 테마 = Dark (D-39의 System 대체, 2026-10-18)
+- **결정:** 새 사용자와 기존 사용자의 기본 테마는 `Dark`다. 로그아웃·스플래시·세션 복원 중(설정이 없을 때)도 Dark. 사용자가 System을 고를 때만 기기 밝기를 따른다.
+- **이유:** 지금까지의 화면은 어두운 테마뿐이었다 — 기본값을 System으로 두면 밝은 OS를 쓰는 기존 사용자의 화면이 말없이 바뀐다.
+- **반영:** `UserProfileDefaults.Theme = Dark`, 마이그레이션 `DefaultThemeDark`(`theme = 'System'` → `'Dark'`, 열 기본값 `Dark`. 이미 적용된 `AddUserProfileSettings`는 고치지 않는다),
+  앱 `UserPreferences.defaults.theme = dark`·`themeModeOf(null) = ThemeMode.dark`.
+- 영향: [03](./03-entity-design.md), [04](./04-api-design.md), [14](./14-profile-settings.md) §7, backend, app, shared/openapi
 
 ---
 
@@ -345,7 +354,8 @@ invalid 랩도 우선 기록은 해두고 랭킹 집계에서는 사용하지 �
 | D-36 | 업로드 실패 분류 = 서버 오류(`TelemetryHubServerException`)만 셈, 연결 문제는 세지 않음, 키 변경 시 초기화 | 13, agent |
 | D-37 | dead-letter = 읽을 수 없는 payload만(`outbox_dead_letter`, 자동 삭제 없음) | 13, agent |
 | D-38 | 올리지 못한 기록을 로그·Tray에 표시, 미뤄진 항목은 D-13 순서의 예외 | 13, agent |
-| D-39 | 프로필·설정 = User 설정 필드(저장만 하는 항목 포함) + `PUT /me/profile`·`POST /me/email`, 이름 비공개 = 랭킹에서 "익명 드라이버", 사진 = 팀 색 원(로고 미사용), 밝은 테마 + System | 03, 04, 05, 14, backend, app |
+| D-39 | 프로필·설정 = User 설정 필드(저장만 하는 항목 포함) + `PUT /me/profile`·`POST /me/email`(사용자당 분당 10회), 이름 비공개 = 랭킹에서 "익명 드라이버", 사진 = 팀 색 원(로고 미사용), 밝은 테마 추가 | 03, 04, 05, 14, backend, app |
+| D-40 | 기본 테마 = `Dark`(기존·새 사용자, 로그아웃·스플래시 포함). System은 사용자가 고를 때만 | 03, 04, 14, backend, app |
 
 **MVP 관련 결정은 모두 확정되어 각 문서에 반영 완료.** 본 설계 문서 세트 최종 승인 시,
 **Phase 0(계약 & 스캐폴딩)** 상세 설계로 진입합니다.

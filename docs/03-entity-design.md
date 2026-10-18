@@ -117,11 +117,11 @@ Lap.SessionKey  ·····  GameSession.SessionKey     (값으로만 이어진�
 | PreferredGame | string(20) | NotNull | 기본 `F1_25`. 저장만 |
 | Controller / Console / Units | string(20) | NotNull | enum 문자열(`Wheel`·`Pc`·`Metric` 기본). 저장만 |
 | TimeZoneId | string(64) | NotNull | IANA, 기본 `Asia/Seoul`. 저장만(랭킹 경계는 D-27) |
-| Theme | string(20) | NotNull | `Light`·`Dark`·`System`(기본) |
+| Theme | string(20) | NotNull | `Light`·`Dark`(기본, D-40)·`System`. 열 기본값 `Dark`(`DefaultThemeDark`) |
 | CreatedAt / UpdatedAt / IsDeleted | 공통 | | |
 
 내비게이션: `AgentDevices` (P6에서 `Sessions` 대체).
-프로필 설정 열(`ShowOnLeaderboard`~`Theme`)은 마이그레이션 `AddUserProfileSettings`(가산적)가 추가했다. DB 기본값은 백필용으로만 쓰고 모델에는 두지 않는다([14](./14-profile-settings.md) §3).
+프로필 설정 열(`ShowOnLeaderboard`~`Theme`)은 마이그레이션 `AddUserProfileSettings`(가산적)가 추가했고, `DefaultThemeDark`가 테마 백필 값을 System → Dark로 바꿨다(D-40). DB 기본값은 백필용으로만 쓰고 모델에는 두지 않는다([14](./14-profile-settings.md) §3).
 
 ### 3.2 AgentDevice (신규 · D-25)
 
