@@ -138,6 +138,43 @@ void main() {
       expect(find.byKey(const ValueKey('track-option-t29')), findsNothing);
     });
 
+    testWidgets('목록이 열린 채로 메뉴 밖을 누르면 목록만 닫히고 아래 위젯은 눌리지 않는다', (t) async {
+      setViewSize(t, const Size(1000, 800));
+      var underneathTaps = 0;
+      final picked = <TrackChoice>[];
+      await t.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: Stack(
+            children: [
+              Positioned.fill(
+                child: GestureDetector(
+                  key: const ValueKey('underneath'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => underneathTaps++,
+                ),
+              ),
+              Align(
+                alignment: Alignment.topLeft,
+                child: TrackPicker(tracks: _tracks, selected: _tracks[0], onSelected: picked.add),
+              ),
+            ],
+          ),
+        ),
+      ));
+      await _open(t);
+
+      await t.tapAt(const Offset(900, 600));
+      await t.pumpAndSettle();
+
+      expect(underneathTaps, 0);
+      expect(picked, isEmpty);
+      expect(find.byKey(const ValueKey('track-option-t29')), findsNothing);
+
+      // 닫힌 뒤에는 아래 위젯이 평소처럼 눌린다.
+      await t.tapAt(const Offset(900, 600));
+      expect(underneathTaps, 1);
+    });
+
     testWidgets('트랙이 많으면 목록 높이는 화면의 80% 이하이고 스크롤해 마지막 트랙을 고를 수 있다', (t) async {
       final picked = await _pump(t, tracks: _manyTracks, selected: _manyTracks.first, size: const Size(800, 600));
       await _open(t);
