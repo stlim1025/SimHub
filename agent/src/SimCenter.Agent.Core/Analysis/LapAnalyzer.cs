@@ -41,7 +41,7 @@ public sealed class LapAnalyzer : ITelemetryAnalyzer
     // 랩 상태
     private int _lastLapNumber;         // 0 = 아직 없음
     private int _lastSector = -1;       // -1 = 아직 없음
-    private bool _lapInvalidAccum;
+    private bool _lapInvalid;
     private bool _outOrInLapAccum;
     private int _completedSector1Ms;
     private int _completedSector2Ms;
@@ -217,7 +217,7 @@ public sealed class LapAnalyzer : ITelemetryAnalyzer
             LapNumber: completedLapNumber,
             LapTimeMs: totalMs,
             Sectors: sectors,
-            IsValid: !_lapInvalidAccum,
+            IsValid: !_lapInvalid,
             IsOutOrInLap: _outOrInLapAccum,
             TrackId: _trackId,
             SessionType: _sessionType,
@@ -261,10 +261,9 @@ public sealed class LapAnalyzer : ITelemetryAnalyzer
 
     private void AccumulateLapFlags(LapFrame lf)
     {
-        if (lf.IsCurrentLapInvalid)
-        {
-            _lapInvalidAccum = true;
-        }
+        // 무효는 누적하지 않고 게임의 최신 값을 따른다. 게임은 무효가 되면 랩 끝까지 유지하지만, 플래시백으로 되감으면 풀어 준다
+        // (실제 F1 25 TT: 무효 이벤트 뒤 플래시백한 랩이 랩 끝 currentLapInvalid=false·Session History lapValid=true였다).
+        _lapInvalid = lf.IsCurrentLapInvalid;
 
         if (lf.IsOutOrInLap)
         {
@@ -274,7 +273,7 @@ public sealed class LapAnalyzer : ITelemetryAnalyzer
 
     private void ResetLapAccumulators()
     {
-        _lapInvalidAccum = false;
+        _lapInvalid = false;
         _outOrInLapAccum = false;
         _completedSector1Ms = 0;
         _completedSector2Ms = 0;

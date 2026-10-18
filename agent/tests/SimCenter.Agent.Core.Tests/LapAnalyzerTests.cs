@@ -97,13 +97,42 @@ public class LapAnalyzerTests
     {
         _sut.Process(new SessionFrame(S1, 7, SessionType.TimeTrial, 2025));
         _sut.Process(Lap(1, 0));
-        _sut.Process(Lap(1, 1, s1: 27010, invalid: true)); // 랩 중 무효 발생
-        _sut.Process(Lap(1, 2, s1: 27010, s2: 30110));
+        _sut.Process(Lap(1, 1, s1: 27010, invalid: true)); // 랩 중 무효 발생 — 게임은 랩 끝까지 무효를 유지한다
+        _sut.Process(Lap(1, 2, s1: 27010, s2: 30110, invalid: true));
 
         var events = _sut.Process(Lap(2, 0, last: 83452));
 
         var finished = Assert.IsType<LapFinished>(events[0]);
         Assert.False(finished.IsValid);
+    }
+
+    [Fact]
+    public void FlashbackClearingInvalidFlag_MakesLapFinishedValid()
+    {
+        // 실제 F1 25 TT: 트랙 이탈로 무효가 켜졌다가 플래시백으로 되감으면 게임이 무효를 푼다(랩 끝 currentLapInvalid=false,
+        // Session History lapValid=true). 랩 판정은 랩이 끝나는 순간의 게임 값을 따른다.
+        _sut.Process(new SessionFrame(S1, 7, SessionType.TimeTrial, 2025));
+        _sut.Process(Lap(1, 0));
+        _sut.Process(Lap(1, 1, s1: 27010, invalid: true));
+        _sut.Process(Lap(1, 1, s1: 27010)); // 플래시백
+        _sut.Process(Lap(1, 2, s1: 27010, s2: 30110));
+
+        var events = _sut.Process(Lap(2, 0, last: 83452));
+
+        var finished = Assert.IsType<LapFinished>(events[0]);
+        Assert.True(finished.IsValid);
+    }
+
+    [Fact]
+    public void InvalidFlagOnNextLapsFirstFrame_DoesNotInvalidateCompletedLap()
+    {
+        _sut.Process(new SessionFrame(S1, 7, SessionType.TimeTrial, 2025));
+        _sut.Process(Lap(1, 0));
+        _sut.Process(Lap(1, 2, s1: 27010, s2: 30110));
+
+        var events = _sut.Process(Lap(2, 0, last: 83452, invalid: true));
+
+        Assert.True(Assert.IsType<LapFinished>(events[0]).IsValid);
     }
 
     [Fact]
