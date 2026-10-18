@@ -318,3 +318,53 @@ F1 25 시드(`DbSeeder`가 매번 맞춘다 — 기존 행의 국가·순서도 
 - **머리줄:** `국기 + {트랙} Lap {랩타임}`, 오른쪽 [Share](주소 복사). Game Mode 줄은 "Driver Career · Race"처럼 모드와 세션을 함께.
 
 - **구현 메모(2026-10-18):** 비교 불가 사유는 `notFound`(없음·남의 비공개 — 구분하지 않음)·`noMatch` 두 가지. 이 랩의 값을 모르는 필터는 건너뛰고 `appliedFilters`에 적용한 것만 담는다. 공유 링크는 스플래시·로그인을 거쳐도 `from`으로 돌아온다.
+
+---
+
+## 11. 세션 목록·상세 F1Laps 맞추기 (P8, D-52~D-54, 2026-10-18)
+
+> 사용자(F1Laps Sessions·세션 상세 화면과 항목별 예시 첨부): "세션 페이지가 국가도 나와야 하고 팀도 내가 선택한 팀이 나와야 해(Team 221 말고).
+> 세션 디테일 페이지는 F1Laps처럼, 각 텔레메트리 항목의 디테일은 첨부 사진들처럼."
+
+### 11.1 원인 (실제 데이터로 확인)
+- **Team 221:** 게임(F1 25 v1.26 · 2026 시즌팩)이 팀 ID를 **220~230**으로 보낸다. F1Game.UDP 25.1.1·26.0.0 모두 이 번호를 모르고 `TeamCatalog`에도 없었다.
+  저장된 결과의 드라이버 이름으로 확정: 220 Mercedes · 221 Ferrari · 222 Red Bull Racing · 223 Williams · 224 Aston Martin · 225 Alpine ·
+  226 Racing Bulls · 227 Haas · 228 McLaren · 229 Audi · 230 Cadillac (D-52).
+- **게임 모드 Other:** 2026 시즌팩 Driver Career가 `m_gameMode` **78**로 온다(라이브러리 enum에 없음) → Agent가 `Other`로 보내 시즌으로 묶이지 않았다. 78 → `DriverCareer`(D-52). 다른 새 번호는 확인되는 대로 더한다.
+
+### 11.2 Sessions 목록 (`/sessions`)
+F1Laps "All Sessions" 배치: 제목 + Filters(세션 종류) · 표 열 **TRACK**(원형 국기 + 트랙 이름(링크색) / 아래 세션 종류 "Qualifying 3") ·
+**TEAM**(팀 색 점 + 내 팀 이름 / 아래 모드 "Driver Career Season 1", 시즌 없으면 "Grand Prix" 등) · **RESULT**(P8 배지, 레이스는 강조 배지) · **TIME**(날짜 / 시각).
+행 클릭 → 세션 상세. 600px 미만은 TEAM 아래줄·TIME 시각을 숨긴다.
+
+### 11.3 세션 상세 (`/sessions/:id`) — 카드 2열(900px 미만 1열)
+| 카드 | 내용 | 데이터 |
+|---|---|---|
+| Details | (예선이면) Q1·Q2·Q3 내 순위(같은 주말) · Best Lap Time(→ 랩 상세) · Setup(View Setup → 대화상자, 마지막 랩 `details.setup`) · Difficulty(AI) · Conditions(날씨 아이콘 + 이름) · Team · Session Type · Game Mode(+ Season N) · Date | GameSession, SessionResult(내), 내 랩 스냅샷 |
+| Final Classification | # · DRIVER(팀 색 점 + 이름, 나는 "You" + 강조 행) · POSITION · CHANGE(그리드 대비 ↑초록/↓빨강) · POINTS · GAP(레이스 = 총 시간 차 `+0:02.309`, 예선·연습 = 최고 랩 차) | SessionResult |
+| Laps | # · POS.(랩별 순위 + 변동 ↑n/↓n) · 타이어 원(S/M/H/I/W) · IN PIT · LAP TIME · GAP(내 최고 랩 대비) · SECTOR 1·2·3 — 세션 최고 섹터·최고 랩은 보라색 | `GameSession.details.lapHistory`(내 차) + `lapPositions` + 순위표 스틴트, 내 랩(피트 여부) |
+| Engine Wear | 엔진 그림(CustomPainter, 부품별 색) + ICE · Turbo Charger · MGU-H · MGU-K · Energy Store · Control Electronics · Gearbox · Engine Damage(%), 25/50/75% 색 | 세션 마지막 내 랩 `details.damage` |
+| Tyre Stints: Tyre Life Remaining | 스틴트마다 선(컴파운드 색), x = 스틴트 안 랩, y = 100 − 평균 마모 | 내 랩 스냅샷(마모 끝 값) + 스틴트 |
+| Tyre Stints: Lap Times | 스틴트마다 선, x = 스틴트 안 랩, y = 랩타임 | 내 랩 |
+| Penalties | LAP · DRIVER(팀 색 점, 나는 "You") · INCIDENT(침해 종류 이름) · PENALTY(벌칙 종류 이름) | 세션 내 랩들의 `details.events`(PENA) + 차 번호 → 순위표 이름 |
+
+- 데이터가 없는 카드는 숨기지 않고 "이 세션에는 … 데이터가 없어요"(예: 예전 Agent로 기록한 세션).
+- 그래프는 앱의 기존 CustomPainter 차트 방식을 재사용한다(라이브러리 추가 없음).
+
+### 11.4 계약 (D-53)
+- `GET /me/sessions` 항목에 `countryCode`, `myTeam {name,color}`, `seasonNumber`(시즌이면 1부터, 아니면 null) 추가.
+- `GET /me/sessions/{id}` 응답에 추가: `session.countryCode`, `session.aiDifficulty`, `session.weather`, `session.seasonNumber`, `session.myTeam`,
+  `qualifyingPositions`(같은 주말 Q1·Q2·Q3… 내 순위 목록, 예선 세션일 때), `myBestLap {lapId, lapTimeMs}`, `setup`(object|null),
+  `laps[]` {lapNumber, position, positionChange, visualCompound, inPit, lapTimeMs, gapToBestMs, sectors[3], isValid, isBestLap, bestSectors[3], lapId?},
+  `engineWear` {ice, turboCharger, mguH, mguK, energyStore, controlElectronics, gearbox, engineDamage} (%)|null,
+  `tyreStints[]` {visualCompound, startLap, endLap, laps[] {lapInStint, lapTimeMs, tyreLifeRemaining}},
+  `penalties[]` {lap, carIndex, driverName, isPlayer, teamColor, infringement, penalty, timeS?}.
+  결과 행에 `gapMs`(1위 대비), `positionChange`(그리드 − 순위) 추가.
+- 침해·벌칙 이름은 서버의 정적 카탈로그(F1 25 스펙 표, 영어 이름 — F1Laps와 같게)로 푼다(D-33과 같은 원칙).
+
+### 11.5 결정 (D-52~D-54)
+| ID | 결정 |
+|---|---|
+| D-52 | F1 25 v1.26 팀 ID 220~230(2026 그리드, 드라이버 이름으로 확인)을 `TeamCatalog`에, 게임 모드 78 = DriverCareer. 예전에 Other로 저장된 세션의 키는 바꾸지 않는다(시즌 묶음은 새 세션부터) |
+| D-53 | 세션 상세 = Details · Final Classification · Laps · Engine Wear · Tyre Stints 2종 · Penalties(위 계약), 데이터는 D-49로 이미 수집한 값에서 서버가 만든다 |
+| D-54 | 세션 목록 = F1Laps 배치(국기·내 팀·모드+시즌·P 배지·날짜/시각) |
