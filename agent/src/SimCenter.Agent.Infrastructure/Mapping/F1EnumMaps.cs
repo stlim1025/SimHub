@@ -77,6 +77,18 @@ internal static class F1EnumMaps
         _ => TyreCompound.Unknown,   // 클래식 · F2 · 모르는 값
     };
 
+    /// <summary>세션 날씨(docs/15 §3.1). 게임 0~5와 같은 이름. 모르는 값은 null.</summary>
+    public static Weather? ToWeather(F1Enums.Weather weather) => weather switch
+    {
+        F1Enums.Weather.Clear => Weather.Clear,
+        F1Enums.Weather.LightCloud => Weather.LightCloud,
+        F1Enums.Weather.Overcast => Weather.Overcast,
+        F1Enums.Weather.LightRain => Weather.LightRain,
+        F1Enums.Weather.HeavyRain => Weather.HeavyRain,
+        F1Enums.Weather.Storm => Weather.Storm,
+        _ => null,
+    };
+
     /// <summary>게임 고유 라벨(F1 C0~C6, Inter, Wet). 그 밖(클래식·F2·모르는 값)은 null.</summary>
     public static string? ToActualCompoundLabel(F1Enums.ActualCompound compound) => compound switch
     {
