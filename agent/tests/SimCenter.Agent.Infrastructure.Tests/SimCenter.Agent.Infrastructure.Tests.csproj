@@ -22,6 +22,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- F1WireLayoutTests: 실제 F1 25 게임이 보낸 데이터그램(개인 정보 없는 Session·LapData). -->
+    <None Update="Fixtures\**\*.bin" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\SimCenter.Agent.Infrastructure\SimCenter.Agent.Infrastructure.csproj" />
   </ItemGroup>
 

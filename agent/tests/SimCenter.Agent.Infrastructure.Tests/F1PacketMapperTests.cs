@@ -1,6 +1,7 @@
 using F1Game.UDP.Data;
 using F1Game.UDP.Events;
 using F1Game.UDP.Packets;
+using Microsoft.Extensions.Logging.Abstractions;
 using SimCenter.Agent.Core.Telemetry;
 using SimCenter.Agent.Core.Telemetry.Frames;
 using SimCenter.Agent.Infrastructure.Mapping;
@@ -15,7 +16,7 @@ namespace SimCenter.Agent.Infrastructure.Tests;
 public class F1PacketMapperTests
 {
     private const int Format = 2025;
-    private readonly F1PacketMapper _sut = new(expectedPacketFormat: Format);
+    private readonly F1PacketMapper _sut = new(expectedPacketFormat: Format, NullLogger<F1PacketMapper>.Instance);
 
     private static PacketHeader Header(ulong uid = 1001, byte playerIndex = 0) =>
         new() { PacketFormat = Format, SessionUID = uid, PlayerCarIndex = playerIndex };
@@ -128,10 +129,10 @@ public class F1PacketMapperTests
 
     // ---- P7: Session 맥락 · Participants · Final Classification ----
 
-    private const int CarSlotCount = 24;
+    private const int CarSlotCount = 22; // F1 25 레이아웃(F1Game.UDP 25.x, D-41)
     private const int TyreStintSlotCount = 8;
 
-    // 라이브러리의 Array24/Array8은 T[]에서 암시 변환된다 — 칸 수를 맞춘 배열을 만들어 준다.
+    // 라이브러리의 Array22/Array8은 T[]에서 암시 변환된다 — 칸 수를 맞춘 배열을 만들어 준다.
     private static T[] Slots<T>(int count, params (int Index, T Value)[] filled)
     {
         var array = new T[count];

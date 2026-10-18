@@ -42,7 +42,7 @@ public class TelemetryPipelineAnalyzerTests
         var clock = new FixedClock();
         return new TelemetryPipeline(
             new UdpTelemetryListener(port: 0, NullLogger<UdpTelemetryListener>.Instance),
-            new F1PacketMapper(ExpectedPacketFormat),
+            new F1PacketMapper(ExpectedPacketFormat, NullLogger<F1PacketMapper>.Instance),
             analyzers,
             new DomainEventFactory(clock, new SequentialIds(), new AgentIdentity("F1_25")),
             sink,

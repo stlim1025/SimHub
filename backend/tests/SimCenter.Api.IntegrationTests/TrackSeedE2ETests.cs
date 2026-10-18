@@ -15,8 +15,8 @@ namespace SimCenter.Api.IntegrationTests;
 public sealed class TrackSeedE2ETests : IClassFixture<ApiFactory>
 {
     /// <summary>
-    /// Agent가 보낼 수 있는 트랙 ID 계약. Agent 테스트(TrackIdContractTests)가 이 파일이 F1Game.UDP의 Track enum과
-    /// 같은지 확인하므로, 라이브러리를 올려 새 트랙이 생기면 그쪽이 먼저 실패한다.
+    /// Agent가 보낼 수 있는 트랙 ID 계약. Agent 테스트(TrackIdContractTests)가 F1Game.UDP의 Track enum 값이 모두
+    /// 이 파일에 있는지 확인하므로, 라이브러리를 올려 새 트랙이 생기면 그쪽이 먼저 실패한다(계약에 더 있는 것은 허용, D-41).
     /// </summary>
     private const string ContractRelativePath = "shared/telemetry/f1_25_track_ids.json";
 

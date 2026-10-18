@@ -106,7 +106,7 @@
 - `ResultStatus`: Invalid=0, Inactive=1, Active=2, Finished=3, DidNotFinish=4, Disqualified=5, NotClassified=6, Retired=7
 - `SessionType`(상세): Practice1~3, ShortPractice, Qualifying1~3, ShortQualifying, OneShotQualifying, SprintShootout1~3, ShortSprintShootout, OneShotSprintShootout, Race, Race2, Race3, TimeTrial
 - `VisualCompound`: F1Soft=16, F1Medium=17, F1Hard=18, F1Inter=7, F1Wet=8 (그 외 클래식·F2) · `ActualCompound`: F1C0~C6(21~16, C6=22), F1Inter=7, F1Wet=8
-- 배열(`Array24<T>`, `Array8<T>`)은 `T[]`에서 암시 변환된다(테스트에서 패킷을 만들 때 쓴다).
+- 배열(`Array22<T>`, `Array8<T>` — 25.1.1 기준, 26.0.0은 `Array24`)은 `T[]`에서 암시 변환된다(테스트에서 패킷을 만들 때 쓴다).
 
 ### 3.3 게임에서 확인해야 할 가정
 
@@ -119,7 +119,7 @@
 | Grand Prix 모드의 링크 값이 주말·챔피언십 단위로 의미가 있다 | 아니면 Grand Prix를 시즌 대상 모드에서 뺀다(`SeasonPolicy` 한 줄) | 미확인 |
 | F1 25의 Grand Prix 모드 값이 라이브러리의 `GrandPrix23`(4)이다(예전 연식 스펙의 3이 아니다) | 매퍼가 원시 값 3도 Grand Prix로 본다(§5.2) — 어느 쪽이어도 동작 | 미확인 |
 | 스프린트 주말에서 스프린트가 `Race`, 본 레이스가 `Race2`다 | 세션 이름 표시만 다르다(§8.4 라벨만 고치면 됨). 본 레이스 판정은 시각 기준이라 영향 없음 | 미확인 |
-| Participants의 레이아웃이 사용자의 게임 버전(2026 시즌팩)과 맞다 | 이름이 깨진다 — D-20의 버전 결정 문제로, 게임 업데이트로 맞춘다 | 미확인 |
+| Participants의 레이아웃이 사용자의 게임 버전과 맞다 | 이름이 깨진다 | **확인(D-41):** 게임은 F1 25 레이아웃(22대)을 보낸다. 26.0.0은 맞지 않아 25.1.1로 바꿨고, 16종 패킷 크기를 `F1WireLayoutTests`가 검사한다 |
 
 > 확인 절차는 [TESTING-local-e2e.md](./TESTING-local-e2e.md) §10. 확인하면 "확인 결과" 열에 날짜와 결과(가정이 맞았는지, 틀렸다면 무엇이 달랐는지)를 적는다.
 

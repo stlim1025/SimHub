@@ -1,6 +1,7 @@
 using F1Game.UDP;
 using F1Game.UDP.Data;
 using F1Game.UDP.Packets;
+using Microsoft.Extensions.Logging;
 using SimCenter.Agent.Core.Telemetry;
 using SimCenter.Agent.Core.Telemetry.Frames;
 using F1Enums = F1Game.UDP.Enums;
@@ -26,11 +27,25 @@ public sealed class F1PacketMapper
     /// </summary>
     private const int MaxClassifiedPosition = 32;
 
+    /// <summary>헤더에서 <c>m_packetId</c>의 위치(format 2 + gameYear 1 + major 1 + minor 1 + packetVersion 1).</summary>
+    private const int PacketIdOffset = 6;
+
+    /// <summary>헤더조차 못 읽을 만큼 짧은 데이터그램의 패킷 ID 표기.</summary>
+    private const string UnknownPacketId = "?";
+
     private static readonly IReadOnlyList<ITelemetryFrame> Empty = Array.Empty<ITelemetryFrame>();
 
     private readonly int _expectedPacketFormat;
+    private readonly ILogger<F1PacketMapper> _logger;
 
-    public F1PacketMapper(int expectedPacketFormat) => _expectedPacketFormat = expectedPacketFormat;
+    /// <summary>이미 경고한 버림 사유(예: <c>parse:2</c>, <c>format:2024</c>). 파이프라인이 단일 스레드로 호출하므로 잠금 없이 쓴다.</summary>
+    private readonly HashSet<string> _warnedDropReasons = [];
+
+    public F1PacketMapper(int expectedPacketFormat, ILogger<F1PacketMapper> logger)
+    {
+        _expectedPacketFormat = expectedPacketFormat;
+        _logger = logger;
+    }
 
     /// <summary>원시 데이터그램을 파싱해 프레임으로 매핑한다. 파싱 실패/무관 패킷은 빈 목록.</summary>
     public IReadOnlyList<ITelemetryFrame> Map(ReadOnlySpan<byte> datagram)
@@ -42,11 +57,27 @@ public sealed class F1PacketMapper
         }
         catch (Exception ex) when (ex is ParsingException or NotEnoughBytesException or InvalidPacketTypeException)
         {
+            var packetId = datagram.Length > PacketIdOffset ? datagram[PacketIdOffset].ToString() : UnknownPacketId;
+            if (IsFirstDrop($"parse:{packetId}"))
+            {
+                _logger.LogWarning(
+                    "F1 패킷 해석 실패(packetId={PacketId}, {Length}바이트) — F1Game.UDP 버전이 게임의 UDP 형식과 맞는지 확인하세요. 같은 종류는 다시 기록하지 않습니다: {Reason}",
+                    packetId,
+                    datagram.Length,
+                    ex.Message);
+            }
+
             return Empty;
         }
 
         return Map(packet);
     }
+
+    /// <summary>
+    /// 이 사유로 처음 버리는 것이면 true. 패킷을 버리는 경로는 사유마다 한 번 경고한다(초당 수십 개가 와도 로그가 넘치지 않게).
+    /// 조용히 버리면 "패킷은 받는데 랩이 저장되지 않는" 상태를 알아챌 수 없다 — F1Game.UDP 버전이 게임 레이아웃과 어긋났던 사례(D-41).
+    /// </summary>
+    private bool IsFirstDrop(string reason) => _warnedDropReasons.Add(reason);
 
     /// <summary>파싱된 UnionPacket을 프레임으로 매핑(버전 검증 포함).</summary>
     public IReadOnlyList<ITelemetryFrame> Map(UnionPacket packet)
@@ -54,6 +85,14 @@ public sealed class F1PacketMapper
         // 버전 가드: 기대 포맷이 아니면 스킵(다른 연식 패킷, D-20/OCP).
         if (packet.Header.PacketFormat != _expectedPacketFormat)
         {
+            if (IsFirstDrop($"format:{packet.Header.PacketFormat}"))
+            {
+                _logger.LogWarning(
+                    "UDP 형식 {Actual} 패킷을 버립니다 — Agent는 {ExpectedFormat} 형식만 읽습니다. 게임의 텔레메트리 설정에서 UDP 형식을 확인하세요. 같은 형식은 다시 기록하지 않습니다",
+                    packet.Header.PacketFormat,
+                    _expectedPacketFormat);
+            }
+
             return Empty;
         }
 
@@ -68,6 +107,14 @@ public sealed class F1PacketMapper
                 var cars = lapPacket.LapData.AsReadOnlySpan();
                 if (index >= cars.Length)
                 {
+                    if (IsFirstDrop("player-index"))
+                    {
+                        _logger.LogWarning(
+                            "플레이어 차 번호 {Index}가 LapData 칸 수 {Slots}를 넘어 랩을 읽지 못했습니다(관전 중이면 정상) — 아니면 게임의 UDP 레이아웃과 F1Game.UDP 버전이 맞는지 확인하세요",
+                            index,
+                            cars.Length);
+                    }
+
                     return Empty;
                 }
 

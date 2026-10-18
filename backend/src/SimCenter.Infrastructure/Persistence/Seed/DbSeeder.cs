@@ -13,7 +13,7 @@ namespace SimCenter.Infrastructure.Persistence.Seed;
 /// </summary>
 public sealed class DbSeeder
 {
-    // F1 25 UDP m_trackId → 트랙명(Codemasters 표준 매핑). F1Game.UDP 26.0.0의 Track enum 값(2026 시즌팩 포함)을 모두 덮어야 한다 —
+    // F1 25 UDP m_trackId → 트랙명(Codemasters 표준 매핑). Agent의 F1Game.UDP(25.1.1) Track enum 값과 2026 시즌팩 Madrid(42)를 모두 덮어야 한다(D-41) —
     // 매핑이 없으면 그 트랙의 랩·세션 결과가 Reject되어 영구 손실된다(TrackSeedE2ETests가 확인). 1·8·28은 이전 연식 트랙이라 그대로 둔다.
     private static readonly (int GameTrackId, string Name)[] F1Tracks =
     [

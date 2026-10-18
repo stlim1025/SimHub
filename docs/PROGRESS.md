@@ -9,7 +9,11 @@
 
 ## 1. 한 줄 상태
 
-**프로필·계정 설정(Edit Profile) 완료 — 사이드바 하단 프로필(팀 색 사진 + 이름 + "계정 설정")을 누르면 `/settings`가 열린다. 이메일·닉네임 변경, 랭킹 이름 공개 설정
+**실제 게임 연동 버그 수정(D-41) — F1 25로 랩을 돌아도 기록이 저장되지 않던 문제. F1Game.UDP 26.0.0은 2026 시즌팩 레이아웃(24대)이라 실제 게임(F1 25 v1.26, 22대)의
+Session·LapData를 모두 "바이트 부족"으로 버렸다 → 25.1.1로 교체, 해석 실패 경고 로그, 실제 패킷 회귀 테스트(`F1WireLayoutTests`). 캡처 재생으로 Tray → 허브 수신까지 확인,
+랩 저장(LapFinished)은 게임으로 한 랩 더 돌아 확인해야 한다. 테스트: Agent 246(Core 41 + Infrastructure 205) 통과.**
+
+(이전) **프로필·계정 설정(Edit Profile) 완료 — 사이드바 하단 프로필(팀 색 사진 + 이름 + "계정 설정")을 누르면 `/settings`가 열린다. 이메일·닉네임 변경, 랭킹 이름 공개 설정
 (끄면 랭킹에 "익명 드라이버"), 게임·컨트롤러·플랫폼·단위·타임존·테마, 프로필 사진(팀 색 원), 저장/취소, 로그아웃. 밝은 테마 추가 — 기본 테마는 Dark(D-40), System을 고르면 기기 밝기.
 설계·결정: [14](./14-profile-settings.md), D-39·D-40(리뷰 반영 포함). 테스트: Backend 451(Domain 55 + Application 344 + 통합 52) · App 364 전부 통과, `flutter analyze` 이슈 0, 빌드 경고 0. Agent 변경 없음.
 마이그레이션 `AddUserProfileSettings`·`DefaultThemeDark`는 백엔드 재시작 시 개발 DB에 적용된다. 브라우저 육안 확인(밝은 테마 포함)은 아직이다. 다음 = P8 세션 상세.**
@@ -234,6 +238,11 @@ Agent 95(Core 19 + Infrastructure 76) · App 127 전부 통과, `flutter analyze
      요약 사용자의 프로필 재조회(`isProfileLoaded`·`profileReloadProvider`, 읽기 전 저장 금지), 저장 중 편집 유지, 공용 `SectionCard`를 `core/widgets`로 이동.
    - **계약·문서:** `shared/openapi/openapi.yaml`(`/me/profile`·`/me/email`·설정 스키마, 로그인 `UserSummary`), `docs/03·04·05·08·14`.
    - **검증 범위:** 단위·위젯·통합 테스트(비공개 사용자의 RankingHub `RankingUpdated`·REST 익명화 포함), 임시 골든 렌더로 밝은/어두운 배치 확인. 실제 브라우저 확인은 서버 재시작 뒤.
+15. **실제 게임 연동 버그 수정 (D-41, Agent 246 통과):** 증상 "게임 안에서 127.0.0.1로 설정하고 한랩 돌아봤는데 기록이 저장 안 됨" — Tray는 초당 약 150개를 받는데 Outbox·서버에 이벤트 0.
+   - **원인:** F1Game.UDP 26.0.0 = 2026 시즌팩 레이아웃. 실제 게임 패킷 12종이 `NotEnoughBytesException`(예: LapData 1285바이트, 1399 요구)으로 거부되고 `F1PacketMapper`가 로그 없이 버렸다.
+   - **수정:** 25.1.1(API 동일), 패킷을 버리는 세 경로(해석 실패·포맷 불일치·플레이어 칸 밖)를 사유마다 1회 경고(`F1PacketMapper`에 `ILogger`), 회귀 테스트 `F1WireLayoutTests`(실제 Session·LapData 바이트 `Fixtures/F1_25` + 16종 스펙 크기 — 26.0.0에서 13개 실패 확인),
+     매퍼 테스트 칸 수 24 → 22, 트랙 계약 테스트 = "라이브러리 ⊆ 계약"(Madrid 42는 시드에 남김).
+   - **검증 범위:** 캡처한 실제 패킷을 Tray(UDP 20777)로 재생 → Outbox 기록 → 허브 수신·장치 `last_seen_at` 갱신. 랩 저장은 게임으로 확인 필요.
 
 ---
 
@@ -254,7 +263,7 @@ Agent 95(Core 19 + Infrastructure 76) · App 127 전부 통과, `flutter analyze
 ### 4-B. 라이브 검증(하드웨어 의존, 보류 항목)
 - Agent Cli/Tray를 실 F1 25(UDP 20777)로 지향해 SessionStarted→LapStarted→SectorCompleted→LapFinished 로그 관찰,
   Time Trial 1랩 후 Laps·Leaderboard·Dashboard 반영 확인([TESTING-local-e2e.md](./TESTING-local-e2e.md) §5).
-  현재는 게임/장비 없어 단위테스트 + 통합(E2E) + 헤드리스 연결 확인까지만 검증됨.
+  2026-10-18: 실제 게임 패킷 수신·해석·허브 전달까지 확인(D-41 수정 후). 남은 것은 한 랩을 끝낸 뒤 LapFinished 저장과 화면 반영.
 - **P7 게임 확인:** 커리어에서 예선·레이스를 결과 화면까지 진행 → Agent 로그에서 `SessionClassified` 1건 → `/seasons`·`/sessions` 확인, 그리고 [12](./12-seasons-sessions.md) §3.3의 가정 8개 확인.
   절차와 체크리스트는 [TESTING-local-e2e.md](./TESTING-local-e2e.md) §10. 결과는 12 §3.3 "확인 결과" 열에 적는다.
 
@@ -291,7 +300,7 @@ Agent 95(Core 19 + Infrastructure 76) · App 127 전부 통과, `flutter analyze
 | D-14 | 대상 게임 = F1 25(`F1_25`), 도메인은 게임 중립 |
 | D-15 | 무효 랩 저장 + 랭킹 제외(개별 조회 가능) |
 | D-16 | SessionType 구분, 실시간 랭킹 = Time Trial만, 타 세션 개별 조회 |
-| **D-20** | **F1 UDP 파싱 = F1Game.UDP(26.0.0) 채택, Infra에서 게임중립 모델로 매핑(Core 무의존)** |
+| **D-20** | **F1 UDP 파싱 = F1Game.UDP 채택(버전은 D-41), Infra에서 게임중립 모델로 매핑(Core 무의존)** |
 | D-21 | ~~Agent 인증 = SimRig별 API Key(`rigCode` 귀속)~~ → D-25로 대체 (`X-Agent-Key`·SHA-256 해시 저장은 D-26이 계승) |
 | D-22 | ~~활성 세션 없는 랩 = Drop+Ack~~ → D-25로 대체. 영구 무효 = Reject, 무응답만 재전송은 유지 |
 | D-23 | P3 = 인입·저장(브로드캐스트 P4). TelemetryHub는 요청/응답(반환값 Ack) |
@@ -308,6 +317,7 @@ Agent 95(Core 19 + Infrastructure 76) · App 127 전부 통과, `flutter analyze
 | **D-34** | **남의 시즌·세션 조회 = 404(없는 것과 동일)** |
 | **D-39** | **프로필·설정 = User 설정 필드 + `PUT /me/profile`·`POST /me/email`, 이름 비공개 = 랭킹 "익명 드라이버", 사진 = 팀 색 원(로고 미사용), 밝은 테마 추가** |
 | **D-40** | **기본 테마 = Dark(기존·새 사용자, 로그아웃·스플래시 포함), System은 고를 때만** |
+| **D-41** | **F1Game.UDP = 25.1.1(실제 F1 25 레이아웃). 해석 실패는 종류마다 1회 경고, 실제 패킷 회귀 테스트** |
 
 **Future 결정(해당 Phase 착수 시 결정, 지금 불필요):** D-17(트레이스 저장 원칙 해석), D-18(트레이스 저장소), D-19(샘플링·채널·보존). → `docs/09`
 

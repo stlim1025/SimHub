@@ -38,7 +38,7 @@ public static class DependencyInjection
         services.AddSingleton(sp =>
         {
             var options = sp.GetRequiredService<IOptions<AgentOptions>>().Value;
-            return new F1PacketMapper(options.ExpectedPacketFormat);
+            return new F1PacketMapper(options.ExpectedPacketFormat, sp.GetRequiredService<ILogger<F1PacketMapper>>());
         });
 
         services.AddSingleton(sp =>

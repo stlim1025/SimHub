@@ -288,7 +288,7 @@ DELETE FROM users               WHERE id      IN (SELECT id FROM cleanup_users);
 | 5 | **Grand Prix** 모드의 링크 값이 주말·챔피언십 단위로 의미가 있다 | Grand Prix 모드에서 두 주말을 진행하고 `season_link_id`·`weekend_link_id`가 주말마다 어떻게 변하는지 | 의미가 없으면 한 챔피언십이 여러 시즌으로 쪼개지거나 섞인다 → Grand Prix를 시즌 대상 모드에서 뺀다(`SeasonPolicy` 한 줄) |
 | 6 | F1 25의 Grand Prix 모드 값이 라이브러리의 `GrandPrix23`(**4**)이다 | Grand Prix 세션의 `game_mode`가 `GrandPrix`로 저장되는지(Sessions "모드" 열) | `Other`로 저장되면 모르는 값이다 — 원시 값(Session 패킷의 `m_gameMode`)을 알려 매퍼에 추가한다. (원시 값 3도 Grand Prix로 처리하므로 3이면 이미 맞다) |
 | 7 | 스프린트 주말에서 스프린트가 `Race`, 본 레이스가 `Race2`다 | 스프린트 주말을 진행하고 `session_kind` 값을 본다 | 세션 이름 표시(`R`/`R2`)만 다르다. 본 레이스 판정은 시각 기준이라 영향이 없다 |
-| 8 | **Participants** 레이아웃이 사용자의 게임 버전(2026 시즌팩)과 맞다 | 세션 결과 화면의 드라이버 이름·팀이 실제와 같은지 | 이름이 깨지거나 팀 색이 어긋난다 → D-20의 버전 결정 문제(F1Game.UDP 26.0.0). 게임 업데이트로 맞춘다 |
+| 8 | **Participants** 레이아웃이 사용자의 게임 버전과 맞다 | 세션 결과 화면의 드라이버 이름·팀이 실제와 같은지 | 이름이 깨지거나 팀 색이 어긋난다. 패킷 크기는 D-41에서 F1 25 레이아웃(F1Game.UDP 25.1.1)으로 맞췄으니, 이름이 깨지면 필드 해석 문제다 |
 
 **막힐 때**
 
