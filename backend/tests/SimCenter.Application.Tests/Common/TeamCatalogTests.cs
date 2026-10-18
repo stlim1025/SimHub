@@ -29,6 +29,18 @@ public class TeamCatalogTests
     [InlineData(484, "McLaren", "#FF8000")]
     [InlineData(485, "Audi", "#BB0A30")]
     [InlineData(486, "Cadillac", "#B5B5B5")]
+    // docs/15 §11.1 D-52: F1 25 v1.26(2026 시즌팩) 팀 ID 220~230
+    [InlineData(220, "Mercedes", "#27F4D2")]
+    [InlineData(221, "Ferrari", "#E8002D")]
+    [InlineData(222, "Red Bull Racing", "#3671C6")]
+    [InlineData(223, "Williams", "#64C4FF")]
+    [InlineData(224, "Aston Martin", "#229971")]
+    [InlineData(225, "Alpine", "#0093CC")]
+    [InlineData(226, "Racing Bulls", "#6692FF")]
+    [InlineData(227, "Haas", "#B6BABD")]
+    [InlineData(228, "McLaren", "#FF8000")]
+    [InlineData(229, "Audi", "#BB0A30")]
+    [InlineData(230, "Cadillac", "#B5B5B5")]
     public void Resolve_KnownTeam(int id, string name, string color)
     {
         var team = TeamCatalog.Resolve(GameCode, id);
@@ -41,6 +53,8 @@ public class TeamCatalogTests
     [InlineData(10)]
     [InlineData(184)]
     [InlineData(195)]
+    [InlineData(219)]
+    [InlineData(231)]
     [InlineData(475)]
     [InlineData(487)]
     [InlineData(999)]
@@ -93,7 +107,7 @@ public class TeamCatalogTests
             }
         }
 
-        // 2025 팀 10 + F1 Generic + My Team + 2024 차량 10 + 2026 팀 9 + Audi + Cadillac
-        Assert.Equal(10 + 1 + 1 + 10 + 9 + 2, known);
+        // 2025 팀 10 + F1 Generic + My Team + 2024 차량 10 + 2026 팀 9 + Audi + Cadillac + v1.26 그리드 11(D-52)
+        Assert.Equal(10 + 1 + 1 + 10 + 9 + 2 + 11, known);
     }
 }
