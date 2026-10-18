@@ -41,6 +41,38 @@ public static class SessionDetailsCapture
         return JsonbText.TryCaptureObject(document.RootElement, MaxBytes, out rejectReason);
     }
 
+    /// <summary>
+    /// 순위표 행마다 실려 온 랩 기록(<c>results[].lapHistory</c>, Agent D-49의 모양)을 <c>[{carIndex, laps}]</c> 하나로 모은다.
+    /// 기록이 있는 차가 없으면 null. 최상위 <c>lapHistory</c>가 없을 때 <see cref="Build"/>에 넘긴다.
+    /// </summary>
+    public static JsonElement? HistoryFromResults(IReadOnlyList<ClassifiedResultDto>? results)
+    {
+        var withHistory = results?.Where(result => Present(result.LapHistory) is not null).ToList();
+        if (withHistory is null || withHistory.Count == 0)
+        {
+            return null;
+        }
+
+        var buffer = new ArrayBufferWriter<byte>();
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartArray();
+            foreach (var result in withHistory)
+            {
+                writer.WriteStartObject();
+                writer.WriteNumber("carIndex", result.CarIndex);
+                writer.WritePropertyName("laps");
+                result.LapHistory!.Value.WriteTo(writer);
+                writer.WriteEndObject();
+            }
+
+            writer.WriteEndArray();
+        }
+
+        using var document = JsonDocument.Parse(buffer.WrittenMemory);
+        return document.RootElement.Clone();
+    }
+
     private static JsonElement? Present(JsonElement? value)
         => value is { ValueKind: not (JsonValueKind.Null or JsonValueKind.Undefined) } json ? json : null;
 

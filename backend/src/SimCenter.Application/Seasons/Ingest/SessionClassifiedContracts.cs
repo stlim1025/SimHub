@@ -43,7 +43,8 @@ public sealed record ClassifiedResultDto(
     int? TeamId,
     int? RaceNumber,
     bool IsAiControlled,
-    IReadOnlyList<TyreStintDto>? TyreStints);
+    IReadOnlyList<TyreStintDto>? TyreStints,
+    JsonElement? LapHistory = null);
 
 /// <summary>타이어 스틴트(12 §5.5 <c>tyreStints[]</c>).</summary>
 public sealed record TyreStintDto(int EndLap, string? VisualCompound, string? ActualCompound);

@@ -131,7 +131,9 @@ public sealed class SessionClassificationIngestor : ISessionClassificationIngest
 
     private string? CaptureDetails(Guid eventId, SessionClassifiedPayloadDto payload)
     {
-        var details = SessionDetailsCapture.Build(payload.LapHistory, payload.LapPositions, out var reason);
+        // Agent(D-49)는 랩 기록을 순위표 행마다 싣는다 — 최상위가 없으면 행에서 모은다.
+        var lapHistory = payload.LapHistory ?? SessionDetailsCapture.HistoryFromResults(payload.Results);
+        var details = SessionDetailsCapture.Build(lapHistory, payload.LapPositions, out var reason);
         if (reason is not null)
         {
             _logger.LogWarning(

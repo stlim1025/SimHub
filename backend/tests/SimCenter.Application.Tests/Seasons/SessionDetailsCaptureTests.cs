@@ -32,6 +32,37 @@ public class SessionDetailsCaptureTests
     }
 
     [Fact]
+    public void HistoryFromResults_IsCollectedPerCar_WhenTopLevelMissing()
+    {
+        // Agent(D-49)는 랩 기록을 순위표 행마다 results[].lapHistory로 보낸다.
+        var results = new[]
+        {
+            Result(carIndex: 0, lapHistory: Parse("[{\"lapNumber\":1,\"lapTimeMs\":83452}]")),
+            Result(carIndex: 3, lapHistory: null),
+            Result(carIndex: 5, lapHistory: Parse("[{\"lapNumber\":1,\"lapTimeMs\":84000}]")),
+        };
+
+        var history = SessionDetailsCapture.HistoryFromResults(results);
+
+        Assert.Equal(
+            "[{\"carIndex\":0,\"laps\":[{\"lapNumber\":1,\"lapTimeMs\":83452}]},{\"carIndex\":5,\"laps\":[{\"lapNumber\":1,\"lapTimeMs\":84000}]}]",
+            history!.Value.GetRawText());
+    }
+
+    [Fact]
+    public void HistoryFromResults_IsNull_WhenNoCarHasHistory()
+    {
+        Assert.Null(SessionDetailsCapture.HistoryFromResults([Result(carIndex: 0, lapHistory: null)]));
+        Assert.Null(SessionDetailsCapture.HistoryFromResults(null));
+    }
+
+    private static ClassifiedResultDto Result(int carIndex, JsonElement? lapHistory) => new(
+        carIndex, IsPlayer: carIndex == 0, Position: carIndex + 1, GridPosition: 1, NumLaps: 1, Points: 0, NumPitStops: 0,
+        NumPenalties: 0, ResultStatus: "Finished", BestLapTimeMs: 83452, TotalRaceTimeMs: 83452, PenaltiesTimeMs: 0,
+        DriverName: "Driver", GameDriverId: null, TeamId: 1, RaceNumber: 1, IsAiControlled: false, TyreStints: null,
+        LapHistory: lapHistory);
+
+    [Fact]
     public void OnlyHistory_HasOnlyThatProperty()
     {
         var details = SessionDetailsCapture.Build(Parse("[1]"), null, out _);
