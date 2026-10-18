@@ -24,6 +24,7 @@ Future<FakeLapsRepository> _pumpDashboard(
   final router = GoRouter(routes: [
     GoRoute(path: '/', builder: (_, _) => const DashboardPage()),
     GoRoute(path: '/laps', builder: (_, _) => const Text('body:laps')),
+    GoRoute(path: '/laps/:lapId', builder: (_, state) => Text('body:lap:${state.pathParameters['lapId']}')),
     GoRoute(path: '/telemetry-app', builder: (_, _) => const Text('body:telemetry-app')),
   ]);
 
@@ -65,6 +66,17 @@ void main() {
     await _pumpDashboard(t, const []);
 
     expect(find.textContaining('아직 기록된 랩이 없어요'), findsOneWidget);
+  });
+
+  testWidgets('최근 랩을 누르면 그 랩의 상세(/laps/:lapId)로 가고, 모드는 표시 라벨로 보인다', (t) async {
+    await _pumpDashboard(t, [lapOf('l1', 'Silverstone', 83452, gameMode: 'GrandPrix')]);
+
+    expect(find.textContaining('Grand Prix · '), findsOneWidget);
+
+    await t.tap(find.text('1:23.452'));
+    await t.pumpAndSettle();
+
+    expect(find.text('body:lap:l1'), findsOneWidget);
   });
 
   testWidgets('View all lap times를 누르면 /laps로 이동한다', (t) async {
