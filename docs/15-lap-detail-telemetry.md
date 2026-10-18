@@ -368,3 +368,19 @@ F1Laps "All Sessions" 배치: 제목 + Filters(세션 종류) · 표 열 **TRACK
 | D-52 | F1 25 v1.26 팀 ID 220~230(2026 그리드, 드라이버 이름으로 확인)을 `TeamCatalog`에, 게임 모드 78 = DriverCareer. 예전에 Other로 저장된 세션의 키는 바꾸지 않는다(시즌 묶음은 새 세션부터) |
 | D-53 | 세션 상세 = Details · Final Classification · Laps · Engine Wear · Tyre Stints 2종 · Penalties(위 계약), 데이터는 D-49로 이미 수집한 값에서 서버가 만든다 |
 | D-54 | 세션 목록 = F1Laps 배치(국기·내 팀·모드+시즌·P 배지·날짜/시각) |
+
+---
+
+## 12. 시즌 가져오기 — F1Laps 마크다운 (D-55, 2026-10-18)
+
+> 사용자: F1Laps에서 내보낸 "Season: Driver Career" 마크다운(Grand Prix Results · Driver Standings · Constructor Standings)을 붙여 넣으며 "드라이버 커리어 시즌 1로 원래 하던 데이터인데 이거 넣어줘".
+
+- **화면:** Seasons에 [F1Laps에서 가져오기] → 마크다운 붙여넣기 → 미리보기(라운드·스탠딩·연결할 게임 시즌·옮길 세션) → [가져오기]. 사용자가 자기 계정으로 직접 넣는다.
+- **API:** `POST /me/seasons/import/preview`, `POST /me/seasons/import` — 본문 `{ markdown }`. 파싱은 서버 한 곳(`F1LapsSeasonMarkdownParser`). 모르는 형식은 400 + 줄 번호.
+- **해석:** 헤더 `Game`·`Team`·`Mode`·`Name`. Grand Prix Results의 `#` = 라운드 = F1 25 캘린더 순서 = `Track.DisplayOrder`(1~24, D-43). Quali·Race = 순위(`-` = 없음), Points, Best Lap(`m:ss.fff`), Conditions(Dry/Wet), Race/Quali Diff = AI 난이도.
+  값이 하나라도 있는 라운드만 만든다. 세션 종류는 Qualifying(짧은/원샷 구분 불가 → `Qualifying`)·Race.
+- **저장:** Season(`ImportedFrom = "F1Laps"`, `ImportedAt`, `ImportedStandings` jsonb = 드라이버 이름·포인트·본인 표시) → RaceWeekend(라운드 트랙) → GameSession(`IsImported = true`) → 내 SessionResult 1행(순위·포인트·베스트 랩). 다른 드라이버 결과는 없다.
+- **Standings:** 가져온 시즌이면 드라이버 = 가져온 포인트 + 가져온 뒤 기록된(가져온 것이 아닌) 세션의 포인트. 이름은 대소문자·악센트 무시로 맞춘다(게임 "PÉREZ" ↔ "Sergio Perez"는 성으로). 컨스트럭터 = 드라이버의 팀(이 시즌 기록 결과의 최신 팀)별 합 — F1Laps 컨스트럭터 표("F1 Generic")는 쓰지 않는다.
+- **게임 시즌 연결:** 미리보기가 사용자의 기록 세션 중 같은 게임·커리어 계열(DriverCareer 또는 예전 `Other`)이면서 시즌 링크 ID가 있는 가장 최근 값을 제안한다(지금: 2160041047, 마이애미 Q1~Q3). 가져오기 때 Season.SeasonLinkId에 넣고,
+  그 링크의 세션들을 이 시즌으로 옮긴다: `game_mode = DriverCareer`, 세션 키 `uid:` → `link:`(D-29 규칙), 시즌·주말 연결, 그 세션의 내 랩 `SessionKey`도 같이. 앞으로 오는 세션은 같은 링크라 자동으로 붙는다.
+- 같은 사용자가 같은 링크로 두 번 가져오면 409(덮어쓰지 않음). 가져온 시즌 삭제는 범위 밖.
