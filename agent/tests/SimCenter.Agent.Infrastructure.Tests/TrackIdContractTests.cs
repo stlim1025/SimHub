@@ -19,12 +19,11 @@ public class TrackIdContractTests
         var library = Enum.GetValues<F1Enums.Track>()
             .Where(track => track != F1Enums.Track.Unknown)
             .Select(track => (int)track)
-            .Order()
-            .ToList();
+            .ToHashSet();
 
         var contract = ReadContractTrackIds().ToHashSet();
 
-        Assert.Empty(library.Where(trackId => !contract.Contains(trackId)));
+        Assert.Subset(contract, library);
     }
 
     private static IReadOnlyList<int> ReadContractTrackIds()
