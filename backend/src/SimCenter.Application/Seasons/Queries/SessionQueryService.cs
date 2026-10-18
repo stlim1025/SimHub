@@ -2,6 +2,7 @@ using SimCenter.Application.Common;
 using SimCenter.Application.Common.Exceptions;
 using SimCenter.Application.Common.Interfaces;
 using SimCenter.Application.Rankings;
+using SimCenter.Application.Seasons.Import;
 using SimCenter.Application.Seasons.Queries.Detail;
 using SimCenter.Domain.Entities;
 using SimCenter.Domain.Enums;
@@ -67,7 +68,8 @@ public sealed class SessionQueryService : ISessionQueryService
         var extras = SessionDetailAssembler.Build(session, results, lapRows, weekendQualifying);
 
         return new SessionDetailDto(
-            ToHeader(session, results, round, seasonNumber, extras.Weather),
+            // 가져온 세션(D-55)은 랩이 없어 세션에 저장한 날씨를 쓴다.
+            ToHeader(session, results, round, seasonNumber, extras.Weather ?? session.Weather?.ToString()),
             ToResultDtos(session, results),
             extras.QualifyingPositions,
             extras.MyBestLap,
@@ -167,8 +169,20 @@ public sealed class SessionQueryService : ISessionQueryService
             .Select(r => (int?)r.BestLapTimeMs)
             .Min();
         var gaps = ClassificationGaps.For(session.SessionType, results);
+        var dtos = results.Select(r => ToResultDto(session.GameCode, r, fastestLapMs, gaps)).ToList();
 
-        return results.Select(r => ToResultDto(session.GameCode, r, fastestLapMs, gaps)).ToList();
+        // 가져온 세션(docs/15 §12, D-55): 총 시간이 없어 레이스 GAP은 F1Laps 값, 최고 랩은 인게임 표의 * 표시를 쓴다.
+        if (!session.IsImported || ImportedSessionDetails.TryRead(session.Details) is not { } imported)
+        {
+            return dtos;
+        }
+
+        var importedGaps = imported.Gaps.GroupBy(g => g.CarIndex).ToDictionary(g => g.Key, g => g.Last().GapMs);
+        return dtos.Select(dto => dto with
+        {
+            GapMs = importedGaps.TryGetValue(dto.CarIndex, out var gap) ? gap : dto.GapMs,
+            IsFastestLap = imported.FastestLapCarIndex is { } fastestCar ? dto.CarIndex == fastestCar : dto.IsFastestLap,
+        }).ToList();
     }
 
     private static SessionResultDto ToResultDto(string gameCode, SessionResult result, int? fastestLapMs, ClassificationGaps gaps)

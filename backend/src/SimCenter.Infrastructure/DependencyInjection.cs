@@ -40,6 +40,7 @@ public static class DependencyInjection
         services.AddScoped<ISeasonRepository, SeasonRepository>();
         services.AddScoped<IGameSessionRepository, GameSessionRepository>();
         services.AddScoped<ISeasonQueryRepository, SeasonQueryRepository>();
+        services.AddScoped<ISeasonImportRepository, SeasonImportRepository>();
         services.AddScoped<IGameSessionQueryRepository, GameSessionQueryRepository>();
         services.AddScoped<ISessionDetailQueryRepository, SessionDetailQueryRepository>();
         services.AddScoped<DbSeeder>();

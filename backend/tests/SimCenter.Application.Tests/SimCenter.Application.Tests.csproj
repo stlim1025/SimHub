@@ -18,6 +18,11 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <!-- docs/15 §12 (D-55) 가져오기 픽스처: 사용자가 준 원문 그대로. -->
+  <ItemGroup>
+    <None Include="Seasons\Import\Fixtures\*.md" CopyToOutputDirectory="PreserveNewest" Link="Fixtures\%(Filename)%(Extension)" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\SimCenter.Application\SimCenter.Application.csproj" />
   </ItemGroup>

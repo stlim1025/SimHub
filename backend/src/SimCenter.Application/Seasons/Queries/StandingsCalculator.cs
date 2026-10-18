@@ -1,4 +1,5 @@
 using SimCenter.Application.Common;
+using SimCenter.Application.Seasons.Import;
 using SimCenter.Domain.Enums;
 
 namespace SimCenter.Application.Seasons.Queries;
@@ -12,18 +13,38 @@ namespace SimCenter.Application.Seasons.Queries;
 /// <item>드라이버 동점: 점수 ↓ → 본 레이스 1위 수 ↓ → 2위 수 ↓ … → 표시 이름 Ordinal ↑ → <c>DriverKey</c> Ordinal ↑.</item>
 /// <item>컨스트럭터: 팀별 점수 합(그 세션에서 그 드라이버가 속한 팀 기준, 팀 없는 행 제외) — 점수 ↓ → 우승 ↓ → 팀 이름 Ordinal ↑ → 팀 ID ↑.</item>
 /// </list>
+/// <para>
+/// <b>가져온 시즌</b>(docs/15 §12, D-55, <c>imported</c>가 있을 때): 드라이버 점수 = 가져온 포인트 + 가져온 것이 아닌 세션의 점수
+/// (가져온 세션의 점수는 기준선에 이미 들어 있다). 기준선 드라이버는 <see cref="DriverAliasing"/>로 기록된 드라이버와 묶고,
+/// 못 맞춘 기준선 드라이버는 기록 없이(기준선의 팀) 오른다. 컨스트럭터 = 가져온 컨스트럭터 기준값 + 가져온 것이 아닌 행의 팀별 점수,
+/// 기준값이 없으면(F1Laps 요약만) 드라이버의 최신 팀별 합 — 팀을 모르는 드라이버는 컨스트럭터에서 빠진다.
+/// </para>
 /// 합계는 <c>long</c>으로 구해 정렬하고 표시 값만 <c>int</c> 상한으로 자른다(점수는 0 이상 <c>int</c>까지 검증을 통과하므로).
 /// </summary>
 public static class StandingsCalculator
 {
     private const int PodiumPositions = 3;
+    private const string ImportedDriverKeyPrefix = "imported:";
 
-    public static SeasonStandings Calculate(SeasonSelection selection, string gameCode)
+    public static SeasonStandings Calculate(
+        SeasonSelection selection, string gameCode, ImportedSeasonSnapshot? imported = null)
     {
         ArgumentNullException.ThrowIfNull(selection);
         ArgumentNullException.ThrowIfNull(gameCode);
 
+        if (imported is { Drivers.Count: > 0 })
+        {
+            var aliased = DriverAliasing.Apply(selection, imported.Drivers, out var keyByEntry);
+            var rows = aliased.CountedRows.Where(IsScoringRow).ToList();
+            var drivers = BuildDrivers(aliased, rows, new Baseline(imported.Drivers, keyByEntry));
+            var constructors = imported.Constructors is { Count: > 0 } teams
+                ? BuildConstructorsWithBaseline(rows, aliased.MainRaceSessionByWeekend, gameCode, teams)
+                : BuildConstructorsFromDrivers(drivers, gameCode);
+            return new SeasonStandings(drivers, constructors);
+        }
+
         var scoringRows = selection.CountedRows.Where(IsScoringRow).ToList();
+
         if (scoringRows.Count == 0)
         {
             return new SeasonStandings([], []);
@@ -31,7 +52,7 @@ public static class StandingsCalculator
 
         var mainRace = selection.MainRaceSessionByWeekend;
         return new SeasonStandings(
-            BuildDrivers(selection, scoringRows),
+            BuildDrivers(selection, scoringRows, baseline: null),
             BuildConstructors(scoringRows, mainRace, gameCode));
     }
 
@@ -43,22 +64,34 @@ public static class StandingsCalculator
     // ---- 드라이버 ----
 
     private sealed record DriverTally(
-        SeasonResultRow Latest,
+        string DriverKey,
         string Name,
+        int? TeamId,
+        bool IsPlayer,
+        bool IsAiControlled,
         long Points,
         int Wins,
         int Podiums,
         int[] PositionCounts);
 
-    private static List<DriverStanding> BuildDrivers(SeasonSelection selection, List<SeasonResultRow> scoringRows)
+    /// <summary>가져온 드라이버 기준값과 <see cref="DriverAliasing"/>이 묶은 키(기준선 순번 → 키).</summary>
+    private sealed record Baseline(IReadOnlyList<ImportedDriverPoints> Entries, IReadOnlyDictionary<int, string> KeyByEntry);
+
+    private static List<DriverStanding> BuildDrivers(
+        SeasonSelection selection, List<SeasonResultRow> scoringRows, Baseline? baseline)
     {
         var mainRace = selection.MainRaceSessionByWeekend;
         var positionIndex = MainRacePositionIndex(scoringRows, mainRace);
 
         var tallies = scoringRows
             .GroupBy(r => r.DriverKey)
-            .Select(group => Tally(group.ToList(), mainRace, positionIndex))
+            .Select(group => Tally(group.ToList(), mainRace, positionIndex, excludeImportedPoints: baseline is not null))
             .ToList();
+
+        if (baseline is not null)
+        {
+            tallies = ApplyBaseline(tallies, baseline, positionIndex.Count);
+        }
 
         var cellsByDriver = selection.CountedRows.ToLookup(r => r.DriverKey);
         var weekendStart = selection.CountedRows
@@ -68,15 +101,15 @@ public static class StandingsCalculator
         return Rank(tallies, positionIndex.Count)
             .Select((tally, index) => new DriverStanding(
                 index + 1,
-                tally.Latest.DriverKey,
+                tally.DriverKey,
                 tally.Name,
-                tally.Latest.TeamId,
-                tally.Latest.IsPlayer,
-                tally.Latest.IsAiControlled,
+                tally.TeamId,
+                tally.IsPlayer,
+                tally.IsAiControlled,
                 PointTotals.ToInt(tally.Points),
                 tally.Wins,
                 tally.Podiums,
-                BuildCells(cellsByDriver[tally.Latest.DriverKey], mainRace, weekendStart)))
+                BuildCells(cellsByDriver[tally.DriverKey], mainRace, weekendStart)))
             .ToList();
     }
 
@@ -101,7 +134,10 @@ public static class StandingsCalculator
     }
 
     private static DriverTally Tally(
-        List<SeasonResultRow> rows, IReadOnlyDictionary<Guid, Guid> mainRace, Dictionary<int, int> positionIndex)
+        List<SeasonResultRow> rows,
+        IReadOnlyDictionary<Guid, Guid> mainRace,
+        Dictionary<int, int> positionIndex,
+        bool excludeImportedPoints)
     {
         var latest = rows
             .OrderByDescending(r => r.ClassifiedAt)
@@ -117,12 +153,45 @@ public static class StandingsCalculator
         }
 
         return new DriverTally(
-            latest,
+            latest.DriverKey,
             DriverLabels.Name(latest.DriverName, latest.CarIndex),
-            rows.Sum(r => (long)r.Points),
+            latest.TeamId,
+            latest.IsPlayer,
+            latest.IsAiControlled,
+            rows.Where(r => !(excludeImportedPoints && r.IsImported)).Sum(r => (long)r.Points),
             mainRaceRows.Count(r => r.Position == 1),
             mainRaceRows.Count(r => r.Position <= PodiumPositions),
             counts);
+    }
+
+    /// <summary>
+    /// 가져온 포인트를 기록된 드라이버에 더한다(D-55). 묶인 키(<see cref="DriverAliasing"/>)가 있으면 그 줄에, 없으면
+    /// 기록 없는 줄(<c>imported:{이름}</c>, 기준선의 팀)로 더한다. 기록된 줄의 팀이 없으면 기준선의 팀을 쓴다.
+    /// </summary>
+    private static List<DriverTally> ApplyBaseline(List<DriverTally> tallies, Baseline baseline, int positionCount)
+    {
+        var merged = tallies.ToDictionary(t => t.DriverKey, StringComparer.Ordinal);
+        for (var i = 0; i < baseline.Entries.Count; i++)
+        {
+            var entry = baseline.Entries[i];
+            var key = baseline.KeyByEntry.TryGetValue(i, out var bound)
+                ? bound
+                : ImportedDriverKeyPrefix + DriverNameMatcher.Normalize(entry.Name);
+            merged[key] = merged.TryGetValue(key, out var tally)
+                ? tally with { Points = tally.Points + entry.Points, TeamId = tally.TeamId ?? entry.TeamId }
+                : new DriverTally(
+                    key,
+                    entry.Name,
+                    entry.TeamId,
+                    entry.IsPlayer,
+                    IsAiControlled: !entry.IsPlayer,
+                    entry.Points,
+                    Wins: 0,
+                    Podiums: 0,
+                    new int[positionCount]);
+        }
+
+        return merged.Values.ToList();
     }
 
     /// <summary>점수 → 카운트백(1위 수, 2위 수 …) → 이름 → DriverKey. 마지막 키가 유일해 전순서다.</summary>
@@ -137,7 +206,7 @@ public static class StandingsCalculator
 
         return ordered
             .ThenBy(t => t.Name, StringComparer.Ordinal)
-            .ThenBy(t => t.Latest.DriverKey, StringComparer.Ordinal);
+            .ThenBy(t => t.DriverKey, StringComparer.Ordinal);
     }
 
     /// <summary>
@@ -178,20 +247,67 @@ public static class StandingsCalculator
         var teams = scoringRows
             .Where(r => r.TeamId is not null)
             .GroupBy(r => r.TeamId!.Value)
-            .Select(g => new
-            {
-                TeamId = g.Key,
-                Name = TeamCatalog.Resolve(gameCode, g.Key).Name,
-                Points = g.Sum(r => (long)r.Points),
-                Wins = g.Count(r => IsMainRaceRow(r, mainRace) && r.Position == 1),
-            });
+            .Select(g => new TeamTotal(
+                g.Key,
+                TeamCatalog.Resolve(gameCode, g.Key).Name,
+                g.Sum(r => (long)r.Points),
+                g.Count(r => IsMainRaceRow(r, mainRace) && r.Position == 1)));
 
-        return teams
+        return RankTeams(teams);
+    }
+
+    /// <summary>가져온 시즌(D-55): 드라이버 최종 점수를 그 드라이버의 최신 팀별로 더한다. 팀을 모르는 드라이버는 뺀다.</summary>
+    private static List<ConstructorStanding> BuildConstructorsFromDrivers(List<DriverStanding> drivers, string gameCode)
+    {
+        var teams = drivers
+            .Where(d => d.TeamId is not null)
+            .GroupBy(d => d.TeamId!.Value)
+            .Select(g => new TeamTotal(
+                g.Key,
+                TeamCatalog.Resolve(gameCode, g.Key).Name,
+                g.Sum(d => (long)d.Points),
+                g.Sum(d => d.Wins)));
+
+        return RankTeams(teams);
+    }
+
+    /// <summary>
+    /// 가져온 시즌의 컨스트럭터(D-55): 인게임 기준값 + 가져온 것이 아닌 대상 행의 팀별 점수(그 세션의 팀). 우승 = 본 레이스 1위(가져온 행 포함).
+    /// </summary>
+    private static List<ConstructorStanding> BuildConstructorsWithBaseline(
+        List<SeasonResultRow> scoringRows,
+        IReadOnlyDictionary<Guid, Guid> mainRace,
+        string gameCode,
+        IReadOnlyList<ImportedConstructorPoints> baseline)
+    {
+        var points = baseline.GroupBy(t => t.TeamId).ToDictionary(g => g.Key, g => g.Sum(t => (long)t.Points));
+        var wins = new Dictionary<int, int>();
+        foreach (var row in scoringRows.Where(r => r.TeamId is not null))
+        {
+            var teamId = row.TeamId!.Value;
+            if (!row.IsImported)
+            {
+                points[teamId] = points.GetValueOrDefault(teamId) + row.Points;
+            }
+
+            if (IsMainRaceRow(row, mainRace) && row.Position == 1)
+            {
+                wins[teamId] = wins.GetValueOrDefault(teamId) + 1;
+            }
+        }
+
+        return RankTeams(points.Select(p => new TeamTotal(
+            p.Key, TeamCatalog.Resolve(gameCode, p.Key).Name, p.Value, wins.GetValueOrDefault(p.Key))));
+    }
+
+    private sealed record TeamTotal(int TeamId, string Name, long Points, int Wins);
+
+    private static List<ConstructorStanding> RankTeams(IEnumerable<TeamTotal> teams)
+        => teams
             .OrderByDescending(t => t.Points)
             .ThenByDescending(t => t.Wins)
             .ThenBy(t => t.Name, StringComparer.Ordinal)
             .ThenBy(t => t.TeamId)
             .Select((t, index) => new ConstructorStanding(index + 1, t.TeamId, PointTotals.ToInt(t.Points), t.Wins))
             .ToList();
-    }
 }

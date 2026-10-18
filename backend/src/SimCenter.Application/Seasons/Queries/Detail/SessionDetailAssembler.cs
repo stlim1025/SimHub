@@ -1,4 +1,5 @@
 using SimCenter.Application.Common.Interfaces;
+using SimCenter.Application.Seasons.Import;
 using SimCenter.Domain.Entities;
 using SimCenter.Domain.Enums;
 
@@ -28,15 +29,25 @@ public static class SessionDetailAssembler
         var history = SessionHistory.Parse(session.Details);
 
         var laps = SessionLapsBuilder.Build(playerCarIndex, me?.GridPosition, history, stints, myLaps);
+        var setup = LatestLapValues.Setup(myLaps);
+        var penalties = SessionPenaltiesBuilder.Build(session.GameCode, playerCarIndex, results, myLaps);
+
+        // 가져온 세션(docs/15 §12, D-55)은 랩 엔티티가 없어 Details의 imported 값으로 채운다.
+        if (session.IsImported && ImportedSessionDetails.TryRead(session.Details) is { } imported)
+        {
+            laps = ImportedDetailOverlay.Laps(laps, imported);
+            setup ??= imported.Setup;
+            penalties = penalties.Count > 0 ? penalties : ImportedDetailOverlay.Penalties(imported);
+        }
 
         return new SessionDetailExtras(
             QualifyingPositions(session, me, weekendQualifying),
             MyBestLap(lapRows),
-            LatestLapValues.Setup(myLaps),
+            setup,
             laps,
             LatestLapValues.EngineWear(myLaps),
             TyreStintSeriesBuilder.Build(stints, laps, myLaps),
-            SessionPenaltiesBuilder.Build(session.GameCode, playerCarIndex, results, myLaps),
+            penalties,
             LatestLapValues.Weather(myLaps));
     }
 

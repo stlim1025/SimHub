@@ -19,6 +19,10 @@ public sealed class SeasonConfiguration : IEntityTypeConfiguration<Season>
         builder.Property(x => x.FirstSessionAt).IsRequired();
         builder.Property(x => x.LastSessionAt).IsRequired();
 
+        // 가져온 시즌(docs/15 §12, D-55). 게임에서 기록된 시즌은 모두 null.
+        builder.Property(x => x.ImportedFrom).HasMaxLength(20);
+        builder.Property(x => x.ImportedStandings).HasColumnType(JsonColumns.Jsonb);
+
         // 시즌 주인. 내비게이션 없이 FK만 건다.
         builder.HasOne<User>()
             .WithMany()

@@ -13,8 +13,15 @@ public class GameSession : BaseEntity
 
     /// <summary>
     /// 마지막으로 결과를 보낸 장치. FK만 둔다 — <c>Lap.AgentDevice</c>의 soft-delete inner join 함정을 피하려고 내비게이션은 두지 않는다.
+    /// 가져온 세션(<see cref="IsImported"/>, D-55)은 보낸 장치가 없어 null이다.
     /// </summary>
-    public Guid AgentDeviceId { get; set; }
+    public Guid? AgentDeviceId { get; set; }
+
+    /// <summary>외부 기록(F1Laps)에서 가져온 세션인가(docs/15 §12, D-55). 내 결과 1행만 있다.</summary>
+    public bool IsImported { get; set; }
+
+    /// <summary>가져온 세션의 날씨(D-55: Dry → Clear, Wet → LightRain). 게임에서 기록된 세션은 null(날씨는 랩 스냅샷에서 읽는다).</summary>
+    public Weather? Weather { get; set; }
 
     /// <summary>시즌 대상이 아니면 null.</summary>
     public Guid? SeasonId { get; set; }

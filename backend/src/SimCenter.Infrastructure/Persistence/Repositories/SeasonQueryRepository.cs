@@ -47,9 +47,16 @@ public sealed class SeasonQueryRepository : ISeasonQueryRepository
         return await (
                 from weekend in _context.RaceWeekends.AsNoTracking()
                 join track in _context.Tracks.AsNoTracking() on weekend.TrackId equals track.Id
+                join season in _context.Seasons.AsNoTracking() on weekend.SeasonId equals season.Id
                 where ids.Contains(weekend.SeasonId)
                 orderby weekend.FirstSessionAt, weekend.Id
-                select new WeekendRow(weekend.Id, weekend.SeasonId, track.Name, weekend.FirstSessionAt))
+                select new WeekendRow(
+                    weekend.Id,
+                    weekend.SeasonId,
+                    track.Name,
+                    weekend.FirstSessionAt,
+                    track.DisplayOrder,
+                    season.ImportedFrom != null))
             .ToListAsync(cancellationToken);
     }
 
@@ -94,7 +101,8 @@ public sealed class SeasonQueryRepository : ISeasonQueryRepository
                 x.result.IsAiControlled,
                 x.result.Position,
                 x.result.ResultStatus,
-                x.result.Points))
+                x.result.Points,
+                x.session.IsImported))
             .ToListAsync(cancellationToken);
     }
 }
