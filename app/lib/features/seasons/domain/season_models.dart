@@ -1,3 +1,5 @@
+import '../../sessions/domain/session_display.dart' show knownPosition;
+
 /// 시즌 목록 한 줄(`GET /me/seasons`, docs/12 §7.2).
 /// 내가 결과에 없으면 `my*`가, 결과가 하나도 없으면 `leader*`가 null이다.
 /// `gameMode`는 서버가 준 문자열 그대로 두고 표시는 `gameModeLabel`이 맡는다.
@@ -108,7 +110,7 @@ class SeasonRoundSession {
         sessionId: json['sessionId'] as String,
         sessionType: json['sessionType'] as String,
         sessionKind: json['sessionKind'] as String,
-        myPosition: json['myPosition'] as int?,
+        myPosition: knownPosition(json['myPosition'] as int?),
         myResultStatus: json['myResultStatus'] as String?,
       );
 }
@@ -283,6 +285,9 @@ class SeasonCalendarRound {
     this.qualiPosition,
     this.raceAiDifficulty,
     this.qualiAiDifficulty,
+    this.sprintPosition,
+    this.isSprintWeekend = false,
+    this.sessions = const [],
   });
 
   final int round;
@@ -306,6 +311,15 @@ class SeasonCalendarRound {
   final int? raceAiDifficulty;
   final int? qualiAiDifficulty;
 
+  /// 스프린트(스프린트 주말의 `Race`) 내 순위.
+  final int? sprintPosition;
+
+  /// 그 주말에 Race2가 있다 — `Race` = 스프린트, `Race2` = 본 레이스([racePosition]).
+  final bool isSprintWeekend;
+
+  /// 그 주말 세션(연습 → 슛아웃 → 스프린트 → 예선 → 레이스 순, 서버 정렬). 옛 서버·달리지 않은 라운드는 빈 목록.
+  final List<SeasonCalendarSession> sessions;
+
   factory SeasonCalendarRound.fromJson(Map<String, dynamic> json) => SeasonCalendarRound(
         round: json['round'] as int,
         trackId: json['trackId'] as String,
@@ -316,11 +330,34 @@ class SeasonCalendarRound {
         firstSessionId: json['firstSessionId'] as String?,
         myTeamName: json['myTeamName'] as String?,
         myTeamColor: json['myTeamColor'] as String?,
-        racePosition: json['racePosition'] as int?,
+        racePosition: knownPosition(json['racePosition'] as int?),
         points: json['points'] as int?,
-        qualiPosition: json['qualiPosition'] as int?,
+        qualiPosition: knownPosition(json['qualiPosition'] as int?),
         raceAiDifficulty: json['raceAiDifficulty'] as int?,
         qualiAiDifficulty: json['qualiAiDifficulty'] as int?,
+        sprintPosition: knownPosition(json['sprintPosition'] as int?),
+        isSprintWeekend: json['isSprintWeekend'] == true,
+        sessions: [
+          for (final item in (json['sessions'] as List<dynamic>?) ?? const [])
+            SeasonCalendarSession.fromJson(item as Map<String, dynamic>),
+        ],
+      );
+}
+
+/// Season 탭 그랑프리 메뉴의 세션 하나. 내 결과가 없거나 순위를 모르면 [myPosition]은 null.
+class SeasonCalendarSession {
+  const SeasonCalendarSession({required this.sessionId, required this.sessionKind, this.myPosition});
+
+  final String sessionId;
+
+  /// 서버 종류(`Practice1`, `Race` …). 표시는 `sessionKindName(kind, sprintWeekend:)`.
+  final String sessionKind;
+  final int? myPosition;
+
+  factory SeasonCalendarSession.fromJson(Map<String, dynamic> json) => SeasonCalendarSession(
+        sessionId: json['sessionId'] as String,
+        sessionKind: json['sessionKind'] as String,
+        myPosition: knownPosition(json['myPosition'] as int?),
       );
 }
 

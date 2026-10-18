@@ -228,13 +228,15 @@ String linkLine(SeasonLinkCandidate link) {
 
 /// `R1 Melbourne — R(22대, 6랩) · 내 점수 25`. 옮길 기록 세션은 `Q1(기록)`.
 String roundLine(SeasonImportRound round) {
+  // 스프린트 주말(Race2가 있음)이면 Race = 스프린트(S), Race2 = 레이스(R).
+  final sprintWeekend = round.sessions.any((s) => s.sessionKind == 'Race2');
   final sessions = round.sessions.map((s) {
     final details = [
       if (s.isRecorded) _recordedMark,
       if (s.carCount > 1) '${s.carCount}대',
       if (s.lapCount > 0) '${s.lapCount}랩',
     ];
-    final label = sessionKindLabel(s.sessionKind);
+    final label = sessionKindLabel(s.sessionKind, sprintWeekend: sprintWeekend);
     return details.isEmpty ? label : '$label(${details.join(', ')})';
   }).join(' · ');
   final points = round.myPoints == null ? '' : ' · 내 점수 ${round.myPoints}';

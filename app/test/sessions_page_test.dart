@@ -169,6 +169,21 @@ void main() {
       expect(find.text('Grand Prix'), findsOneWidget); // 시즌이 아니면 모드만
     });
 
+    testWidgets('SessionsPage_SprintWeekend_LabelsSprintAndRace_UnknownPositionDash', (t) async {
+      final repo = FakeSessionsRepository(sessions: [
+        sessionOf('s', sessionKind: 'Race', isSprintWeekend: true, myPosition: 5),
+        sessionOf('r', sessionKind: 'Race2', isSprintWeekend: true, myPosition: 3),
+        // 위치 모름은 서버·모델이 null로 바꿔 둔다(P0 대신 -).
+        sessionOf('q', sessionType: 'Qualifying', sessionKind: 'Qualifying2', myPosition: null),
+      ]);
+      await _pump(t, repo);
+
+      expect(find.text('Sprint'), findsOneWidget);
+      expect(find.text('Race'), findsOneWidget);
+      expect(find.text('Race 2'), findsNothing);
+      expect(find.text('P0'), findsNothing);
+    });
+
     testWidgets('SessionsPage_TeamDotUsesMyTeamColor', (t) async {
       await _pump(t, FakeSessionsRepository(sessions: _races(1)));
 

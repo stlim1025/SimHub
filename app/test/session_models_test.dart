@@ -97,6 +97,16 @@ void main() {
       expect(s.myPoints, isNull);
     });
 
+    test('순위 0은 모름(null), isSprintWeekend를 읽고 없으면 false', () {
+      final s = SessionSummary.fromJson({..._summaryJson, 'myPosition': 0, 'myGridPosition': 0, 'isSprintWeekend': true});
+      expect(s.myPosition, isNull);
+      expect(s.myGridPosition, isNull);
+      expect(s.isSprintWeekend, isTrue);
+      expect(SessionSummary.fromJson(_summaryJson).isSprintWeekend, isFalse);
+      final h = SessionDetail.fromJson(_detailJson(session: {'isSprintWeekend': true})).header;
+      expect(h.isSprintWeekend, isTrue);
+    });
+
     test('시즌에 속하면 seasonId를 읽는다', () {
       expect(SessionSummary.fromJson({..._summaryJson, 'seasonId': 'season-1'}).seasonId, 'season-1');
     });

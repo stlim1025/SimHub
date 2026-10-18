@@ -489,8 +489,10 @@ SessionSummary sessionOf(
   String? countryCode,
   LapTeam? myTeam,
   int? seasonNumber,
+  bool isSprintWeekend = false,
 }) =>
     SessionSummary(
+      isSprintWeekend: isSprintWeekend,
       countryCode: countryCode,
       myTeam: myTeam,
       seasonNumber: seasonNumber,

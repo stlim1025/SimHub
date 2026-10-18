@@ -37,6 +37,26 @@ void main() {
         expect(sessionKindLabel(entry.key), entry.value, reason: entry.key);
       }
     });
+
+    test('스프린트 주말이면 Race = S(스프린트), Race2 = R(레이스), 나머지는 그대로', () {
+      expect(sessionKindLabel('Race', sprintWeekend: true), 'S');
+      expect(sessionKindLabel('Race2', sprintWeekend: true), 'R');
+      expect(sessionKindLabel('Qualifying1', sprintWeekend: true), 'Q1');
+      expect(sessionKindLabel('Race'), 'R');
+      expect(displaySessionKind('Race', sprintWeekend: true), 'Sprint');
+      expect(displaySessionKind('Race2'), 'Race2');
+    });
+  });
+
+  group('knownPosition / positionText', () {
+    test('0 이하 = 모름 → null / -', () {
+      expect(knownPosition(0), isNull);
+      expect(knownPosition(-1), isNull);
+      expect(knownPosition(null), isNull);
+      expect(knownPosition(3), 3);
+      expect(positionText(0), '-');
+      expect(positionText(7), '7');
+    });
   });
 
   group('resultStatusLabel / isRunningOrFinished', () {

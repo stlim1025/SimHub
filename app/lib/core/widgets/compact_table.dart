@@ -27,8 +27,12 @@ class CompactColumn<T> {
     this.flex = 1,
     this.width,
     this.compactHidden = false,
+    this.hideBelowWidth,
     this.alignment = Alignment.centerLeft,
   });
+
+  /// 표 폭이 이 값 미만이면 숨긴다([compactHidden]보다 넓은 기준이 필요할 때). null이면 [compactHidden]만 따른다.
+  final double? hideBelowWidth;
 
   /// 머리글(대문자로 보인다). [header]를 주면 그 위젯을 대신 쓴다(아이콘 머리글 등).
   final String label;
@@ -79,10 +83,11 @@ class CompactTable<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compact = constraints.maxWidth < compactWidth;
+        final width = constraints.maxWidth;
+        final compact = width < compactWidth;
         final visible = [
           for (final column in columns)
-            if (!(compact && column.compactHidden)) column,
+            if (!(compact && column.compactHidden) && !(width < (column.hideBelowWidth ?? 0))) column,
         ];
         final table = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,

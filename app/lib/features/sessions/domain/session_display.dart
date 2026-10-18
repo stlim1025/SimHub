@@ -73,14 +73,35 @@ const Map<String, String> _sessionKindLabels = {
   'SprintShootout3': 'SQ3',
   'ShortSprintShootout': 'SQ',
   'OneShotSprintShootout': 'OSSQ',
+  kSprintKind: 'S',
   'Race': 'R',
   'Race2': 'R2',
   'Race3': 'R3',
   'TimeTrial': 'TT',
 };
 
-/// 세션 종류 라벨(`Practice1` → `P1`, `Race` → `R`). `Unknown`과 모르는 값은 `-`(docs/12 §8.4).
-String sessionKindLabel(String kind) => _sessionKindLabels[kind] ?? kNoValueText;
+/// 표시용 종류 `Sprint`(서버 종류가 아니라 [displaySessionKind]가 만든다).
+const String kSprintKind = 'Sprint';
+
+/// 표시용 종류. 스프린트 주말(서버 `isSprintWeekend` = 같은 주말에 Race2가 있음)이면 게임 관례대로
+/// `Race` = 스프린트(`Sprint`), `Race2` = 본 레이스(`Race`). 그 밖은 그대로(순수 함수).
+String displaySessionKind(String kind, {bool sprintWeekend = false}) => !sprintWeekend
+    ? kind
+    : switch (kind) {
+        'Race' => kSprintKind,
+        'Race2' => 'Race',
+        _ => kind,
+      };
+
+/// 세션 종류 라벨(`Practice1` → `P1`, `Race` → `R`, 스프린트 주말의 `Race` → `S`). `Unknown`과 모르는 값은 `-`(docs/12 §8.4).
+String sessionKindLabel(String kind, {bool sprintWeekend = false}) =>
+    _sessionKindLabels[displaySessionKind(kind, sprintWeekend: sprintWeekend)] ?? kNoValueText;
+
+/// 순위 0 이하 = 모름(가져온 예선에 Finish Position이 없을 때, D-55) → null.
+int? knownPosition(int? position) => position != null && position > 0 ? position : null;
+
+/// 결과 표 순위 칸 글자. 모르면(0 이하) `-`.
+String positionText(int position) => position > 0 ? '$position' : kNoValueText;
 
 const Map<String, String> _resultStatusLabels = {
   'DidNotFinish': 'DNF',

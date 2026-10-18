@@ -14,6 +14,13 @@ void main() {
       expect(sessionKindName('Weird'), '-');
     });
 
+    test('스프린트 주말이면 Race → Sprint, Race2 → Race', () {
+      expect(sessionKindName('Race', sprintWeekend: true), 'Sprint');
+      expect(sessionKindName('Race2', sprintWeekend: true), 'Race');
+      expect(sessionKindName('Race2'), 'Race 2');
+      expect(sessionKindName('ShortQualifying', sprintWeekend: true), 'Short Qualifying');
+    });
+
     test('시즌이면 Season N을 붙이고 아니면 모드만', () {
       expect(gameModeLine('DriverCareer', 1), 'Driver Career Season 1');
       expect(gameModeLine('GrandPrix', null), 'Grand Prix');
