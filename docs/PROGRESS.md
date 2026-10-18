@@ -2,14 +2,19 @@
 
 > Last Updated: 2026-10-18
 > **이 문서 목적:** 다른 PC·다른 세션에서도 작업을 그대로 이어가기 위한 단일 상태 파일.
-> 새 세션은 이 파일 → `CLAUDE.md` → `docs/00~12` 순으로 읽으면 맥락이 복원된다.
+> 새 세션은 이 파일 → `CLAUDE.md` → `docs/00~14` 순으로 읽으면 맥락이 복원된다.
 > (주의: AI 메모리는 머신 로컬(`~/.claude`)이라 이동하지 않는다. **진행 상태의 진실 원천은 이 문서**다.)
 
 ---
 
 ## 1. 한 줄 상태
 
-**Phase 7(시즌·세션 결과 수집) 완료 — Agent가 세션 끝의 최종 순위표를 Participants와 합쳐 `SessionClassified` 1건으로 보내고, 백엔드가
+**프로필·계정 설정(Edit Profile) 완료 — 사이드바 하단 프로필(팀 색 사진 + 이름 + "계정 설정")을 누르면 `/settings`가 열린다. 이메일·닉네임 변경, 랭킹 이름 공개 설정
+(끄면 랭킹에 "익명 드라이버"), 게임·컨트롤러·플랫폼·단위·타임존·테마, 프로필 사진(팀 색 원), 저장/취소, 로그아웃. 밝은 테마 추가(System = 기기 밝기).
+설계·결정: [14](./14-profile-settings.md), D-39. 테스트: Backend 441(Domain 53 + Application 338 + 통합 50) · App 356 전부 통과, `flutter analyze` 이슈 0, 빌드 경고 0. Agent 변경 없음.
+마이그레이션 `AddUserProfileSettings`는 백엔드 재시작 시 개발 DB에 적용된다. 브라우저 육안 확인(밝은 테마 포함)은 아직이다. 다음 = P8 세션 상세.**
+
+(이전) **Phase 7(시즌·세션 결과 수집) 완료 — Agent가 세션 끝의 최종 순위표를 Participants와 합쳐 `SessionClassified` 1건으로 보내고, 백엔드가
 게임 링크 식별자로 시즌 → 그랑프리 주말 → 세션 → 드라이버별 결과(AI 포함)를 저장한다. 앱은 Seasons(Season · Results · Standings 탭)·Sessions 화면을 갖는다.
 테스트: Backend 363(Domain 49 + Application 278 + 통합 36) · Agent 189(Core 41 + Infrastructure 148) · App 303 전부 통과, `flutter analyze` 이슈 0,
 빌드 경고 0. **게임으로 확인한 것은 아직 없다** — [12](./12-seasons-sessions.md) §3.3의 가정 8개와 실제 Final Classification 수신은 F1 25로 확인해야 한다
@@ -46,7 +51,7 @@ Agent 95(Core 19 + Infrastructure 76) · App 127 전부 통과, `flutter analyze
 - 형상: **Phase 0~7 완료.** 계약 스펙 + 3개 솔루션이 구현됨. 빌드·테스트 통과 확인. (브랜치 `feat/p6-personal-mode`에서 P6, `feat/p7-seasons-sessions`에서 P7 작업 — 머지 여부는 git으로 확인)
   ```
   CLAUDE.md                        # 프로젝트 헌장(압축본)
-  docs/00~12 + PROGRESS.md + TESTING-local-e2e.md   # 설계 문서 + 진행 상황 + 로컬 E2E 가이드
+  docs/00~14 + PROGRESS.md + TESTING-local-e2e.md   # 설계 문서 + 진행 상황 + 로컬 E2E 가이드
   global.json                      # .NET 10 SDK 버전 고정
   shared/                          # 계약(Contract) — OpenAPI, JSON Schema, Telemetry Spec, Samples
   backend/                         # ASP.NET Core 10 Clean Architecture (빌드 ✅)
@@ -75,6 +80,8 @@ Agent 95(Core 19 + Infrastructure 76) · App 127 전부 통과, `flutter analyze
    | `10-realtime-ingest.md` | P3 실시간 인입 As-Built (P6 반영) |
    | `11-personal-mode.md` | P6 개인 모드 전환 + 웹 셸 설계·구현 기록 |
    | `12-seasons-sessions.md` | P7 시즌·세션 결과 수집 설계·구현 기록 (D-28~34, 구현 중 달라진 점 §14) |
+   | `13-outbox-dead-letter.md` | Agent Outbox 독성 항목 미루기 + dead-letter (D-35~38) |
+   | `14-profile-settings.md` | 프로필·계정 설정(Edit Profile)·랭킹 이름 비공개·밝은 테마 (D-39) |
    | `TESTING-local-e2e.md` | 로컬 E2E 가이드 (웹 가입 → 코드 발급 → `pair` → 주행 확인 → §10 시즌·세션 게임 확인) |
 2. **핵심 결정 D-1~D-16 + D-8a 전부 확정** (§5 참조), 각 문서 반영 완료. (P6에서 D-1·D-2·D-10·D-12·D-21·D-22는 D-25로 대체)
 3. **사용자 최종 승인 완료** (설계 세트 approve).
@@ -218,6 +225,14 @@ Agent 95(Core 19 + Infrastructure 76) · App 127 전부 통과, `flutter analyze
      `CLAUDE.md`·`docs/02~06·08·11·12`·`TESTING-local-e2e.md` 갱신.
    - **검증 범위:** 단위·통합 테스트(PostgreSQL 통합 36개: 허브 → 인입 → 조회 API, 병합, 64KiB 한도 회귀, 404/400/401). **F1 25로는 확인하지 못했다** — Final Classification 수신,
      Participants 레이아웃, 링크 식별자 동작 등 §3.3의 가정 8개는 미확인([TESTING-local-e2e.md](./TESTING-local-e2e.md) §10).
+14. **프로필·계정 설정 (완료: Backend 441 · App 356 통과, analyze 이슈 0, 빌드 경고 0):** 설계 [docs/14](./14-profile-settings.md), 결정 D-39. 요청 "내 프로필 누르면 설정화면이 나와야 해"(F1Laps Edit Profile 참고).
+   - **Backend:** `User`에 `ShowOnLeaderboard`·`AvatarTeam`·`PreferredGame`·`Controller`·`Console`·`Units`·`TimeZoneId`·`Theme`(enum 4종 문자열 저장, 기본값 `UserProfileDefaults`),
+     **마이그레이션 `AddUserProfileSettings`**(가산적, 기존 사용자 백필). `GET /me` 설정 포함, `PUT /me/profile`(전체 교체·필드별 400, `ProfileUpdateValidator`)·`POST /me/email`(비밀번호 틀림 400·중복 409)
+     — `ProfileService`·`MyProfileController`. 가입과 같은 입력 규칙(`UserInputRules`), 엄격한 enum 해석(`EnumNames`), IANA 타임존 검증. 랭킹 이름 비공개 = `RankingPrivacy`("익명 드라이버", REST·허브 공통).
+   - **App:** `features/profile`(설정 화면·폼 컨트롤러·저장소·사진 고르기·대화상자), 사이드바 하단 프로필 → `/settings`, 로그인 뒤 `GET /me`로 프로필 로드·`applyProfile`로 반영,
+     밝은 팔레트(`AppColors.light*` + `AppPalette` 테마 확장, 위젯은 `context.palette`)·`themeModeProvider`, `ApiException.fieldErrors`, 공용 `SectionCard`를 `core/widgets`로 이동.
+   - **계약·문서:** `shared/openapi/openapi.yaml`(`/me/profile`·`/me/email`·설정 스키마, 로그인 `UserSummary`), `docs/03·04·05·08·14`.
+   - **검증 범위:** 단위·위젯·통합 테스트(비공개 사용자의 RankingHub `RankingUpdated`·REST 익명화 포함), 임시 골든 렌더로 밝은/어두운 배치 확인. 실제 브라우저 확인은 서버 재시작 뒤.
 
 ---
 
@@ -229,7 +244,7 @@ Agent 95(Core 19 + Infrastructure 76) · App 127 전부 통과, `flutter analyze
 
 ### 4-A. 이월분
 - Agent **자동실행(Windows 시작 등록)** — Tray 부팅 시 자동 기동/재접속. (설치 파일·자동 업데이트와 함께 P11에서 다룰 후보)
-- P6 웹 화면의 육안 확인(브라우저)은 컨트롤러 확인 대상. P7의 Seasons·Sessions 화면도 같다(테스트는 통과했지만 브라우저로 본 적은 없다).
+- P6 웹 화면의 육안 확인(브라우저)은 컨트롤러 확인 대상. P7의 Seasons·Sessions 화면, 설정 화면(`/settings`, 밝은 테마 포함)도 같다(테스트는 통과했지만 브라우저로 본 적은 없다).
 - P7 이월: Agent Outbox의 독성 항목 처리(같은 항목이 허브 예외로 계속 실패하면 dead-letter로 옮겨 뒤의 항목을 막지 않기, [12](./12-seasons-sessions.md) §12),
   시즌 이름 변경·삭제·숨기기, Dashboard 시즌 카드, Seasons·Sessions 실시간 갱신, 세션 Details 탭(P8).
 - P7 리뷰에서 미뤄 둔 알려진 사항: ① Agent 매퍼가 Final Classification의 `Position`(byte)을 자르지 않는다 — 32를 넘는 깨진 값이면 백엔드 검증이 그 세션을 Reject해 1건을 잃는다(빈 칸으로 취급하는 보정 후보).
@@ -290,6 +305,7 @@ Agent 95(Core 19 + Infrastructure 76) · App 127 전부 통과, `flutter analyze
 | **D-32** | **시즌 안의 드라이버 식별 = `player` → `driver:{id}` → `name:{이름}#{번호}`(→ `car:{SessionRef}:{carIndex}`)** |
 | **D-33** | **팀 이름·색 = 백엔드의 게임별 정적 카탈로그(`TeamCatalog`)** |
 | **D-34** | **남의 시즌·세션 조회 = 404(없는 것과 동일)** |
+| **D-39** | **프로필·설정 = User 설정 필드 + `PUT /me/profile`·`POST /me/email`, 이름 비공개 = 랭킹 "익명 드라이버", 사진 = 팀 색 원(로고 미사용), 밝은 테마 + System** |
 
 **Future 결정(해당 Phase 착수 시 결정, 지금 불필요):** D-17(트레이스 저장 원칙 해석), D-18(트레이스 저장소), D-19(샘플링·채널·보존). → `docs/09`
 

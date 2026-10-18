@@ -1,6 +1,6 @@
 # 04 · REST API Design
 
-> Status: **Design (미승인)** · Last Updated: 2026-10-18 (P7 시즌·세션 API 반영, 앞서 P6 개인 모드 반영)
+> Status: **Design (미승인)** · Last Updated: 2026-10-18 (프로필·설정 API 반영 — D-39, 앞서 P7 시즌·세션·P6 개인 모드 반영)
 > 계약 원본: `shared/openapi/openapi.yaml`. JSON body는 **camelCase**.
 > P6에서 `/sessions/*`(체크인)를 제거하고 Agent 연결·장치·내 트랙 API를 추가했다(D-25·D-26, [11](./11-personal-mode.md) §8).
 > P7에서 내 시즌·세션 조회 API 4개를 추가했다(`/me/seasons`, `/me/seasons/{id}`, `/me/sessions`, `/me/sessions/{id}`, D-34, [12](./12-seasons-sessions.md) §7).
@@ -42,7 +42,7 @@
 | 401 | 미인증 (토큰 없음/만료) |
 | 403 | 권한 없음 (남의 장치 해제 시도 등) |
 | 404 | 리소스 없음 (시즌·세션은 **남의 것도 없는 것과 똑같이 404** — 존재 여부를 알려 주지 않는다, D-34. GUID가 아닌 Id는 라우트가 맞지 않아 404) |
-| 409 | 상태 충돌 (예: 이미 가입된 이메일) |
+| 409 | 상태 충돌 (예: 이미 가입된 이메일, 이메일 변경 시 다른 계정이 쓰는 이메일) |
 | 429 | 요청 제한 초과 (`POST /agent/pair` IP당 분당 10회, 코드 발급 사용자당 분당 10회) |
 | 500 | 서버 오류 (상세 미노출, traceId만) |
 
@@ -54,7 +54,9 @@
 |---|---|---|---|
 | POST | `/api/v1/auth/register` | ❌ | 회원가입 |
 | POST | `/api/v1/auth/login` | ❌ | 로그인 → JWT 발급 |
-| GET | `/api/v1/me` | ✅ | 내 프로필 |
+| GET | `/api/v1/me` | ✅ | 내 프로필(계정 + 설정) |
+| PUT | `/api/v1/me/profile` | ✅ | 프로필·설정 저장(전체 교체, D-39) |
+| POST | `/api/v1/me/email` | ✅ | 이메일 변경(현재 비밀번호 확인) |
 | POST | `/api/v1/me/agent-pairing-codes` | ✅ | Agent 연결 코드 발급(10분·1회용) |
 | POST | `/api/v1/agent/pair` | ❌ (요청 제한) | 연결 코드 → 장치 키 교환 |
 | GET | `/api/v1/me/agent-devices` | ✅ | 내 연결된 PC 목록 |
@@ -98,10 +100,43 @@
 > Refresh Token은 도입하지 않는다(D-9). 만료 시 재로그인.
 
 ### 3.3 GET `/me`
+계정 + 프로필 설정([14](./14-profile-settings.md) §3). `PUT /me/profile`·`POST /me/email`도 같은 형태로 돌려준다. enum은 이름 문자열.
 ```jsonc
 // 200
-{ "userId": "guid", "email": "a@b.com", "displayName": "홍길동" }
+{
+  "userId": "guid", "email": "a@b.com", "displayName": "홍길동",
+  "showOnLeaderboard": true,      // false면 랭킹에 "익명 드라이버"(D-39)
+  "avatarTeam": null,             // MER|FER|RBR|MCL|AST|ALP|WIL|RB|SAU|HAA, null = 사진 없음
+  "preferredGame": "F1_25",
+  "controller": "Wheel",          // Gamepad|Wheel        (저장만)
+  "console": "Pc",                // Pc|Xbox|PlayStation  (저장만)
+  "units": "Metric",              // Metric|Imperial      (저장만)
+  "timeZoneId": "Asia/Seoul",     // IANA                 (저장만 — 랭킹 경계는 D-27)
+  "theme": "System"               // Light|Dark|System
+}
 ```
+> 로그인 응답의 `user`는 요약(`userId`·`displayName`)뿐이라 앱은 로그인 직후 `GET /me`를 부른다.
+
+### 3.3a PUT `/me/profile`
+프로필·설정 **전체 교체**. `avatarTeam`만 null 허용, 나머지는 필수.
+```jsonc
+// Request
+{ "displayName": "lemonary", "showOnLeaderboard": false, "avatarTeam": "MCL", "preferredGame": "F1_25",
+  "controller": "Gamepad", "console": "PlayStation", "units": "Imperial", "timeZoneId": "Europe/London", "theme": "Dark" }
+// 200 → §3.3과 같은 프로필
+```
+검증(틀린 필드를 모두 모아 400, `errors.<필드>[0]`): `displayName` trim 후 1~50자(가입과 같은 규칙) · enum은 이름만(대소문자 무시, 숫자·모르는 값 거부) ·
+`avatarTeam`은 trim + 대문자 후 목록에 있어야 함 · `preferredGame`은 지원 게임(`F1_25`) · `timeZoneId`는 서버가 찾을 수 있는 IANA ID(Windows ID 거부, 64자 이하).
+
+### 3.3b POST `/me/email`
+```jsonc
+// Request
+{ "newEmail": "new@b.com", "currentPassword": "P@ssw0rd!" }
+// 200 → §3.3과 같은 프로필(email 갱신)
+```
+- 새 이메일은 가입과 같이 정규화(trim + 소문자)·검증(`errors.newEmail`). 같은 이메일이면 그대로 200.
+- 현재 비밀번호가 틀리면 **400**(`errors.currentPassword`) — 401은 앱이 세션 만료로 보고 로그아웃시키므로 쓰지 않는다.
+- 다른 계정이 쓰는 이메일은 **409**(가입과 같은 메시지). 발급된 JWT의 email 클레임은 다음 로그인 때 바뀐다.
 
 ### 3.4 POST `/me/agent-pairing-codes`
 웹 Telemetry App에서 Agent 연결 코드를 발급한다(D-26). 요청 본문 없음.
@@ -166,6 +201,7 @@ Agent가 연결 코드를 **장치 키**로 교환한다. 인증 없음(코드�
 }
 ```
 > 기간 경계는 서버 설정 타임존 `Ranking:TimeZoneId`(기본 `Asia/Seoul`)로 계산한다(D-8 · D-27). 잘못된 값이면 서버 시작이 실패한다.
+> 랭킹 이름 비공개 사용자(`showOnLeaderboard = false`)의 `displayName`은 `익명 드라이버`다(D-39). RankingHub `RankingUpdated`도 같다.
 
 ### 3.9 GET `/tracks`
 ```jsonc
@@ -310,6 +346,7 @@ My Lap Record. **모든 세션·무효 랩까지 조회 가능**(D-15/D-16). `se
 
 ## 6. 확정된 결정 (반영 완료)
 
+- **D-39 ✅** 프로필·설정 = `GET /me` 설정 포함 + `PUT /me/profile`(전체 교체) + `POST /me/email`(비밀번호 틀림 400, 중복 409), 이름 비공개 = 랭킹에서 "익명 드라이버"
 - **D-25 ✅** 개인 모드 — 체크인 API 제거 (~~D-10 중복 세션 정책~~ 불필요)
 - **D-26 ✅** Agent 연결 = 1회용 코드 → 장치 키 (`/me/agent-pairing-codes`, `/agent/pair`)
 - **D-27 ✅** 랭킹 타임존 = 서버 설정 `Ranking:TimeZoneId`

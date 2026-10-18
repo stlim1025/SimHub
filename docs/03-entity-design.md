@@ -1,6 +1,6 @@
 # 03 · Entity Design — ERD · 공통 규약
 
-> Status: **Design (미승인)** · Last Updated: 2026-10-18 (P7 시즌·세션 반영, 앞서 P6 개인 모드 반영)
+> Status: **Design (미승인)** · Last Updated: 2026-10-18 (User 프로필 설정 열 반영 — D-39, 앞서 P7 시즌·세션·P6 개인 모드 반영)
 > 대상: Backend (EF Core, Code First, PostgreSQL). 현재 구현 범위 Entity만 정의한다.
 > P6에서 `Store`·`SimRig`·`DrivingSession`을 제거하고 `AgentDevice`·`AgentPairingCode`를 추가했다(D-25, [11](./11-personal-mode.md)).
 > P7에서 `Season`·`RaceWeekend`·`GameSession`·`SessionResult`·`SessionResultTyreStint` 5종과 `laps.session_key`를 추가했다(D-28~34, [12](./12-seasons-sessions.md) §4).
@@ -112,9 +112,16 @@ Lap.SessionKey  ·····  GameSession.SessionKey     (값으로만 이어진�
 | Email | string(256) | Unique, NotNull | 로그인 식별자 |
 | PasswordHash | string | NotNull | BCrypt |
 | DisplayName | string(50) | NotNull | 랭킹 공개명 |
+| ShowOnLeaderboard | bool | NotNull | false면 랭킹에 "익명 드라이버"(D-39). 기존 행 백필 true |
+| AvatarTeam | string(8) | Null | 프로필 사진 팀 코드(`AvatarTeamCodes`) |
+| PreferredGame | string(20) | NotNull | 기본 `F1_25`. 저장만 |
+| Controller / Console / Units | string(20) | NotNull | enum 문자열(`Wheel`·`Pc`·`Metric` 기본). 저장만 |
+| TimeZoneId | string(64) | NotNull | IANA, 기본 `Asia/Seoul`. 저장만(랭킹 경계는 D-27) |
+| Theme | string(20) | NotNull | `Light`·`Dark`·`System`(기본) |
 | CreatedAt / UpdatedAt / IsDeleted | 공통 | | |
 
 내비게이션: `AgentDevices` (P6에서 `Sessions` 대체).
+프로필 설정 열(`ShowOnLeaderboard`~`Theme`)은 마이그레이션 `AddUserProfileSettings`(가산적)가 추가했다. DB 기본값은 백필용으로만 쓰고 모델에는 두지 않는다([14](./14-profile-settings.md) §3).
 
 ### 3.2 AgentDevice (신규 · D-25)
 
@@ -327,6 +334,7 @@ LIMIT 10;
 - **기간 경계(D-8 · D-27):** 일별=설정 타임존 자정~자정, 월별=해당 월, 연도별=해당 연도.
   타임존은 서버 설정 `Ranking:TimeZoneId`(기본 `Asia/Seoul`, 시작 시 검증)로 계산 후 UTC로 변환해 `set_at` 비교.
 - **실시간 랭킹(SignalR) 기본 기준 = 월별(D-8a).** 즉 `@periodStart/End`는 "이번 달"로 계산.
+- **이름 비공개(D-39):** `u.show_on_leaderboard = false`인 행은 서비스가 표시 이름을 `익명 드라이버`로 바꾼다(순위·기록 그대로).
 - **개별 기록 조회(D-16)**는 `is_ranking_eligible` 필터 없이 모든 세션·무효 랩까지 노출.
 - **내 트랙 요약(`/me/tracks`):** 내 랩이 1개 이상 있는 트랙별 `lapCount`, `bestValidLapTimeMs`(`IsValid` 랩 중 최소, 세션 유형 무관 —
   랭킹용 PB와 다른 값), `lastSetAt`.

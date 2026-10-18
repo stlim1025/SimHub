@@ -171,6 +171,8 @@ Reject 사유(고정 문구): `"SessionClassified payload 파싱 실패"`, `"Ses
   ]
 }
 
+// ↑ entries[].displayName: 랭킹 이름 비공개 사용자(showOnLeaderboard=false)는 "익명 드라이버"(D-39, 14 §6). REST /rankings와 같다.
+
 // LapRecorded
 { "lapId": "guid", "userId": "guid", "trackId": "guid", "sessionType": "TimeTrial",
   "lapTimeMs": 83452, "isValid": true, "isRankingEligible": true }
