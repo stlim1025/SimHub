@@ -83,6 +83,8 @@ internal static class SessionDetailSamples
             CarIndex = carIndex,
             Position = position,
             GridPosition = grid,
+            NumLaps = 15,
+            ResultStatus = ResultStatus.Finished,
             DriverKey = isPlayer ? "player" : $"driver:{carIndex}",
             DriverName = name,
             TeamId = teamId,

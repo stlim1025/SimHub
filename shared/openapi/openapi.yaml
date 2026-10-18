@@ -2249,7 +2249,7 @@ components:
       type: object
       description: |
         Laps 카드 한 줄. `positionChange` = 이전 랩 순위 − 이 랩 순위(양수 = 올라감, 1랩은 그리드 대비, 모르면 null).
-        `gapToBestMs` = 이 랩 − 내 최고 랩(유효 랩 중 최소, 유효 랩이 없으면 전체 최소). `bestSectors[i]` = 그 섹터가 이 세션 내 유효 섹터 중 최고(보라).
+        `gapToBestMs` = 이 랩 − 내 최고 랩(유효 랩 중 최소, 유효 랩이 없으면 전체 최소) — 더 빠른 무효 랩은 음수. `bestSectors[i]` = 그 섹터가 이 세션 내 유효 섹터 중 최고(보라).
         `inPit` = 내 랩 스냅샷 `lapData.pitStatus != 0` 또는 스틴트가 바뀐 랩. `lapId`는 같은 랩 번호의 저장된 내 랩(없으면 null).
       required: [lapNumber, inPit, lapTimeMs, sectors, isValid, isBestLap, bestSectors]
       properties:
@@ -2523,7 +2523,7 @@ components:
           type: integer
           nullable: true
           description: |
-            1위 대비 차(ms, docs/15 §11.4). 레이스 = (총 시간 + 패널티) − 1위의 (총 시간 + 패널티), 1위는 0.
+            1위 대비 차(ms, docs/15 §11.4). 레이스 = (총 시간 + 패널티) − 1위의 (총 시간 + 패널티), 1위는 0 — 완주했고 1위와 같은 랩 수인 차만(리타이어·랩 다운은 null).
             예선·연습 = 최고 랩 − 세션 최고 랩. 시간이 없으면 null
           example: 2309
         positionChange:

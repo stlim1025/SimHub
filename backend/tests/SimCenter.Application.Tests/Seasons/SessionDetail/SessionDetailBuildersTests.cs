@@ -111,6 +111,24 @@ public class SessionDetailBuildersTests
         Assert.Empty(StintSpan.From(null));
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(255)]
+    public void StintSpan_LastStintUnsetEnd_IsOpenEnded(int lastEndLap)
+    {
+        var result = Result(0, 1, 1, true, null, 1, (2, TyreCompound.Medium), (lastEndLap, TyreCompound.Hard));
+
+        var spans = StintSpan.From(result);
+
+        Assert.Equal(new[] { (1, 2, "Medium", false), (3, StintSpan.OpenEnd, "Hard", true) },
+            spans.Select(s => (s.StartLap, s.EndLap, s.VisualCompound, s.IsLast)));
+        Assert.True(StintSpan.IsPitLap(spans, 2));
+
+        var laps = SessionLapsBuilder.Build(0, 6, SessionHistory.Parse(SessionDetailsJson), spans, []);
+        var series = TyreStintSeriesBuilder.Build(spans, laps, []);
+        Assert.Equal(("Hard", 3, 3), (series[1].VisualCompound, series[1].StartLap, series[1].EndLap));
+    }
+
     // ---- Penalties ----
 
     [Fact]
@@ -167,6 +185,24 @@ public class SessionDetailBuildersTests
         Assert.Equal((int?)3, gaps.PositionChange(winner));
         Assert.Equal((int?)-1, gaps.PositionChange(second));
         Assert.Null(gaps.PositionChange(noGrid));
+    }
+
+    [Fact]
+    public void Gaps_Race_RetiredOrLapped_IsNull()
+    {
+        var winner = Result(0, 1, 1);
+        winner.TotalRaceTimeMs = 1_600_000;
+        var lapped = Result(1, 2, 2);
+        lapped.TotalRaceTimeMs = 1_590_000;
+        lapped.NumLaps = 14;
+        var retired = Result(2, 3, 3);
+        retired.TotalRaceTimeMs = 900_000;
+        retired.ResultStatus = ResultStatus.Retired;
+
+        var gaps = ClassificationGaps.For(SessionType.Race, [winner, lapped, retired]);
+
+        Assert.Null(gaps.GapMs(lapped));
+        Assert.Null(gaps.GapMs(retired));
     }
 
     [Fact]
