@@ -357,6 +357,19 @@ public class LapAnalyzerTests
     }
 
     [Fact]
+    public void FlashbackAcrossLine_ThenRecrossing_DoesNotRepeatLapFinished()
+    {
+        _sut.Process(ConditionsSession());
+        DriveAt(1, 0f, 0, speed: 100);
+        _sut.Process(At(2, 0f, 0, last: 83_000));
+        _sut.Process(At(1, 5_800f, 82_000));   // 플래시백으로 앞 랩 끝으로
+
+        var events = _sut.Process(At(2, 0f, 0, last: 83_100));   // 다시 출발선을 건넘
+
+        Assert.DoesNotContain(events, e => e is LapFinished);
+    }
+
+    [Fact]
     public void NewSession_DropsCarStateAndTrace()
     {
         _sut.Process(ConditionsSession());

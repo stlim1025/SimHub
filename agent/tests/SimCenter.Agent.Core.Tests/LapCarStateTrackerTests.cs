@@ -174,6 +174,52 @@ public class LapCarStateTrackerTests
     }
 
     [Fact]
+    public void BuildCar_FuelNotFiniteOrOutOfRange_IsNull()
+    {
+        // NaN은 JSON으로 쓸 수 없어 랩 전체를 잃는다. 범위 밖(0~200kg)은 백엔드가 스냅샷 전체를 버린다 — 그 값만 null로.
+        _sut.StartLap(captureStartValues: true);
+        _sut.OnStatus(Status(fuel: float.NaN, fuelLaps: float.PositiveInfinity));
+        _sut.OnStatus(Status(fuel: 250f, fuelLaps: -0.4f));
+
+        var car = Assert.IsType<LapCarSnapshot>(_sut.BuildCar());
+
+        Assert.Null(car.FuelStartKg);
+        Assert.Null(car.FuelEndKg);
+        Assert.Equal(-0.4f, car.FuelRemainingLaps);   // 모자라면 음수일 수 있다
+    }
+
+    [Fact]
+    public void BuildCar_FuelRemainingLapsNotFinite_IsNull()
+    {
+        _sut.StartLap(captureStartValues: true);
+        _sut.OnStatus(Status(fuelLaps: float.NaN));
+
+        Assert.Null(Assert.IsType<LapCarSnapshot>(_sut.BuildCar()).FuelRemainingLaps);
+    }
+
+    [Fact]
+    public void BuildCar_DamageOutsidePercentRange_IsClamped()
+    {
+        var damage = Damage(frontLeftWing: 140, engine: -5) with { TyreDamagePercent = new WheelSet<int>(101, 0, 50, 255) };
+        _sut.StartLap(captureStartValues: true);
+        _sut.OnDamage(damage);
+
+        var car = Assert.IsType<LapCarSnapshot>(_sut.BuildCar());
+
+        Assert.Equal(100, car.FrontLeftWingDamage);
+        Assert.Equal(0, car.EngineDamage);
+        Assert.Equal(new WheelSet<int>(100, 0, 50, 100), car.TyreDamage);
+    }
+
+    [Fact]
+    public void BuildConditions_TemperatureOutOfRange_IsNull()
+    {
+        _sut.OnSession(new SessionFrame(S1, 7, SessionType.Race, 2025, Weather: Weather.Clear, AirTemperatureC: -120, TrackTemperatureC: 95, RainForecastPercent: 140));
+
+        Assert.Equal(new LapConditions(Weather.Clear, null, null, null), _sut.BuildConditions());
+    }
+
+    [Fact]
     public void BuildConditions_UsesLatestSessionValues()
     {
         _sut.OnSession(new SessionFrame(S1, 7, SessionType.Race, 2025, Weather: Weather.Overcast, AirTemperatureC: 20, TrackTemperatureC: 29, TrackLengthM: 5891, RainForecastPercent: 10));

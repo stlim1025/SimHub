@@ -12,8 +12,14 @@ namespace SimCenter.Agent.Core.Analysis;
 /// </summary>
 public sealed class LapCarStateTracker
 {
+    // 백엔드 검증 범위(docs/15 §5). 값 하나 때문에 스냅샷·조건 전체가 버려지지 않게 퍼센트는 다듬고, 연료·기온은 범위 밖이면 그 값만 null로 둔다.
+    // NaN·무한대는 JSON으로 쓸 수 없어(직렬화 예외 → 랩 유실) 항상 걸러낸다.
     private const float MinPercent = 0f;
-    private const float MaxPercent = 100f;   // 백엔드 검증 범위(docs/15 §5) — 바퀴 하나의 값 때문에 스냅샷 전체가 버려지지 않게 다듬는다
+    private const float MaxPercent = 100f;
+    private const int MaxPercentInt = 100;
+    private const float MaxFuelKg = 200f;
+    private const int MinTemperatureC = -50;
+    private const int MaxTemperatureC = 80;
 
     // 랩을 넘어 유지
     private SessionFrame? _session;
@@ -99,19 +105,19 @@ public sealed class LapCarStateTracker
             TyreAgeLaps: status?.TyreAgeLaps,
             TyreWearStart: _startTyreWear,
             TyreWearEnd: damage is null ? null : ClampWear(damage.TyreWearPercent),
-            TyreDamage: damage?.TyreDamagePercent,
-            BrakeDamage: damage?.BrakeDamagePercent,
-            FrontLeftWingDamage: damage?.FrontLeftWingDamage,
-            FrontRightWingDamage: damage?.FrontRightWingDamage,
-            RearWingDamage: damage?.RearWingDamage,
-            FloorDamage: damage?.FloorDamage,
-            DiffuserDamage: damage?.DiffuserDamage,
-            SidepodDamage: damage?.SidepodDamage,
-            GearboxDamage: damage?.GearboxDamage,
-            EngineDamage: damage?.EngineDamage,
-            FuelStartKg: _startStatus?.FuelInTankKg,
-            FuelEndKg: status?.FuelInTankKg,
-            FuelRemainingLaps: status?.FuelRemainingLaps,
+            TyreDamage: damage is null ? null : ClampPercent(damage.TyreDamagePercent),
+            BrakeDamage: damage is null ? null : ClampPercent(damage.BrakeDamagePercent),
+            FrontLeftWingDamage: ClampPercent(damage?.FrontLeftWingDamage),
+            FrontRightWingDamage: ClampPercent(damage?.FrontRightWingDamage),
+            RearWingDamage: ClampPercent(damage?.RearWingDamage),
+            FloorDamage: ClampPercent(damage?.FloorDamage),
+            DiffuserDamage: ClampPercent(damage?.DiffuserDamage),
+            SidepodDamage: ClampPercent(damage?.SidepodDamage),
+            GearboxDamage: ClampPercent(damage?.GearboxDamage),
+            EngineDamage: ClampPercent(damage?.EngineDamage),
+            FuelStartKg: FuelKg(_startStatus?.FuelInTankKg),
+            FuelEndKg: FuelKg(status?.FuelInTankKg),
+            FuelRemainingLaps: status?.FuelRemainingLaps is float laps && float.IsFinite(laps) ? laps : null,
             ErsStoreStartJ: ToJoules(_startStatus?.ErsStoreEnergyJ),
             ErsStoreEndJ: ToJoules(status?.ErsStoreEnergyJ),
             ErsDeployedJ: ToJoules(status?.ErsDeployedThisLapJ),
@@ -127,8 +133,25 @@ public sealed class LapCarStateTracker
             return null;
         }
 
-        return new LapConditions(session.Weather, session.AirTemperatureC, session.TrackTemperatureC, session.RainForecastPercent);
+        return new LapConditions(
+            session.Weather,
+            InRange(session.AirTemperatureC, MinTemperatureC, MaxTemperatureC),
+            InRange(session.TrackTemperatureC, MinTemperatureC, MaxTemperatureC),
+            InRange(session.RainForecastPercent, 0, MaxPercentInt));
     }
+
+    private static int? InRange(int? value, int min, int max) => value is int v && v >= min && v <= max ? v : null;
+
+    /// <summary>연료(kg). 유한하지 않거나 0~200kg 밖이면 null.</summary>
+    private static float? FuelKg(float? kg) => kg is float v && float.IsFinite(v) && v >= 0f && v <= MaxFuelKg ? v : null;
+
+    private static int? ClampPercent(int? percent) => percent is int v ? Math.Clamp(v, 0, MaxPercentInt) : null;
+
+    private static WheelSet<int> ClampPercent(WheelSet<int> wheels) => new(
+        Math.Clamp(wheels.FrontLeft, 0, MaxPercentInt),
+        Math.Clamp(wheels.FrontRight, 0, MaxPercentInt),
+        Math.Clamp(wheels.RearLeft, 0, MaxPercentInt),
+        Math.Clamp(wheels.RearRight, 0, MaxPercentInt));
 
     /// <summary>줄(float) → 정수 줄(사사오입). NaN·무한대는 null, 음수는 0.</summary>
     private static int? ToJoules(float? joules)
