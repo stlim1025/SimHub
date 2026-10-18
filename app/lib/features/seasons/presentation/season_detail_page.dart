@@ -5,13 +5,14 @@ import 'package:go_router/go_router.dart';
 import '../../../core/layout/layout_constants.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/widgets/error_retry.dart';
+import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/not_found_state.dart';
-import '../../../core/widgets/stat.dart';
+import '../../../core/widgets/track_picker.dart';
 import '../application/seasons_providers.dart';
 import '../domain/season_display.dart';
 import '../domain/season_models.dart';
+import 'season_calendar_tab.dart';
 import 'season_results_tab.dart';
-import 'season_rounds_tab.dart';
 import 'season_standings_tab.dart';
 
 const String _seasonsPath = '/seasons';
@@ -22,7 +23,8 @@ const String _notFoundBackLabel = 'Seasons';
 const String _fallbackTitle = 'Season';
 
 const int _httpNotFound = 404;
-const double _statSpacing = 32;
+const String _pickerSemanticLabel = '시즌 선택';
+const EdgeInsets _driverNamePadding = EdgeInsets.only(left: 4);
 
 /// 탭 값 → 탭 글자(`kSeasonTabs`와 같은 순서로 그린다).
 const Map<String, String> _tabLabels = {
@@ -94,7 +96,7 @@ class _SeasonDetailPageState extends ConsumerState<SeasonDetailPage> with Single
       padding: kPagePadding,
       children: [
         _Header(
-          title: season == null ? _fallbackTitle : seasonTitle(season),
+          season: season,
           onBack: () => context.go(_seasonsPath),
         ),
         const SizedBox(height: 16),
@@ -117,8 +119,6 @@ class _SeasonDetailPageState extends ConsumerState<SeasonDetailPage> with Single
           data: (data) => Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _HeaderStats(season: data.season),
-              const SizedBox(height: 16),
               TabBar(
                 controller: _tabController,
                 onTap: _selectTab,
@@ -136,15 +136,21 @@ class _SeasonDetailPageState extends ConsumerState<SeasonDetailPage> with Single
   static bool _isNotFound(Object error) => error is ApiException && error.statusCode == _httpNotFound;
 }
 
+/// F1Laps 모양 헤더(docs/15 §12): 뒤로 + `Driver Career Season 1` ⇅(내 시즌 메뉴, 최근 순) + 아래 흐린 내 이름.
 class _Header extends StatelessWidget {
-  const _Header({required this.title, required this.onBack});
+  const _Header({required this.season, required this.onBack});
 
-  final String title;
+  /// 로딩 중·조회 실패면 null(제목만 [_fallbackTitle]).
+  final SeasonSummary? season;
   final VoidCallback onBack;
 
   @override
   Widget build(BuildContext context) {
+    final current = season;
+    final titleStyle = Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold);
+    final driverName = current?.myDriverName;
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         IconButton(
           tooltip: '시즌 목록',
@@ -153,9 +159,22 @@ class _Header extends StatelessWidget {
         ),
         const SizedBox(width: 4),
         Expanded(
-          child: Text(
-            title,
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (current == null)
+                Text(_fallbackTitle, style: titleStyle)
+              else
+                _SeasonPicker(current: current, textStyle: titleStyle),
+              if (driverName != null && driverName.isNotEmpty)
+                Padding(
+                  padding: _driverNamePadding,
+                  child: Text(
+                    driverName,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: context.palette.textMuted),
+                  ),
+                ),
+            ],
           ),
         ),
       ],
@@ -163,26 +182,32 @@ class _Header extends StatelessWidget {
   }
 }
 
-/// 모드 · 기간 · 라운드 수 · 내 순위와 점수.
-class _HeaderStats extends StatelessWidget {
-  const _HeaderStats({required this.season});
+/// 내 시즌 메뉴: Laps의 트랙 메뉴와 같은 모양(국기 없음). 목록 첫 페이지(최근 순)를 쓰고, 아직 없으면 지금 시즌만.
+class _SeasonPicker extends ConsumerWidget {
+  const _SeasonPicker({required this.current, required this.textStyle});
 
-  final SeasonSummary season;
+  final SeasonSummary current;
+  final TextStyle? textStyle;
 
   @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: _statSpacing,
-      runSpacing: 8,
-      children: [
-        Stat(label: '모드', value: seasonModeLabel(season)),
-        Stat(label: '기간', value: seasonPeriodLabel(season)),
-        if (season.importedFrom case final source?) Stat(label: '가져옴', value: source),
-        Stat(label: '라운드', value: roundsLabel(season.roundCount)),
-        Stat(label: '내 순위', value: myStandingLabel(season.myPosition, season.myPoints)),
-      ],
+  Widget build(BuildContext context, WidgetRef ref) {
+    final listed = ref.watch(seasonsProvider(1)).valueOrNull?.items ?? const <SeasonSummary>[];
+    final seasons = listed.any((s) => s.seasonId == current.seasonId) ? listed : [current, ...listed];
+    return TrackPicker(
+      tracks: [for (final s in seasons) _choiceOf(s)],
+      selected: _choiceOf(current),
+      showFlags: false,
+      semanticLabel: _pickerSemanticLabel,
+      textStyle: textStyle,
+      onSelected: (choice) {
+        if (choice.id != current.seasonId) {
+          context.go(seasonLocation(choice.id));
+        }
+      },
     );
   }
+
+  static TrackChoice _choiceOf(SeasonSummary season) => TrackChoice(id: season.seasonId, name: seasonHeaderTitle(season));
 }
 
 /// 선택된 탭의 내용. 세 탭이 같은 [detail] 스냅샷을 쓴다.
@@ -197,7 +222,7 @@ class _TabContent extends StatelessWidget {
     return switch (tab) {
       kSeasonTabResults => SeasonResultsTab(rounds: detail.rounds, drivers: detail.standings.drivers),
       kSeasonTabStandings => SeasonStandingsTab(standings: detail.standings),
-      _ => SeasonRoundsTab(rounds: detail.rounds),
+      _ => SeasonCalendarTab(calendar: detail.calendar, totalPoints: detail.season.myPoints),
     };
   }
 }

@@ -15,6 +15,8 @@ class SeasonSummary {
     required this.leaderPoints,
     this.importedFrom,
     this.myTeamName,
+    this.seasonNumber,
+    this.myDriverName,
   });
 
   final String seasonId;
@@ -34,6 +36,12 @@ class SeasonSummary {
   /// Standings의 내 팀 이름(헤더 "모드 · 팀"). 내 결과가 없으면 null.
   final String? myTeamName;
 
+  /// 같은 게임·모드 안 시즌 번호(D-54, 헤더 `Driver Career Season 1`). 모르면 null.
+  final int? seasonNumber;
+
+  /// Standings의 내 드라이버 이름(헤더 아래 흐린 줄). 내 결과가 없으면 null.
+  final String? myDriverName;
+
   factory SeasonSummary.fromJson(Map<String, dynamic> json) => SeasonSummary(
         seasonId: json['seasonId'] as String,
         gameCode: json['gameCode'] as String,
@@ -47,6 +55,8 @@ class SeasonSummary {
         leaderPoints: json['leaderPoints'] as int?,
         importedFrom: json['importedFrom'] as String?,
         myTeamName: json['myTeamName'] as String?,
+        seasonNumber: json['seasonNumber'] as int?,
+        myDriverName: json['myDriverName'] as String?,
       );
 }
 
@@ -255,13 +265,78 @@ class SeasonStandings {
       );
 }
 
-/// 시즌 상세 응답(`GET /me/seasons/{id}`): 헤더 + 라운드 + Standings. 세 탭이 같은 스냅샷을 쓴다.
+/// Season 탭 표의 한 줄(F1Laps 시즌 표, docs/15 §12). 캘린더 트랙 전부가 오며, 달리지 않은 라운드는
+/// 주말·세션·결과가 null이고 팀은 시즌 팀이다. AI 난이도는 모르면 null.
+class SeasonCalendarRound {
+  const SeasonCalendarRound({
+    required this.round,
+    required this.trackId,
+    required this.trackName,
+    this.countryCode,
+    this.weekendId,
+    this.raceSessionId,
+    this.firstSessionId,
+    this.myTeamName,
+    this.myTeamColor,
+    this.racePosition,
+    this.points,
+    this.qualiPosition,
+    this.raceAiDifficulty,
+    this.qualiAiDifficulty,
+  });
+
+  final int round;
+  final String trackId;
+  final String trackName;
+  final String? countryCode;
+  final String? weekendId;
+
+  /// 본 레이스 세션(이름을 누르면 여기로). 없으면 [firstSessionId].
+  final String? raceSessionId;
+  final String? firstSessionId;
+  final String? myTeamName;
+  final String? myTeamColor;
+  final int? racePosition;
+
+  /// 레이스(스프린트 포함) 내 점수 합.
+  final int? points;
+
+  /// 마지막 예선(슛아웃 제외) 내 순위.
+  final int? qualiPosition;
+  final int? raceAiDifficulty;
+  final int? qualiAiDifficulty;
+
+  factory SeasonCalendarRound.fromJson(Map<String, dynamic> json) => SeasonCalendarRound(
+        round: json['round'] as int,
+        trackId: json['trackId'] as String,
+        trackName: json['trackName'] as String,
+        countryCode: json['countryCode'] as String?,
+        weekendId: json['weekendId'] as String?,
+        raceSessionId: json['raceSessionId'] as String?,
+        firstSessionId: json['firstSessionId'] as String?,
+        myTeamName: json['myTeamName'] as String?,
+        myTeamColor: json['myTeamColor'] as String?,
+        racePosition: json['racePosition'] as int?,
+        points: json['points'] as int?,
+        qualiPosition: json['qualiPosition'] as int?,
+        raceAiDifficulty: json['raceAiDifficulty'] as int?,
+        qualiAiDifficulty: json['qualiAiDifficulty'] as int?,
+      );
+}
+
+/// 시즌 상세 응답(`GET /me/seasons/{id}`): 헤더 + 라운드 + Standings + 캘린더(Season 탭). 세 탭이 같은 스냅샷을 쓴다.
 class SeasonDetail {
-  const SeasonDetail({required this.season, required this.rounds, required this.standings});
+  const SeasonDetail({
+    required this.season,
+    required this.rounds,
+    required this.standings,
+    this.calendar = const [],
+  });
 
   final SeasonSummary season;
   final List<SeasonRound> rounds;
   final SeasonStandings standings;
+  final List<SeasonCalendarRound> calendar;
 
   factory SeasonDetail.fromJson(Map<String, dynamic> json) => SeasonDetail(
         season: SeasonSummary.fromJson(json['season'] as Map<String, dynamic>),
@@ -269,5 +344,8 @@ class SeasonDetail {
             .map((e) => SeasonRound.fromJson(e as Map<String, dynamic>))
             .toList(),
         standings: SeasonStandings.fromJson(json['standings'] as Map<String, dynamic>),
+        calendar: ((json['calendar'] as List<dynamic>?) ?? const [])
+            .map((e) => SeasonCalendarRound.fromJson(e as Map<String, dynamic>))
+            .toList(),
       );
 }

@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:simcenter_app/core/network/api_exception.dart';
 import 'package:simcenter_app/features/seasons/data/seasons_repository.dart';
-import 'package:simcenter_app/features/seasons/domain/season_display.dart';
 import 'package:simcenter_app/features/seasons/domain/season_import_models.dart';
 import 'package:simcenter_app/features/seasons/domain/season_models.dart';
 import 'package:simcenter_app/features/seasons/presentation/season_import_dialog.dart';
@@ -98,8 +97,7 @@ void main() {
     });
 
     expect(season.importedFrom, 'F1Laps');
-    expect(seasonModeLabel(season), 'Driver Career · Ferrari');
-    expect(seasonModeLabel(seasonOf('se2')), 'Driver Career');
+    expect(season.myTeamName, 'Ferrari');
   });
 
   group('SeasonImportDialog', () {

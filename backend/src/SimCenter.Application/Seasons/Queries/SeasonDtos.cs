@@ -4,6 +4,7 @@ namespace SimCenter.Application.Seasons.Queries;
 /// 시즌 목록 한 줄(12 §7.2). 내 결과가 없으면 <c>My*</c>, Standings가 비면 <c>Leader*</c>는 null이다.
 /// 점수는 <c>int</c> 상한으로 자른 값이다(순서는 실제 합계 기준). 열거형은 문자열로 직렬화한다.
 /// <c>ImportedFrom</c> = 가져온 출처(docs/15 §12, D-55, 없으면 null). <c>MyTeam*</c> = Standings의 내 팀(내 결과가 없으면 null) — 헤더의 "모드 · 팀".
+/// <c>SeasonNumber</c> = 같은 게임·모드 안 시즌 번호(D-54, 헤더 "Driver Career Season 1"), <c>MyDriverName</c> = Standings의 내 이름(없으면 null).
 /// </summary>
 public sealed record SeasonSummaryDto(
     Guid SeasonId,
@@ -18,13 +19,41 @@ public sealed record SeasonSummaryDto(
     int? LeaderPoints,
     string? ImportedFrom = null,
     string? MyTeamName = null,
-    string? MyTeamColor = null);
+    string? MyTeamColor = null,
+    int? SeasonNumber = null,
+    string? MyDriverName = null);
 
-/// <summary>시즌 상세: 헤더 + 라운드 + Standings(결과표 칸 포함). 세 탭이 같은 스냅샷을 쓴다.</summary>
+/// <summary>
+/// 시즌 상세: 헤더 + 라운드 + Standings(결과표 칸 포함) + 캘린더(시즌 탭, docs/15 §12). 세 탭이 같은 스냅샷을 쓴다.
+/// </summary>
 public sealed record SeasonDetailDto(
     SeasonSummaryDto Season,
     IReadOnlyList<SeasonRoundDto> Rounds,
-    SeasonStandingsDto Standings);
+    SeasonStandingsDto Standings,
+    IReadOnlyList<SeasonCalendarRoundDto> Calendar);
+
+/// <summary>
+/// 시즌 탭 한 줄(F1Laps 시즌 표, docs/15 §12): 게임 캘린더 트랙 전부 + 캘린더 밖 트랙에서 달린 주말(시간 순 자리에 끼움).
+/// <see cref="Round"/> = 표 안 순번(1부터). 달리지 않은 라운드는 <c>WeekendId</c>·세션·결과가 null이고 팀은 시즌 팀이다.
+/// <see cref="RaceSessionId"/> = 본 레이스(없으면 null), <see cref="FirstSessionId"/> = 그 주말 첫 세션.
+/// <see cref="Points"/> = 레이스(스프린트 포함) 내 점수 합, <see cref="QualiPosition"/> = 마지막 예선(슛아웃 제외) 내 순위.
+/// AI 난이도는 모르면(0) null.
+/// </summary>
+public sealed record SeasonCalendarRoundDto(
+    int Round,
+    Guid TrackId,
+    string TrackName,
+    string? CountryCode,
+    Guid? WeekendId,
+    Guid? RaceSessionId,
+    Guid? FirstSessionId,
+    string? MyTeamName,
+    string? MyTeamColor,
+    int? RacePosition,
+    int? Points,
+    int? QualiPosition,
+    int? RaceAiDifficulty,
+    int? QualiAiDifficulty);
 
 /// <summary>
 /// 라운드(그랑프리 주말) 한 줄. <see cref="WinnerName"/>은 본 레이스 1위(없으면 null),

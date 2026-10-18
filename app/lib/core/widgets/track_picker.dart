@@ -46,6 +46,8 @@ class TrackPicker extends StatelessWidget {
     required this.onSelected,
     this.placeholder = 'Select track',
     this.textStyle,
+    this.showFlags = true,
+    this.semanticLabel = _pickerSemanticLabel,
   });
 
   /// 메뉴 항목(이 순서대로 보인다). 비어 있으면 메뉴가 열리지 않는다.
@@ -55,6 +57,12 @@ class TrackPicker extends StatelessWidget {
   final TrackChoice? selected;
   final ValueChanged<TrackChoice> onSelected;
   final String placeholder;
+
+  /// false면 국기를 그리지 않는다(같은 모양의 시즌 메뉴, docs/15 §12).
+  final bool showFlags;
+
+  /// 제목 버튼의 읽기 도구 이름.
+  final String semanticLabel;
 
   /// 제목 글자 모양. 기본은 `headlineSmall` 굵게.
   final TextStyle? textStyle;
@@ -82,6 +90,7 @@ class TrackPicker extends StatelessWidget {
             key: ValueKey('track-option-${track.id}'),
             track: track,
             selected: track.id == selected?.id,
+            showFlag: showFlags,
             onPressed: () => onSelected(track),
           ),
       ],
@@ -89,6 +98,8 @@ class TrackPicker extends StatelessWidget {
         selected: selected,
         placeholder: placeholder,
         textStyle: textStyle,
+        showFlag: showFlags,
+        semanticLabel: semanticLabel,
         onTap: tracks.isEmpty ? null : () => controller.isOpen ? controller.close() : controller.open(),
       ),
     );
@@ -100,12 +111,16 @@ class _PickerTitle extends StatelessWidget {
     required this.selected,
     required this.placeholder,
     required this.textStyle,
+    required this.showFlag,
+    required this.semanticLabel,
     required this.onTap,
   });
 
   final TrackChoice? selected;
   final String placeholder;
   final TextStyle? textStyle;
+  final bool showFlag;
+  final String semanticLabel;
   final VoidCallback? onTap;
 
   @override
@@ -115,7 +130,7 @@ class _PickerTitle extends StatelessWidget {
     return Semantics(
       button: true,
       enabled: onTap != null,
-      label: _pickerSemanticLabel,
+      label: semanticLabel,
       child: InkWell(
         key: const ValueKey('track-picker'),
         borderRadius: BorderRadius.circular(_titleRadius),
@@ -125,7 +140,7 @@ class _PickerTitle extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (track != null) ...[
+              if (track != null && showFlag) ...[
                 TrackFlag(countryCode: track.countryCode, size: _titleFlagSize),
                 const SizedBox(width: _titleGap),
               ],
@@ -148,10 +163,17 @@ class _PickerTitle extends StatelessWidget {
 }
 
 class _TrackMenuItem extends StatelessWidget {
-  const _TrackMenuItem({super.key, required this.track, required this.selected, required this.onPressed});
+  const _TrackMenuItem({
+    super.key,
+    required this.track,
+    required this.selected,
+    required this.showFlag,
+    required this.onPressed,
+  });
 
   final TrackChoice track;
   final bool selected;
+  final bool showFlag;
   final VoidCallback onPressed;
 
   @override
@@ -164,7 +186,7 @@ class _TrackMenuItem extends StatelessWidget {
       child: SizedBox(
         width: kTrackMenuWidth,
         child: MenuItemButton(
-          leadingIcon: TrackFlag(countryCode: track.countryCode),
+          leadingIcon: showFlag ? TrackFlag(countryCode: track.countryCode) : null,
           trailingIcon: selected ? Icon(Icons.check, size: _checkIconSize, color: palette.link) : null,
           autofocus: selected,
           onPressed: onPressed,
