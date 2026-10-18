@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/compact_table.dart';
 import '../../lap_detail/domain/lap_detail_display.dart';
+import '../application/fresh_laps.dart';
 import '../domain/lap_display.dart';
 import '../domain/lap_models.dart';
 import 'lap_cells.dart';
@@ -33,7 +35,8 @@ final List<CompactColumn<Lap>> _columns = [
 ];
 
 /// 한 트랙의 내 랩 표. 행 전체를 누르면 랩 상세(`/laps/:lapId`)로 간다.
-class LapsTable extends StatelessWidget {
+/// 실시간으로 막 들어온 랩 행은 잠깐 강조된다(D-50, docs/15 §9).
+class LapsTable extends ConsumerWidget {
   const LapsTable({super.key, required this.laps, this.footer});
 
   final List<Lap> laps;
@@ -42,11 +45,13 @@ class LapsTable extends StatelessWidget {
   final Widget? footer;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final freshIds = ref.watch(freshLapIdsProvider);
     return CompactTable<Lap>(
       columns: _columns,
       rows: laps,
       compactWidth: kLapTableCompactWidth,
+      isFresh: (lap) => freshIds.contains(lap.lapId),
       rowKey: (lap) => ValueKey('lap-row-${lap.lapId}'),
       onRowTap: (lap) => context.go(lapDetailLocation(lap.lapId)),
       footer: footer,

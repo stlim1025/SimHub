@@ -44,11 +44,19 @@ class _FakeHubConnection implements HubConnection {
     return null;
   }
 
-  @override
-  void on(String methodName, MethodInvocationFunc newMethod) {}
+  /// 등록된 서버 이벤트 처리기(이름 → 처리기). 테스트가 서버 이벤트를 흉내 낼 때 부른다.
+  final handlers = <String, MethodInvocationFunc>{};
+  ReconnectedCallback? reconnectedCallback;
+  ClosedCallback? closedCallback;
 
   @override
-  void onreconnected(ReconnectedCallback callback) {}
+  void on(String methodName, MethodInvocationFunc newMethod) => handlers[methodName] = newMethod;
+
+  @override
+  void onreconnected(ReconnectedCallback callback) => reconnectedCallback = callback;
+
+  @override
+  void onclose(ClosedCallback callback) => closedCallback = callback;
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -115,5 +123,59 @@ void main() {
 
     expect(created, hasLength(2));
     expect(created.last.invocations, ['SubscribeTrack:t2']);
+  });
+
+  group('새 랩 실시간(D-50)', () {
+    test('LapRecorded 첫 인자를 lapRecorded 스트림으로 흘린다', () async {
+      final (:client, :created) = _clientWith((_) => Future.value());
+      await client.connect();
+      final received = client.lapRecorded.first;
+
+      created.single.handlers['LapRecorded']!([
+        {'lapId': 'l9', 'trackId': 't1'},
+      ]);
+
+      expect(await received, {'lapId': 'l9', 'trackId': 't1'});
+    });
+
+    test('재접속되면 관심 트랙을 다시 구독하고 reconnected를 알린다', () async {
+      final (:client, :created) = _clientWith((_) => Future.value());
+      await client.subscribeTrack('t1');
+      var reconnects = 0;
+      client.reconnected.listen((_) => reconnects++);
+
+      created.single.reconnectedCallback!(connectionId: 'c2');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(created.single.invocations, ['SubscribeTrack:t1', 'SubscribeTrack:t1']);
+      expect(reconnects, 1);
+    });
+
+    test('연결이 완전히 끊기면 closed를 알리고 다음 connect는 새 연결을 만든다', () async {
+      final (:client, :created) = _clientWith((_) => Future.value());
+      await client.connect();
+      var closes = 0;
+      client.closed.listen((_) => closes++);
+
+      created.single.closedCallback!();
+      await Future<void>.delayed(Duration.zero);
+      await client.connect();
+
+      expect(closes, 1);
+      expect(created, hasLength(2));
+    });
+
+    test('stop()으로 닫은 연결은 closed를 알리지 않는다', () async {
+      final (:client, :created) = _clientWith((_) => Future.value());
+      await client.connect();
+      var closes = 0;
+      client.closed.listen((_) => closes++);
+
+      await client.stop();
+      created.single.closedCallback!();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(closes, 0);
+    });
   });
 }

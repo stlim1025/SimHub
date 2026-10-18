@@ -43,24 +43,43 @@ class FakeAuthController extends AuthController {
   }
 }
 
-/// 실제 SignalR 연결 없이 `rankingUpdated`를 테스트가 직접 흘려보내는 허브.
+/// 실제 SignalR 연결 없이 `rankingUpdated`·`lapRecorded`(D-50)·재연결·끊김을 테스트가 직접 흘려보내는 허브.
 class FakeRankingHub implements RankingHubClient {
   final updates = StreamController<Map<String, dynamic>>.broadcast();
+  final laps = StreamController<Map<String, dynamic>>.broadcast();
+  final reconnects = StreamController<void>.broadcast();
+  final closes = StreamController<void>.broadcast();
   final subscribed = <String>[];
   final unsubscribed = <String>[];
   int stopCalls = 0;
+  int connectCalls = 0;
+
+  /// null이 아니면 [connect]가 이 오류로 실패한다. 테스트 도중에 바꿀 수 있다.
+  Object? connectError;
 
   @override
   Stream<Map<String, dynamic>> get rankingUpdated => updates.stream;
 
   @override
-  Stream<Map<String, dynamic>> get lapRecorded => const Stream.empty();
+  Stream<Map<String, dynamic>> get lapRecorded => laps.stream;
 
   @override
   Stream<Map<String, dynamic>> get personalBest => const Stream.empty();
 
   @override
-  Future<void> connect() async {}
+  Stream<void> get reconnected => reconnects.stream;
+
+  @override
+  Stream<void> get closed => closes.stream;
+
+  @override
+  Future<void> connect() async {
+    connectCalls++;
+    final error = connectError;
+    if (error != null) {
+      throw error;
+    }
+  }
 
   @override
   Future<void> subscribeTrack(String trackId) async => subscribed.add(trackId);
@@ -72,8 +91,41 @@ class FakeRankingHub implements RankingHubClient {
   Future<void> stop() async => stopCalls++;
 
   @override
-  void dispose() => updates.close();
+  void dispose() {
+    updates.close();
+    laps.close();
+    reconnects.close();
+    closes.close();
+  }
 }
+
+/// 서버가 `LapRecorded`로 보내는 페이로드(D-50, shared/samples/lap_recorded_broadcast.json 모양: LapDto + trackId).
+Map<String, dynamic> lapRecordedPayload(
+  String lapId, {
+  String trackId = 't1',
+  String trackName = 'Jeddah',
+  int lapTimeMs = 98448,
+  bool isValid = true,
+}) =>
+    {
+      'lapId': lapId,
+      'trackName': trackName,
+      'gameCode': 'F1_25',
+      'sessionType': 'TimeTrial',
+      'lapTimeMs': lapTimeMs,
+      'sectors': [
+        {'sectorNumber': 1, 'sectorTimeMs': 32816},
+      ],
+      'isValid': isValid,
+      'isRankingEligible': isValid,
+      'setAt': '2026-10-18T11:00:00Z',
+      'lapNumber': 6,
+      'gameMode': 'TimeTrial',
+      'team': {'name': 'Ferrari', 'color': '#E8002D'},
+      'weather': 'LightCloud',
+      'hasTrace': true,
+      'trackId': trackId,
+    };
 
 /// 요청을 기록하고 미리 정한 스냅샷을 돌려주는 랭킹 저장소.
 class FakeRankingRepository implements RankingRepository {
@@ -140,9 +192,11 @@ typedef LapsRequest = ({String? trackId, String sort, bool validOnly, int page, 
 class FakeLapsRepository implements LapsRepository {
   FakeLapsRepository({this.laps = const [], this.tracks = const []});
 
-  final List<Lap> laps;
-  final List<MyTrack> tracks;
+  /// 테스트 도중 새 랩·트랙으로 바꿀 수 있다(실시간 새 랩 흉내, D-50).
+  List<Lap> laps;
+  List<MyTrack> tracks;
   final requests = <LapsRequest>[];
+  int tracksCalls = 0;
 
   List<int> get pageSizes => [for (final r in requests) r.pageSize];
 
@@ -169,7 +223,10 @@ class FakeLapsRepository implements LapsRepository {
   }
 
   @override
-  Future<List<MyTrack>> getMyTracks() async => tracks;
+  Future<List<MyTrack>> getMyTracks() async {
+    tracksCalls++;
+    return tracks;
+  }
 }
 
 Lap lapOf(

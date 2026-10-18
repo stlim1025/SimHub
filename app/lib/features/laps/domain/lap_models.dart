@@ -57,6 +57,7 @@ class Lap {
     this.team,
     this.weather,
     this.hasTrace = false,
+    this.trackId,
   });
 
   final String lapId;
@@ -84,6 +85,20 @@ class Lap {
   /// 텔레메트리 트레이스가 저장됐는지(`GET /me/laps/{id}/trace`).
   final bool hasTrace;
 
+  /// 트랙 Id. `GET /me/laps` 항목에는 없고, 실시간 `LapRecorded`(D-50, docs/15 §9)에만 실린다.
+  final String? trackId;
+
+  /// 실시간 페이로드처럼 모양을 믿을 수 없는 JSON을 읽는다. 필수 필드가 없거나 형식이 다르면 null.
+  static Lap? tryParse(Map<String, dynamic> json) {
+    try {
+      return Lap.fromJson(json);
+    } on TypeError {
+      return null;
+    } on FormatException {
+      return null;
+    }
+  }
+
   factory Lap.fromJson(Map<String, dynamic> json) => Lap(
         lapId: json['lapId'] as String,
         trackName: json['trackName'] as String,
@@ -101,6 +116,7 @@ class Lap {
         team: LapTeam.fromJsonOrNull(json['team']),
         weather: json['weather'] as String?,
         hasTrace: json['hasTrace'] as bool? ?? false,
+        trackId: json['trackId'] as String?,
       );
 }
 

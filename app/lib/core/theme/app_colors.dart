@@ -83,6 +83,9 @@ class AppColors {
   /// 표 행에 마우스를 올렸을 때의 배경(`accent` 약 8%).
   static const Color rowHover = Color(0x146366F1);
 
+  /// 실시간으로 막 들어온 랩 행의 강조 시작색(`accent` 약 30%, D-50). 몇 초에 걸쳐 투명해진다.
+  static const Color freshRow = Color(0x4D6366F1);
+
   /// 텔레메트리 비교 랩(내 최고 랩) 선 — 청록. 이 랩은 `accent`.
   static const Color comparisonLap = Color(0xFF2DD4BF);
   static const Color lightComparisonLap = Color(0xFF0D9488);
