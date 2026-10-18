@@ -677,6 +677,8 @@ SeasonSummary seasonOf(
   int? leaderPoints = 120,
   DateTime? firstSessionAt,
   DateTime? lastSessionAt,
+  int? seasonNumber,
+  String? myDriverName,
 }) =>
     SeasonSummary(
       seasonId: id,
@@ -689,6 +691,40 @@ SeasonSummary seasonOf(
       myPoints: myPoints,
       leaderName: leaderName,
       leaderPoints: leaderPoints,
+      seasonNumber: seasonNumber,
+      myDriverName: myDriverName,
+    );
+
+/// Season 탭 표 한 줄(docs/15 §12). 기본은 달리지 않은 라운드.
+SeasonCalendarRound seasonCalendarRoundOf(
+  int round, {
+  String? trackName,
+  String? countryCode,
+  String? raceSessionId,
+  String? firstSessionId,
+  String? myTeamName,
+  String? myTeamColor,
+  int? racePosition,
+  int? points,
+  int? qualiPosition,
+  int? raceAiDifficulty,
+  int? qualiAiDifficulty,
+}) =>
+    SeasonCalendarRound(
+      round: round,
+      trackId: 't$round',
+      trackName: trackName ?? 'Track $round',
+      countryCode: countryCode,
+      weekendId: firstSessionId == null ? null : 'w$round',
+      raceSessionId: raceSessionId,
+      firstSessionId: firstSessionId,
+      myTeamName: myTeamName,
+      myTeamColor: myTeamColor,
+      racePosition: racePosition,
+      points: points,
+      qualiPosition: qualiPosition,
+      raceAiDifficulty: raceAiDifficulty,
+      qualiAiDifficulty: qualiAiDifficulty,
     );
 
 SeasonRoundSession seasonSessionOf(
@@ -777,11 +813,13 @@ SeasonDetail seasonDetailOf(
   List<SeasonRound> rounds = const [],
   List<DriverStanding> drivers = const [],
   List<ConstructorStanding> constructors = const [],
+  List<SeasonCalendarRound> calendar = const [],
 }) =>
     SeasonDetail(
       season: season ?? seasonOf(id),
       rounds: rounds,
       standings: SeasonStandings(drivers: drivers, constructors: constructors),
+      calendar: calendar,
     );
 
 /// 팀 색 막대([key]가 붙은 `TeamColorBar`)가 칠한 색.

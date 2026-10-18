@@ -110,20 +110,26 @@ void main() {
     });
   });
 
-  group('sessionChipResult', () {
-    test('순위가 있으면 P순위', () {
-      expect(sessionChipResult(4, 'Finished'), 'P4');
-      expect(sessionChipResult(2, null), 'P2');
+  group('seasonHeaderTitle', () {
+    test('시즌 번호가 있으면 Driver Career Season N(D-54)', () {
+      expect(seasonHeaderTitle(seasonOf('se1', seasonNumber: 2)), 'Driver Career Season 2');
     });
 
-    test('완주하지 못했으면 상태 라벨', () {
-      expect(sessionChipResult(20, 'DidNotFinish'), 'DNF');
-      expect(sessionChipResult(null, 'Retired'), 'RET');
+    test('번호를 모르면 모드 · 시작 날짜', () {
+      expect(seasonHeaderTitle(seasonOf('se1')), 'Driver Career · 2026.10.17');
+    });
+  });
+
+  group('calendar labels', () {
+    test('PTS 머리글은 시즌 합계를 괄호로', () {
+      expect(calendarPointsHeader(87), 'Pts (87)');
+      expect(calendarPointsHeader(null), 'Pts (0)');
     });
 
-    test('내 결과가 없거나 상태를 모르면 null', () {
-      expect(sessionChipResult(null, null), isNull);
-      expect(sessionChipResult(null, 'Unknown'), isNull);
+    test('세션 이동 대상: 본 레이스 → 첫 세션 → 없음', () {
+      expect(calendarRoundTarget(seasonCalendarRoundOf(1, raceSessionId: 'r', firstSessionId: 'p')), 'r');
+      expect(calendarRoundTarget(seasonCalendarRoundOf(1, firstSessionId: 'p')), 'p');
+      expect(calendarRoundTarget(seasonCalendarRoundOf(1)), isNull);
     });
   });
 }

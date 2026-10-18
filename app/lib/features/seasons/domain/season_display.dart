@@ -1,5 +1,6 @@
 import 'package:intl/intl.dart';
 
+import '../../sessions/domain/session_detail_display.dart';
 import '../../sessions/domain/session_display.dart';
 import 'season_models.dart';
 
@@ -41,12 +42,19 @@ String formatSeasonDate(DateTime value) => _dateFormat.format(value.toLocal());
 String seasonTitle(SeasonSummary season) =>
     '${gameModeLabel(season.gameMode)} · ${formatSeasonDate(season.firstSessionAt)}';
 
-/// 헤더의 모드 칸: `Driver Career · Ferrari`(내 팀을 알면, docs/15 §12 D-55).
-String seasonModeLabel(SeasonSummary season) {
-  final mode = gameModeLabel(season.gameMode);
-  final team = season.myTeamName;
-  return team == null || team.isEmpty ? mode : '$mode · $team';
+/// 시즌 상세 헤더·시즌 메뉴 이름: `Driver Career Season 1`(D-54). 번호를 모르면 [seasonTitle].
+String seasonHeaderTitle(SeasonSummary season) {
+  final number = season.seasonNumber;
+  return number == null ? seasonTitle(season) : gameModeLine(season.gameMode, number);
 }
+
+// -- Season 탭 표(docs/15 §12) -------------------------------------------------
+
+/// PTS 머리글: `Pts (87)`(시즌 내 합계, 없으면 0). 머리글은 표가 대문자로 그린다.
+String calendarPointsHeader(int? totalPoints) => 'Pts (${totalPoints ?? 0})';
+
+/// GRAND PRIX 이름을 누르면 갈 세션: 본 레이스 → 그 주말 첫 세션 → 없음(누를 수 없음).
+String? calendarRoundTarget(SeasonCalendarRound round) => round.raceSessionId ?? round.firstSessionId;
 
 /// 시즌 기간: `2026.10.17 ~ 2026.11.02`. 하루 안에 끝났으면 날짜 하나만.
 String seasonPeriodLabel(SeasonSummary season) {
@@ -74,7 +82,7 @@ String leaderLabel(String? name, int? points) {
 /// 라운드 수: `6 rounds`.
 String roundsLabel(int count) => '$count rounds';
 
-// -- Results 칸 · 세션 칩 -------------------------------------------------------
+// -- Results 칸 ---------------------------------------------------------------
 
 /// 칸이 순위 숫자를 보이는 칸인가: 본 레이스 기록이 있고 끝까지 달렸다(Finished·Active).
 bool standingCellShowsPosition(StandingCell? cell) {
@@ -101,15 +109,4 @@ int? standingCellPodiumPlace(StandingCell? cell) {
   }
   final position = cell.position!;
   return position >= 1 && position <= _podiumPlaces ? position : null;
-}
-
-/// Season 탭 세션 칩에 붙는 내 결과. 완주하지 못했으면 상태 라벨, 아니면 `P4`. 내 결과가 없으면 null.
-String? sessionChipResult(int? position, String? status) {
-  if (status != null && !isRunningOrFinished(status)) {
-    final label = resultStatusLabel(status);
-    if (label != kNoValueText) {
-      return label;
-    }
-  }
-  return position == null ? null : 'P$position';
 }

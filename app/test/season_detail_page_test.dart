@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:simcenter_app/core/network/api_exception.dart';
 import 'package:simcenter_app/core/theme/app_colors.dart';
+import 'package:simcenter_app/core/theme/app_theme.dart';
 import 'package:simcenter_app/features/seasons/data/seasons_repository.dart';
 import 'package:simcenter_app/features/seasons/domain/season_display.dart';
 import 'package:simcenter_app/features/seasons/domain/season_models.dart';
@@ -34,17 +35,51 @@ class _ServerErrorRepository extends FakeSeasonsRepository {
       throw ApiException('서버가 아파요.', statusCode: 500);
 }
 
+/// 캘린더 3라운드: 1 = 레이스까지, 2 = 연습만(본 레이스 없음), 3 = 달리지 않음.
+const List<SeasonCalendarRound> _calendar = [
+  SeasonCalendarRound(
+    round: 1,
+    trackId: 't1',
+    trackName: 'Bahrain',
+    countryCode: 'BH',
+    weekendId: 'w1',
+    raceSessionId: 'r1',
+    firstSessionId: 'q1',
+    myTeamName: 'Ferrari',
+    myTeamColor: '#E8002D',
+    racePosition: 4,
+    points: 12,
+    qualiPosition: 2,
+    raceAiDifficulty: 100,
+    qualiAiDifficulty: 105,
+  ),
+  SeasonCalendarRound(
+    round: 2,
+    trackId: 't2',
+    trackName: 'Jeddah',
+    countryCode: 'SA',
+    weekendId: 'w2',
+    firstSessionId: 'p2',
+    myTeamName: 'Ferrari',
+    myTeamColor: '#E8002D',
+  ),
+  SeasonCalendarRound(round: 3, trackId: 't3', trackName: 'Suzuka', countryCode: 'JP', myTeamName: 'Ferrari'),
+];
+
 /// 라운드 2개 · 드라이버 3명(AI 2명 + 나) · 팀 2개.
-SeasonDetail _detail() => seasonDetailOf(
-      'se1',
+SeasonDetail _detail({String id = 'se1', int seasonNumber = 1}) => seasonDetailOf(
+      id,
+      calendar: _calendar,
       season: seasonOf(
-        'se1',
+        id,
         gameMode: 'DriverCareer',
         roundCount: 2,
         myPosition: 3,
         myPoints: 87,
         firstSessionAt: DateTime(2026, 10, 17, 12),
         lastSessionAt: DateTime(2026, 10, 24, 12),
+        seasonNumber: seasonNumber,
+        myDriverName: 'GOM',
       ),
       rounds: [
         seasonRoundOf(
@@ -136,6 +171,7 @@ Future<GoRouter> _pumpPage(
   SeasonsRepository repo, {
   String initialLocation = '/seasons/se1',
   Size size = const Size(1000, 2400),
+  ThemeData? theme,
 }) async {
   setViewSize(tester, size);
   final router = GoRouter(initialLocation: initialLocation, routes: [
@@ -154,7 +190,7 @@ Future<GoRouter> _pumpPage(
 
   await tester.pumpWidget(ProviderScope(
     overrides: [seasonsRepositoryProvider.overrideWithValue(repo)],
-    child: MaterialApp.router(routerConfig: router),
+    child: MaterialApp.router(routerConfig: router, theme: theme),
   ));
   await tester.pumpAndSettle();
   return router;
@@ -177,57 +213,90 @@ Color? _rowColor(WidgetTester t, String key) =>
 
 void main() {
   group('SeasonDetailPage - Season 탭', () {
-    testWidgets('SeasonDetail_DefaultTab_IsSeason_ShowsRoundsAndSessionChips', (t) async {
+    testWidgets('SeasonDetail_DefaultTab_IsSeason_ShowsCalendarTable', (t) async {
       final repo = FakeSeasonsRepository(details: {'se1': _detail()});
       final router = await _pumpPage(t, repo);
 
       expect(repo.detailRequests, ['se1']);
       expect(_selectedTab(t), 0);
-      expect(find.text('R1 · Bahrain'), findsOneWidget);
-      expect(find.text('R2 · Jeddah'), findsOneWidget);
-      expect(find.text('2026.10.17'), findsOneWidget); // 1라운드 날짜
-      expect(find.text('2026.10.24'), findsOneWidget); // 2라운드 날짜
-      expect(find.text('NORRIS'), findsOneWidget); // 1라운드 우승자
-      expect(find.text('12 pts'), findsOneWidget); // 1라운드 내 점수
-
-      // 1라운드 칩: 예선 Q1(내 순위 P2) · 레이스 R(P4). 2라운드: R(DNF) · 연습 P1(내 결과 없음).
-      expect(find.text('Q1'), findsOneWidget);
-      expect(find.text('P2'), findsOneWidget);
-      expect(find.text('R'), findsNWidgets(2));
-      expect(find.text('P4'), findsOneWidget);
-      expect(find.text('DNF'), findsOneWidget);
-      expect(find.text('P1'), findsOneWidget);
+      for (final header in ['GRAND PRIX', 'TEAM', 'RACE', 'PTS (87)', 'QUALI', 'DIFF']) {
+        expect(find.text(header), findsOneWidget, reason: header);
+      }
+      expect(find.text('Bahrain'), findsOneWidget);
+      expect(find.text('Jeddah'), findsOneWidget);
+      expect(find.text('Suzuka'), findsOneWidget);
+      expect(find.text('Ferrari'), findsNWidgets(3)); // 달리지 않은 라운드도 시즌 팀
+      expect(find.text('P4'), findsOneWidget); // 1라운드 레이스
+      expect(find.text('P2'), findsOneWidget); // 1라운드 예선
+      expect(find.text('12'), findsOneWidget);
+      expect(find.text('100'), findsOneWidget);
+      expect(find.text('105'), findsOneWidget);
+      expect(find.text('-'), findsNWidgets(4)); // 2·3라운드 DIFF(레이스 / 예선)
 
       // Results·Standings 내용은 아직 없다.
       expect(find.text('Pts'), findsNothing);
       expect(find.text(_standingsNote), findsNothing);
 
-      await t.tap(find.widgetWithText(ActionChip, 'Q1'));
+      await t.tap(find.text('Bahrain'));
       await t.pumpAndSettle();
 
-      // 주소가 곧 화면이다(새로고침·공유). from=season은 세션 화면의 뒤로 가기가 이 시즌으로 돌아오게 하는 표시다.
-      expect(_location(router), '/sessions/q1?from=season');
-      expect(find.text('session:q1'), findsOneWidget);
+      // 본 레이스로 간다. from=season은 세션 화면의 뒤로 가기가 이 시즌으로 돌아오게 하는 표시다.
+      expect(_location(router), '/sessions/r1?from=season');
+      expect(find.text('session:r1'), findsOneWidget);
     });
 
-    testWidgets('SeasonDetail_Season_NoWinnerNoPoints_ShowDash', (t) async {
+    testWidgets('SeasonDetail_Season_NoRace_LinksFirstSession_UndrivenNotTappable', (t) async {
+      final repo = FakeSeasonsRepository(details: {'se1': _detail()});
+      final router = await _pumpPage(t, repo);
+
+      expect(find.byKey(const ValueKey('season-calendar-link-3')), findsNothing);
+
+      await t.tap(find.text('Jeddah'));
+      await t.pumpAndSettle();
+
+      expect(_location(router), '/sessions/p2?from=season');
+    });
+
+    testWidgets('SeasonDetail_Header_ShowsSeasonTitleAndDriverName', (t) async {
       final repo = FakeSeasonsRepository(details: {'se1': _detail()});
       await _pumpPage(t, repo);
 
-      // 2라운드: 본 레이스 기록이 없어 우승자 -, 내 결과가 없어 점수 -.
-      final round2 = find.ancestor(of: find.text('R2 · Jeddah'), matching: find.byKey(const ValueKey('season-round-2')));
-      expect(round2, findsOneWidget);
-      expect(find.descendant(of: round2, matching: find.text('-')), findsNWidgets(2));
+      expect(find.text('Driver Career Season 1'), findsOneWidget);
+      expect(find.text('GOM'), findsOneWidget);
     });
 
-    testWidgets('SeasonDetail_Header_ShowsTitleModePeriodAndMyStanding', (t) async {
-      final repo = FakeSeasonsRepository(details: {'se1': _detail()});
-      await _pumpPage(t, repo);
+    testWidgets('SeasonDetail_SeasonPicker_ListsMySeasons_AndSwitches', (t) async {
+      final repo = FakeSeasonsRepository(
+        seasons: [_detail(id: 'se2', seasonNumber: 2).season, _detail().season],
+        details: {'se1': _detail(), 'se2': _detail(id: 'se2', seasonNumber: 2)},
+      );
+      final router = await _pumpPage(t, repo);
 
-      expect(find.text('Driver Career · 2026.10.17'), findsOneWidget);
-      expect(find.text('2026.10.17 ~ 2026.10.24'), findsOneWidget);
-      expect(find.text('P3 · 87 pts'), findsOneWidget);
-      expect(find.text('2 rounds'), findsOneWidget);
+      await t.tap(find.byKey(const ValueKey('track-picker')));
+      await t.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('track-option-se2')), findsOneWidget);
+      expect(find.byKey(const ValueKey('track-option-se1')), findsOneWidget);
+      expect(find.byKey(const ValueKey('track-flag-fallback')), findsNothing); // 국기 없음
+
+      await t.tap(find.byKey(const ValueKey('track-option-se2')));
+      await t.pumpAndSettle();
+
+      expect(_location(router), '/seasons/se2?tab=season');
+      expect(find.text('Driver Career Season 2'), findsOneWidget);
+    });
+
+    testWidgets('SeasonDetail_Season_375_HidesTeamAndDiff_NoOverflow_BothThemes', (t) async {
+      for (final theme in [AppTheme.dark, AppTheme.light]) {
+        final repo = FakeSeasonsRepository(details: {'se1': _detail()});
+        await _pumpPage(t, repo, size: const Size(375, 2400), theme: theme);
+
+        expect(t.takeException(), isNull);
+        expect(find.text('TEAM'), findsNothing);
+        expect(find.text('DIFF'), findsNothing);
+        expect(find.text('PTS (87)'), findsOneWidget);
+        expect(find.text('Bahrain'), findsOneWidget);
+      }
     });
 
     testWidgets('SeasonDetail_Back_ReturnsToSeasonList', (t) async {
@@ -256,7 +325,7 @@ void main() {
       expect(find.text('ME'), findsOneWidget);
       expect(find.text('ALONSO'), findsOneWidget);
       // Season 탭 내용은 없다.
-      expect(find.text('R1 · Bahrain'), findsNothing);
+      expect(find.text('GRAND PRIX'), findsNothing);
 
       // 칸: 순위 · DNF · 기록 없음(-).
       expect(find.descendant(of: _cell('driver:4', 1), matching: find.text('1')), findsOneWidget);
@@ -385,7 +454,7 @@ void main() {
       expect(find.text('McLaren'), findsNWidgets(2)); // 드라이버 표(NORRIS)와 팀 표
       expect(find.text('55'), findsOneWidget);
       expect(find.text(_standingsNote), findsOneWidget);
-      expect(find.text('R1 · Bahrain'), findsNothing);
+      expect(find.text('GRAND PRIX'), findsNothing);
     });
 
     testWidgets('SeasonDetail_Standings_TeamColorBarsAndMyRowHighlight', (t) async {
@@ -414,7 +483,7 @@ void main() {
       await _pumpPage(t, repo, size: const Size(320, 2400));
 
       expect(t.takeException(), isNull);
-      expect(find.text('R1 · Bahrain'), findsOneWidget);
+      expect(find.text('GRAND PRIX'), findsOneWidget);
     });
 
     testWidgets('SeasonDetail_UnknownTab_FallsBackToSeason', (t) async {
@@ -422,7 +491,7 @@ void main() {
       await _pumpPage(t, repo, initialLocation: '/seasons/se1?tab=weird');
 
       expect(_selectedTab(t), 0);
-      expect(find.text('R1 · Bahrain'), findsOneWidget);
+      expect(find.text('GRAND PRIX'), findsOneWidget);
       expect(find.text('Pts'), findsNothing);
     });
 
@@ -460,7 +529,7 @@ void main() {
 
       expect(_location(router), '/seasons/se1?tab=season');
       expect(_selectedTab(t), 0);
-      expect(find.text('R1 · Bahrain'), findsOneWidget);
+      expect(find.text('GRAND PRIX'), findsOneWidget);
       expect(repo.detailRequests, ['se1']); // 탭을 바꿔도 다시 불러오지 않는다.
 
       // 대조: neglect 없이 이동하면 기록에 새 항목이 쌓인다(위 검증이 의미 있는 이유).
@@ -507,7 +576,7 @@ void main() {
       await t.tap(find.text('다시 시도'));
       await t.pumpAndSettle();
 
-      expect(find.text('R1 · Bahrain'), findsOneWidget);
+      expect(find.text('GRAND PRIX'), findsOneWidget);
     });
 
     testWidgets('SeasonDetail_ServerError_ShowsMessageAndRetry', (t) async {
