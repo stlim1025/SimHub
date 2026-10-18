@@ -5,16 +5,18 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:simcenter_app/core/network/api_exception.dart';
 import 'package:simcenter_app/core/theme/app_colors.dart';
+import 'package:simcenter_app/core/theme/app_theme.dart';
+import 'package:simcenter_app/features/laps/domain/lap_models.dart';
 import 'package:simcenter_app/features/sessions/data/sessions_repository.dart';
 import 'package:simcenter_app/features/sessions/domain/session_models.dart';
+import 'package:simcenter_app/features/sessions/presentation/engine_painter.dart';
 import 'package:simcenter_app/features/sessions/presentation/session_detail_page.dart';
-import 'package:simcenter_app/features/sessions/presentation/session_results_table.dart';
+import 'package:simcenter_app/features/sessions/presentation/stint_line_chart.dart';
 import 'package:simcenter_app/features/sessions/presentation/tyre_stints_view.dart';
 
 import 'support/fakes.dart';
 
-const _allHeaders = ['Pos', 'Driver', 'Team', 'Grid', 'Laps', 'Time/Gap', 'Best', 'Tyres', 'Pits', 'Pen', 'Pts'];
-const _compactHiddenHeaders = ['Grid', 'Tyres', 'Pits', 'Pen'];
+const _ferrari = LapTeam(name: 'Ferrari', color: '#E8002D');
 
 /// 첫 호출만 실패하고 이후엔 정상 응답하는 저장소(다시 시도 검증용).
 class _FlakySessionsRepository extends FakeSessionsRepository {
@@ -37,43 +39,119 @@ class _ServerErrorRepository extends FakeSessionsRepository {
 }
 
 List<SessionResult> _raceResults() => [
-      resultOf(
-        1,
-        name: 'NORRIS',
-        isFastestLap: true,
-        bestLapTimeMs: 104987,
-        totalRaceTimeMs: 1598765,
-        points: 25,
-      ),
+      resultOf(1, name: 'NORRIS', raceNumber: 4, gridPosition: 2, bestLapTimeMs: 104987, totalRaceTimeMs: 1598765, points: 25),
       resultOf(
         2,
         name: 'ME',
         isPlayer: true,
         isAiControlled: false,
-        bestLapTimeMs: 105321,
-        totalRaceTimeMs: 1610000,
-        penaltiesTimeMs: 5000,
-        numPenalties: 1,
+        raceNumber: 16,
+        teamName: 'Ferrari',
+        teamColor: '#E8002D',
+        totalRaceTimeMs: 1601074,
+        gapMs: 2309,
+        positionChange: -1,
         points: 18,
-        tyreStints: const [
-          TyreStintView(endLap: 7, visualCompound: 'Medium', actualCompound: 'C3'),
-          TyreStintView(endLap: 15, visualCompound: 'Hard', actualCompound: 'C2'),
-        ],
       ),
-      resultOf(3, name: 'PIASTRI', numLaps: 14, bestLapTimeMs: 106000, totalRaceTimeMs: 1500000, points: 15),
+      resultOf(3, name: 'PIASTRI', numLaps: 14, positionChange: 9, points: 15),
       resultOf(4, name: 'ALONSO', resultStatus: 'DidNotFinish', numLaps: 3),
     ];
+
+/// 계약(docs/15 §11.4)의 모든 카드 데이터가 있는 레이스.
+SessionDetail _fullDetail({String sessionType = 'Race', String sessionKind = 'Race'}) => detailOf(
+      'd1',
+      results: _raceResults(),
+      trackName: 'Jeddah',
+      sessionType: sessionType,
+      sessionKind: sessionKind,
+      countryCode: 'SA',
+      myTeam: _ferrari,
+      seasonNumber: 1,
+      seasonId: 'season-1',
+      round: 3,
+      aiDifficulty: 105,
+      weather: 'Clear',
+      myBestLap: const SessionBestLap(lapId: 'lap-9', lapTimeMs: 90088),
+      setup: const {'frontWing': 10, 'rearWing': 8, 'tyrePressureFL': 22.5, 'mystery': 3},
+      laps: const [
+        SessionLap(
+          lapNumber: 1,
+          position: 11,
+          positionChange: 1,
+          visualCompound: 'Medium',
+          lapTimeMs: 95000,
+          gapToBestMs: 4912,
+          sectorsMs: [30000, 32000, 33000],
+          lapId: 'lap-1',
+        ),
+        SessionLap(
+          lapNumber: 2,
+          position: 10,
+          positionChange: 1,
+          visualCompound: 'Medium',
+          lapTimeMs: 90088,
+          gapToBestMs: 0,
+          sectorsMs: [29000, 30500, 30588],
+          isBestLap: true,
+          bestSectors: [true, false, false],
+          lapId: 'lap-9',
+        ),
+        SessionLap(
+          lapNumber: 3,
+          position: 18,
+          positionChange: -8,
+          visualCompound: 'Soft',
+          inPit: true,
+          lapTimeMs: 110123,
+          gapToBestMs: 20035,
+          isValid: false,
+        ),
+      ],
+      engineWear: const EngineWear(
+        ice: 12,
+        turboCharger: 8,
+        mguH: 15,
+        mguK: 6,
+        energyStore: 4,
+        controlElectronics: 3,
+        gearbox: 52,
+        engineDamage: 0,
+      ),
+      tyreStints: const [
+        SessionTyreStint(visualCompound: 'Medium', startLap: 1, endLap: 2, laps: [
+          StintLap(lapInStint: 1, lapTimeMs: 95000, tyreLifeRemaining: 97),
+          StintLap(lapInStint: 2, lapTimeMs: 90088, tyreLifeRemaining: 93),
+        ]),
+        SessionTyreStint(visualCompound: 'Soft', startLap: 3, endLap: 3, laps: [
+          StintLap(lapInStint: 1, lapTimeMs: 110123, tyreLifeRemaining: 99),
+        ]),
+      ],
+      penalties: const [
+        SessionPenalty(
+          lap: 2,
+          carIndex: 1,
+          driverName: 'ME',
+          isPlayer: true,
+          teamColor: '#E8002D',
+          infringement: 'Small Collision',
+          penalty: 'Warning',
+        ),
+        SessionPenalty(lap: 3, carIndex: 0, driverName: 'NORRIS', infringement: 'Corner Cutting', penalty: 'Time Penalty', timeS: 5),
+      ],
+    );
 
 Future<GoRouter> _pumpPage(
   WidgetTester tester,
   SessionsRepository repo, {
   String sessionId = 'd1',
   String? initialLocation,
-  Size size = const Size(1000, 2400),
+  Size size = const Size(1200, 4000),
+  ThemeData? theme,
 }) async {
   setViewSize(tester, size);
   final router = GoRouter(initialLocation: initialLocation ?? '/sessions/$sessionId', routes: [
     GoRoute(path: '/sessions', builder: (_, _) => const Text('sessions-list')),
+    GoRoute(path: '/laps/:lapId', builder: (_, state) => Text('lap:${state.pathParameters['lapId']}')),
     GoRoute(
       path: '/seasons/:seasonId',
       builder: (_, state) => Text('season:${state.pathParameters['seasonId']}:${state.uri.queryParameters['tab']}'),
@@ -91,165 +169,297 @@ Future<GoRouter> _pumpPage(
 
   await tester.pumpWidget(ProviderScope(
     overrides: [sessionsRepositoryProvider.overrideWithValue(repo)],
-    child: MaterialApp.router(routerConfig: router),
+    child: MaterialApp.router(theme: theme, routerConfig: router),
   ));
   await tester.pumpAndSettle();
   return router;
 }
 
-/// 표만 [width] 폭 안에 올린다(콘텐츠 폭 판정 검증용).
-Future<void> _pumpTable(
-  WidgetTester tester,
-  List<SessionResult> results, {
-  required double width,
-  bool isRace = true,
-}) async {
-  setViewSize(tester, const Size(1400, 1600));
-  await tester.pumpWidget(MaterialApp(
-    home: Scaffold(
-      body: SingleChildScrollView(
-        child: Align(
-          alignment: Alignment.topLeft,
-          child: SizedBox(width: width, child: SessionResultsTable(results: results, isRace: isRace)),
-        ),
-      ),
-    ),
-  ));
-  await tester.pumpAndSettle();
-}
+FakeSessionsRepository _repo(SessionDetail detail) => FakeSessionsRepository(details: {'d1': detail});
 
 String _location(GoRouter router) => router.routeInformationProvider.value.uri.toString();
 
-double _top(WidgetTester t, String text) => t.getTopLeft(find.text(text)).dy;
-
-/// 결과 표(DataTable)의 데이터 행들.
-List<DataRow> _dataRows(WidgetTester t) => t.widget<DataTable>(find.byType(DataTable)).rows;
+Offset _topLeft(WidgetTester t, String text) => t.getTopLeft(find.text(text).first);
 
 Color? _textColor(WidgetTester t, String text) => t.widget<Text>(find.text(text)).style?.color;
 
+Finder _rowOf(String key) => find.byKey(ValueKey(key));
+
 void main() {
-  group('SessionDetailPage', () {
-    testWidgets('SessionDetail_ShowsResultsInOrder_WithAiBadgeAndMyRowHighlight', (t) async {
-      final repo = FakeSessionsRepository(details: {'d1': detailOf('d1', results: _raceResults())});
-      await _pumpPage(t, repo);
+  group('SessionDetailPage 헤더·레이아웃', () {
+    testWidgets('헤더: 국기 + 트랙 + 세션 종류 이름', (t) async {
+      await _pumpPage(t, _repo(_fullDetail(sessionType: 'Qualifying', sessionKind: 'Qualifying3')));
 
-      expect(repo.detailRequests, ['d1']);
-      expect(_top(t, 'NORRIS'), lessThan(_top(t, 'ME')));
-      expect(_top(t, 'ME'), lessThan(_top(t, 'PIASTRI')));
-      expect(_top(t, 'PIASTRI'), lessThan(_top(t, 'ALONSO')));
-
-      // AI 배지는 AI 차에만(내 차 제외).
-      expect(find.text('AI'), findsNWidgets(3));
-
-      // 내 행만 강조된다.
-      final rows = _dataRows(t);
-      expect(rows, hasLength(4));
-      expect([for (final r in rows) r.color?.resolve({}) != null], [false, true, false, false]);
+      expect(find.byKey(const ValueKey('track-flag-SA')), findsOneWidget);
+      expect(find.text('Jeddah'), findsOneWidget);
+      expect(find.text('Qualifying 3'), findsNWidgets(2)); // 헤더 + Details Session Type
     });
 
-    testWidgets('SessionDetail_Header_ShowsTrackLabelModeDateAiAndRound', (t) async {
-      final repo = FakeSessionsRepository(details: {
-        'd1': detailOf(
-          'd1',
-          results: _raceResults(),
-          trackName: 'Spa',
-          sessionKind: 'Qualifying3',
-          sessionType: 'Qualifying',
-          gameMode: 'MyTeamCareer',
-          seasonId: 'season-1',
-          round: 7,
-          aiDifficulty: 85,
-        ),
-      });
-      await _pumpPage(t, repo);
+    testWidgets('일곱 카드 제목이 모두 보인다', (t) async {
+      await _pumpPage(t, _repo(_fullDetail()));
 
-      expect(find.text('Spa'), findsOneWidget);
-      expect(find.text('Q3'), findsOneWidget);
-      expect(find.text('My Team'), findsOneWidget);
-      expect(find.text(DateFormat('yyyy-MM-dd HH:mm').format(DateTime.utc(2026, 10, 12, 9).toLocal())), findsOneWidget);
-      expect(find.text('85'), findsOneWidget);
-      expect(find.text('R7'), findsOneWidget);
-    });
-
-    testWidgets('SessionDetail_SeasonRound_LinksToSeasonTab', (t) async {
-      final repo = FakeSessionsRepository(details: {
-        'd1': detailOf('d1', results: _raceResults(), seasonId: 'season-1', round: 7),
-      });
-      final router = await _pumpPage(t, repo);
-
-      expect(find.ancestor(of: find.text('R7'), matching: find.byType(InkWell)), findsOneWidget);
-
-      await t.tap(find.text('R7'));
-      await t.pumpAndSettle();
-
-      expect(_location(router), '/seasons/season-1?tab=season');
-      expect(find.text('season:season-1:season'), findsOneWidget);
-    });
-
-    testWidgets('SessionDetail_NoSeasonNoAi_OmitsRoundAndAiDifficulty', (t) async {
-      final repo = FakeSessionsRepository(details: {
-        'd1': detailOf('d1', results: _raceResults(), seasonId: null, round: null, aiDifficulty: 0),
-      });
-      await _pumpPage(t, repo);
-
-      expect(find.textContaining('AI 난이도'), findsNothing);
-      expect(find.text('시즌'), findsNothing);
-      expect(find.textContaining(RegExp(r'^R\d+$')), findsNothing);
-    });
-
-    testWidgets('SessionDetail_Race_ShowsTimeGapLapsDownStatusPenAndPoints', (t) async {
-      final repo = FakeSessionsRepository(details: {'d1': detailOf('d1', results: _raceResults())});
-      await _pumpPage(t, repo);
-
-      expect(find.text('26:38.765'), findsOneWidget); // 기준 행: 총 시간(패널티 0)
-      expect(find.text('+16.235'), findsOneWidget); // (1610000 + 5000) - 1598765
-      expect(find.text('+1 Lap'), findsOneWidget);
-      expect(find.text('DNF'), findsOneWidget);
-      expect(find.text('+5s (1)'), findsOneWidget);
-      for (final points in ['25', '18', '15']) {
-        expect(find.text(points), findsWidgets, reason: points);
+      for (final title in [
+        'Details',
+        'Final Classification',
+        'Laps',
+        'Engine Wear',
+        'Tyre Stints: Tyre Life Remaining',
+        'Tyre Stints: Lap Times',
+        'Penalties',
+      ]) {
+        expect(find.text(title), findsOneWidget, reason: title);
       }
     });
 
-    testWidgets('SessionDetail_Qualifying_ShowsBestLapAndGapToFastest', (t) async {
-      final repo = FakeSessionsRepository(details: {
-        'd1': detailOf('d1', sessionType: 'Qualifying', sessionKind: 'Qualifying1', results: [
-          resultOf(1, name: 'A', bestLapTimeMs: 81500),
-          resultOf(2, name: 'B', bestLapTimeMs: 81234, isFastestLap: true),
-          resultOf(3, name: 'C', resultStatus: 'Retired'),
-        ]),
+    testWidgets('900px 이상은 2열(Details 옆 Final Classification), 미만은 1열', (t) async {
+      await _pumpPage(t, _repo(_fullDetail()), size: const Size(1200, 4000));
+      expect(_topLeft(t, 'Final Classification').dy, _topLeft(t, 'Details').dy);
+      expect(_topLeft(t, 'Final Classification').dx, greaterThan(_topLeft(t, 'Details').dx));
+
+      await _pumpPage(t, _repo(_fullDetail()), size: const Size(800, 6000));
+      expect(_topLeft(t, 'Final Classification').dy, greaterThan(_topLeft(t, 'Details').dy));
+      expect(_topLeft(t, 'Laps').dy, greaterThan(_topLeft(t, 'Final Classification').dy));
+    });
+
+    for (final light in [false, true]) {
+      testWidgets('375px에서 넘치지 않는다(${light ? 'light' : 'dark'}, 전체 데이터·빈 데이터)', (t) async {
+        // AppTheme은 글꼴을 불러오므로 테스트 안에서 만든다.
+        final theme = light ? AppTheme.light : AppTheme.dark;
+        await _pumpPage(t, _repo(_fullDetail()), size: const Size(375, 8000), theme: theme);
+        expect(t.takeException(), isNull);
+
+        await _pumpPage(t, _repo(detailOf('d1')), size: const Size(375, 4000), theme: theme);
+        expect(t.takeException(), isNull);
       });
-      await _pumpPage(t, repo);
+    }
+  });
 
-      // 시간 열: 가장 빠른 행(B)은 베스트 랩, A는 차이, C는 상태.
-      expect(find.text('+0.266'), findsOneWidget);
-      expect(find.text('RET'), findsOneWidget);
-      // 베스트 열과 시간 열 모두에 1:21.234가 보인다.
-      expect(find.text('1:21.234'), findsNWidgets(2));
+  group('Details 카드', () {
+    testWidgets('값: 난이도·날씨·팀·세션 종류·모드+시즌·날짜·라운드', (t) async {
+      await _pumpPage(t, _repo(_fullDetail()));
+
+      expect(find.text('105'), findsOneWidget);
+      expect(find.text('Clear'), findsOneWidget);
+      expect(find.descendant(of: _rowOf('detail-row-Team'), matching: find.text('Ferrari')), findsOneWidget);
+      expect(find.descendant(of: _rowOf('detail-row-Session Type'), matching: find.text('Race')), findsOneWidget);
+      expect(find.text('Driver Career Season 1'), findsOneWidget);
+      expect(find.text(DateFormat('yyyy-MM-dd HH:mm').format(DateTime.utc(2026, 10, 12, 9).toLocal())), findsOneWidget);
+      expect(find.text('R3'), findsOneWidget);
     });
 
-    testWidgets('SessionDetail_FastestLap_UsesFastestColor', (t) async {
-      final repo = FakeSessionsRepository(details: {'d1': detailOf('d1', results: _raceResults())});
-      await _pumpPage(t, repo);
+    testWidgets('Best Lap Time을 누르면 그 랩 상세로 간다', (t) async {
+      final router = await _pumpPage(t, _repo(_fullDetail()));
 
-      expect(_textColor(t, '1:44.987'), AppColors.fastestLap);
-      expect(_textColor(t, '1:45.321'), isNot(AppColors.fastestLap));
+      await t.tap(find.descendant(of: _rowOf('detail-row-Best Lap Time'), matching: find.text('1:30.088')));
+      await t.pumpAndSettle();
+
+      expect(_location(router), '/laps/lap-9');
     });
 
-    testWidgets('SessionDetail_TeamColor_UsesApiHexOrMutedFallback', (t) async {
-      final repo = FakeSessionsRepository(details: {
-        'd1': detailOf('d1', results: [
-          resultOf(1, teamColor: '#FF8000'),
-          resultOf(2, teamColor: 'not-a-color'),
-        ]),
-      });
-      await _pumpPage(t, repo);
+    testWidgets('View Setup → 묶음별 대화상자, 모르는 키는 Other에 그대로', (t) async {
+      await _pumpPage(t, _repo(_fullDetail()));
 
-      expect(teamBarColor(t, const ValueKey('team-color-bar-0')), const Color(0xFFFF8000));
-      expect(teamBarColor(t, const ValueKey('team-color-bar-1')), AppColors.textMuted);
+      await t.tap(find.text('View Setup'));
+      await t.pumpAndSettle();
+
+      expect(find.text('Aerodynamics'), findsOneWidget);
+      expect(find.text('Front Wing Aero'), findsOneWidget);
+      expect(find.text('Tyres'), findsOneWidget);
+      expect(find.text('22.5 psi'), findsOneWidget);
+      expect(find.text('Other'), findsOneWidget);
+      expect(find.text('mystery'), findsOneWidget);
+
+      await t.tap(find.text('닫기'));
+      await t.pumpAndSettle();
+      expect(find.text('Aerodynamics'), findsNothing);
     });
 
-    testWidgets('SessionDetail_NotFound_ShowsNotFoundState', (t) async {
+    testWidgets('예선이면 같은 주말 Q1·Q2·Q3 내 순위', (t) async {
+      final detail = detailOf(
+        'd1',
+        sessionType: 'Qualifying',
+        sessionKind: 'Qualifying3',
+        qualifyingPositions: const [
+          QualifyingPosition(label: 'Q1', position: 6, sessionId: 'q1'),
+          QualifyingPosition(label: 'Q2', position: 10),
+          QualifyingPosition(label: 'Q3', position: 8),
+        ],
+      );
+      final router = await _pumpPage(t, _repo(detail));
+
+      expect(find.text('P6'), findsOneWidget);
+      expect(find.text('P10'), findsOneWidget);
+      expect(find.text('P8'), findsOneWidget);
+
+      await t.tap(find.text('P6'));
+      await t.pumpAndSettle();
+      expect(_location(router), '/sessions/q1');
+    });
+
+    testWidgets('옛 서버: 값이 없으면 -, 셋업 링크 없음, 최고 랩은 헤더 값', (t) async {
+      await _pumpPage(t, _repo(detailOf('d1', aiDifficulty: 0, myBestLapTimeMs: 91234)));
+
+      expect(find.text('View Setup'), findsNothing);
+      expect(find.text('1:31.234'), findsOneWidget);
+      for (final label in ['Setup', 'Difficulty', 'Conditions', 'Team']) {
+        expect(find.descendant(of: _rowOf('detail-row-$label'), matching: find.text('-')), findsOneWidget, reason: label);
+      }
+      expect(find.text('Driver Career'), findsOneWidget);
+    });
+
+    testWidgets('시즌 라운드 R3는 그 시즌으로 가는 링크', (t) async {
+      final router = await _pumpPage(t, _repo(_fullDetail()));
+
+      await t.tap(find.text('R3'));
+      await t.pumpAndSettle();
+
+      expect(_location(router), '/seasons/season-1?tab=season');
+    });
+  });
+
+  group('Final Classification 카드', () {
+    testWidgets('순서·번호·You·내 행 강조·변동·GAP', (t) async {
+      await _pumpPage(t, _repo(_fullDetail()));
+
+      expect(find.text('NORRIS'), findsWidgets);
+      expect(find.text('ME'), findsNothing); // 나는 You
+      expect(find.text('You'), findsNWidgets(2)); // 순위표 + 패널티
+      expect(find.descendant(of: _rowOf('classification-row-0'), matching: find.text('4')), findsWidgets);
+      expect(find.descendant(of: _rowOf('classification-row-1'), matching: find.text('+0:02.309')), findsOneWidget);
+      expect(find.descendant(of: _rowOf('classification-row-2'), matching: find.text('+1 Lap')), findsOneWidget);
+      expect(find.descendant(of: _rowOf('classification-row-3'), matching: find.text('DNF')), findsOneWidget);
+      expect(find.text('26:38.765'), findsOneWidget);
+
+      // 변동: 서버 값(ME −1 ↓, PIASTRI +9 ↑), 없으면 그리드 − 순위(NORRIS 2 − 1 = ↑1).
+      expect(find.descendant(of: _rowOf('classification-row-1'), matching: find.byIcon(Icons.arrow_downward)), findsOneWidget);
+      expect(find.descendant(of: _rowOf('classification-row-2'), matching: find.text('9')), findsOneWidget);
+      expect(find.descendant(of: _rowOf('classification-row-0'), matching: find.byIcon(Icons.arrow_upward)), findsOneWidget);
+
+      final highlighted = t.widget<Material>(
+        find.descendant(of: _rowOf('classification-row-1'), matching: find.byType(Material)).first,
+      );
+      expect(highlighted.color, AppColors.playerRow);
+    });
+
+    testWidgets('결과가 없으면 안내 문구', (t) async {
+      await _pumpPage(t, _repo(detailOf('d1')));
+
+      expect(find.text('이 세션에는 최종 순위 데이터가 없어요.'), findsOneWidget);
+    });
+  });
+
+  group('Laps 카드', () {
+    testWidgets('순위+변동·타이어·IN PIT·랩타임·GAP·섹터, 최고 랩·섹터는 보라, 무효는 빨강', (t) async {
+      await _pumpPage(t, _repo(_fullDetail()));
+
+      for (final header in ['POS.', 'TYRE', 'LAP TIME', 'SECTOR 1', 'SECTOR 2', 'SECTOR 3']) {
+        expect(find.text(header), findsOneWidget, reason: header);
+      }
+      expect(find.text('IN PIT'), findsNWidgets(2)); // 머리글 + 3랩 꼬리표
+      expect(find.text('GAP'), findsNWidgets(2)); // Final Classification + Laps
+      expect(find.descendant(of: _rowOf('session-lap-1'), matching: find.text('11')), findsOneWidget);
+      expect(find.descendant(of: _rowOf('session-lap-3'), matching: find.text('8')), findsOneWidget);
+      expect(find.descendant(of: _rowOf('session-lap-3'), matching: find.text('IN PIT')), findsOneWidget);
+      expect(find.descendant(of: _rowOf('session-lap-3'), matching: find.byType(TyreCompoundCircle)), findsOneWidget);
+      expect(find.text('+4.912'), findsOneWidget);
+      expect(find.text('30.000'), findsOneWidget);
+      expect(_textColor(t, '29.000'), AppColors.fastestLap);
+      expect(_textColor(t, '30.500'), isNot(AppColors.fastestLap));
+      expect(
+        t.widget<Text>(find.descendant(of: _rowOf('session-lap-2'), matching: find.text('1:30.088'))).style?.color,
+        AppColors.fastestLap,
+      );
+      expect(_textColor(t, '1:50.123'), AppColors.danger);
+    });
+
+    testWidgets('저장된 랩 행을 누르면 랩 상세', (t) async {
+      final router = await _pumpPage(t, _repo(_fullDetail()));
+
+      await t.tap(_rowOf('session-lap-1'));
+      await t.pumpAndSettle();
+
+      expect(_location(router), '/laps/lap-1');
+    });
+
+    testWidgets('좁으면 IN PIT·GAP·섹터를 숨긴다', (t) async {
+      await _pumpPage(t, _repo(_fullDetail()), size: const Size(500, 8000));
+
+      expect(t.takeException(), isNull);
+      for (final header in ['IN PIT', 'SECTOR 1']) {
+        expect(find.text(header), findsNothing, reason: header);
+      }
+      expect(find.text('GAP'), findsOneWidget); // Final Classification만 남는다
+      expect(find.text('LAP TIME'), findsOneWidget);
+    });
+  });
+
+  group('Engine Wear·Tyre Stints·Penalties 카드', () {
+    testWidgets('엔진 그림 + 부품 목록(%), 색은 25/50/75% 단계', (t) async {
+      await _pumpPage(t, _repo(_fullDetail()));
+
+      expect(find.byWidgetPredicate((w) => w is CustomPaint && w.painter is EnginePainter), findsOneWidget);
+      expect(find.descendant(of: _rowOf('engine-wear-ICE'), matching: find.text('12%')), findsOneWidget);
+      expect(find.descendant(of: _rowOf('engine-wear-Gearbox'), matching: find.text('52%')), findsOneWidget);
+      expect(find.descendant(of: _rowOf('engine-wear-Engine Damage'), matching: find.text('0%')), findsOneWidget);
+      final painter = t
+          .widget<CustomPaint>(find.byWidgetPredicate((w) => w is CustomPaint && w.painter is EnginePainter))
+          .painter! as EnginePainter;
+      expect(painter.partColors[EnginePart.ice.index], AppColors.wearLow);
+      expect(painter.partColors[EnginePart.gearbox.index], AppColors.wearHigh);
+    });
+
+    testWidgets('스틴트 그래프 두 장: 스틴트마다 선, 범례', (t) async {
+      await _pumpPage(t, _repo(_fullDetail()));
+
+      final charts = t.widgetList<StintLineChart>(find.byType(StintLineChart)).toList();
+      expect(charts, hasLength(2));
+      expect(charts.first.series.map((s) => s.color), [AppColors.tyreMedium, AppColors.tyreSoft]);
+      expect(charts.first.range.max, 100);
+      expect(charts.first.maxX, 2);
+      expect(find.text('Stint 1 · Medium (L1–L2)'), findsNWidgets(2));
+      expect(find.text('Lap in stint'), findsNWidgets(2));
+    });
+
+    testWidgets('패널티: 랩·You·침해·벌칙(시간이면 초)', (t) async {
+      await _pumpPage(t, _repo(_fullDetail()));
+
+      expect(find.text('Small Collision'), findsOneWidget);
+      expect(find.text('Warning'), findsOneWidget);
+      expect(find.text('Time Penalty (5s)'), findsOneWidget);
+      expect(find.text('Corner Cutting'), findsOneWidget);
+    });
+
+    testWidgets('데이터가 없으면 카드마다 안내 문구', (t) async {
+      await _pumpPage(t, _repo(detailOf('d1', results: _raceResults())));
+
+      for (final message in [
+        '이 세션에는 랩 데이터가 없어요.',
+        '이 세션에는 엔진 마모 데이터가 없어요.',
+        '이 세션에는 타이어 마모 데이터가 없어요.',
+        '이 세션에는 스틴트 랩타임 데이터가 없어요.',
+        '이 세션에는 패널티 기록이 없어요.',
+      ]) {
+        expect(find.text(message), findsOneWidget, reason: message);
+      }
+    });
+
+    test('tyreColorOf: 컴파운드 토큰, 모르면 muted', () {
+      expect(tyreColorOf('Soft'), AppColors.tyreSoft);
+      expect(tyreColorOf('Medium'), AppColors.tyreMedium);
+      expect(tyreColorOf('Hard'), AppColors.tyreHard);
+      expect(tyreColorOf('Intermediate'), AppColors.tyreIntermediate);
+      expect(tyreColorOf('Wet'), AppColors.tyreWet);
+      expect(tyreColorOf('Weird'), AppColors.textMuted);
+    });
+
+    test('stintXTicks: 10개 이하로 건너뛴다', () {
+      expect(stintXTicks(3), [1, 2, 3]);
+      expect(stintXTicks(25), [1, 4, 7, 10, 13, 16, 19, 22, 25]);
+    });
+  });
+
+  group('불러오기·뒤로 가기', () {
+    testWidgets('없는 세션은 404 상태', (t) async {
       final router = await _pumpPage(t, FakeSessionsRepository(), sessionId: 'missing');
 
       expect(find.text('찾을 수 없는 세션입니다.'), findsOneWidget);
@@ -259,15 +469,13 @@ void main() {
       await t.pumpAndSettle();
 
       expect(_location(router), '/sessions');
-      expect(find.text('sessions-list'), findsOneWidget);
     });
 
-    testWidgets('SessionDetail_LoadFails_RetryReloads', (t) async {
+    testWidgets('실패하면 다시 시도로 다시 불러온다', (t) async {
       final repo = _FlakySessionsRepository(details: {'d1': detailOf('d1', results: _raceResults())});
       await _pumpPage(t, repo);
 
       expect(find.text('다시 시도'), findsOneWidget);
-      expect(find.text('찾을 수 없는 세션입니다.'), findsNothing);
 
       await t.tap(find.text('다시 시도'));
       await t.pumpAndSettle();
@@ -275,181 +483,38 @@ void main() {
       expect(find.text('NORRIS'), findsOneWidget);
     });
 
-    testWidgets('SessionDetail_ServerError_ShowsMessageAndRetry', (t) async {
+    testWidgets('서버 오류는 메시지 + 다시 시도', (t) async {
       await _pumpPage(t, _ServerErrorRepository());
 
       expect(find.text('서버가 아파요.'), findsOneWidget);
       expect(find.text('다시 시도'), findsOneWidget);
-      expect(find.text('찾을 수 없는 세션입니다.'), findsNothing);
     });
 
-    testWidgets('SessionDetail_Back_WithoutFrom_GoesToSessionList', (t) async {
-      // 시즌 소속 세션이어도 from이 없으면 목록으로 간다(직접 열기·새로고침·목록 행).
-      final repo = FakeSessionsRepository(details: {
-        'd1': detailOf('d1', results: _raceResults(), seasonId: 'season-1', round: 3),
-      });
-      final router = await _pumpPage(t, repo);
+    testWidgets('from이 없으면 시즌 세션이어도 목록으로', (t) async {
+      final router = await _pumpPage(t, _repo(_fullDetail()));
 
       await t.tap(find.byTooltip('세션 목록'));
       await t.pumpAndSettle();
 
       expect(_location(router), '/sessions');
-      expect(find.text('sessions-list'), findsOneWidget);
     });
 
-    testWidgets('SessionDetail_Back_FromSeason_GoesToThatSeasonsSeasonTab', (t) async {
-      final repo = FakeSessionsRepository(details: {
-        'd1': detailOf('d1', results: _raceResults(), seasonId: 'season-1', round: 3),
-      });
-      final router = await _pumpPage(t, repo, initialLocation: '/sessions/d1?from=season');
+    testWidgets('from=season이면 그 시즌의 Season 탭으로', (t) async {
+      final router = await _pumpPage(t, _repo(_fullDetail()), initialLocation: '/sessions/d1?from=season');
 
-      expect(_location(router), '/sessions/d1?from=season');
       await t.tap(find.byTooltip('시즌으로'));
       await t.pumpAndSettle();
 
       expect(_location(router), '/seasons/season-1?tab=season');
-      expect(find.text('season:season-1:season'), findsOneWidget);
     });
 
-    testWidgets('SessionDetail_Back_FromSeasonButSessionHasNoSeason_GoesToSessionList', (t) async {
-      final repo = FakeSessionsRepository(details: {'d1': detailOf('d1', results: _raceResults(), gameMode: 'Online')});
-      final router = await _pumpPage(t, repo, initialLocation: '/sessions/d1?from=season');
+    testWidgets('from=season이어도 시즌 없는 세션은 목록으로', (t) async {
+      final router = await _pumpPage(t, _repo(detailOf('d1', gameMode: 'Online')), initialLocation: '/sessions/d1?from=season');
 
       await t.tap(find.byTooltip('세션 목록'));
       await t.pumpAndSettle();
 
       expect(_location(router), '/sessions');
-    });
-
-    testWidgets('SessionDetail_Back_UnknownFrom_GoesToSessionList', (t) async {
-      final repo = FakeSessionsRepository(details: {
-        'd1': detailOf('d1', results: _raceResults(), seasonId: 'season-1', round: 3),
-      });
-      final router = await _pumpPage(t, repo, initialLocation: '/sessions/d1?from=bogus');
-
-      await t.tap(find.byTooltip('세션 목록'));
-      await t.pumpAndSettle();
-
-      expect(_location(router), '/sessions');
-    });
-
-    testWidgets('SessionDetail_Narrow_HidesGridTyresPitsPen', (t) async {
-      final repo = FakeSessionsRepository(details: {'d1': detailOf('d1', results: _raceResults())});
-      await _pumpPage(t, repo, size: const Size(500, 2400));
-
-      expect(t.takeException(), isNull);
-      for (final header in _compactHiddenHeaders) {
-        expect(find.text(header), findsNothing, reason: header);
-      }
-      expect(find.text('NORRIS'), findsOneWidget);
-    });
-
-    testWidgets('SessionDetail_Full24CarGrid_DoesNotOverflowWide', (t) async {
-      final repo = FakeSessionsRepository(details: {
-        'd1': detailOf('d1', results: [
-          for (var i = 1; i <= 24; i++)
-            resultOf(
-              i,
-              name: 'A VERY LONG DRIVER NAME NUMBER $i',
-              teamName: 'A Rather Long Team Name',
-              totalRaceTimeMs: 1600000 + i * 1000,
-              bestLapTimeMs: 105000 + i,
-              tyreStints: const [
-                TyreStintView(endLap: 5, visualCompound: 'Soft', actualCompound: 'C5'),
-                TyreStintView(endLap: 10, visualCompound: 'Medium', actualCompound: 'C4'),
-                TyreStintView(endLap: 15, visualCompound: 'Hard', actualCompound: 'C3'),
-              ],
-            ),
-        ]),
-      });
-      await _pumpPage(t, repo, size: const Size(1100, 3000));
-
-      expect(t.takeException(), isNull);
-    });
-  });
-
-  group('SessionResultsTable', () {
-    testWidgets('SessionResultsTable_Wide_ShowsEveryColumn', (t) async {
-      await _pumpTable(t, _raceResults(), width: 900);
-
-      expect(t.takeException(), isNull);
-      for (final header in _allHeaders) {
-        expect(find.text(header), findsOneWidget, reason: header);
-      }
-    });
-
-    testWidgets('SessionResultsTable_Narrow_HidesGridTyresPitsPenAndStillScrolls', (t) async {
-      await _pumpTable(t, _raceResults(), width: 500);
-
-      expect(t.takeException(), isNull);
-      for (final header in _allHeaders.where((h) => !_compactHiddenHeaders.contains(h))) {
-        expect(find.text(header), findsOneWidget, reason: header);
-      }
-      for (final header in _compactHiddenHeaders) {
-        expect(find.text(header), findsNothing, reason: header);
-      }
-    });
-
-    testWidgets('SessionResultsTable_VeryNarrow_ScrollsHorizontallyWithoutOverflow', (t) async {
-      await _pumpTable(t, _raceResults(), width: 280);
-
-      expect(t.takeException(), isNull);
-      expect(find.text('NORRIS'), findsOneWidget);
-      expect(
-        find.descendant(
-          of: find.byType(SessionResultsTable),
-          matching: find.byWidgetPredicate((w) => w is SingleChildScrollView && w.scrollDirection == Axis.horizontal),
-        ),
-        findsOneWidget,
-      );
-    });
-
-    testWidgets('SessionResultsTable_Boundary_599IsCompactAnd600IsFull', (t) async {
-      await _pumpTable(t, _raceResults(), width: 599);
-      expect(find.text('Grid'), findsNothing);
-
-      await _pumpTable(t, _raceResults(), width: 600);
-      expect(find.text('Grid'), findsOneWidget);
-    });
-
-    testWidgets('SessionResultsTable_Empty_ShowsHeadersOnly', (t) async {
-      await _pumpTable(t, const [], width: 900);
-
-      expect(t.takeException(), isNull);
-      expect(find.text('Pos'), findsOneWidget);
-      expect(_dataRows(t), isEmpty);
-    });
-  });
-
-  group('TyreStintsView', () {
-    Future<void> pumpStints(WidgetTester t, List<TyreStintView> stints) => t.pumpWidget(
-          MaterialApp(home: Scaffold(body: Center(child: TyreStintsView(stints: stints)))),
-        );
-
-    testWidgets('TyreStintsView_ShowsOneCircleWithTooltipPerStint', (t) async {
-      await pumpStints(t, const [
-        TyreStintView(endLap: 7, visualCompound: 'Medium', actualCompound: 'C3'),
-        TyreStintView(endLap: 15, visualCompound: 'Soft', actualCompound: null),
-      ]);
-
-      expect(find.byTooltip('Medium (C3) · ~L7'), findsOneWidget);
-      expect(find.byTooltip('Soft · ~L15'), findsOneWidget);
-    });
-
-    testWidgets('TyreStintsView_Empty_ShowsDash', (t) async {
-      await pumpStints(t, const []);
-
-      expect(find.text('-'), findsOneWidget);
-    });
-
-    test('tyreColorOf maps each compound to its token and unknown to muted', () {
-      expect(tyreColorOf('Soft'), AppColors.tyreSoft);
-      expect(tyreColorOf('Medium'), AppColors.tyreMedium);
-      expect(tyreColorOf('Hard'), AppColors.tyreHard);
-      expect(tyreColorOf('Intermediate'), AppColors.tyreIntermediate);
-      expect(tyreColorOf('Wet'), AppColors.tyreWet);
-      expect(tyreColorOf('Unknown'), AppColors.textMuted);
-      expect(tyreColorOf('Weird'), AppColors.textMuted);
     });
   });
 }
