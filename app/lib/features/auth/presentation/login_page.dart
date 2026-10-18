@@ -30,7 +30,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) {
+    // 버튼은 진행 중 비활성이지만 키보드 엔터는 막히지 않으므로 여기서도 이중 제출을 막는다.
+    if (_submitting || !_formKey.currentState!.validate()) {
       return;
     }
     setState(() => _submitting = true);
@@ -82,6 +83,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     TextFormField(
                       controller: _email,
                       keyboardType: TextInputType.emailAddress,
+                      textInputAction: TextInputAction.next,
                       autofillHints: const [AutofillHints.email],
                       decoration: const InputDecoration(labelText: '이메일'),
                       validator: (v) {
@@ -95,6 +97,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     TextFormField(
                       controller: _password,
                       obscureText: true,
+                      // 로그인에서는 비밀번호가 마지막 입력이라 엔터가 제출, 가입에서는 닉네임으로 이동.
+                      textInputAction: _registerMode ? TextInputAction.next : TextInputAction.done,
+                      onFieldSubmitted: _registerMode ? null : (_) => _submit(),
                       autofillHints: const [AutofillHints.password],
                       decoration: const InputDecoration(labelText: '비밀번호'),
                       validator: (v) {
@@ -107,6 +112,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _displayName,
+                        textInputAction: TextInputAction.done,
+                        onFieldSubmitted: (_) => _submit(),
                         decoration: const InputDecoration(labelText: '닉네임'),
                         validator: (v) {
                           final value = (v ?? '').trim();

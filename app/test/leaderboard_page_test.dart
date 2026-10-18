@@ -26,8 +26,10 @@ Future<_Harness> _pumpLeaderboard(
   WidgetTester tester, {
   String location = '/leaderboard',
   List<RankingEntry> Function(String trackId, String period, int call)? entriesFor,
+  Size size = const Size(1000, 800),
+  TargetPlatform? platform,
 }) async {
-  setViewSize(tester, const Size(1000, 800));
+  setViewSize(tester, size);
   final repo = FakeRankingRepository(
     tracks: const [_monaco, _silverstone],
     entriesFor: entriesFor ?? (trackId, period, _) => [entryOf(1, '$trackId-$period-1위', 80000)],
@@ -48,7 +50,7 @@ Future<_Harness> _pumpLeaderboard(
       rankingRepositoryProvider.overrideWithValue(repo),
       rankingHubClientProvider.overrideWithValue(hub),
     ],
-    child: MaterialApp.router(routerConfig: router),
+    child: MaterialApp.router(theme: ThemeData(platform: platform), routerConfig: router),
   ));
   await tester.pumpAndSettle();
   return _Harness(router, repo, hub);
@@ -132,5 +134,32 @@ void main() {
     await _pumpLeaderboard(t, entriesFor: (_, _, _) => const []);
 
     expect(find.textContaining('아직 기록이 없어요'), findsOneWidget);
+  });
+  group('트랙 선택 상자와 기간 버튼', () {
+    void expectSameHeightRow(WidgetTester t) {
+      final field = find.byType(InputDecorator).first;
+      final segments = find.byType(SegmentedButton<String>);
+      expect(field, findsOneWidget);
+      expect(segments, findsOneWidget);
+      expect(t.getSize(field).height, t.getSize(segments).height);
+      expect(t.getCenter(field).dy, t.getCenter(segments).dy);
+    }
+
+    for (final platform in [TargetPlatform.windows, TargetPlatform.macOS, TargetPlatform.android, TargetPlatform.iOS]) {
+      testWidgets('${platform.name}에서도 높이가 같고 세로 중앙이 맞는다', (t) async {
+        await _pumpLeaderboard(t, platform: platform);
+
+        expectSameHeightRow(t);
+      });
+    }
+
+    testWidgets('좁은 화면에서는 줄바꿈되어도 넘치지 않고 높이가 같다', (t) async {
+      await _pumpLeaderboard(t, size: const Size(320, 800), platform: TargetPlatform.android);
+
+      expect(t.takeException(), isNull);
+      final field = find.byType(InputDecorator).first;
+      final segments = find.byType(SegmentedButton<String>);
+      expect(t.getSize(field).height, t.getSize(segments).height);
+    });
   });
 }

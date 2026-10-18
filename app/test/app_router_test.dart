@@ -4,10 +4,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:simcenter_app/core/realtime/ranking_hub_client.dart';
 import 'package:simcenter_app/core/router/app_router.dart';
+import 'package:simcenter_app/core/shell/app_shell.dart';
+import 'package:simcenter_app/features/auth/application/auth_controller.dart';
 import 'package:simcenter_app/features/auth/domain/auth_models.dart';
+import 'package:simcenter_app/features/auth/presentation/login_page.dart';
+import 'package:simcenter_app/features/dashboard/presentation/dashboard_page.dart';
 import 'package:simcenter_app/features/devices/data/devices_repository.dart';
 import 'package:simcenter_app/features/devices/presentation/telemetry_app_page.dart';
 import 'package:simcenter_app/features/laps/data/laps_repository.dart';
+import 'package:simcenter_app/features/laps/presentation/laps_page.dart';
 import 'package:simcenter_app/features/ranking/data/ranking_repository.dart';
 import 'package:simcenter_app/features/ranking/domain/ranking_models.dart';
 import 'package:simcenter_app/features/seasons/data/seasons_repository.dart';
@@ -241,5 +246,77 @@ void main() {
     expect(_location(router), '/laps/tracks/t1');
     expect(find.text('Dashboard'), findsOneWidget); // 사이드바가 그대로 있다.
     expect(find.byTooltip('트랙 목록'), findsOneWidget);
+  });
+
+  group('화면 전환 애니메이션 없음', () {
+    /// 트리 안의 모든 Navigator(루트 + 셸)가 쌓은 페이지.
+    List<Page<dynamic>> pagesOf(WidgetTester t) => [
+          for (final nav in t.widgetList<Navigator>(find.byType(Navigator))) ...nav.pages,
+        ];
+
+    testWidgets('모든 라우트 페이지는 전환 효과가 없는 NoTransitionPage다', (t) async {
+      final router = await _pumpApp(t);
+
+      for (final location in const [
+        '/',
+        '/laps',
+        '/laps/tracks/t1',
+        '/seasons',
+        '/sessions',
+        '/leaderboard',
+      ]) {
+        router.go(location);
+        await t.pumpAndSettle();
+        final pages = pagesOf(t);
+        expect(pages, isNotEmpty, reason: location);
+        expect(pages.every((p) => p is NoTransitionPage), isTrue, reason: '$location → $pages');
+      }
+    });
+
+    testWidgets('로그아웃 상태의 /login 페이지도 NoTransitionPage다', (t) async {
+      await _pumpApp(t, user: null);
+
+      expect(find.byType(LoginPage), findsOneWidget);
+      expect(pagesOf(t).every((p) => p is NoTransitionPage), isTrue);
+    });
+
+    testWidgets('사이드바 메뉴를 누르면 한 프레임 만에 새 화면으로 바뀐다', (t) async {
+      await _pumpApp(t);
+      expect(find.byType(DashboardPage), findsOneWidget);
+
+      await t.tap(find.widgetWithText(ListTile, 'Sessions'));
+      await t.pump(); // 라우터 반영
+      await t.pump(); // 새 페이지 빌드
+
+      expect(find.byType(SessionsPage), findsOneWidget);
+      expect(find.byType(DashboardPage), findsNothing); // 이전 화면이 겹쳐 남지 않는다.
+    });
+
+    testWidgets('셸 안의 상세 화면 이동도 한 프레임 만에 바뀐다', (t) async {
+      final router = await _pumpApp(t);
+      router.go('/laps');
+      await t.pumpAndSettle();
+      expect(find.byType(LapsPage), findsOneWidget);
+
+      router.go('/laps/tracks/t1');
+      await t.pump();
+      await t.pump();
+
+      expect(find.byTooltip('트랙 목록'), findsOneWidget);
+      expect(find.byType(LapsPage), findsNothing);
+    });
+
+    testWidgets('로그아웃하면 한 프레임 만에 로그인 화면으로 바뀐다', (t) async {
+      await _pumpApp(t);
+      expect(find.byType(AppShell), findsOneWidget);
+
+      final container = ProviderScope.containerOf(t.element(find.byType(AppShell)));
+      await container.read(authControllerProvider.notifier).logout();
+      await t.pump();
+      await t.pump();
+
+      expect(find.byType(LoginPage), findsOneWidget);
+      expect(find.byType(AppShell), findsNothing);
+    });
   });
 }

@@ -49,6 +49,18 @@ class _RouterNotifier extends ChangeNotifier {
   }
 }
 
+/// 화면 전환 애니메이션 없이 즉시 바뀌는 페이지. 모든 화면은 이 페이지로 연다(메뉴·상세·로그인/스플래시 이동 공통).
+/// key·restorationId는 기본 페이지(MaterialPage)와 같게 [GoRouterState.pageKey]를 쓴다.
+Page<void> _instantPage(GoRouterState state, Widget child) => NoTransitionPage<void>(
+      key: state.pageKey,
+      restorationId: state.pageKey.value,
+      child: child,
+    );
+
+/// [_instantPage]로 [build]가 만든 화면을 여는 경로.
+GoRoute _screen(String path, Widget Function(GoRouterState state) build) =>
+    GoRoute(path: path, pageBuilder: (_, state) => _instantPage(state, build(state)));
+
 final routerProvider = Provider<GoRouter>((ref) {
   final notifier = _RouterNotifier(ref);
   ref.onDispose(notifier.dispose);
@@ -58,8 +70,8 @@ final routerProvider = Provider<GoRouter>((ref) {
     refreshListenable: notifier,
     redirect: notifier.redirect,
     routes: [
-      GoRoute(path: '/splash', builder: (_, _) => const SplashPage()),
-      GoRoute(path: '/login', builder: (_, _) => const LoginPage()),
+      _screen('/splash', (_) => const SplashPage()),
+      _screen('/login', (_) => const LoginPage()),
       // 예전 랭킹 경로(P5)는 셸 안의 Leaderboard로 보낸다(11 §7.4).
       GoRoute(
         path: '/rankings/:trackId',
@@ -69,41 +81,39 @@ final routerProvider = Provider<GoRouter>((ref) {
         ).toString(),
       ),
       ShellRoute(
-        builder: (_, state, child) => AppShell(location: state.uri.path, child: child),
+        pageBuilder: (_, state, child) =>
+            _instantPage(state, AppShell(location: state.uri.path, child: child)),
         routes: [
-          GoRoute(path: '/', builder: (_, _) => const DashboardPage()),
-          GoRoute(path: '/seasons', builder: (_, _) => const SeasonsPage()),
+          _screen('/', (_) => const DashboardPage()),
+          _screen('/seasons', (_) => const SeasonsPage()),
           // 시즌 상세의 탭은 `?tab=season|results|standings`(모르는 값은 season, docs/12 §8.1).
-          GoRoute(
-            path: '/seasons/:seasonId',
-            builder: (_, state) => SeasonDetailPage(
+          _screen(
+            '/seasons/:seasonId',
+            (state) => SeasonDetailPage(
               seasonId: state.pathParameters['seasonId']!,
               tab: state.uri.queryParameters['tab'],
             ),
           ),
           // 세션 목록의 필터는 `?type=`(모르는 값은 all, docs/12 §8.1).
-          GoRoute(
-            path: '/sessions',
-            builder: (_, state) => SessionsPage(filter: state.uri.queryParameters['type']),
-          ),
+          _screen('/sessions', (state) => SessionsPage(filter: state.uri.queryParameters['type'])),
           // 세션 상세의 `?from=season`은 시즌 칩에서 열었다는 표시다(뒤로 가기가 그 시즌으로, docs/12 §8.1).
-          GoRoute(
-            path: '/sessions/:sessionId',
-            builder: (_, state) => SessionDetailPage(
+          _screen(
+            '/sessions/:sessionId',
+            (state) => SessionDetailPage(
               sessionId: state.pathParameters['sessionId']!,
               from: state.uri.queryParameters['from'],
             ),
           ),
-          GoRoute(path: '/laps', builder: (_, _) => const LapsPage()),
-          GoRoute(
-            path: '/laps/tracks/:trackId',
-            builder: (_, state) => TrackLapsPage(trackId: state.pathParameters['trackId']!),
+          _screen('/laps', (_) => const LapsPage()),
+          _screen(
+            '/laps/tracks/:trackId',
+            (state) => TrackLapsPage(trackId: state.pathParameters['trackId']!),
           ),
-          GoRoute(
-            path: '/leaderboard',
-            builder: (_, state) => LeaderboardPage(trackId: state.uri.queryParameters['trackId']),
+          _screen(
+            '/leaderboard',
+            (state) => LeaderboardPage(trackId: state.uri.queryParameters['trackId']),
           ),
-          GoRoute(path: '/telemetry-app', builder: (_, _) => const TelemetryAppPage()),
+          _screen('/telemetry-app', (_) => const TelemetryAppPage()),
         ],
       ),
     ],
