@@ -21,14 +21,27 @@ public interface ILapQueryRepository
     Task<LapRow?> GetMineAsync(Guid userId, Guid lapId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 같은 트랙·게임에서 내 가장 빠른 유효(<c>IsValid</c>) 랩(D-46의 비교 대상). 같으면 먼저 세운 랩. 없으면 null.
+    /// 비교 대상 최고 랩(docs/15 §10, D-51): <see cref="LapComparisonCriteria.Scope"/> 범위(내 유효 랩 / 모든 사용자의 랭킹 적격 랩)에서
+    /// 같은 트랙·게임 + 값이 있는 조건(팀·세션 유형·어시스트 칸)에 맞는 가장 빠른 랩. 같으면 먼저 세운 랩. 없으면 null.
     /// </summary>
-    Task<LapRow?> GetMyFastestValidAsync(
-        Guid userId, Guid trackId, string gameCode, CancellationToken cancellationToken = default);
+    Task<LapRow?> FindFastestAsync(LapComparisonCriteria criteria, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 비교할 수 있는 랩 1건(D-51): 내 랩이면 무엇이든, 남의 랩이면 랭킹 적격 랩만. 그 밖·없는 것은 null.
+    /// </summary>
+    Task<LapRow?> GetComparableAsync(Guid userId, Guid lapId, CancellationToken cancellationToken = default);
+
+    /// <summary>남의 랩 주인의 표시 이름·공개 설정(D-39). 사용자 행이 없으면 null(서비스가 익명으로 보인다).</summary>
+    Task<LapDriverRow?> GetDriverAsync(Guid userId, CancellationToken cancellationToken = default);
 
     /// <summary>랩의 스냅샷. 없으면 null. 호출자가 먼저 랩 주인을 확인한다.</summary>
     Task<LapSnapshot?> GetSnapshotAsync(Guid lapId, CancellationToken cancellationToken = default);
 
     /// <summary>내 랩의 트레이스. 트레이스가 없거나 남의 랩이면 null.</summary>
     Task<LapTelemetryTrace?> GetMyTraceAsync(Guid userId, Guid lapId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 비교할 수 있는 랩의 트레이스(D-51, <see cref="GetComparableAsync"/>와 같은 공개 규칙). 트레이스가 없거나 비교할 수 없는 랩이면 null.
+    /// </summary>
+    Task<LapTelemetryTrace?> GetComparableTraceAsync(Guid userId, Guid lapId, CancellationToken cancellationToken = default);
 }

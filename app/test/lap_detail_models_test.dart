@@ -76,7 +76,7 @@ void main() {
       expect(d.comparison?.sectors.single.sectorTimeMs, 30500);
       expect(d.comparison?.setAt, DateTime.utc(2026, 7, 20, 9));
       expect(d.comparison?.hasTrace, isTrue);
-      expect(d.isPersonalBest, isFalse);
+      expect(d.comparesWithItself, isFalse);
     });
 
     test('차량 스냅샷의 타이어·손상·연료·ERS를 읽는다(정수도 실수로)', () {
@@ -125,7 +125,7 @@ void main() {
       expect(d.comparison, isNull);
       expect(d.sessionId, isNull);
       expect(d.countryCode, isNull);
-      expect(d.isPersonalBest, isFalse);
+      expect(d.comparesWithItself, isFalse);
     });
 
     test('스냅샷 안의 필드도 각각 없거나 null일 수 있다', () {
@@ -172,12 +172,12 @@ void main() {
       expect(d.comparison?.sectors, hasLength(1));
     });
 
-    test('비교 대상이 이 랩이면 isPersonalBest가 참이다', () {
+    test('비교 대상이 이 랩이면 comparesWithItself가 참이다', () {
       final d = LapDetail.fromJson(_detailJson({
         'comparison': {'lapId': 'l1', 'lapTimeMs': 98448, 'sectors': [], 'setAt': '2026-07-26T09:00:00Z'},
       }));
 
-      expect(d.isPersonalBest, isTrue);
+      expect(d.comparesWithItself, isTrue);
       expect(d.comparison?.hasTrace, isFalse); // 빠진 hasTrace는 false.
     });
   });

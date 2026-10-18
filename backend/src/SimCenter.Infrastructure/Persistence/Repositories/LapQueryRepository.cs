@@ -8,6 +8,7 @@ namespace SimCenter.Infrastructure.Persistence.Repositories;
 
 /// <summary>
 /// ILapQueryRepository의 EF Core 구현(15 §4.2). 읽기 전용 — 모두 <c>AsNoTracking</c> + <c>UserId</c> 조건.
+/// 예외는 비교(docs/15 §10, D-51): 남의 랩은 <b>랭킹 적격</b>(이미 리더보드에 공개된 기록)만 읽는다.
 /// 랩 행은 <see cref="Project"/> 한 프로젝션으로 트랙 이름·국가, 스냅샷의 팀·날씨(left join), 트레이스 유무(EXISTS), 섹터를 함께 읽는다.
 /// 주의(Ruling R10): <c>Lap.AgentDevice</c>는 거치지 않는다 — 연결 해제된 장치의 랩이 사라진다.
 /// </summary>
@@ -47,27 +48,106 @@ public sealed class LapQueryRepository : ILapQueryRepository
     public Task<LapRow?> GetMineAsync(Guid userId, Guid lapId, CancellationToken cancellationToken = default)
         => Project(Mine(userId).Where(l => l.Id == lapId)).FirstOrDefaultAsync(cancellationToken);
 
-    public Task<LapRow?> GetMyFastestValidAsync(
-        Guid userId, Guid trackId, string gameCode, CancellationToken cancellationToken = default)
-        => Project(Mine(userId)
-                .Where(l => l.TrackId == trackId && l.GameCode == gameCode && l.IsValid)
+    public Task<LapRow?> FindFastestAsync(LapComparisonCriteria criteria, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(criteria);
+
+        // 범위(D-51): 내 유효 랩 / 모든 사용자의 랭킹 적격 랩(리더보드에 이미 공개된 기록).
+        var query = criteria.Scope == LapComparisonScope.MineValid
+            ? Mine(criteria.UserId).Where(l => l.IsValid)
+            : _context.Laps.AsNoTracking().Where(l => l.IsRankingEligible);
+        query = query.Where(l => l.TrackId == criteria.TrackId && l.GameCode == criteria.GameCode);
+
+        if (criteria.SessionType is { } sessionType)
+        {
+            query = query.Where(l => l.SessionType == sessionType);
+        }
+
+        if (criteria.TeamId is { } teamId)
+        {
+            query = query.Where(l => l.Snapshot != null && l.Snapshot.TeamId == teamId);
+        }
+
+        if (criteria.Assists is { } assists)
+        {
+            query = WhereSameAssists(query, assists);
+        }
+
+        return Project(query
                 .OrderBy(l => l.LapTimeMs)
                 .ThenBy(l => l.SetAt)
                 .ThenBy(l => l.Id)
                 .Take(1))
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public Task<LapRow?> GetComparableAsync(Guid userId, Guid lapId, CancellationToken cancellationToken = default)
+        => Project(Comparable(userId).Where(l => l.Id == lapId)).FirstOrDefaultAsync(cancellationToken);
+
+    public Task<LapDriverRow?> GetDriverAsync(Guid userId, CancellationToken cancellationToken = default)
+        => _context.Users
+            .AsNoTracking()
+            .Where(u => u.Id == userId && !u.IsDeleted) // 지운 사용자 = 행 없음 → 익명(D-39)
+            .Select(u => new LapDriverRow(u.DisplayName, u.ShowOnLeaderboard))
             .FirstOrDefaultAsync(cancellationToken);
 
     public Task<LapSnapshot?> GetSnapshotAsync(Guid lapId, CancellationToken cancellationToken = default)
         => _context.LapSnapshots.AsNoTracking().FirstOrDefaultAsync(s => s.LapId == lapId, cancellationToken);
 
     public Task<LapTelemetryTrace?> GetMyTraceAsync(Guid userId, Guid lapId, CancellationToken cancellationToken = default)
+        => TraceOf(Mine(userId), lapId, cancellationToken);
+
+    public Task<LapTelemetryTrace?> GetComparableTraceAsync(Guid userId, Guid lapId, CancellationToken cancellationToken = default)
+        => TraceOf(Comparable(userId), lapId, cancellationToken);
+
+    private Task<LapTelemetryTrace?> TraceOf(IQueryable<Lap> laps, Guid lapId, CancellationToken cancellationToken)
         => (from trace in _context.LapTelemetryTraces.AsNoTracking()
-            join lap in Mine(userId) on trace.LapId equals lap.Id
+            join lap in laps on trace.LapId equals lap.Id
             where lap.Id == lapId
             select trace)
             .FirstOrDefaultAsync(cancellationToken);
 
     private IQueryable<Lap> Mine(Guid userId) => _context.Laps.AsNoTracking().Where(l => l.UserId == userId);
+
+    /// <summary>비교할 수 있는 랩(D-51): 내 것이면 무엇이든, 남의 것이면 랭킹 적격만. 남의 비공개 랩은 없는 것과 같다.</summary>
+    private IQueryable<Lap> Comparable(Guid userId)
+        => _context.Laps.AsNoTracking().Where(l => l.UserId == userId || l.IsRankingEligible);
+
+    /// <summary>값이 있는 어시스트 칸만 같아야 한다(스냅샷 없는 랩은 제외된다).</summary>
+    private static IQueryable<Lap> WhereSameAssists(IQueryable<Lap> query, LapAssistValues a)
+    {
+        if (a.TractionControl is { } tc)
+        {
+            query = query.Where(l => l.Snapshot != null && l.Snapshot.TractionControl == tc);
+        }
+
+        if (a.AntiLockBrakes is { } abs)
+        {
+            query = query.Where(l => l.Snapshot != null && l.Snapshot.AntiLockBrakes == abs);
+        }
+
+        if (a.SteeringAssist is { } steering)
+        {
+            query = query.Where(l => l.Snapshot != null && l.Snapshot.SteeringAssist == steering);
+        }
+
+        if (a.BrakingAssist is { } braking)
+        {
+            query = query.Where(l => l.Snapshot != null && l.Snapshot.BrakingAssist == braking);
+        }
+
+        if (a.GearboxAssist is { } gearbox)
+        {
+            query = query.Where(l => l.Snapshot != null && l.Snapshot.GearboxAssist == gearbox);
+        }
+
+        if (a.DynamicRacingLine is { } line)
+        {
+            query = query.Where(l => l.Snapshot != null && l.Snapshot.DynamicRacingLine == line);
+        }
+
+        return query;
+    }
 
     /// <summary>
     /// 정렬 적용. Fastest = 유효 랩 우선 → 랩타임 오름차순 → 먼저 세운 순. 그 외(Recent 포함)는 최근 순.
@@ -100,5 +180,6 @@ public sealed class LapQueryRepository : ILapQueryRepository
             l.Sectors
                 .OrderBy(s => s.SectorNumber)
                 .Select(s => new LapSectorDto(s.SectorNumber, s.SectorTimeMs))
-                .ToList()));
+                .ToList(),
+            l.UserId));
 }

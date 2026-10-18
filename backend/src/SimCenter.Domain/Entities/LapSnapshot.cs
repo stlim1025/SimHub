@@ -65,6 +65,25 @@ public class LapSnapshot : BaseEntity
     /// </summary>
     public string? Details { get; set; }
 
+    // ── 드라이버 어시스트(docs/15 §10, D-51): Details의 status·session에서 뽑은 게임 원시 값. 비교 필터(같은 어시스트)용 열 ──
+    /// <summary>TC: 0 Off · 1 Medium · 2 Full (<c>status.tractionControl</c>).</summary>
+    public int? TractionControl { get; set; }
+
+    /// <summary>ABS: 0 Off · 1 On (<c>status.antiLockBrakes</c>).</summary>
+    public int? AntiLockBrakes { get; set; }
+
+    /// <summary>조향 보조: 0 Off · 1 On (<c>session.steeringAssist</c>).</summary>
+    public int? SteeringAssist { get; set; }
+
+    /// <summary>제동 보조: 0 Off · 1 Low · 2 Medium · 3 High (<c>session.brakingAssist</c>).</summary>
+    public int? BrakingAssist { get; set; }
+
+    /// <summary>기어: 1 Manual · 2 Manual + 추천 기어 · 3 Auto (<c>session.gearboxAssist</c>).</summary>
+    public int? GearboxAssist { get; set; }
+
+    /// <summary>레이싱 라인: 0 Off · 1 Corners only · 2 Full (<c>session.dynamicRacingLine</c>).</summary>
+    public int? DynamicRacingLine { get; set; }
+
     // ── 날씨 ──
     public Weather? Weather { get; set; }
     public int? AirTempC { get; set; }

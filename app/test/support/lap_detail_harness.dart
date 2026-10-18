@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:simcenter_app/features/auth/domain/auth_models.dart';
+import 'package:simcenter_app/features/lap_detail/application/lap_detail_providers.dart';
 import 'package:simcenter_app/features/lap_detail/data/lap_detail_repository.dart';
+import 'package:simcenter_app/features/lap_detail/domain/lap_compare.dart';
 import 'package:simcenter_app/features/lap_detail/domain/lap_detail_models.dart';
 import 'package:simcenter_app/features/lap_detail/presentation/lap_detail_page.dart';
 import 'package:simcenter_app/features/laps/data/laps_repository.dart';
@@ -72,12 +74,25 @@ const sampleCar = CarSnapshot(
 
 const sampleConditions = LapConditions(weather: 'Clear', airTempC: 21, trackTempC: 31, rainForecastPercent: 4);
 
+/// TC Medium · ABS On · 조향 Off · 제동 Off · 기어 Manual · 라인 Corners(F1Laps 스크린샷과 같은 값).
+const sampleAssists = LapAssists(
+  tractionControl: 'Medium',
+  antiLockBrakes: 'On',
+  steeringAssist: 'Off',
+  brakingAssist: 'Off',
+  gearbox: 'Manual',
+  racingLine: 'CornersOnly',
+);
+
+/// [withComparison]이 false면 비교 대상 없음 + 까닭 [unavailable](기본 noMatch).
 LapDetail sampleDetail({
   Lap? lap,
   CarSnapshot? car = sampleCar,
   LapConditions? conditions = sampleConditions,
+  LapAssists? assists = sampleAssists,
   ComparisonLap? comparison,
   bool withComparison = true,
+  ComparisonUnavailable unavailable = ComparisonUnavailable.noMatch,
   String? sessionId = 's1',
 }) =>
     lapDetailOf(
@@ -85,7 +100,9 @@ LapDetail sampleDetail({
       sessionId: sessionId,
       car: car,
       conditions: conditions,
+      assists: assists,
       comparison: withComparison ? (comparison ?? sampleComparison()) : null,
+      unavailable: withComparison ? null : unavailable,
     );
 
 String locationOf(GoRouter router) => router.routeInformationProvider.value.uri.toString();
@@ -99,6 +116,7 @@ Future<GoRouter> pumpLapDetail(
   Size size = const Size(1000, 3000),
   ThemeData? theme,
   AppUser? user = testUser,
+  Uri? shareBase,
 }) async {
   setViewSize(tester, size);
   final router = GoRouter(initialLocation: location, routes: [
@@ -110,7 +128,11 @@ Future<GoRouter> pumpLapDetail(
     GoRoute(
       path: '/laps/:lapId',
       builder: (_, state) => Scaffold(
-        body: LapDetailPage(lapId: state.pathParameters['lapId']!, tab: state.uri.queryParameters['tab']),
+        body: LapDetailPage(
+          lapId: state.pathParameters['lapId']!,
+          tab: state.uri.queryParameters['tab'],
+          compare: LapCompareSelection.fromQuery(state.uri.queryParameters),
+        ),
       ),
     ),
     GoRoute(path: '/sessions/:sessionId', builder: (_, state) => Text('session:${state.pathParameters['sessionId']}')),
@@ -122,6 +144,7 @@ Future<GoRouter> pumpLapDetail(
       lapDetailRepositoryProvider.overrideWithValue(detailRepo),
       lapsRepositoryProvider.overrideWithValue(lapsRepo ?? FakeLapsRepository()),
       rankingRepositoryProvider.overrideWithValue(FakeRankingRepository()),
+      shareBaseUriProvider.overrideWithValue(shareBase ?? Uri.parse('https://simcenter.test/')),
     ],
     child: MaterialApp.router(theme: theme, routerConfig: router),
   ));

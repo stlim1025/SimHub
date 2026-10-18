@@ -1,16 +1,21 @@
 using Microsoft.Extensions.Logging;
 using SimCenter.Application.Common.Exceptions;
 using SimCenter.Application.Common.Interfaces;
+using SimCenter.Application.Rankings;
+using SimCenter.Domain.Entities;
 
 namespace SimCenter.Application.Laps;
 
 /// <summary>
-/// 랩 상세·트레이스 조회(15 §4.2, D-46). 상세는 쿼리 4번 이하(랩 → 스냅샷 → 비교 대상 → 세션 ID, 세션 키가 없으면 3번)로 끝난다.
+/// 랩 상세·트레이스 조회(15 §4.2, D-46, §10 D-51). 상세는 쿼리 5번 이하
+/// (랩 → 스냅샷 → 비교 대상 → 남의 랩이면 주인 이름 → 세션 키가 있으면 세션 ID)로 끝난다.
 /// </summary>
 public sealed class LapQueryService : ILapQueryService
 {
     private const string LapNotFoundMessage = "랩을 찾을 수 없습니다.";
     private const string TraceNotFoundMessage = "이 랩의 텔레메트리를 찾을 수 없습니다.";
+    private const string CompareField = "compare";
+    private const string CompareLapIdField = "compareLapId";
 
     private readonly ILapQueryRepository _laps;
     private readonly IGameSessionQueryRepository _sessions;
@@ -23,13 +28,18 @@ public sealed class LapQueryService : ILapQueryService
         _logger = logger;
     }
 
-    public async Task<LapDetailResponse> GetMyLapAsync(Guid userId, Guid lapId, CancellationToken cancellationToken = default)
+    public async Task<LapDetailResponse> GetMyLapAsync(
+        Guid userId, Guid lapId, LapComparisonRequest? comparison = null, CancellationToken cancellationToken = default)
     {
+        var request = comparison ?? LapComparisonRequest.Default;
+        Validate(request);
+
         var lap = await _laps.GetMineAsync(userId, lapId, cancellationToken)
             ?? throw new NotFoundException(LapNotFoundMessage);
 
         var snapshot = await _laps.GetSnapshotAsync(lap.LapId, cancellationToken);
-        var best = await _laps.GetMyFastestValidAsync(userId, lap.TrackId, lap.GameCode, cancellationToken);
+        var assists = LapAssistValues.From(snapshot);
+        var (compared, unavailable) = await CompareAsync(userId, lap, assists, request, cancellationToken);
         var sessionId = lap.SessionKey is { } sessionKey
             ? await _sessions.FindMySessionIdAsync(userId, lap.GameCode, sessionKey, cancellationToken)
             : null;
@@ -41,14 +51,113 @@ public sealed class LapQueryService : ILapQueryService
             sessionId,
             LapDtoMapper.ToCar(snapshot),
             LapDtoMapper.ToConditions(snapshot),
-            LapDtoMapper.ToComparison(best));
+            LapAssistNames.ToDto(assists),
+            compared,
+            unavailable);
     }
 
     public async Task<LapTraceResponse> GetMyLapTraceAsync(Guid userId, Guid lapId, CancellationToken cancellationToken = default)
     {
         var trace = await _laps.GetMyTraceAsync(userId, lapId, cancellationToken)
             ?? throw new NotFoundException(TraceNotFoundMessage);
+        return ToTraceResponse(lapId, trace);
+    }
 
+    public async Task<LapTraceResponse> GetComparableLapTraceAsync(Guid userId, Guid lapId, CancellationToken cancellationToken = default)
+    {
+        // 공개 규칙(D-51): 내 랩 또는 남의 랭킹 적격 랩. 그 밖은 없는 것과 같은 404(D-34).
+        var trace = await _laps.GetComparableTraceAsync(userId, lapId, cancellationToken)
+            ?? throw new NotFoundException(TraceNotFoundMessage);
+        return ToTraceResponse(lapId, trace);
+    }
+
+    private static void Validate(LapComparisonRequest request)
+    {
+        if (!Enum.IsDefined(request.Kind))
+        {
+            throw new ValidationException(CompareField, "compare는 best·leaderboard·lap·none 중 하나여야 합니다.");
+        }
+
+        if (request.Kind == LapComparisonKind.Lap && request.CompareLapId is null)
+        {
+            throw new ValidationException(CompareLapIdField, "compare=lap이면 compareLapId가 필요합니다.");
+        }
+    }
+
+    /// <summary>고른 비교 대상(D-51). 없으면 까닭(<see cref="LapComparisonUnavailable"/>), <c>none</c>이면 둘 다 null.</summary>
+    private async Task<(LapComparisonDto? Comparison, string? Unavailable)> CompareAsync(
+        Guid userId, LapRow lap, LapAssistValues assists, LapComparisonRequest request, CancellationToken cancellationToken)
+    {
+        switch (request.Kind)
+        {
+            case LapComparisonKind.None:
+                return (null, null);
+
+            case LapComparisonKind.Lap:
+                var picked = await _laps.GetComparableAsync(userId, request.CompareLapId!.Value, cancellationToken);
+                return picked is null
+                    ? (null, LapComparisonUnavailable.NotFound)
+                    : (await ToComparisonAsync(userId, picked, LapComparisonKinds.Lap, [], cancellationToken), null);
+
+            default:
+                var (criteria, applied) = BuildCriteria(userId, lap, assists, request);
+                var fastest = await _laps.FindFastestAsync(criteria, cancellationToken);
+                var kind = request.Kind == LapComparisonKind.Leaderboard ? LapComparisonKinds.Leaderboard : LapComparisonKinds.Best;
+                return fastest is null
+                    ? (null, LapComparisonUnavailable.NoMatch)
+                    : (await ToComparisonAsync(userId, fastest, kind, applied, cancellationToken), null);
+        }
+    }
+
+    /// <summary>
+    /// 최고 랩 조건 + 실제로 적용한 필터. 이 랩의 값을 모르는 필터(팀 없음·어시스트 전부 모름)는 적용하지 않는다 —
+    /// "같은 값"을 정할 수 없어서다. 세션 유형은 늘 안다.
+    /// </summary>
+    private static (LapComparisonCriteria Criteria, IReadOnlyList<string> Applied) BuildCriteria(
+        Guid userId, LapRow lap, LapAssistValues assists, LapComparisonRequest request)
+    {
+        var applied = new List<string>();
+        var teamId = request.SameTeam ? lap.TeamId : null;
+        if (teamId is not null)
+        {
+            applied.Add(LapComparisonFilters.SameTeam);
+        }
+
+        var sessionType = request.SameSessionType ? lap.SessionType : (Domain.Enums.SessionType?)null;
+        if (sessionType is not null)
+        {
+            applied.Add(LapComparisonFilters.SameSessionType);
+        }
+
+        var assistFilter = request.SameAssists && assists.HasAny ? assists : null;
+        if (assistFilter is not null)
+        {
+            applied.Add(LapComparisonFilters.SameAssists);
+        }
+
+        var scope = request.Kind == LapComparisonKind.Leaderboard
+            ? LapComparisonScope.LeaderboardEligible
+            : LapComparisonScope.MineValid;
+        return (new LapComparisonCriteria(scope, userId, lap.TrackId, lap.GameCode, teamId, sessionType, assistFilter), applied);
+    }
+
+    /// <summary>비교 DTO. 남의 랩이면 주인 이름을 랭킹과 같은 규칙으로(D-39, 행이 없으면 익명).</summary>
+    private async Task<LapComparisonDto> ToComparisonAsync(
+        Guid userId, LapRow row, string kind, IReadOnlyList<string> applied, CancellationToken cancellationToken)
+    {
+        var isMine = row.UserId == userId;
+        string? displayName = null;
+        if (!isMine)
+        {
+            var driver = await _laps.GetDriverAsync(row.UserId, cancellationToken);
+            displayName = driver is { ShowOnLeaderboard: true } ? driver.DisplayName : RankingPrivacy.AnonymousDisplayName;
+        }
+
+        return LapDtoMapper.ToComparison(row, kind, isMine, displayName, applied);
+    }
+
+    private LapTraceResponse ToTraceResponse(Guid lapId, LapTelemetryTrace trace)
+    {
         LapTraceChannels channels;
         try
         {

@@ -278,7 +278,7 @@ void main() {
     expect(page.lapId, 'l1');
     expect(page.tab, 'best');
     expect(repo.detailRequests, ['l1']);
-    expect(find.text('Jeddah · 1:38.448'), findsOneWidget);
+    expect(find.text('Jeddah Lap 1:38.448'), findsOneWidget);
     expect(t.widget<ListTile>(find.widgetWithText(ListTile, 'Laps')).selected, isTrue);
   });
 

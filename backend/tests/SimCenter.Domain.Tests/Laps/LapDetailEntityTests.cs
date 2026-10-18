@@ -62,7 +62,7 @@ public class LapDetailEntityTests
     {
         // 열을 더하고 HasCarData에 빠뜨리면 여기서 실패한다.
         var carProperties = ValueProperties()
-            .Where(p => p.Name != nameof(LapSnapshot.TeamId) && !ConditionProperties.Contains(p.Name))
+            .Where(p => p.Name != nameof(LapSnapshot.TeamId) && !ConditionProperties.Contains(p.Name) && !AssistProperties.Contains(p.Name))
             .ToList();
         Assert.Equal(34, carProperties.Count);
 
@@ -73,6 +73,26 @@ public class LapDetailEntityTests
 
             Assert.True(snapshot.HasCarData(), $"{property.Name}이(가) car 값으로 판정되지 않았다.");
             Assert.False(snapshot.HasConditionsData(), $"{property.Name}이(가) conditions 값으로 판정됐다.");
+        }
+    }
+
+    /// <summary>어시스트 열(D-51)은 details에서 뽑은 필터용 값이라 car·conditions 영역 판정에 들지 않는다(상세의 <c>assists</c>로 따로 나간다).</summary>
+    private static readonly string[] AssistProperties =
+    [
+        nameof(LapSnapshot.TractionControl), nameof(LapSnapshot.AntiLockBrakes), nameof(LapSnapshot.SteeringAssist),
+        nameof(LapSnapshot.BrakingAssist), nameof(LapSnapshot.GearboxAssist), nameof(LapSnapshot.DynamicRacingLine),
+    ];
+
+    [Fact]
+    public void LapSnapshot_AssistColumns_AreNeitherCarNorConditionsData()
+    {
+        foreach (var name in AssistProperties)
+        {
+            var snapshot = new LapSnapshot();
+            SetSampleValue(snapshot, typeof(LapSnapshot).GetProperty(name)!);
+
+            Assert.False(snapshot.HasCarData(), name);
+            Assert.False(snapshot.HasConditionsData(), name);
         }
     }
 

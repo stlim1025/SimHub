@@ -36,12 +36,27 @@ public sealed class MeController(IRankingService rankingService, ILapQueryServic
         return Ok(result);
     }
 
-    /// <summary>내 랩 상세(스냅샷·비교 대상·세션 연결, D-46). 남의 랩이거나 없으면 404.</summary>
+    /// <summary>
+    /// 내 랩 상세(스냅샷·어시스트·비교 대상·세션 연결, D-46·D-51). 남의 랩이거나 없으면 404.
+    /// compare=best(기본)|leaderboard|lap|none, compare=lap이면 compareLapId 필수.
+    /// sameTeam·sameSessionType·sameAssists = best·leaderboard를 고를 때만 쓰는 필터(기본 false).
+    /// </summary>
     [HttpGet("laps/{lapId:guid}")]
     [ProducesResponseType(typeof(LapDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<LapDetailResponse>> GetMyLap(Guid lapId, CancellationToken cancellationToken)
-        => Ok(await lapQueryService.GetMyLapAsync(User.GetRequiredUserId(), lapId, cancellationToken));
+    public async Task<ActionResult<LapDetailResponse>> GetMyLap(
+        Guid lapId,
+        [FromQuery] LapComparisonKind compare = LapComparisonKind.Best,
+        [FromQuery] Guid? compareLapId = null,
+        [FromQuery] bool sameTeam = false,
+        [FromQuery] bool sameSessionType = false,
+        [FromQuery] bool sameAssists = false,
+        CancellationToken cancellationToken = default)
+    {
+        var comparison = new LapComparisonRequest(compare, compareLapId, sameTeam, sameSessionType, sameAssists);
+        return Ok(await lapQueryService.GetMyLapAsync(User.GetRequiredUserId(), lapId, comparison, cancellationToken));
+    }
 
     /// <summary>내 랩 텔레메트리 트레이스(D-45). 트레이스가 없거나 남의 랩이면 404.</summary>
     [HttpGet("laps/{lapId:guid}/trace")]

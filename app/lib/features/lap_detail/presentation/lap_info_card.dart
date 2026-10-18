@@ -23,7 +23,16 @@ const String _sessionLinkLabel = '세션 보기';
 
 final DateFormat _dateTimeFormat = DateFormat('yyyy-MM-dd HH:mm:ss');
 
-/// Lap Details 목록(docs/15 §2.3): Track(국기) · Team · Game Mode · Session · Lap · Lap Valid · Lap ID(복사) · Date · 세션 보기 링크.
+/// Game Mode 줄 `Driver Career · Race`(docs/15 §10, D-51): 아는 게임 모드 + 세션 유형. 둘 다 모르면 `-`(순수 함수).
+String gameModeAndSessionText(String? gameMode, String sessionType) {
+  final parts = [
+    knownGameModeLabel(gameMode),
+    sessionTypeLabel(sessionType),
+  ].whereType<String>().where((part) => part != kLapNoValueText);
+  return parts.isEmpty ? kDetailNoValueText : parts.join(' · ');
+}
+
+/// Lap Details 목록(docs/15 §2.3, §10): Track(국기) · Team · Game Mode(모드 · 세션) · Lap · Lap Valid · Lap ID(복사) · Date · 세션 보기 링크.
 class LapInfoCard extends StatelessWidget {
   const LapInfoCard({super.key, required this.detail});
 
@@ -41,8 +50,7 @@ class LapInfoCard extends StatelessWidget {
           DetailList(items: [
             DetailItem('Track', value: _TrackValue(name: lap.trackName, countryCode: detail.countryCode)),
             DetailItem('Team', value: LapTeamCell(lap: lap)),
-            DetailItem('Game Mode', text: knownGameModeLabel(lap.gameMode) ?? kDetailNoValueText),
-            DetailItem('Session', text: sessionTypeLabel(lap.sessionType)),
+            DetailItem('Game Mode', text: gameModeAndSessionText(lap.gameMode, lap.sessionType)),
             DetailItem('Lap', text: lap.lapNumber?.toString() ?? kDetailNoValueText),
             DetailItem('Lap Valid', value: _ValidValue(isValid: lap.isValid)),
             DetailItem('Lap ID', value: _LapIdValue(lapId: lap.lapId)),
