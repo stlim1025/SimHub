@@ -41,6 +41,13 @@ String formatSeasonDate(DateTime value) => _dateFormat.format(value.toLocal());
 String seasonTitle(SeasonSummary season) =>
     '${gameModeLabel(season.gameMode)} · ${formatSeasonDate(season.firstSessionAt)}';
 
+/// 헤더의 모드 칸: `Driver Career · Ferrari`(내 팀을 알면, docs/15 §12 D-55).
+String seasonModeLabel(SeasonSummary season) {
+  final mode = gameModeLabel(season.gameMode);
+  final team = season.myTeamName;
+  return team == null || team.isEmpty ? mode : '$mode · $team';
+}
+
 /// 시즌 기간: `2026.10.17 ~ 2026.11.02`. 하루 안에 끝났으면 날짜 하나만.
 String seasonPeriodLabel(SeasonSummary season) {
   final first = formatSeasonDate(season.firstSessionAt);

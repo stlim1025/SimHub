@@ -13,6 +13,8 @@ class SeasonSummary {
     required this.myPoints,
     required this.leaderName,
     required this.leaderPoints,
+    this.importedFrom,
+    this.myTeamName,
   });
 
   final String seasonId;
@@ -26,6 +28,12 @@ class SeasonSummary {
   final String? leaderName;
   final int? leaderPoints;
 
+  /// 가져온 출처(docs/15 §12, D-55 — `F1Laps`). 게임에서 기록된 시즌이면 null.
+  final String? importedFrom;
+
+  /// Standings의 내 팀 이름(헤더 "모드 · 팀"). 내 결과가 없으면 null.
+  final String? myTeamName;
+
   factory SeasonSummary.fromJson(Map<String, dynamic> json) => SeasonSummary(
         seasonId: json['seasonId'] as String,
         gameCode: json['gameCode'] as String,
@@ -37,6 +45,8 @@ class SeasonSummary {
         myPoints: json['myPoints'] as int?,
         leaderName: json['leaderName'] as String?,
         leaderPoints: json['leaderPoints'] as int?,
+        importedFrom: json['importedFrom'] as String?,
+        myTeamName: json['myTeamName'] as String?,
       );
 }
 

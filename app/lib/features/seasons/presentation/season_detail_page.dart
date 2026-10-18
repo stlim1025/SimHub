@@ -7,7 +7,6 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/not_found_state.dart';
 import '../../../core/widgets/stat.dart';
-import '../../sessions/domain/session_display.dart';
 import '../application/seasons_providers.dart';
 import '../domain/season_display.dart';
 import '../domain/season_models.dart';
@@ -176,8 +175,9 @@ class _HeaderStats extends StatelessWidget {
       spacing: _statSpacing,
       runSpacing: 8,
       children: [
-        Stat(label: '모드', value: gameModeLabel(season.gameMode)),
+        Stat(label: '모드', value: seasonModeLabel(season)),
         Stat(label: '기간', value: seasonPeriodLabel(season)),
+        if (season.importedFrom case final source?) Stat(label: '가져옴', value: source),
         Stat(label: '라운드', value: roundsLabel(season.roundCount)),
         Stat(label: '내 순위', value: myStandingLabel(season.myPosition, season.myPoints)),
       ],
