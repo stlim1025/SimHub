@@ -31,7 +31,8 @@ public class LapQueryServiceTests
         int? teamId = null, Weather? weather = null, bool hasTrace = false, string? sessionKey = null)
     {
         var row = FakeLapQueryRepository.Row(
-            Guid.NewGuid(), trackId ?? Jeddah, lapTimeMs, isValid, setAt ?? T0, teamId, weather, hasTrace, sessionKey, "DriverCareer");
+            Guid.NewGuid(), trackId ?? Jeddah, lapTimeMs, isValid, setAt ?? T0, teamId, weather, hasTrace, sessionKey, "DriverCareer",
+            userId: userId);
         _laps.Laps.Add((userId, row));
         return row;
     }
@@ -148,6 +149,7 @@ public class LapQueryServiceTests
         var detail = await _sut.GetMyLapAsync(Me, current.LapId);
 
         Assert.Null(detail.Comparison);
+        Assert.Equal(LapComparisonUnavailable.NoMatch, detail.ComparisonUnavailable);
     }
 
     [Fact]

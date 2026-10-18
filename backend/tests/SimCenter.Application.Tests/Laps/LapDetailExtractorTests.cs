@@ -259,6 +259,49 @@ public class LapDetailExtractorTests
         Assert.Contains("크기", Assert.Single(_logger.Warnings));
     }
 
+    // ── D-51: 어시스트 열 ──
+
+    [Fact]
+    public void Snapshot_Assists_AreReadFromDetails()
+    {
+        var car = new
+        {
+            teamId = 1,
+            details = new
+            {
+                status = new { tractionControl = 2, antiLockBrakes = 1 },
+                session = new { steeringAssist = 1, brakingAssist = 3, gearboxAssist = 3, dynamicRacingLine = 2 },
+            },
+        };
+
+        var snapshot = _sut.BuildSnapshot(EventId, Json(car), conditions: null, LapId, Now);
+
+        Assert.Equal(new LapAssistValues(2, 1, 1, 3, 3, 2), LapAssistValues.From(snapshot));
+    }
+
+    [Fact]
+    public void Snapshot_UnstorableDetails_StillKeepsAssists()
+    {
+        var car = new
+        {
+            teamId = 1,
+            details = new { status = new { tractionControl = 1 }, blob = new string('x', LapDetailExtractor.MaxCarDetailsBytes) },
+        };
+
+        var snapshot = _sut.BuildSnapshot(EventId, Json(car), conditions: null, LapId, Now);
+
+        Assert.Null(snapshot!.Details);
+        Assert.Equal(1, snapshot.TractionControl);
+    }
+
+    [Fact]
+    public void Snapshot_WithoutDetails_HasNoAssists()
+    {
+        var snapshot = _sut.BuildSnapshot(EventId, Json(new { teamId = 1, engineDamage = 3 }), conditions: null, LapId, Now);
+
+        Assert.Equal(LapAssistValues.Unknown, LapAssistValues.From(snapshot));
+    }
+
     private static double[] Repeat(double value) => Enumerable.Repeat(value, 10).ToArray();
 
     /// <summary>표본 10개 트레이스 + extra.</summary>

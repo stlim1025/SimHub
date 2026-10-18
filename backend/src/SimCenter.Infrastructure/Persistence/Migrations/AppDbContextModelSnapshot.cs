@@ -407,6 +407,10 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("air_temp_c");
 
+                    b.Property<int?>("AntiLockBrakes")
+                        .HasColumnType("integer")
+                        .HasColumnName("anti_lock_brakes");
+
                     b.Property<double?>("BrakeDamageFrontLeft")
                         .HasColumnType("double precision")
                         .HasColumnName("brake_damage_front_left");
@@ -423,6 +427,10 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                         .HasColumnType("double precision")
                         .HasColumnName("brake_damage_rear_right");
 
+                    b.Property<int?>("BrakingAssist")
+                        .HasColumnType("integer")
+                        .HasColumnName("braking_assist");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -434,6 +442,10 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                     b.Property<int?>("DiffuserDamage")
                         .HasColumnType("integer")
                         .HasColumnName("diffuser_damage");
+
+                    b.Property<int?>("DynamicRacingLine")
+                        .HasColumnType("integer")
+                        .HasColumnName("dynamic_racing_line");
 
                     b.Property<int?>("EngineDamage")
                         .HasColumnType("integer")
@@ -479,6 +491,10 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                         .HasColumnType("double precision")
                         .HasColumnName("fuel_start_kg");
 
+                    b.Property<int?>("GearboxAssist")
+                        .HasColumnType("integer")
+                        .HasColumnName("gearbox_assist");
+
                     b.Property<int?>("GearboxDamage")
                         .HasColumnType("integer")
                         .HasColumnName("gearbox_damage");
@@ -503,6 +519,10 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("sidepod_damage");
 
+                    b.Property<int?>("SteeringAssist")
+                        .HasColumnType("integer")
+                        .HasColumnName("steering_assist");
+
                     b.Property<int?>("TeamId")
                         .HasColumnType("integer")
                         .HasColumnName("team_id");
@@ -510,6 +530,10 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                     b.Property<int?>("TrackTempC")
                         .HasColumnType("integer")
                         .HasColumnName("track_temp_c");
+
+                    b.Property<int?>("TractionControl")
+                        .HasColumnType("integer")
+                        .HasColumnName("traction_control");
 
                     b.Property<int?>("TyreAgeLaps")
                         .HasColumnType("integer")

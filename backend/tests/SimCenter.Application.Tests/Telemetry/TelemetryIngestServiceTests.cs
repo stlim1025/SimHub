@@ -839,20 +839,30 @@ public class TelemetryIngestServiceTests
                 lap.Id, lap.TrackId, track.Name, track.CountryCode, lap.GameCode, lap.SessionType, lap.LapNumber, lap.LapTimeMs,
                 lap.IsValid, lap.IsRankingEligible, lap.SetAt, lap.GameMode, lap.SessionKey, lap.Snapshot?.TeamId,
                 lap.Snapshot?.Weather, _laps.Traces.Any(t => t.LapId == lap.Id),
-                lap.Sectors.OrderBy(s => s.SectorNumber).Select(s => new LapSectorDto(s.SectorNumber, s.SectorTimeMs)).ToList()));
+                lap.Sectors.OrderBy(s => s.SectorNumber).Select(s => new LapSectorDto(s.SectorNumber, s.SectorTimeMs)).ToList(),
+                lap.UserId));
         }
 
         public Task<(IReadOnlyList<LapRow> Items, int Total)> GetMyPageAsync(
             Guid userId, MyLapsFilter filter, MyLapsSort sort, int skip, int take, CancellationToken ct = default)
             => throw new NotImplementedException();
 
-        public Task<LapRow?> GetMyFastestValidAsync(Guid userId, Guid trackId, string gameCode, CancellationToken ct = default)
+        public Task<LapRow?> FindFastestAsync(LapComparisonCriteria criteria, CancellationToken ct = default)
+            => throw new NotImplementedException();
+
+        public Task<LapRow?> GetComparableAsync(Guid userId, Guid lapId, CancellationToken ct = default)
+            => throw new NotImplementedException();
+
+        public Task<LapDriverRow?> GetDriverAsync(Guid userId, CancellationToken ct = default)
             => throw new NotImplementedException();
 
         public Task<LapSnapshot?> GetSnapshotAsync(Guid lapId, CancellationToken ct = default)
             => throw new NotImplementedException();
 
         public Task<LapTelemetryTrace?> GetMyTraceAsync(Guid userId, Guid lapId, CancellationToken ct = default)
+            => throw new NotImplementedException();
+
+        public Task<LapTelemetryTrace?> GetComparableTraceAsync(Guid userId, Guid lapId, CancellationToken ct = default)
             => throw new NotImplementedException();
     }
 

@@ -96,8 +96,25 @@ public static class LapDtoMapper
             ? null
             : new LapConditionsDto(s.Weather?.ToString(), s.AirTempC, s.TrackTempC, s.RainForecastPercent);
 
-    public static LapComparisonDto? ToComparison(LapRow? best)
-        => best is null ? null : new LapComparisonDto(best.LapId, best.LapTimeMs, best.Sectors, best.SetAt, best.HasTrace);
+    /// <summary>비교 대상 행 → DTO(D-51). 이름 규칙은 호출자(<see cref="LapQueryService"/>)가 정한다.</summary>
+    public static LapComparisonDto ToComparison(
+        LapRow row, string kind, bool isMine, string? displayName, IReadOnlyList<string> appliedFilters)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+
+        return new LapComparisonDto(
+            kind,
+            row.LapId,
+            row.LapTimeMs,
+            row.Sectors,
+            row.SetAt,
+            row.HasTrace,
+            isMine,
+            displayName,
+            ToTeam(row.GameCode, row.TeamId),
+            row.SessionType.ToString(),
+            appliedFilters);
+    }
 
     /// <summary>바퀴 4개 값이 모두 있을 때만 묶음을 만든다(인입 검증이 묶음 단위로 받으므로 보통 모두 있거나 모두 없다).</summary>
     private static WheelValuesDto? ToWheels(double? frontLeft, double? frontRight, double? rearLeft, double? rearRight)

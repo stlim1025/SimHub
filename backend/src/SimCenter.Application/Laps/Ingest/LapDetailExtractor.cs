@@ -55,6 +55,8 @@ public sealed class LapDetailExtractor
         {
             ApplyCar(snapshot, carPart);
             snapshot.Details = CaptureDetails(eventId, carPart.Details);
+            // 어시스트 열(docs/15 §10, D-51): details를 저장하지 못해도(크기 초과 등) 정수 값은 남긴다.
+            LapAssistReader.Read(carPart.Details).ApplyTo(snapshot);
         }
 
         if (conditionsPart is not null)
