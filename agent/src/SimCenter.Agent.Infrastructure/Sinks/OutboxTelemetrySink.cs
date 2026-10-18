@@ -139,7 +139,10 @@ public sealed class OutboxTelemetrySink : ITelemetrySink
         return null;
     }
 
-    /// <summary>트레이스 없이도 넘으면 상세까지 뺀다(스냅샷 본체는 남긴다). 상세가 없거나 빼도 넘으면 null.</summary>
+    /// <summary>
+    /// 트레이스 없이도 넘으면 상세를 빼고(스냅샷 본체는 남긴다) 트레이스 맞추기를 처음부터 다시 한다 — 상세 때문에 트레이스까지 잃지 않게.
+    /// 상세가 없으면 null(상세 탓이 아니다).
+    /// </summary>
     private string? FitWithoutDetails(TelemetryEnvelope envelope, LapFinished lap, int bytes)
     {
         if (lap.Car?.Details is null)
@@ -147,17 +150,12 @@ public sealed class OutboxTelemetrySink : ITelemetrySink
             return null;
         }
 
-        var json = Serialize(envelope, lap with { Trace = null, Car = lap.Car with { Details = null } });
-        var strippedBytes = Utf8Bytes(json);
-        if (strippedBytes > MaxEnvelopeBytes)
-        {
-            return null;
-        }
-
         _logger.LogWarning(
-            "LapFinished {EventId}가 {Bytes}바이트로 트레이스를 빼도 한도({Max})를 넘어 트레이스와 상세를 빼고 적재합니다({StrippedBytes}바이트).",
-            envelope.EventId, bytes, MaxEnvelopeBytes, strippedBytes);
-        return json;
+            "LapFinished {EventId}가 {Bytes}바이트로 트레이스를 빼도 한도({Max})를 넘어 상세(car.details)를 빼고 다시 맞춥니다.",
+            envelope.EventId, bytes, MaxEnvelopeBytes);
+        var withoutDetails = lap with { Car = lap.Car with { Details = null } };
+        var json = Serialize(envelope, withoutDetails);
+        return Utf8Bytes(json) <= MaxEnvelopeBytes ? json : FitLap(envelope, withoutDetails, bytes);
     }
 
     private static int Utf8Bytes(string json) => Encoding.UTF8.GetByteCount(json);

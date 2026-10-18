@@ -214,7 +214,7 @@ public sealed class OutboxTelemetrySinkLapDetailTests : IAsyncLifetime
     [Fact]
     public async Task OversizedDetailsEvenWithoutTrace_AreDropped_AndSnapshotIsKept()
     {
-        // 상세가 비정상적으로 커서 트레이스를 빼도 넘는 경우 — 상세까지 빼고 랩·스냅샷 본체는 보낸다(D-49).
+        // 상세가 비정상적으로 커서 트레이스를 빼도 넘는 경우 — 상세를 빼고 다시 맞춘다: 랩·스냅샷 본체·트레이스는 지킨다(D-49).
         var huge = new Dictionary<string, object?> { ["setup"] = new Dictionary<string, object?> { ["blob"] = new string('x', OutboxTelemetrySink.MaxEnvelopeBytes) } };
         var lap = Lap(Snapshot() with { Details = huge }, conditions: null, Trace(4, value: 1));
 
@@ -222,7 +222,7 @@ public sealed class OutboxTelemetrySinkLapDetailTests : IAsyncLifetime
 
         using var doc = JsonDocument.Parse(await SingleOutboxJsonAsync());
         var payload = doc.RootElement.GetProperty("payload");
-        Assert.Equal(JsonValueKind.Null, payload.GetProperty("trace").ValueKind);
+        Assert.Equal(TraceResolutionM, payload.GetProperty("trace").GetProperty("resolutionM").GetInt32());   // 상세 탓에 트레이스를 잃지 않는다
         Assert.Equal(JsonValueKind.Null, payload.GetProperty("car").GetProperty("details").ValueKind);
         Assert.Equal(1, payload.GetProperty("car").GetProperty("teamId").GetInt32());
         Assert.Single(_logger.Entries, e => e.Level == LogLevel.Warning);

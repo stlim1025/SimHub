@@ -157,6 +157,20 @@ public class LapTraceExtraChannelsTests
     }
 
     [Fact]
+    public void Flush_ReusedBuckets_DoNotLeakPreviousLapValues()
+    {
+        SampleAt(0f, ("clutch", 1));
+        SampleAt(5f, ("clutch", 2));
+        SampleAt(10f, ("clutch", 3));
+        _ = FlushTrace();
+
+        SampleAt(0f, ("clutch", 7));
+        SampleAt(10f, ("clutch", 9));   // 칸 1은 이번 랩에 비었다 — 앞 랩의 2가 아니라 앞 칸 값 7
+
+        Assert.Equal(new[] { 7d, 7d, 9d }, FlushTrace().Extra!["clutch"]);
+    }
+
+    [Fact]
     public void Clear_ForgetsChannels()
     {
         SampleAt(0f, ("ersDeployMode", 2));

@@ -78,15 +78,28 @@ public sealed class TraceExtraChannels
         return channels.Count == 0 ? null : channels;
     }
 
-    /// <summary>칸 0 ~ <paramref name="lastFilled"/>의 묶음을 비운다(최신 값은 유지 — 다음 랩도 같은 차 상태에서 이어진다).</summary>
-    public void ClearSamples(int lastFilled) => Array.Clear(_buckets, 0, lastFilled + 1);
+    /// <summary>
+    /// 칸 0 ~ <paramref name="lastFilled"/>의 묶음을 비운다(최신 값은 유지 — 다음 랩도 같은 차 상태에서 이어진다).
+    /// 배열은 버리지 않고 NaN(= 값 없음)으로 채워 다음 랩에 다시 쓴다(랩마다 칸 수천 개를 새로 만들지 않게).
+    /// </summary>
+    public void ClearSamples(int lastFilled)
+    {
+        for (var i = 0; i <= lastFilled; i++)
+        {
+            if (_buckets[i] is { } sample)
+            {
+                Array.Fill(sample, double.NaN);
+            }
+        }
+    }
 
-    /// <summary>채널 이름·최신 값까지 모두 잊는다(세션 변경). 칸은 <see cref="ClearSamples"/>로 따로 비운다.</summary>
+    /// <summary>채널 이름·최신 값·칸 배열까지 모두 잊는다(세션 변경 — 채널 구성이 바뀔 수 있다).</summary>
     public void Reset()
     {
         _indexByName.Clear();
         _names.Clear();
         Array.Fill(_latest, double.NaN);
+        Array.Clear(_buckets);
     }
 
     private int? IndexOf(string name)
