@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using F1Game.UDP;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using SimCenter.Agent.Core.Telemetry;
 using SimCenter.Agent.Core.Telemetry.Frames;
 using SimCenter.Agent.Infrastructure.Mapping;
 using F1Enums = F1Game.UDP.Enums;
@@ -126,6 +127,131 @@ public class F1WireLayoutTests
 
         Assert.Single(Warnings(logger));
     }
+
+    // ---- 랩 상세(docs/15 §3.1): 실제 캡처의 새 필드 + Car Telemetry·Status·Damage 바이트 레이아웃 ----
+
+    private const int HeaderSize = 29;
+    private const int CarTelemetrySize = 60;   // F1 25 CarTelemetryData 1대
+    private const int CarStatusSize = 55;      // F1 25 CarStatusData 1대
+    private const int CarDamageSize = 46;      // F1 25 CarDamageData 1대
+    private const byte WirePlayerIndex = 2;
+
+    [Fact]
+    public void Map_RealSessionDatagram_ProducesConditions()
+    {
+        var session = Assert.IsType<SessionFrame>(Assert.Single(Mapper().Map(ReadFixture("session.bin"))));
+
+        Assert.Equal(Weather.Clear, session.Weather);
+        Assert.Equal(27, session.AirTemperatureC);
+        Assert.Equal(40, session.TrackTemperatureC);
+        Assert.Equal(5514, session.TrackLengthM);   // COTA
+        Assert.Null(session.RainForecastPercent);   // Time Trial 캡처에는 예보 샘플이 없다
+    }
+
+    [Fact]
+    public void Map_RealLapDataDatagram_ProducesDistanceAndCurrentLapTime()
+    {
+        var lap = Assert.IsType<LapFrame>(Assert.Single(Mapper().Map(ReadFixture("lapdata.bin"))));
+
+        // 랩 번호가 막 바뀐 순간의 캡처 — 시간은 0으로 돌아갔지만 거리는 아직 앞 랩 값이다(트레이스는 칸 덮어쓰기로 견딘다).
+        Assert.Equal(5054.4614f, lap.LapDistanceM, precision: 3);
+        Assert.Equal(0, lap.CurrentLapTimeMs);
+    }
+
+    /// <summary>F1 UDP의 바퀴 배열 순서는 RL·RR·FL·FR이다 — 바이트에 순서대로 다른 값을 넣고 이름으로 옮겨졌는지 본다.</summary>
+    [Fact]
+    public void Map_CarDamageBytes_MapsWheelOrderRearLeftRearRightFrontLeftFrontRight()
+    {
+        var datagram = Datagram(F1Enums.PacketType.CarDamage, 1041);
+        var car = HeaderSize + (WirePlayerIndex * CarDamageSize);
+        WriteFloats(datagram, car, 1.5f, 2.5f, 3.5f, 4.5f);              // m_tyresWear[RL, RR, FL, FR]
+        WriteBytes(datagram, car + 16, 11, 12, 13, 14);                  // m_tyresDamage
+        WriteBytes(datagram, car + 20, 21, 22, 23, 24);                  // m_brakesDamage
+        WriteBytes(datagram, car + 28, 31, 32, 33, 34, 35, 36);          // 앞날개 L·R, 뒷날개, 플로어, 디퓨저, 사이드포드
+        WriteBytes(datagram, car + 36, 37, 38);                          // 기어박스, 엔진
+
+        var frame = Assert.IsType<CarDamageFrame>(Assert.Single(Mapper().Map(datagram)));
+
+        Assert.Equal(new WheelSet<float>(FrontLeft: 3.5f, FrontRight: 4.5f, RearLeft: 1.5f, RearRight: 2.5f), frame.TyreWearPercent);
+        Assert.Equal(new WheelSet<int>(FrontLeft: 13, FrontRight: 14, RearLeft: 11, RearRight: 12), frame.TyreDamagePercent);
+        Assert.Equal(new WheelSet<int>(FrontLeft: 23, FrontRight: 24, RearLeft: 21, RearRight: 22), frame.BrakeDamagePercent);
+        Assert.Equal(
+            new[] { 31, 32, 33, 34, 35, 36, 37, 38 },
+            new[]
+            {
+                frame.FrontLeftWingDamage, frame.FrontRightWingDamage, frame.RearWingDamage, frame.FloorDamage,
+                frame.DiffuserDamage, frame.SidepodDamage, frame.GearboxDamage, frame.EngineDamage,
+            });
+    }
+
+    [Fact]
+    public void Map_CarTelemetryBytes_MapsPlayerCar()
+    {
+        var datagram = Datagram(F1Enums.PacketType.CarTelemetry, 1352);
+        var car = HeaderSize + (WirePlayerIndex * CarTelemetrySize);
+        BinaryPrimitives.WriteUInt16LittleEndian(datagram.AsSpan(car), 287);         // m_speed
+        WriteFloats(datagram, car + 2, 0.75f, -0.25f, 0.5f);                          // m_throttle, m_steer, m_brake
+        datagram[car + 15] = unchecked((byte)(sbyte)-1);                              // m_gear(R)
+        BinaryPrimitives.WriteUInt16LittleEndian(datagram.AsSpan(car + 16), 11_850);  // m_engineRPM
+
+        var frame = Assert.IsType<CarTelemetryFrame>(Assert.Single(Mapper().Map(datagram)));
+
+        Assert.Equal(new CarTelemetryFrame("0", 287, 0.75f, 0.5f, -0.25f, -1, 11_850), frame);
+    }
+
+    [Fact]
+    public void Map_CarStatusBytes_MapsPlayerCar()
+    {
+        var datagram = Datagram(F1Enums.PacketType.CarStatus, 1239);
+        var car = HeaderSize + (WirePlayerIndex * CarStatusSize);
+        WriteFloats(datagram, car + 5, 24.5f);                         // m_fuelInTank
+        WriteFloats(datagram, car + 13, 13.25f);                       // m_fuelRemainingLaps
+        WriteBytes(datagram, car + 25, 18, 16, 3);                     // m_actualTyreCompound, m_visualTyreCompound, m_tyresAgeLaps
+        WriteFloats(datagram, car + 37, 1_494_000f);                   // m_ersStoreEnergy
+        WriteFloats(datagram, car + 42, 1_000_000f, 600_000f, 2_100_000f);   // 이 랩 회수(MGU-K, MGU-H)·배포
+
+        var frame = Assert.IsType<CarStatusFrame>(Assert.Single(Mapper().Map(datagram)));
+
+        Assert.Equal(new CarStatusFrame("0", 24.5f, 13.25f, 1_494_000f, 2_100_000f, 1_000_000f, 600_000f, 18, 16, 3), frame);
+    }
+
+    [Fact]
+    public void Map_PlayerIndexBeyondSlots_WarnsOnceAcrossCarPackets()
+    {
+        var logger = new CapturingLogger<F1PacketMapper>();
+        var sut = Mapper(logger);
+        var lap = ReadFixture("lapdata.bin");
+        lap[PlayerCarIndexOffset] = byte.MaxValue;
+        var telemetry = Datagram(F1Enums.PacketType.CarTelemetry, 1352, playerIndex: byte.MaxValue);
+        var status = Datagram(F1Enums.PacketType.CarStatus, 1239, playerIndex: byte.MaxValue);
+        var damage = Datagram(F1Enums.PacketType.CarDamage, 1041, playerIndex: byte.MaxValue);
+
+        Assert.Empty(sut.Map(telemetry));
+        Assert.Empty(sut.Map(status));
+        Assert.Empty(sut.Map(damage));
+        Assert.Empty(sut.Map(lap));
+
+        Assert.Single(Warnings(logger));   // 관전 중이면 모든 차 패킷이 같은 이유로 버려진다 — 한 번만 알린다
+    }
+
+    private static byte[] Datagram(F1Enums.PacketType packetType, int size, byte playerIndex = WirePlayerIndex)
+    {
+        var datagram = new byte[size];
+        BinaryPrimitives.WriteUInt16LittleEndian(datagram, Format);
+        datagram[PacketIdOffset] = (byte)packetType;
+        datagram[PlayerCarIndexOffset] = playerIndex;
+        return datagram;
+    }
+
+    private static void WriteFloats(byte[] datagram, int offset, params float[] values)
+    {
+        for (var i = 0; i < values.Length; i++)
+        {
+            BinaryPrimitives.WriteSingleLittleEndian(datagram.AsSpan(offset + (i * sizeof(float))), values[i]);
+        }
+    }
+
+    private static void WriteBytes(byte[] datagram, int offset, params byte[] values) => values.CopyTo(datagram, offset);
 
     private static List<string> Warnings(CapturingLogger<F1PacketMapper> logger) =>
         logger.Entries.Where(entry => entry.Level == LogLevel.Warning).Select(entry => entry.Message).ToList();

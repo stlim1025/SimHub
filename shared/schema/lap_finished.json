@@ -72,6 +72,95 @@
       "type": "integer",
       "minimum": 0,
       "description": "선택. 게임의 SessionLinkIdentifier(uint). 없으면 0 — 없으면 세션 키는 uid:{sessionRef}가 된다."
+    },
+    "car": {
+      "type": ["object", "null"],
+      "description": "선택(D-44, docs/15 §3.2·§4.3). 랩 끝 차량 스냅샷. null 또는 생략 = 받은 값 없음(옛 Agent 포함). 안의 필드도 각각 null 가능(받지 못한 값, 또는 랩 중간에 Agent가 시작해 시작 값이 없음). 끝 값 = 랩이 바뀌기 직전 마지막 값, 시작 값 = 새 랩 시작 뒤 첫 값. 이 랩 사용량은 앱이 시작 − 끝으로 계산한다. 백엔드는 범위를 벗어나면 스냅샷만 버리고 랩은 저장한다(docs/15 §5).",
+      "properties": {
+        "teamId": { "type": ["integer", "null"], "minimum": 0, "maximum": 65535, "description": "게임 원시 팀 ID(플레이어 차의 Participants 팀). TeamCatalog(D-33)로 이름·색을 푼다." },
+        "visualTyreCompound": { "type": ["integer", "null"], "minimum": 0, "maximum": 255, "description": "게임 원시 표시 컴파운드(F1 25: 16=Soft, 17=Medium, 18=Hard, 7=Inter, 8=Wet)." },
+        "actualTyreCompound": { "type": ["integer", "null"], "minimum": 0, "maximum": 255, "description": "게임 원시 실제 컴파운드(F1 25: 16=C5 … 20=C1, 21=C0, 22=C6, 7=Inter, 8=Wet)." },
+        "tyreAgeLaps": { "type": ["integer", "null"], "minimum": 0, "maximum": 255 },
+        "tyreWearStart": { "$ref": "#/definitions/wheelPercentNumber", "description": "랩 시작 타이어 마모(%)." },
+        "tyreWearEnd": { "$ref": "#/definitions/wheelPercentNumber", "description": "랩 끝 타이어 마모(%)." },
+        "tyreDamage": { "$ref": "#/definitions/wheelPercentInteger", "description": "랩 끝 타이어 손상(%)." },
+        "brakeDamage": { "$ref": "#/definitions/wheelPercentInteger", "description": "랩 끝 브레이크 손상(%)." },
+        "frontLeftWingDamage": { "$ref": "#/definitions/percentInteger" },
+        "frontRightWingDamage": { "$ref": "#/definitions/percentInteger" },
+        "rearWingDamage": { "$ref": "#/definitions/percentInteger" },
+        "floorDamage": { "$ref": "#/definitions/percentInteger" },
+        "diffuserDamage": { "$ref": "#/definitions/percentInteger" },
+        "sidepodDamage": { "$ref": "#/definitions/percentInteger" },
+        "gearboxDamage": { "$ref": "#/definitions/percentInteger" },
+        "engineDamage": { "$ref": "#/definitions/percentInteger" },
+        "fuelStartKg": { "type": ["number", "null"], "minimum": 0, "maximum": 200 },
+        "fuelEndKg": { "type": ["number", "null"], "minimum": 0, "maximum": 200 },
+        "fuelRemainingLaps": { "type": ["number", "null"], "description": "게임 MFD의 남은 랩 수(연료 여유). 모자라면 음수일 수 있다." },
+        "ersStoreStartJ": { "$ref": "#/definitions/joules", "description": "랩 시작 배터리 저장량(J, 최대 4,000,000)." },
+        "ersStoreEndJ": { "$ref": "#/definitions/joules", "description": "랩 끝 배터리 저장량(J)." },
+        "ersDeployedJ": { "$ref": "#/definitions/joules", "description": "이 랩에 배포한 에너지(J)." },
+        "ersHarvestedJ": { "$ref": "#/definitions/joules", "description": "이 랩에 회수한 에너지(J) = MGU-K + MGU-H." }
+      }
+    },
+    "conditions": {
+      "type": ["object", "null"],
+      "description": "선택(D-44, docs/15 §3.1·§4.3). 랩 끝의 주행 조건(최신 Session 값). null 또는 생략 = 받은 값 없음. 안의 필드도 각각 null 가능.",
+      "properties": {
+        "weather": {
+          "type": ["string", "null"],
+          "enum": ["Clear", "LightCloud", "Overcast", "LightRain", "HeavyRain", "Storm", null],
+          "description": "게임 날씨 0~5. 모르는 값은 null."
+        },
+        "airTempC": { "type": ["integer", "null"], "minimum": -50, "maximum": 80 },
+        "trackTempC": { "type": ["integer", "null"], "minimum": -50, "maximum": 80 },
+        "rainForecastPercent": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "maximum": 100,
+          "description": "현재 세션 종류 예보 샘플 중 TimeOffset > 0인 가장 이른 샘플의 비 확률. 없으면 그 세션 종류의 첫 샘플, 그것도 없으면 null."
+        }
+      }
+    },
+    "trace": {
+      "type": ["object", "null"],
+      "description": "선택(D-45, docs/15 §3.3·§4.3). 정제된 1랩 거리 기준 텔레메트리 표본 1건. i번째 칸 = 랩 거리 i × resolutionM. 7개 배열은 모두 같은 길이다(스키마로는 표현하지 못한다 — 백엔드가 검사). 채워진 칸이 50% 미만이거나 봉투 한도(48KiB)를 20m에서도 넘으면 null. 백엔드는 틀리면 트레이스만 버리고 랩은 저장한다.",
+      "required": ["resolutionM", "timeMs", "speedKph", "throttle", "brake", "steer", "gear", "rpm"],
+      "properties": {
+        "resolutionM": { "type": "integer", "minimum": 1, "maximum": 50, "description": "칸 간격(m). 기본 5, 크기 한도 때문에 10·20일 수 있다." },
+        "timeMs": { "type": "array", "minItems": 2, "maxItems": 5000, "items": { "type": "integer", "minimum": 0, "maximum": 3600000 }, "description": "랩 시작부터 ms." },
+        "speedKph": { "type": "array", "minItems": 2, "maxItems": 5000, "items": { "type": "integer", "minimum": 0, "maximum": 500 } },
+        "throttle": { "type": "array", "minItems": 2, "maxItems": 5000, "items": { "type": "integer", "minimum": 0, "maximum": 100 } },
+        "brake": { "type": "array", "minItems": 2, "maxItems": 5000, "items": { "type": "integer", "minimum": 0, "maximum": 100 } },
+        "steer": { "type": "array", "minItems": 2, "maxItems": 5000, "items": { "type": "integer", "minimum": -100, "maximum": 100 }, "description": "−100(왼쪽 끝) ~ 100(오른쪽 끝)." },
+        "gear": { "type": "array", "minItems": 2, "maxItems": 5000, "items": { "type": "integer", "minimum": -1, "maximum": 9 }, "description": "−1 = R, 0 = N. Agent는 −1~8을 보낸다(검증 상한은 9)." },
+        "rpm": { "type": "array", "minItems": 2, "maxItems": 5000, "items": { "type": "integer", "minimum": 0, "maximum": 25000 } }
+      }
+    }
+  },
+  "definitions": {
+    "percentInteger": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
+    "joules": { "type": ["integer", "null"], "minimum": 0, "maximum": 10000000 },
+    "wheelPercentNumber": {
+      "type": ["object", "null"],
+      "description": "바퀴 4개 값(%). 게임 배열 순서(F1: RL·RR·FL·FR)와 무관하게 이름으로 담는다.",
+      "required": ["frontLeft", "frontRight", "rearLeft", "rearRight"],
+      "properties": {
+        "frontLeft": { "type": "number", "minimum": 0, "maximum": 100 },
+        "frontRight": { "type": "number", "minimum": 0, "maximum": 100 },
+        "rearLeft": { "type": "number", "minimum": 0, "maximum": 100 },
+        "rearRight": { "type": "number", "minimum": 0, "maximum": 100 }
+      }
+    },
+    "wheelPercentInteger": {
+      "type": ["object", "null"],
+      "description": "바퀴 4개 정수 값(%). 이름으로 담는다.",
+      "required": ["frontLeft", "frontRight", "rearLeft", "rearRight"],
+      "properties": {
+        "frontLeft": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "frontRight": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "rearLeft": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "rearRight": { "type": "integer", "minimum": 0, "maximum": 100 }
+      }
     }
   }
 }

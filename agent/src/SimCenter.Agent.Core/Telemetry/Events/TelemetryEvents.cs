@@ -33,7 +33,8 @@ public sealed record LapSectorDto(int SectorNumber, int SectorTimeMs);
 /// <summary>
 /// 랩 완주. shared/schema/lap_finished.json (+ sessionType — docs/06 예시·샘플과 일치, 스키마 보강 예정).
 /// 무효/아웃/인랩도 전송하며 랭킹 적격 판정은 Backend가 수행(D-15).
-/// 뒤쪽 4개(P7, 12 §4.6)는 선택 필드다 — 백엔드가 <c>Lap.SessionKey</c>를 계산해 P8에서 세션과 연결하는 데 쓴다.
+/// 링크 4개(P7, 12 §4.6)는 선택 필드다 — 백엔드가 <c>Lap.SessionKey</c>를 계산해 P8에서 세션과 연결하는 데 쓴다.
+/// 마지막 3개(docs/15 §4.3)도 선택이다 — 차량 스냅샷·주행 조건(D-44)과 1랩 트레이스(D-45). 받은 값이 없으면 null(옛 계약과 같다).
 /// </summary>
 public sealed record LapFinished(
     string SessionRef,
@@ -47,7 +48,10 @@ public sealed record LapFinished(
     GameMode GameMode = GameMode.Other,
     uint SeasonLinkId = 0,
     uint WeekendLinkId = 0,
-    uint SessionLinkId = 0) : TelemetryEvent(SessionRef)
+    uint SessionLinkId = 0,
+    LapCarSnapshot? Car = null,
+    LapConditions? Conditions = null,
+    LapTrace? Trace = null) : TelemetryEvent(SessionRef)
 {
     public override TelemetryEventType Type => TelemetryEventType.LapFinished;
 }
