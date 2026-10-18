@@ -60,10 +60,9 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - images/a_dot_burr.jpeg
-  #   - images/a_dot_ham.jpeg
+  # 팀 로고(D-48, docs/15 §2.4). 파일은 저장소에 넣지 않는다 — assets/team_logos/README.md 참고.
+  assets:
+    - assets/team_logos/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
