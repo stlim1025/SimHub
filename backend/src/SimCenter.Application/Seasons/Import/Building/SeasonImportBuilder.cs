@@ -214,12 +214,9 @@ public static class SeasonImportBuilder
 
     private static bool IsMainRace(F1LapsSessionDocument doc) => doc.SessionType == SessionType.Race && !doc.IsSprint;
 
-    private static bool IsShootout(SessionKind kind) => kind is
-        SessionKind.SprintShootout1 or SessionKind.SprintShootout2 or SessionKind.SprintShootout3
-        or SessionKind.ShortSprintShootout or SessionKind.OneShotSprintShootout;
+    private static bool IsShootout(SessionKind kind) => kind.IsSprintShootout();
 
-    private static bool IsQualifying(SessionKind kind) => kind is
-        SessionKind.Qualifying1 or SessionKind.Qualifying2 or SessionKind.Qualifying3 or SessionKind.ShortQualifying or SessionKind.OneShotQualifying;
+    private static bool IsQualifying(SessionKind kind) => kind.IsGrandPrixQualifying();
 
     /// <summary>주말 안 순서: 연습(0~3) → 슛아웃(4~8) → 스프린트(9) → 예선(10~14) → 레이스(15).</summary>
     private static int OrderOf(SessionType type, SessionKind kind, bool isSprint) => kind switch

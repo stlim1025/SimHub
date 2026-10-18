@@ -14,11 +14,13 @@ public class SeasonQueryServiceTests
     private static readonly Guid OtherUserId = Guid.Parse("00000000-0000-0000-0000-0000000000a2");
 
     private readonly FakeSeasonQueries _repo = new();
+    private readonly FakeSeasonOrder _order = new();
+    private readonly FakeTracks _tracks = new();
     private readonly SeasonQueryService _sut;
 
     public SeasonQueryServiceTests()
     {
-        _sut = new SeasonQueryService(_repo);
+        _sut = new SeasonQueryService(_repo, _order, _tracks);
     }
 
     // ---- 입력 구성 ----
@@ -361,7 +363,94 @@ public class SeasonQueryServiceTests
         await Assert.ThrowsAsync<NotFoundException>(() => _sut.GetMySeasonAsync(UserId, Guid.NewGuid()));
     }
 
+    // ---- 시즌 탭·헤더(docs/15 §12, D-54) ----
+
+    [Fact]
+    public async Task GetSeasons_MapsSeasonNumberAndMyDriverName()
+    {
+        ArrangeCareerSeason();
+        _order.Rows.AddRange(
+        [
+            new(Id(9), GameCode, GameMode.DriverCareer, At(-50)),
+            new(Id(1), GameCode, GameMode.DriverCareer, At(1)),
+        ]);
+
+        var page = await _sut.GetMySeasonsAsync(UserId, 1, 20);
+
+        var dto = Assert.Single(page.Items);
+        Assert.Equal((2, "S. LIM"), (dto.SeasonNumber, dto.MyDriverName));
+        Assert.Equal(1, _order.Calls);
+    }
+
+    [Fact]
+    public async Task GetSeason_Calendar_ListsAllCalendarTracks_WithMyRoundValues()
+    {
+        ArrangeCareerSeason();
+        _order.Rows.Add(new(Id(1), GameCode, GameMode.DriverCareer, At(1)));
+        _tracks.Tracks.AddRange(
+        [
+            new Track { Id = Id(201), GameCode = GameCode, Name = "Bahrain", CountryCode = "BH", DisplayOrder = 1 },
+            new Track { Id = Id(202), GameCode = GameCode, Name = "Jeddah", CountryCode = "SA", DisplayOrder = 2 },
+            new Track { Id = Id(203), GameCode = GameCode, Name = "Suzuka", CountryCode = "JP", DisplayOrder = 3 },
+        ]);
+        _repo.Weekends.Clear();
+        _repo.Weekends.Add(new WeekendRow(Id(22), Id(1), "Jeddah", At(19), 2, TrackId: Id(202)));
+        _repo.Weekends.Add(new WeekendRow(Id(21), Id(1), "Bahrain", At(1), 1, TrackId: Id(201)));
+
+        var detail = await _sut.GetMySeasonAsync(UserId, Id(1));
+
+        Assert.Equal(1, detail.Season.SeasonNumber);
+        Assert.Equal(new[] { "Bahrain", "Jeddah", "Suzuka" }, detail.Calendar.Select(r => r.TrackName));
+        var bahrain = detail.Calendar[0];
+        Assert.Equal((Id(3), 4, 12, 6), (bahrain.RaceSessionId!.Value, bahrain.RacePosition, bahrain.Points, bahrain.QualiPosition));
+        var jeddah = detail.Calendar[1];
+        Assert.Equal((Id(5), 5, 16), (jeddah.RaceSessionId!.Value, jeddah.RacePosition, jeddah.Points));  // 옛 중복 스프린트 제외
+        var suzuka = detail.Calendar[2];
+        Assert.Null(suzuka.WeekendId);
+        Assert.Equal("Ferrari", suzuka.MyTeamName);   // 달리지 않은 라운드 = 시즌 팀
+        Assert.Equal(1, _tracks.Calls);
+    }
+
     // ---- Fake ----
+
+    private sealed class FakeSeasonOrder : ISessionDetailQueryRepository
+    {
+        public List<SimCenter.Application.Seasons.Queries.Detail.SeasonOrderRow> Rows { get; } = new();
+        public int Calls { get; private set; }
+
+        public Task<IReadOnlyList<SimCenter.Application.Seasons.Queries.Detail.SessionLapRow>> GetMySessionLapsAsync(
+            Guid userId, string gameCode, Guid trackId, string sessionKey, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<WeekendQualifyingRow>> GetMyWeekendQualifyingAsync(
+            Guid userId, Guid raceWeekendId, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<SimCenter.Application.Seasons.Queries.Detail.SeasonOrderRow>> GetMySeasonOrderAsync(
+            Guid userId, CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            return Task.FromResult<IReadOnlyList<SimCenter.Application.Seasons.Queries.Detail.SeasonOrderRow>>(Rows);
+        }
+    }
+
+    private sealed class FakeTracks : ITrackRepository
+    {
+        public List<Track> Tracks { get; } = new();
+        public int Calls { get; private set; }
+
+        public Task<Track?> GetByGameTrackIdAsync(string gameCode, int gameTrackId, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<Track?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<Track>> GetAllAsync(CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            return Task.FromResult<IReadOnlyList<Track>>(Tracks);
+        }
+    }
 
     private sealed class FakeSeasonQueries : ISeasonQueryRepository
     {

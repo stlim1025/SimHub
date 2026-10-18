@@ -119,6 +119,38 @@ public sealed class SeasonImportApiE2ETests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Season_tab_lists_full_calendar_with_my_round_values()
+    {
+        var (client, connection) = await SeedMiamiQualifyingAsync();
+        await using var _ = connection;
+
+        var seasonId = await ImportAsync(client, Summary);
+        var detail = await GetOkAsync(client, $"{SeasonsUrl}/{seasonId}");
+
+        // 시즌 탭(docs/15 §12): F1 25 캘린더 24개, 가져온 라운드 + 옮긴 마이애미 예선.
+        var calendar = detail.GetProperty("calendar").EnumerateArray().ToList();
+        Assert.Equal(Enumerable.Range(1, 24), calendar.Select(r => r.GetProperty("round").GetInt32()));
+        Assert.Equal(("Melbourne", "AU"), (calendar[0].GetProperty("trackName").GetString(), calendar[0].GetProperty("countryCode").GetString()));
+
+        var australia = calendar[0];
+        Assert.Equal((1, 25, 100), (australia.GetProperty("racePosition").GetInt32(), australia.GetProperty("points").GetInt32(),
+            australia.GetProperty("raceAiDifficulty").GetInt32()));
+        Assert.NotEqual(JsonValueKind.Null, australia.GetProperty("raceSessionId").ValueKind);
+        var china = calendar[1];
+        Assert.Equal((14, 103), (china.GetProperty("qualiPosition").GetInt32(), china.GetProperty("qualiAiDifficulty").GetInt32()));
+
+        var miami = calendar[5];
+        Assert.Equal(JsonValueKind.Null, miami.GetProperty("raceSessionId").ValueKind);
+        Assert.NotEqual(JsonValueKind.Null, miami.GetProperty("firstSessionId").ValueKind);
+        Assert.Equal(JsonValueKind.Null, calendar[3].GetProperty("weekendId").ValueKind);   // 바레인: 달리지 않음
+        Assert.Equal("Ferrari", calendar[3].GetProperty("myTeamName").GetString());
+
+        var header = detail.GetProperty("season");
+        Assert.Equal(1, header.GetProperty("seasonNumber").GetInt32());
+        Assert.False(string.IsNullOrEmpty(header.GetProperty("myDriverName").GetString()));
+    }
+
+    [Fact]
     public async Task Sessions_recorded_before_import_are_not_counted_twice()
     {
         var (client, connection) = await SeedMiamiQualifyingAsync();

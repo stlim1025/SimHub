@@ -56,7 +56,9 @@ public sealed class SeasonQueryRepository : ISeasonQueryRepository
                     track.Name,
                     weekend.FirstSessionAt,
                     track.DisplayOrder,
-                    season.ImportedFrom != null))
+                    season.ImportedFrom != null,
+                    track.Id,
+                    track.CountryCode))
             .ToListAsync(cancellationToken);
     }
 
@@ -109,7 +111,8 @@ public sealed class SeasonQueryRepository : ISeasonQueryRepository
                 x.result.Position,
                 x.result.ResultStatus,
                 x.result.Points,
-                x.coveredByBaseline))
+                x.coveredByBaseline,
+                x.session.AiDifficulty))
             .ToListAsync(cancellationToken);
     }
 }

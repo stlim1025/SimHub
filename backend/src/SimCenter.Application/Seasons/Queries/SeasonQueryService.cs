@@ -3,6 +3,7 @@ using SimCenter.Application.Common.Exceptions;
 using SimCenter.Application.Common.Interfaces;
 using SimCenter.Application.Rankings;
 using SimCenter.Application.Seasons.Import;
+using SimCenter.Application.Seasons.Queries.Detail;
 using SimCenter.Domain.Entities;
 
 namespace SimCenter.Application.Seasons.Queries;
@@ -14,11 +15,19 @@ namespace SimCenter.Application.Seasons.Queries;
 public sealed class SeasonQueryService : ISeasonQueryService
 {
     private readonly ISeasonQueryRepository _seasons;
+    private readonly ISessionDetailQueryRepository _seasonOrder;
+    private readonly ITrackRepository _tracks;
 
-    public SeasonQueryService(ISeasonQueryRepository seasons)
+    public SeasonQueryService(ISeasonQueryRepository seasons, ISessionDetailQueryRepository seasonOrder, ITrackRepository tracks)
     {
         _seasons = seasons;
+        _seasonOrder = seasonOrder;
+        _tracks = tracks;
     }
+
+    /// <summary>시즌 번호(D-54) — 내 시즌 전부를 한 쿼리로 읽어 매긴다.</summary>
+    private async Task<IReadOnlyDictionary<Guid, int>> SeasonNumbersAsync(Guid userId, CancellationToken cancellationToken)
+        => SeasonNumbering.Assign(await _seasonOrder.GetMySeasonOrderAsync(userId, cancellationToken));
 
     public async Task<PagedResult<SeasonSummaryDto>> GetMySeasonsAsync(
         Guid userId, int page, int pageSize, CancellationToken cancellationToken = default)
@@ -35,6 +44,8 @@ public sealed class SeasonQueryService : ISeasonQueryService
         var weekends = await _seasons.GetWeekendRowsAsync(seasonIds, cancellationToken);
         var rows = await _seasons.GetResultRowsAsync(seasonIds, scoringRowsOnly: true, cancellationToken);
 
+        var numbers = await SeasonNumbersAsync(userId, cancellationToken);
+
         var roundCounts = weekends.GroupBy(w => w.SeasonId).ToDictionary(g => g.Key, g => g.Count());
         var rowsBySeason = rows.ToLookup(r => r.SeasonId);
 
@@ -42,7 +53,8 @@ public sealed class SeasonQueryService : ISeasonQueryService
             .Select(season => ToSummary(
                 season,
                 roundCounts.GetValueOrDefault(season.Id),
-                Calculate(season, rowsBySeason[season.Id].ToList()).Standings))
+                Calculate(season, rowsBySeason[season.Id].ToList()).Standings,
+                numbers))
             .ToList();
 
         return new PagedResult<SeasonSummaryDto>(window.Page, window.PageSize, total, items);
@@ -58,13 +70,19 @@ public sealed class SeasonQueryService : ISeasonQueryService
         var weekends = await _seasons.GetWeekendRowsAsync(seasonIds, cancellationToken);
         var rows = await _seasons.GetResultRowsAsync(seasonIds, scoringRowsOnly: false, cancellationToken);
 
+        var numbers = await SeasonNumbersAsync(userId, cancellationToken);
+        var calendar = SeasonCalendar.CalendarOf(await _tracks.GetAllAsync(cancellationToken), season.GameCode);
+
         var (selection, standings) = Calculate(season, rows);
         var rounds = RoundNumbering.Assign(weekends);
+        var seasonTeamId = standings.Drivers.FirstOrDefault(d => d.IsPlayer)?.TeamId;
 
         return new SeasonDetailDto(
-            ToSummary(season, weekends.Count, standings),
+            ToSummary(season, weekends.Count, standings, numbers),
             BuildRounds(weekends, rounds, rows, selection),
-            ToStandingsDto(standings, rounds, season.GameCode));
+            ToStandingsDto(standings, rounds, season.GameCode),
+            // 시즌 탭(docs/15 §12): 캘린더 전부 + 내 라운드 값. 가져온 세션(D-55)은 내 결과 행만 있어도 된다.
+            SeasonCalendar.Build(season.GameCode, calendar, weekends, rows, selection, seasonTeamId));
     }
 
     // ---- 계산 ----
@@ -81,7 +99,8 @@ public sealed class SeasonQueryService : ISeasonQueryService
 
     // ---- 매핑: 요약 ----
 
-    private static SeasonSummaryDto ToSummary(Season season, int roundCount, SeasonStandings standings)
+    private static SeasonSummaryDto ToSummary(
+        Season season, int roundCount, SeasonStandings standings, IReadOnlyDictionary<Guid, int> seasonNumbers)
     {
         var me = standings.Drivers.FirstOrDefault(d => d.IsPlayer);
         var leader = standings.Drivers.FirstOrDefault();
@@ -100,7 +119,9 @@ public sealed class SeasonQueryService : ISeasonQueryService
             leader?.Points,
             season.ImportedFrom,
             myTeam?.Name,
-            myTeam?.Color);
+            myTeam?.Color,
+            SeasonNumbering.Of(seasonNumbers, season.Id),
+            me?.Name);
     }
 
     // ---- 매핑: 라운드 ----
