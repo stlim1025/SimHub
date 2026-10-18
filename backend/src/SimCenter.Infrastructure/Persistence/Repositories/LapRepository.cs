@@ -58,10 +58,10 @@ public sealed class LapRepository : ILapRepository
         var names = await _context.Users
             .AsNoTracking()
             .Where(u => userIds.Contains(u.Id))
-            .Select(u => new { u.Id, u.DisplayName })
+            .Select(u => new { u.Id, u.DisplayName, u.ShowOnLeaderboard })
             .ToListAsync(cancellationToken);
 
-        var nameById = names.ToDictionary(x => x.Id, x => x.DisplayName);
+        var userById = names.ToDictionary(x => x.Id);
 
         return best
             .Select(b =>
@@ -72,8 +72,14 @@ public sealed class LapRepository : ILapRepository
                     .ThenBy(l => l.SetAt)
                     .First();
 
-                var displayName = nameById.TryGetValue(b.UserId, out var name) ? name : string.Empty;
-                return new RankingLapRow(b.UserId, displayName, bestLap.LapTimeMs, bestLap.SetAt);
+                // 사용자 행이 없으면(soft delete 등) 이름을 비우고 비공개로 둔다 → 서비스가 익명으로 보인다.
+                var found = userById.TryGetValue(b.UserId, out var user);
+                return new RankingLapRow(
+                    b.UserId,
+                    found ? user!.DisplayName : string.Empty,
+                    bestLap.LapTimeMs,
+                    bestLap.SetAt,
+                    found && user!.ShowOnLeaderboard);
             })
             .OrderBy(r => r.LapTimeMs)
             .ThenBy(r => r.SetAt)

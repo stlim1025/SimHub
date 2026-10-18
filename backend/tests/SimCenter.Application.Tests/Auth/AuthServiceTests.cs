@@ -128,6 +128,23 @@ public class AuthServiceTests
     }
 
     [Fact]
+    public async Task GetMe_NewUser_HasDefaultProfileSettings()
+    {
+        var registered = await _sut.RegisterAsync(new RegisterRequest(ValidEmail, ValidPassword, ValidDisplayName));
+
+        var me = await _sut.GetMeAsync(registered.UserId);
+
+        Assert.True(me.ShowOnLeaderboard);
+        Assert.Null(me.AvatarTeam);
+        Assert.Equal("F1_25", me.PreferredGame);
+        Assert.Equal("Wheel", me.Controller);
+        Assert.Equal("Pc", me.Console);
+        Assert.Equal("Metric", me.Units);
+        Assert.Equal("Asia/Seoul", me.TimeZoneId);
+        Assert.Equal("System", me.Theme);
+    }
+
+    [Fact]
     public async Task GetMe_Unknown_ThrowsNotFound()
     {
         await Assert.ThrowsAsync<NotFoundException>(() => _sut.GetMeAsync(Guid.NewGuid()));

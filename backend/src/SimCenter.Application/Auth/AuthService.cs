@@ -1,4 +1,3 @@
-using System.Net.Mail;
 using SimCenter.Application.Common.Exceptions;
 using SimCenter.Application.Common.Interfaces;
 using SimCenter.Domain.Entities;
@@ -12,7 +11,9 @@ namespace SimCenter.Application.Auth;
 public sealed class AuthService : IAuthService
 {
     private const int MinPasswordLength = 8;
-    private const int MaxDisplayNameLength = 50;
+    private const string EmailField = "email";
+    private const string PasswordField = "password";
+    private const string DisplayNameField = "displayName";
 
     private readonly IUserRepository _users;
     private readonly IUnitOfWork _unitOfWork;
@@ -39,14 +40,14 @@ public sealed class AuthService : IAuthService
 
     public async Task<RegisterResponse> RegisterAsync(RegisterRequest request, CancellationToken cancellationToken = default)
     {
-        var email = NormalizeEmail(request.Email);
-        ValidateEmail(email);
+        var email = UserInputRules.NormalizeEmail(request.Email);
+        UserInputRules.ValidateEmail(email, EmailField);
         ValidatePassword(request.Password);
-        var displayName = ValidateDisplayName(request.DisplayName);
+        var displayName = UserInputRules.ValidateDisplayName(request.DisplayName, DisplayNameField);
 
         if (await _users.ExistsByEmailAsync(email, cancellationToken))
         {
-            throw new ConflictException("이미 사용 중인 이메일입니다.");
+            throw new ConflictException(UserInputRules.EmailInUseMessage);
         }
 
         var now = _clock.UtcNow;
@@ -67,7 +68,7 @@ public sealed class AuthService : IAuthService
 
     public async Task<LoginResponse> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default)
     {
-        var email = NormalizeEmail(request.Email);
+        var email = UserInputRules.NormalizeEmail(request.Email);
         var user = await _users.GetByEmailAsync(email, cancellationToken);
 
         // 사용자 부재/비밀번호 불일치를 동일 메시지로 처리해 계정 존재 여부 노출을 막는다.
@@ -85,40 +86,14 @@ public sealed class AuthService : IAuthService
         var user = await _users.GetByIdAsync(userId, cancellationToken)
             ?? throw new NotFoundException("사용자를 찾을 수 없습니다.");
 
-        return new UserDto(user.Id, user.Email, user.DisplayName);
-    }
-
-    private static string NormalizeEmail(string email) => (email ?? string.Empty).Trim().ToLowerInvariant();
-
-    private static void ValidateEmail(string email)
-    {
-        if (string.IsNullOrWhiteSpace(email))
-        {
-            throw new ValidationException("email", "이메일은 필수입니다.");
-        }
-
-        if (email.Length > 256 || !MailAddress.TryCreate(email, out _))
-        {
-            throw new ValidationException("email", "이메일 형식이 올바르지 않습니다.");
-        }
+        return UserDto.From(user);
     }
 
     private static void ValidatePassword(string password)
     {
         if (string.IsNullOrEmpty(password) || password.Length < MinPasswordLength)
         {
-            throw new ValidationException("password", $"비밀번호는 최소 {MinPasswordLength}자 이상이어야 합니다.");
+            throw new ValidationException(PasswordField, $"비밀번호는 최소 {MinPasswordLength}자 이상이어야 합니다.");
         }
-    }
-
-    private static string ValidateDisplayName(string displayName)
-    {
-        var trimmed = (displayName ?? string.Empty).Trim();
-        if (trimmed.Length is < 1 or > MaxDisplayNameLength)
-        {
-            throw new ValidationException("displayName", $"표시 이름은 1~{MaxDisplayNameLength}자여야 합니다.");
-        }
-
-        return trimmed;
     }
 }

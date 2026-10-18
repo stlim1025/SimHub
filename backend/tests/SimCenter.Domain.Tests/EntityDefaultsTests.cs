@@ -1,4 +1,6 @@
+using SimCenter.Domain.Constants;
 using SimCenter.Domain.Entities;
+using SimCenter.Domain.Enums;
 
 namespace SimCenter.Domain.Tests;
 
@@ -12,6 +14,32 @@ public class EntityDefaultsTests
         Assert.False(user.IsDeleted);
         Assert.Null(user.UpdatedAt);
         Assert.Empty(user.AgentDevices);
+    }
+
+    [Fact]
+    public void User_ProfileSettings_DefaultToPublicWheelPcMetricSeoulSystem()
+    {
+        var user = new User { Email = "a@b.com", PasswordHash = "hash", DisplayName = "홍길동" };
+
+        Assert.True(user.ShowOnLeaderboard);
+        Assert.Null(user.AvatarTeam);
+        Assert.Equal(GameCodes.F1_25, user.PreferredGame);
+        Assert.Equal(ControllerType.Wheel, user.Controller);
+        Assert.Equal(ConsolePlatform.Pc, user.Console);
+        Assert.Equal(UnitSystem.Metric, user.Units);
+        Assert.Equal("Asia/Seoul", user.TimeZoneId);
+        Assert.Equal(ThemePreference.System, user.Theme);
+    }
+
+    [Fact]
+    public void AvatarTeamCodes_AreTenUniqueShortCodes()
+    {
+        Assert.Equal(
+            new[] { "MER", "FER", "RBR", "MCL", "AST", "ALP", "WIL", "RB", "SAU", "HAA" },
+            AvatarTeamCodes.All);
+        Assert.All(AvatarTeamCodes.All, code => Assert.InRange(code.Length, 2, AvatarTeamCodes.MaxLength));
+        Assert.True(AvatarTeamCodes.IsKnown("MCL"));
+        Assert.False(AvatarTeamCodes.IsKnown("mcl")); // 호출자가 대문자로 정규화한다.
     }
 
     [Fact]

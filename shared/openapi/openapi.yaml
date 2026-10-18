@@ -62,7 +62,7 @@ paths:
 
   /me:
     get:
-      summary: 내 프로필 조회
+      summary: 내 프로필 조회 (계정 + 설정, docs/14)
       operationId: getMyProfile
       responses:
         '200':
@@ -73,6 +73,67 @@ paths:
                 $ref: '#/components/schemas/UserProfile'
         '401':
           $ref: '#/components/responses/401Unauthorized'
+        '500':
+          $ref: '#/components/responses/500ServerError'
+
+  /me/profile:
+    put:
+      summary: 내 프로필·설정 저장 (전체 교체, docs/14 §5)
+      description: |
+        표시 이름·랭킹 공개 여부·프로필 사진·게임 환경·타임존·테마를 한 번에 저장한다. `avatarTeam`만 null 허용(사진 없음).
+        표시 이름은 가입과 같은 규칙(trim 후 1~50자). enum 값은 이름 문자열(대소문자 무시), 모르는 값·팀 코드·타임존은 400.
+        `showOnLeaderboard`가 false면 랭킹(`/rankings`, RankingHub `RankingUpdated`)의 내 표시 이름이 "익명 드라이버"로 보인다(D-39).
+      operationId: updateMyProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        '200':
+          description: 저장된 프로필
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '400':
+          $ref: '#/components/responses/400ValidationError'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '500':
+          $ref: '#/components/responses/500ServerError'
+
+  /me/email:
+    post:
+      summary: 로그인 이메일 변경 (현재 비밀번호 확인, docs/14 §5)
+      description: |
+        새 이메일은 가입과 같이 정규화(trim + 소문자)·검증한다. 현재 비밀번호가 틀리면 401이 아니라 400(`errors.currentPassword`) —
+        앱은 401을 세션 만료로 보고 로그아웃시키기 때문이다. 이미 쓰는 이메일은 409. 발급된 JWT의 email 클레임은 다음 로그인 때 갱신된다.
+      operationId: changeMyEmail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeEmailRequest'
+      responses:
+        '200':
+          description: 이메일이 바뀐 프로필
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '400':
+          $ref: '#/components/responses/400ValidationError'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '409':
+          description: 다른 계정이 이미 쓰는 이메일
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
         '500':
           $ref: '#/components/responses/500ServerError'
 
@@ -610,14 +671,38 @@ components:
           format: date-time
           example: "2026-07-06T10:00:00Z"
         user:
-          $ref: '#/components/schemas/UserProfile'
+          $ref: '#/components/schemas/UserSummary'
+
+    UserSummary:
+      description: 로그인 응답의 사용자 요약(이메일·설정 미포함 — 앱은 로그인 뒤 `GET /me`로 프로필을 받는다).
+      type: object
+      required:
+        - userId
+        - displayName
+      properties:
+        userId:
+          type: string
+          format: uuid
+          example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        displayName:
+          type: string
+          example: "홍길동"
 
     UserProfile:
+      description: 내 프로필(계정 + 설정, docs/14). `GET /me`·`PUT /me/profile`·`POST /me/email` 공통 응답.
       type: object
       required:
         - userId
         - email
         - displayName
+        - showOnLeaderboard
+        - avatarTeam
+        - preferredGame
+        - controller
+        - console
+        - units
+        - timeZoneId
+        - theme
       properties:
         userId:
           type: string
@@ -630,6 +715,120 @@ components:
         displayName:
           type: string
           example: "홍길동"
+        showOnLeaderboard:
+          type: boolean
+          description: false면 랭킹의 내 표시 이름이 "익명 드라이버"로 보인다(D-39). 기본 true.
+          example: true
+        avatarTeam:
+          allOf:
+            - $ref: '#/components/schemas/AvatarTeamCode'
+          nullable: true
+          description: 프로필 사진 팀 코드. null이면 앱이 이름 첫 글자를 보인다.
+        preferredGame:
+          type: string
+          enum: [F1_25]
+          example: "F1_25"
+        controller:
+          $ref: '#/components/schemas/ControllerTypeName'
+        console:
+          $ref: '#/components/schemas/ConsolePlatformName'
+        units:
+          $ref: '#/components/schemas/UnitSystemName'
+        timeZoneId:
+          type: string
+          description: IANA 타임존 ID(기본 Asia/Seoul). 저장만 한다 — 랭킹 기간 경계는 서버 설정(D-27).
+          example: "Asia/Seoul"
+        theme:
+          $ref: '#/components/schemas/ThemePreferenceName'
+
+    UpdateProfileRequest:
+      description: 프로필·설정 전체 교체. `avatarTeam`만 null(사진 없음) 허용, 나머지는 필수.
+      type: object
+      required:
+        - displayName
+        - showOnLeaderboard
+        - preferredGame
+        - controller
+        - console
+        - units
+        - timeZoneId
+        - theme
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: trim 후 1~50자(가입과 같은 규칙).
+          example: "lemonary"
+        showOnLeaderboard:
+          type: boolean
+          example: false
+        avatarTeam:
+          allOf:
+            - $ref: '#/components/schemas/AvatarTeamCode'
+          nullable: true
+        preferredGame:
+          type: string
+          enum: [F1_25]
+          example: "F1_25"
+        controller:
+          $ref: '#/components/schemas/ControllerTypeName'
+        console:
+          $ref: '#/components/schemas/ConsolePlatformName'
+        units:
+          $ref: '#/components/schemas/UnitSystemName'
+        timeZoneId:
+          type: string
+          maxLength: 64
+          description: 서버가 찾을 수 있는 IANA ID만(Windows ID 거부).
+          example: "Europe/London"
+        theme:
+          $ref: '#/components/schemas/ThemePreferenceName'
+
+    ChangeEmailRequest:
+      type: object
+      required:
+        - newEmail
+        - currentPassword
+      properties:
+        newEmail:
+          type: string
+          format: email
+          example: "new@example.com"
+        currentPassword:
+          type: string
+          format: password
+          example: "SecureP@ss123"
+
+    AvatarTeamCode:
+      description: 프로필 사진 팀 코드(팀 색 원 + 코드로 그린다 — 실제 로고는 쓰지 않는다, docs/14 §4). 백엔드 `AvatarTeamCodes`·앱 `kAvatarTeams`와 같은 목록.
+      type: string
+      enum: [MER, FER, RBR, MCL, AST, ALP, WIL, RB, SAU, HAA]
+      example: "MCL"
+
+    ControllerTypeName:
+      type: string
+      enum: [Gamepad, Wheel]
+      description: 입력 장치. 기본 Wheel. 저장만 한다(이후 Phase).
+      example: "Wheel"
+
+    ConsolePlatformName:
+      type: string
+      enum: [Pc, Xbox, PlayStation]
+      description: 플랫폼. 기본 Pc. 저장만 한다(이후 Phase).
+      example: "Pc"
+
+    UnitSystemName:
+      type: string
+      enum: [Metric, Imperial]
+      description: 속도·거리 단위(Metric = km/h, Imperial = mph). 기본 Metric. 저장만 한다(텔레메트리 화면에서 쓴다).
+      example: "Metric"
+
+    ThemePreferenceName:
+      type: string
+      enum: [Light, Dark, System]
+      description: 앱 테마. System은 기기 밝기 설정을 따른다. 기본 System.
+      example: "System"
 
     RankingSnapshot:
       type: object

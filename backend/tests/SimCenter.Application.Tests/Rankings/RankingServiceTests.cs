@@ -51,6 +51,28 @@ public class RankingServiceTests
     }
 
     [Fact]
+    public async Task GetRankingAsync_HiddenUser_ShowsAnonymousName_KeepingRankAndTime()
+    {
+        _laps.RankingRows =
+        [
+            new RankingLapRow(Guid.NewGuid(), "홍길동", 83452, Now, ShowOnLeaderboard: false),
+            new RankingLapRow(Guid.NewGuid(), "김레이", 84010, Now, ShowOnLeaderboard: true),
+        ];
+
+        var snapshot = await _sut.GetRankingAsync(TrackId, GameCode, RankingPeriod.Monthly, date: null);
+
+        Assert.Collection(snapshot.Entries,
+            e =>
+            {
+                Assert.Equal(1, e.Rank);
+                Assert.Equal(RankingPrivacy.AnonymousDisplayName, e.DisplayName);
+                Assert.Equal(83452, e.BestLapTimeMs);
+            },
+            e => Assert.Equal("김레이", e.DisplayName));
+        Assert.Equal("익명 드라이버", RankingPrivacy.AnonymousDisplayName);
+    }
+
+    [Fact]
     public async Task GetRankingAsync_UsesConfiguredTimeZone()
     {
         // Now = 2026-07-31T16:00:00Z: 서울(UTC+9)은 이미 8월 1일, UTC는 아직 7월 31일.

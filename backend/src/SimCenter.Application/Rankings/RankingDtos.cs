@@ -12,8 +12,16 @@ public sealed record RankingSnapshotDto(
 /// <summary>랭킹 한 줄(유저별 최고 랩).</summary>
 public sealed record RankingEntryDto(int Rank, string DisplayName, int BestLapTimeMs, DateTime SetAt);
 
-/// <summary>랭킹 쿼리 원시 행(순위 미부여). 리포지토리 → 서비스 전달용.</summary>
-public sealed record RankingLapRow(Guid UserId, string DisplayName, int LapTimeMs, DateTime SetAt);
+/// <summary>
+/// 랭킹 쿼리 원시 행(순위 미부여). 리포지토리 → 서비스 전달용.
+/// <paramref name="ShowOnLeaderboard"/>가 false면 서비스가 표시 이름을 익명으로 바꾼다(<see cref="RankingPrivacy"/>).
+/// </summary>
+public sealed record RankingLapRow(
+    Guid UserId,
+    string DisplayName,
+    int LapTimeMs,
+    DateTime SetAt,
+    bool ShowOnLeaderboard = true);
 
 /// <summary>트랙 마스터 항목(04 §3.8).</summary>
 public sealed record TrackDto(Guid TrackId, string GameCode, string Name);

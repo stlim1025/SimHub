@@ -11,20 +11,5 @@ public static class LenientEnum
     /// 숫자 문자열("15")·쉼표 목록·공백이 낀 값은 이름이 아니므로 거부한다(<c>Enum.TryParse</c>와 다름).
     /// </summary>
     public static TEnum Parse<TEnum>(string? value) where TEnum : struct, Enum
-    {
-        if (string.IsNullOrEmpty(value))
-        {
-            return default;
-        }
-
-        foreach (var name in Enum.GetNames<TEnum>())
-        {
-            if (string.Equals(name, value, StringComparison.OrdinalIgnoreCase))
-            {
-                return Enum.Parse<TEnum>(name);
-            }
-        }
-
-        return default;
-    }
+        => EnumNames.TryParse<TEnum>(value, out var parsed) ? parsed : default;
 }

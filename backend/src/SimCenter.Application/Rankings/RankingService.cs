@@ -47,8 +47,10 @@ public sealed class RankingService : IRankingService
         var rows = await _laps.GetRankingAsync(
             trackId, gameCode, SessionType.TimeTrial, range.FromUtc, range.ToUtc, TopCount, cancellationToken);
 
+        // 이름 비공개 사용자는 익명으로 보인다(D-39). REST와 RankingUpdated 브로드캐스트가 모두 이 스냅샷을 쓴다.
         var entries = rows
-            .Select((row, index) => new RankingEntryDto(index + 1, row.DisplayName, row.LapTimeMs, row.SetAt))
+            .Select((row, index) => new RankingEntryDto(
+                index + 1, RankingPrivacy.DisplayNameFor(row), row.LapTimeMs, row.SetAt))
             .ToList();
 
         return new RankingSnapshotDto(
