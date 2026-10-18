@@ -141,7 +141,7 @@ public class AuthServiceTests
         Assert.Equal("Pc", me.Console);
         Assert.Equal("Metric", me.Units);
         Assert.Equal("Asia/Seoul", me.TimeZoneId);
-        Assert.Equal("System", me.Theme);
+        Assert.Equal("Dark", me.Theme);
     }
 
     [Fact]

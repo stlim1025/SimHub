@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using SimCenter.Api.Common;
+using SimCenter.Api.RateLimiting;
 using SimCenter.Application.Auth;
 using SimCenter.Application.Profile;
 
@@ -24,8 +26,12 @@ public sealed class MyProfileController(IProfileService profileService) : Contro
         return Ok(result);
     }
 
-    /// <summary>현재 비밀번호를 확인하고 로그인 이메일을 바꾼다. 발급된 JWT의 email 클레임은 다음 로그인 때 갱신된다.</summary>
+    /// <summary>
+    /// 현재 비밀번호를 확인하고 로그인 이메일을 바꾼다. 발급된 JWT의 email 클레임은 다음 로그인 때 갱신된다.
+    /// 비밀번호 추측을 늦추도록 사용자당 분당 10회로 제한한다(<see cref="RateLimitPolicies.EmailChange"/>, 넘으면 429).
+    /// </summary>
     [HttpPost("email")]
+    [EnableRateLimiting(RateLimitPolicies.EmailChange)]
     [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<UserDto>> ChangeEmail(ChangeEmailRequest request, CancellationToken cancellationToken)
     {

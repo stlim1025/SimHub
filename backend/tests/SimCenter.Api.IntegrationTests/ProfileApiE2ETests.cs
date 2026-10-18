@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
+using SimCenter.Api.RateLimiting;
 
 namespace SimCenter.Api.IntegrationTests;
 
@@ -38,7 +39,7 @@ public sealed class ProfileApiE2ETests : IClassFixture<ApiFactory>
         Assert.Equal("Pc", me.GetProperty("console").GetString());
         Assert.Equal("Metric", me.GetProperty("units").GetString());
         Assert.Equal("Asia/Seoul", me.GetProperty("timeZoneId").GetString());
-        Assert.Equal("System", me.GetProperty("theme").GetString());
+        Assert.Equal("Dark", me.GetProperty("theme").GetString());
     }
 
     [Fact]
@@ -48,7 +49,7 @@ public sealed class ProfileApiE2ETests : IClassFixture<ApiFactory>
         await TestApi.RegisterAndLoginAsync(client);
 
         using var response = await client.PutAsJsonAsync("/api/v1/me/profile", ProfileBody(
-            displayName: "  lemonary  ", showOnLeaderboard: false, avatarTeam: "mcl", theme: "Dark"));
+            displayName: "  lemonary  ", showOnLeaderboard: false, avatarTeam: "mcl", theme: "System"));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var saved = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -63,7 +64,7 @@ public sealed class ProfileApiE2ETests : IClassFixture<ApiFactory>
         Assert.Equal("PlayStation", me.GetProperty("console").GetString());
         Assert.Equal("Imperial", me.GetProperty("units").GetString());
         Assert.Equal("Europe/London", me.GetProperty("timeZoneId").GetString());
-        Assert.Equal("Dark", me.GetProperty("theme").GetString());
+        Assert.Equal("System", me.GetProperty("theme").GetString());
     }
 
     [Fact]
@@ -113,6 +114,40 @@ public sealed class ProfileApiE2ETests : IClassFixture<ApiFactory>
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(problem.GetProperty("errors").TryGetProperty("currentPassword", out _));
+    }
+
+    [Fact]
+    public async Task ChangeEmail_ExceedingPerUserLimit_Returns429_AndOtherUserIsUnaffected()
+    {
+        var heavyUser = _factory.CreateClient();
+        await TestApi.RegisterAndLoginAsync(heavyUser);
+        var otherUser = _factory.CreateClient();
+        await TestApi.RegisterAndLoginAsync(otherUser);
+        var wrongPassword = new { newEmail = UniqueEmail(), currentPassword = "WrongP@ss1" };
+
+        for (var i = 0; i < RateLimitPolicies.PermitLimit; i++)
+        {
+            using var allowed = await heavyUser.PostAsJsonAsync("/api/v1/me/email", wrongPassword);
+            Assert.Equal(HttpStatusCode.BadRequest, allowed.StatusCode); // 한도 안: 비밀번호 검사(400)까지 도달.
+        }
+
+        using var limited = await heavyUser.PostAsJsonAsync("/api/v1/me/email", wrongPassword);
+        using var unaffected = await otherUser.PostAsJsonAsync("/api/v1/me/email", wrongPassword);
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, limited.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, unaffected.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateProfile_StoresCanonicalTimeZoneId()
+    {
+        var client = _factory.CreateClient();
+        await TestApi.RegisterAndLoginAsync(client);
+
+        using var response = await client.PutAsJsonAsync("/api/v1/me/profile", ProfileBody(timeZoneId: "america/new_york"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("America/New_York", (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("timeZoneId").GetString());
     }
 
     [Fact]

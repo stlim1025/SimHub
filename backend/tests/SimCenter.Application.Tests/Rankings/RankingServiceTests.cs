@@ -31,8 +31,8 @@ public class RankingServiceTests
     {
         _laps.RankingRows =
         [
-            new RankingLapRow(Guid.NewGuid(), "홍길동", 83452, Now),
-            new RankingLapRow(Guid.NewGuid(), "김레이", 84010, Now),
+            new RankingLapRow(Guid.NewGuid(), "홍길동", 83452, Now, ShowOnLeaderboard: true),
+            new RankingLapRow(Guid.NewGuid(), "김레이", 84010, Now, ShowOnLeaderboard: true),
         ];
 
         var snapshot = await _sut.GetRankingAsync(TrackId, GameCode, RankingPeriod.Monthly, date: null);

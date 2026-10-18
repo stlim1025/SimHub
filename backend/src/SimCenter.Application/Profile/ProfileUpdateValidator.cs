@@ -59,8 +59,8 @@ public static class ProfileUpdateValidator
         var units = ParseEnum<UnitSystem>(errors, UnitsField, request.Units);
         var theme = ParseEnum<ThemePreference>(errors, ThemeField, request.Theme);
 
-        var timeZoneId = (request.TimeZoneId ?? string.Empty).Trim();
-        AddError(errors, TimeZoneIdField, TimeZoneError(timeZoneId));
+        var (timeZoneId, timeZoneError) = CheckTimeZone(request.TimeZoneId);
+        AddError(errors, TimeZoneIdField, timeZoneError);
 
         if (errors.Count > 0)
         {
@@ -79,16 +79,20 @@ public static class ProfileUpdateValidator
     private static string? CodeError(string value, bool known)
         => value.Length == 0 ? RequiredMessage : known ? null : UnknownValueMessage;
 
-    private static string? TimeZoneError(string timeZoneId)
+    /// <summary>정식 표기 타임존 ID(저장 값)와 오류 메시지. 틀리면 ID는 빈 문자열.</summary>
+    private static (string Canonical, string? Error) CheckTimeZone(string? timeZoneId)
     {
-        if (timeZoneId.Length == 0)
+        var trimmed = (timeZoneId ?? string.Empty).Trim();
+        if (trimmed.Length == 0)
         {
-            return RequiredMessage;
+            return (string.Empty, RequiredMessage);
         }
 
-        return timeZoneId.Length <= UserProfileDefaults.TimeZoneIdMaxLength && IanaTimeZones.IsValid(timeZoneId)
-            ? null
-            : UnknownTimeZoneMessage;
+        return trimmed.Length <= UserProfileDefaults.TimeZoneIdMaxLength
+            && IanaTimeZones.TryCanonicalize(trimmed, out var canonical)
+            && canonical.Length <= UserProfileDefaults.TimeZoneIdMaxLength
+                ? (canonical, null)
+                : (string.Empty, UnknownTimeZoneMessage);
     }
 
     private static TEnum ParseEnum<TEnum>(Dictionary<string, string[]> errors, string field, string? value)

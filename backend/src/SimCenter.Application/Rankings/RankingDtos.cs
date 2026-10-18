@@ -15,13 +15,14 @@ public sealed record RankingEntryDto(int Rank, string DisplayName, int BestLapTi
 /// <summary>
 /// 랭킹 쿼리 원시 행(순위 미부여). 리포지토리 → 서비스 전달용.
 /// <paramref name="ShowOnLeaderboard"/>가 false면 서비스가 표시 이름을 익명으로 바꾼다(<see cref="RankingPrivacy"/>).
+/// 기본값을 두지 않는다 — 만드는 쪽이 공개 여부를 반드시 정하게 해서, 빠뜨려 비공개 사용자의 이름이 새는 일을 막는다.
 /// </summary>
 public sealed record RankingLapRow(
     Guid UserId,
     string DisplayName,
     int LapTimeMs,
     DateTime SetAt,
-    bool ShowOnLeaderboard = true);
+    bool ShowOnLeaderboard);
 
 /// <summary>트랙 마스터 항목(04 §3.8).</summary>
 public sealed record TrackDto(Guid TrackId, string GameCode, string Name);

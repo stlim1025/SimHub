@@ -42,7 +42,7 @@ public class ProfileServiceTests
         Console: "PlayStation",
         Units: "Imperial",
         TimeZoneId: "Europe/London",
-        Theme: "Dark");
+        Theme: "Light");
 
     // ── UpdateProfile ──
 
@@ -60,7 +60,7 @@ public class ProfileServiceTests
         Assert.Equal(ConsolePlatform.PlayStation, user.Console);
         Assert.Equal(UnitSystem.Imperial, user.Units);
         Assert.Equal("Europe/London", user.TimeZoneId);
-        Assert.Equal(ThemePreference.Dark, user.Theme);
+        Assert.Equal(ThemePreference.Light, user.Theme);
         Assert.Equal(Now, user.UpdatedAt);
         Assert.Equal(1, _users.SaveCount);
 
@@ -69,7 +69,7 @@ public class ProfileServiceTests
         Assert.Equal("Gamepad", dto.Controller);
         Assert.Equal("PlayStation", dto.Console);
         Assert.Equal("Imperial", dto.Units);
-        Assert.Equal("Dark", dto.Theme);
+        Assert.Equal("Light", dto.Theme);
     }
 
     [Fact]
@@ -199,6 +199,20 @@ public class ProfileServiceTests
         await _sut.UpdateProfileAsync(UserId, ValidRequest() with { TimeZoneId = timeZoneId });
 
         Assert.Equal(timeZoneId, Stored.TimeZoneId);
+    }
+
+    [Theory]
+    [InlineData(" asia/seoul ", "Asia/Seoul")]
+    [InlineData("ASIA/TOKYO", "Asia/Tokyo")]
+    [InlineData("america/new_york", "America/New_York")]
+    [InlineData("america/los_angeles", "America/Los_Angeles")]
+    [InlineData("europe/london", "Europe/London")]
+    [InlineData("utc", "UTC")]
+    public async Task UpdateProfile_StoresCanonicalTimeZoneId(string input, string expected)
+    {
+        await _sut.UpdateProfileAsync(UserId, ValidRequest() with { TimeZoneId = input });
+
+        Assert.Equal(expected, Stored.TimeZoneId);
     }
 
     [Fact]

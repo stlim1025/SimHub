@@ -17,7 +17,7 @@ public class EntityDefaultsTests
     }
 
     [Fact]
-    public void User_ProfileSettings_DefaultToPublicWheelPcMetricSeoulSystem()
+    public void User_ProfileSettings_DefaultToPublicWheelPcMetricSeoulDark()
     {
         var user = new User { Email = "a@b.com", PasswordHash = "hash", DisplayName = "홍길동" };
 
@@ -28,7 +28,7 @@ public class EntityDefaultsTests
         Assert.Equal(ConsolePlatform.Pc, user.Console);
         Assert.Equal(UnitSystem.Metric, user.Units);
         Assert.Equal("Asia/Seoul", user.TimeZoneId);
-        Assert.Equal(ThemePreference.System, user.Theme);
+        Assert.Equal(ThemePreference.Dark, user.Theme); // D-40: 기존 어두운 화면 유지.
     }
 
     [Fact]
