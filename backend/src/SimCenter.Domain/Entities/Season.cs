@@ -27,6 +27,18 @@ public class Season : BaseEntity
     /// <summary>받은 세션의 분류 시각 최대값(UTC).</summary>
     public DateTime LastSessionAt { get; set; }
 
+    /// <summary>가져온 출처(docs/15 §12, D-55 — 예: "F1Laps"). 게임에서 기록된 시즌이면 null.</summary>
+    public string? ImportedFrom { get; set; }
+
+    /// <summary>가져온 시각(UTC). 가져온 시즌이 아니면 null.</summary>
+    public DateTime? ImportedAt { get; set; }
+
+    /// <summary>
+    /// 가져온 스탠딩 스냅샷 JSON(jsonb, D-55): 제목·플레이어 이름·팀·드라이버별 포인트.
+    /// Standings 기준선이 된다 — 가져온 뒤 기록된(가져온 것이 아닌) 세션의 포인트만 더한다. 가져온 시즌이 아니면 null.
+    /// </summary>
+    public string? ImportedStandings { get; set; }
+
     public ICollection<RaceWeekend> Weekends { get; set; } = new List<RaceWeekend>();
 
     /// <summary>

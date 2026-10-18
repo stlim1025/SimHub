@@ -5,6 +5,7 @@ using SimCenter.Application.Laps;
 using SimCenter.Application.Laps.Ingest;
 using SimCenter.Application.Profile;
 using SimCenter.Application.Rankings;
+using SimCenter.Application.Seasons.Import;
 using SimCenter.Application.Seasons.Ingest;
 using SimCenter.Application.Seasons.Queries;
 using SimCenter.Application.Telemetry;
@@ -22,6 +23,7 @@ public static class DependencyInjection
         services.AddScoped<LapDetailExtractor>();
         services.AddScoped<ISessionClassificationIngestor, SessionClassificationIngestor>();
         services.AddScoped<ISeasonQueryService, SeasonQueryService>();
+        services.AddScoped<ISeasonImportService, SeasonImportService>();
         services.AddScoped<ISessionQueryService, SessionQueryService>();
         services.AddScoped<IRankingService, RankingService>();
         services.AddScoped<ILapQueryService, LapQueryService>();

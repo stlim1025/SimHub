@@ -130,7 +130,7 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<Guid>("AgentDeviceId")
+                    b.Property<Guid?>("AgentDeviceId")
                         .HasColumnType("uuid")
                         .HasColumnName("agent_device_id");
 
@@ -165,6 +165,12 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean")
                         .HasColumnName("is_deleted");
+
+                    b.Property<bool>("IsImported")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_imported");
 
                     b.Property<bool>("IsNetworkGame")
                         .HasColumnType("boolean")
@@ -225,6 +231,11 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid")
                         .HasColumnName("user_id");
+
+                    b.Property<string>("Weather")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("weather");
 
                     b.Property<long>("WeekendLinkId")
                         .HasColumnType("bigint")
@@ -751,6 +762,19 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(20)")
                         .HasColumnName("game_mode");
 
+                    b.Property<DateTime?>("ImportedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("imported_at");
+
+                    b.Property<string>("ImportedFrom")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("imported_from");
+
+                    b.Property<string>("ImportedStandings")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("imported_standings");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean")
                         .HasColumnName("is_deleted");
@@ -1123,7 +1147,6 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("AgentDeviceId")
                         .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
                         .HasConstraintName("fk_game_sessions_agent_devices_agent_device_id");
 
                     b.HasOne("SimCenter.Domain.Entities.RaceWeekend", null)

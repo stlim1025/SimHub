@@ -6,6 +6,8 @@ namespace SimCenter.Infrastructure.Persistence.Configurations;
 
 public sealed class GameSessionConfiguration : IEntityTypeConfiguration<GameSession>
 {
+    private const int WeatherMaxLength = 20;
+
     public void Configure(EntityTypeBuilder<GameSession> builder)
     {
         builder.HasKey(x => x.Id);
@@ -18,6 +20,10 @@ public sealed class GameSessionConfiguration : IEntityTypeConfiguration<GameSess
         builder.Property(x => x.SessionKind).IsRequired().HasConversion<string>().HasMaxLength(30);
         builder.Property(x => x.GameMode).IsRequired().HasConversion<string>().HasMaxLength(20);
         builder.Property(x => x.ClassifiedAt).IsRequired();
+
+        // 가져온 세션(docs/15 §12, D-55): 장치 없음(AgentDeviceId null)·날씨는 세션에 둔다.
+        builder.Property(x => x.IsImported).IsRequired().HasDefaultValue(false);
+        builder.Property(x => x.Weather).HasConversion<string>().HasMaxLength(WeatherMaxLength);
 
         // 랩별 기록·순위 묶음(D-49): JSON 객체 원문 그대로.
         builder.Property(x => x.Details).HasColumnType(JsonColumns.Jsonb);

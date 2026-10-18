@@ -13,6 +13,7 @@ import '../../sessions/domain/session_display.dart';
 import '../application/seasons_providers.dart';
 import '../domain/season_display.dart';
 import '../domain/season_models.dart';
+import 'season_import_dialog.dart';
 
 const String _seasonsPath = '/seasons';
 const String _telemetryAppPath = '/telemetry-app';
@@ -36,6 +37,14 @@ class _SeasonsPageState extends ConsumerState<SeasonsPage> {
 
   void _changePage(int page) => setState(() => _page = page);
 
+  /// 시즌 가져오기(docs/15 §12, D-55). 가져오면 목록을 새로 읽고 만든 시즌으로 간다.
+  Future<void> _openImport() async {
+    final seasonId = await showDialog<String>(context: context, builder: (_) => const SeasonImportDialog());
+    if (seasonId == null || !mounted) return;
+    ref.invalidate(seasonsProvider);
+    context.go('$_seasonsPath/$seasonId');
+  }
+
   @override
   Widget build(BuildContext context) {
     final seasons = ref.watch(seasonsProvider(_page));
@@ -43,9 +52,22 @@ class _SeasonsPageState extends ConsumerState<SeasonsPage> {
     return ListView(
       padding: kPagePadding,
       children: [
-        Text(
-          'Seasons',
-          style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 12,
+          runSpacing: 8,
+          children: [
+            Text(
+              'Seasons',
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            OutlinedButton.icon(
+              onPressed: _openImport,
+              icon: const Icon(Icons.file_download_outlined),
+              label: const Text(kSeasonImportTitle),
+            ),
+          ],
         ),
         const SizedBox(height: 24),
         seasons.when(

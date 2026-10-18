@@ -21,6 +21,7 @@ import 'package:simcenter_app/features/ranking/data/ranking_repository.dart';
 import 'package:simcenter_app/features/ranking/domain/ranking_models.dart';
 import 'package:simcenter_app/features/seasons/data/seasons_repository.dart';
 import 'package:simcenter_app/features/seasons/domain/season_display.dart';
+import 'package:simcenter_app/features/seasons/domain/season_import_models.dart';
 import 'package:simcenter_app/features/seasons/domain/season_models.dart';
 import 'package:simcenter_app/features/sessions/data/sessions_repository.dart';
 import 'package:simcenter_app/features/sessions/domain/session_display.dart';
@@ -641,6 +642,27 @@ class FakeSeasonsRepository implements SeasonsRepository {
       throw ApiException('대상을 찾을 수 없어요.', statusCode: 404);
     }
     return detail;
+  }
+
+  /// 시즌 가져오기(docs/15 §12): [importPreview]가 없으면 [importError](또는 400)를 던진다.
+  SeasonImportPreview? importPreview;
+  ApiException? importError;
+  String importedSeasonId = 'imported-season';
+  final importRequests = <String>[];
+
+  @override
+  Future<SeasonImportPreview> previewImport(String markdown) async {
+    importRequests.add('preview');
+    final preview = importPreview;
+    if (preview == null) throw importError ?? ApiException('형식 오류', statusCode: 400);
+    return preview;
+  }
+
+  @override
+  Future<String> importSeason(String markdown) async {
+    importRequests.add('import');
+    if (importError case final error?) throw error;
+    return importedSeasonId;
   }
 }
 

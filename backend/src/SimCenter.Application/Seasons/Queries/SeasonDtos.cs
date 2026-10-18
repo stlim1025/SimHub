@@ -3,6 +3,7 @@ namespace SimCenter.Application.Seasons.Queries;
 /// <summary>
 /// 시즌 목록 한 줄(12 §7.2). 내 결과가 없으면 <c>My*</c>, Standings가 비면 <c>Leader*</c>는 null이다.
 /// 점수는 <c>int</c> 상한으로 자른 값이다(순서는 실제 합계 기준). 열거형은 문자열로 직렬화한다.
+/// <c>ImportedFrom</c> = 가져온 출처(docs/15 §12, D-55, 없으면 null). <c>MyTeam*</c> = Standings의 내 팀(내 결과가 없으면 null) — 헤더의 "모드 · 팀".
 /// </summary>
 public sealed record SeasonSummaryDto(
     Guid SeasonId,
@@ -14,7 +15,10 @@ public sealed record SeasonSummaryDto(
     int? MyPosition,
     int? MyPoints,
     string? LeaderName,
-    int? LeaderPoints);
+    int? LeaderPoints,
+    string? ImportedFrom = null,
+    string? MyTeamName = null,
+    string? MyTeamColor = null);
 
 /// <summary>시즌 상세: 헤더 + 라운드 + Standings(결과표 칸 포함). 세 탭이 같은 스냅샷을 쓴다.</summary>
 public sealed record SeasonDetailDto(

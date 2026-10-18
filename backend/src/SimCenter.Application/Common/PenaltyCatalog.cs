@@ -100,6 +100,24 @@ public static class PenaltyCatalog
     /// <summary>침해 종류 이름. 모르거나 없으면 <c>Unknown ({n})</c>.</summary>
     public static string InfringementName(int? infringementType) => NameOf(InfringementTypes, infringementType);
 
+    /// <summary>벌칙 이름 → 번호(대소문자·여분 공백 무시, docs/15 §12 D-55 가져오기). 모르면 null.</summary>
+    public static int? FindPenaltyType(string? name) => IndexOf(PenaltyTypes, name);
+
+    /// <summary>침해 이름 → 번호(대소문자·여분 공백 무시, D-55). 모르면 null.</summary>
+    public static int? FindInfringementType(string? name) => IndexOf(InfringementTypes, name);
+
+    private static int? IndexOf(string[] names, string? name)
+    {
+        var wanted = string.Join(' ', (name ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries));
+        if (wanted.Length == 0)
+        {
+            return null;
+        }
+
+        var index = Array.FindIndex(names, n => string.Equals(n, wanted, StringComparison.OrdinalIgnoreCase));
+        return index >= 0 ? index : null;
+    }
+
     private static string NameOf(string[] names, int? value)
         => value is { } index && index >= 0 && index < names.Length
             ? names[index]

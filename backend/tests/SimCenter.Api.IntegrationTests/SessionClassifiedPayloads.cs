@@ -35,7 +35,9 @@ internal static class SessionClassifiedPayloads
         int trackId = SeedTrackId,
         string namePrefix = "DRIVER",
         string? actualCompound = null,
-        bool awardsPoints = true)
+        bool awardsPoints = true,
+        string gameMode = "DriverCareer",
+        string sessionRef = SessionRef)
     {
         var results = Enumerable.Range(0, carCount)
             .Select(carIndex => BuildResult(
@@ -44,11 +46,11 @@ internal static class SessionClassifiedPayloads
 
         return new
         {
-            sessionRef = SessionRef,
+            sessionRef,
             trackId,
             sessionType,
             sessionKind,
-            gameMode = "DriverCareer",
+            gameMode,
             seasonLinkId = seasonLink,
             weekendLinkId = weekendLink,
             sessionLinkId = sessionLink,

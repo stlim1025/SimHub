@@ -20,6 +20,11 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <!-- docs/15 §12 (D-55) 가져오기 픽스처(Application.Tests와 같은 파일). -->
+  <ItemGroup>
+    <None Include="..\SimCenter.Application.Tests\Seasons\Import\Fixtures\*.md" CopyToOutputDirectory="PreserveNewest" Link="Fixtures\%(Filename)%(Extension)" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\SimCenter.Api\SimCenter.Api.csproj" />
     <ProjectReference Include="..\..\src\SimCenter.Application\SimCenter.Application.csproj" />

@@ -2,6 +2,7 @@ using SimCenter.Application.Common;
 using SimCenter.Application.Common.Exceptions;
 using SimCenter.Application.Common.Interfaces;
 using SimCenter.Application.Rankings;
+using SimCenter.Application.Seasons.Import;
 using SimCenter.Domain.Entities;
 
 namespace SimCenter.Application.Seasons.Queries;
@@ -72,7 +73,10 @@ public sealed class SeasonQueryService : ISeasonQueryService
         Season season, IReadOnlyList<SeasonResultRow> rows)
     {
         var selection = SeasonSessionSelector.Select(rows);
-        return (selection, StandingsCalculator.Calculate(selection, season.GameCode));
+
+        // 가져온 시즌(docs/15 §12, D-55)은 가져온 스탠딩이 기준선이다.
+        var imported = ImportedSeasonSnapshot.TryRead(season.ImportedStandings);
+        return (selection, StandingsCalculator.Calculate(selection, season.GameCode, imported));
     }
 
     // ---- 매핑: 요약 ----
@@ -81,6 +85,7 @@ public sealed class SeasonQueryService : ISeasonQueryService
     {
         var me = standings.Drivers.FirstOrDefault(d => d.IsPlayer);
         var leader = standings.Drivers.FirstOrDefault();
+        var myTeam = me?.TeamId is { } teamId ? TeamCatalog.Resolve(season.GameCode, teamId) : null;
 
         return new SeasonSummaryDto(
             season.Id,
@@ -92,7 +97,10 @@ public sealed class SeasonQueryService : ISeasonQueryService
             me?.Position,
             me?.Points,
             leader?.Name,
-            leader?.Points);
+            leader?.Points,
+            season.ImportedFrom,
+            myTeam?.Name,
+            myTeam?.Color);
     }
 
     // ---- 매핑: 라운드 ----
