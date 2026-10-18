@@ -77,13 +77,13 @@ public sealed class SeasonImportService : ISeasonImportService
             }
 
             var graph = BuildGraph(userId, bundle, prepared);
-            await PersistAsync(userId, bundle, graph, ct);
+            var season = await PersistAsync(userId, bundle, graph, ct);
             await _unitOfWork.SaveChangesAsync(ct);
 
             _logger.LogInformation(
-                "시즌 가져오기 user={User} season={Season} link={Link} sessions={Sessions} attached={Attached}",
-                userId, graph.Season.Id, graph.Season.SeasonLinkId, graph.Sessions.Count, graph.Attachments.Count);
-            return new SeasonImportResultDto(graph.Season.Id, graph.Sessions.Count, graph.Attachments.Count);
+                "시즌 가져오기 user={User} season={Season} link={Link} sessions={Sessions} attached={Attached} merged={Merged}",
+                userId, season.Id, season.SeasonLinkId, graph.Sessions.Count, graph.Attachments.Count, season.Id != graph.Season.Id);
+            return new SeasonImportResultDto(season.Id, graph.Sessions.Count, graph.Attachments.Count);
         }, cancellationToken);
     }
 
@@ -168,7 +168,8 @@ public sealed class SeasonImportService : ISeasonImportService
 
     private async Task<bool> IsAlreadyImportedAsync(Guid userId, ImportBundle bundle, long seasonLinkId, CancellationToken cancellationToken)
     {
-        if (await _seasons.GetByLinkAsync(userId, bundle.GameCode, seasonLinkId, cancellationToken) is not null)
+        // 같은 링크의 시즌이 이미 있어도 기록으로만 만들어진 시즌이면 막지 않는다 — 가져오기가 그 시즌에 합친다(PersistAsync).
+        if (await _seasons.GetByLinkAsync(userId, bundle.GameCode, seasonLinkId, cancellationToken) is { ImportedFrom: not null })
         {
             return true;
         }
@@ -188,24 +189,72 @@ public sealed class SeasonImportService : ISeasonImportService
 
     // ---- 저장 ----
 
-    private async Task PersistAsync(Guid userId, ImportBundle bundle, SeasonImportGraph graph, CancellationToken cancellationToken)
+    /// <summary>그래프를 저장하고 실제로 쓴 시즌(새로 만든 시즌 또는 합친 기록 시즌)을 돌려준다.</summary>
+    private async Task<Season> PersistAsync(Guid userId, ImportBundle bundle, SeasonImportGraph graph, CancellationToken cancellationToken)
     {
         var now = _clock.UtcNow;
-        await _seasons.AddAsync(graph.Season, cancellationToken);
+        var season = await AdoptRecordedSeasonAsync(userId, bundle, graph.Season, now, cancellationToken);
+        var weekendMap = new Dictionary<Guid, RaceWeekend>();
         foreach (var weekend in graph.Weekends)
         {
-            await _seasons.AddWeekendAsync(weekend, cancellationToken);
+            weekendMap[weekend.Id] = await AddOrReuseWeekendAsync(season, weekend, cancellationToken);
         }
 
         foreach (var session in graph.Sessions)
         {
+            session.SeasonId = season.Id;
+            if (session.RaceWeekendId is { } weekendId && weekendMap.TryGetValue(weekendId, out var target))
+            {
+                session.RaceWeekendId = target.Id;
+            }
+
             await _sessions.AddAsync(session, cancellationToken);
         }
 
         foreach (var attachment in graph.Attachments)
         {
-            await AttachAsync(userId, bundle.GameMode, graph.Season, attachment, now, cancellationToken);
+            var weekend = weekendMap.GetValueOrDefault(attachment.Weekend.Id, attachment.Weekend);
+            await AttachAsync(userId, bundle.GameMode, season, attachment with { Weekend = weekend }, now, cancellationToken);
         }
+
+        return season;
+    }
+
+    /// <summary>
+    /// 같은 링크로 기록만으로 만들어진 시즌이 이미 있으면(가져오기 전에 고친 Agent로 달린 세션) 새로 만들지 않고 그 시즌에
+    /// 가져온 기준값을 싣는다. 없으면 만든 시즌을 그대로 추가한다.
+    /// </summary>
+    private async Task<Season> AdoptRecordedSeasonAsync(
+        Guid userId, ImportBundle bundle, Season built, DateTime now, CancellationToken cancellationToken)
+    {
+        var recorded = await _seasons.GetByLinkAsync(userId, bundle.GameCode, built.SeasonLinkId, cancellationToken);
+        if (recorded is null)
+        {
+            await _seasons.AddAsync(built, cancellationToken);
+            return built;
+        }
+
+        recorded.ImportedFrom = built.ImportedFrom;
+        recorded.ImportedAt = built.ImportedAt;
+        recorded.ImportedStandings = built.ImportedStandings;
+        recorded.Touch(built.FirstSessionAt, now);
+        recorded.Touch(built.LastSessionAt, now);
+        recorded.UpdatedAt = now;
+        return recorded;
+    }
+
+    /// <summary>같은 주말 링크의 주말이 이미 그 시즌에 있으면 그것을 쓴다(마이애미처럼 기록된 주말).</summary>
+    private async Task<RaceWeekend> AddOrReuseWeekendAsync(Season season, RaceWeekend weekend, CancellationToken cancellationToken)
+    {
+        if (season.Id != weekend.SeasonId
+            && await _seasons.GetWeekendAsync(season.Id, weekend.WeekendLinkId, cancellationToken) is { } existing)
+        {
+            return existing;
+        }
+
+        weekend.SeasonId = season.Id;
+        await _seasons.AddWeekendAsync(weekend, cancellationToken);
+        return weekend;
     }
 
     /// <summary>기록 세션을 이 시즌으로 옮긴다: 모드 → 가져온 모드, 키 → <c>SessionKeys.For</c>(D-29), 그 키의 내 랩도 같이.</summary>

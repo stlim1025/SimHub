@@ -139,7 +139,7 @@ public sealed class SeasonImportServiceTests
 
         public Task<Season?> GetByLinkAsync(Guid userId, string gameCode, long seasonLinkId, CancellationToken cancellationToken = default)
             => Task.FromResult(ExistingSeasonLinks.Contains(seasonLinkId)
-                ? new Season { GameCode = gameCode, SeasonLinkId = seasonLinkId }
+                ? new Season { GameCode = gameCode, SeasonLinkId = seasonLinkId, ImportedFrom = "F1Laps" }
                 : AddedSeasons.FirstOrDefault(s => s.SeasonLinkId == seasonLinkId));
 
         public Task<RaceWeekend?> GetWeekendAsync(Guid seasonId, long weekendLinkId, CancellationToken cancellationToken = default)

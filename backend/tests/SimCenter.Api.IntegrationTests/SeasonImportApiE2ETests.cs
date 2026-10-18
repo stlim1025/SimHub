@@ -172,6 +172,35 @@ public sealed class SeasonImportApiE2ETests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Import_merges_into_season_already_recorded_with_same_link()
+    {
+        // 실제 상황: 예전 Other 모드 예선(시즌 없음) 뒤, 고친 Agent로 달린 레이스(DriverCareer)가 같은 링크로 시즌을 먼저 만들었다.
+        var (client, connection) = await SeedMiamiQualifyingAsync();
+        await using var _ = connection;
+        await SendAsync(connection, SessionClassifiedPayloads.Build(
+            GridSize, 1, MiamiSeasonLink, MiamiWeekendLink, 4200, sessionKind: "Race2", playerCarIndex: PlayerCarIndex,
+            trackId: MiamiTrackId, gameMode: "DriverCareer", sessionRef: "8200"), DateTime.UtcNow.AddMinutes(-5));
+        var recorded = (await GetOkAsync(client, SeasonsUrl)).GetProperty("items")[0].GetProperty("seasonId").GetGuid();
+
+        var preview = await PostOkAsync(client, PreviewUrl, All);
+        Assert.False(preview.GetProperty("alreadyImported").GetBoolean());
+        var seasonId = await ImportAsync(client, All);
+
+        Assert.Equal(recorded, seasonId);
+        Assert.Single((await GetOkAsync(client, SeasonsUrl)).GetProperty("items").EnumerateArray());
+        var detail = await GetOkAsync(client, $"{SeasonsUrl}/{seasonId}");
+        Assert.Equal([1, 2, 3, 4, 5, 6], Rounds(detail));
+        var drivers = detail.GetProperty("standings").GetProperty("drivers");
+        Assert.Equal(93, drivers[0].GetProperty("points").GetInt32());
+        var miami = detail.GetProperty("rounds").EnumerateArray().Single(r => r.GetProperty("round").GetInt32() == 6);
+        Assert.Equal(4, miami.GetProperty("sessions").GetArrayLength());
+
+        // 같은 내용을 다시 가져오면 이제는 409.
+        using var again = await client.PostAsJsonAsync(ImportUrl, new { markdown = All });
+        Assert.Equal(HttpStatusCode.Conflict, again.StatusCode);
+    }
+
+    [Fact]
     public async Task Preview_bad_markdown_is_400_with_line_number()
     {
         var client = _factory.CreateClient();
