@@ -4,10 +4,13 @@ using SimCenter.Domain.Enums;
 
 namespace SimCenter.Application.Common.Interfaces;
 
-/// <summary>Lap 영속성/조회 포트. 섹터는 Lap.Sectors로 함께 저장된다(cascade).</summary>
+/// <summary>Lap 영속성/조회 포트. 섹터(Lap.Sectors)·스냅샷(Lap.Snapshot)은 랩과 함께 저장된다(cascade).</summary>
 public interface ILapRepository
 {
     Task AddAsync(Lap lap, CancellationToken cancellationToken = default);
+
+    /// <summary>랩의 텔레메트리 트레이스를 추적에 더한다(D-45). 저장은 랩과 같은 커밋(호출자의 SaveChanges)으로 한다.</summary>
+    Task AddTraceAsync(LapTelemetryTrace trace, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 트랙·기간·세션타입별 유저별 최고 랩 상위 N(랭킹적격만, lapTimeMs ASC). 04 §3.7 / 05 §3.4.

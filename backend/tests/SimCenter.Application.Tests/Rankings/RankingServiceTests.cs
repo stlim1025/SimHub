@@ -239,6 +239,8 @@ public class RankingServiceTests
 
         public Task AddAsync(Lap lap, CancellationToken ct = default) => Task.CompletedTask;
 
+        public Task AddTraceAsync(LapTelemetryTrace trace, CancellationToken ct = default) => Task.CompletedTask;
+
         public Task<IReadOnlyList<RankingLapRow>> GetRankingAsync(
             Guid trackId, string gameCode, SessionType sessionType, DateTime fromUtc, DateTime toUtc, int top, CancellationToken ct = default)
         {

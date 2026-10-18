@@ -6,7 +6,7 @@ using SimCenter.Domain.Enums;
 
 namespace SimCenter.Infrastructure.Persistence.Repositories;
 
-/// <summary>ILapRepository의 EF Core 구현. Sectors는 관계로 함께 삽입된다(cascade).</summary>
+/// <summary>ILapRepository의 EF Core 구현. Sectors·Snapshot은 관계로 함께 삽입된다(cascade).</summary>
 public sealed class LapRepository : ILapRepository
 {
     private readonly AppDbContext _context;
@@ -15,6 +15,9 @@ public sealed class LapRepository : ILapRepository
 
     public async Task AddAsync(Lap lap, CancellationToken cancellationToken = default)
         => await _context.Laps.AddAsync(lap, cancellationToken);
+
+    public async Task AddTraceAsync(LapTelemetryTrace trace, CancellationToken cancellationToken = default)
+        => await _context.LapTelemetryTraces.AddAsync(trace, cancellationToken);
 
     public async Task<IReadOnlyList<RankingLapRow>> GetRankingAsync(
         Guid trackId,
