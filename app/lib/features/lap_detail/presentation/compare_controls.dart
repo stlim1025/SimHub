@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/widgets/menu_items.dart';
 import '../../../core/theme/app_palette.dart';
 import '../domain/lap_compare.dart';
 
@@ -71,11 +72,7 @@ class CompareControls extends StatelessWidget {
       onSelected: (filter) => onChanged(selection.toggle(filter)),
       itemBuilder: (_) => [
         for (final filter in LapCompareFilter.values)
-          CheckedPopupMenuItem<LapCompareFilter>(
-            value: filter,
-            checked: selection.filters.contains(filter),
-            child: Text(kCompareFilterLabels[filter]!),
-          ),
+          CheckMenuItem<LapCompareFilter>(value: filter, checked: selection.filters.contains(filter), label: kCompareFilterLabels[filter]!),
       ],
       child: _MenuButtonFace(text: filterText, enabled: filtersEnabled),
     );
@@ -90,11 +87,7 @@ class CompareControls extends StatelessWidget {
           onSelected: (kind) => _pickKind(context, kind),
           itemBuilder: (_) => [
             for (final kind in LapCompareKind.values)
-              CheckedPopupMenuItem<LapCompareKind>(
-                value: kind,
-                checked: kind == selection.kind,
-                child: Text(compareButtonText(kind)),
-              ),
+              CheckMenuItem<LapCompareKind>(value: kind, checked: kind == selection.kind, label: compareButtonText(kind)),
           ],
           child: _MenuButtonFace(text: compareButtonText(selection.kind)),
         ),

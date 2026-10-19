@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/widgets/app_notice.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/time/clock_provider.dart';
@@ -144,12 +145,12 @@ class _IssuedCodeState extends ConsumerState<_IssuedCode> {
   }
 
   Future<void> _copy() async {
-    final messenger = ScaffoldMessenger.of(context);
+    final messenger = AppToaster.of(context);
     try {
       await Clipboard.setData(ClipboardData(text: widget.code.code));
-      messenger.showSnackBar(const SnackBar(content: Text('복사했어요')));
+      messenger.show('복사했어요', tone: NoticeTone.success);
     } on PlatformException {
-      messenger.showSnackBar(const SnackBar(content: Text(_copyFailedText)));
+      messenger.show(_copyFailedText, tone: NoticeTone.error);
     }
   }
 

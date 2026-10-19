@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/widgets/app_notice.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/time/clock_provider.dart';
@@ -27,7 +28,7 @@ class ConnectedDevicesCard extends ConsumerStatefulWidget {
 class _ConnectedDevicesCardState extends ConsumerState<ConnectedDevicesCard> {
   /// 확인 대화상자 후 해제하고 목록을 다시 불러온다. 실패하면 사유를 스낵바로 알린다.
   Future<void> _confirmAndRevoke(AgentDevice device) async {
-    final messenger = ScaffoldMessenger.of(context);
+    final messenger = AppToaster.of(context);
     final repo = ref.read(devicesRepositoryProvider);
 
     final confirmed = await showDialog<bool>(
@@ -41,10 +42,10 @@ class _ConnectedDevicesCardState extends ConsumerState<ConnectedDevicesCard> {
     try {
       await repo.revoke(device.deviceId);
     } on ApiException catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+      messenger.show(e.message, tone: NoticeTone.error);
     } catch (e) {
       debugPrint('장치 연결 해제 실패: $e');
-      messenger.showSnackBar(const SnackBar(content: Text(_revokeFailedText)));
+      messenger.show(_revokeFailedText, tone: NoticeTone.error);
     }
     if (mounted) {
       ref.invalidate(agentDevicesProvider);

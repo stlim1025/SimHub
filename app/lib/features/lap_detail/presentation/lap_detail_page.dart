@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/widgets/app_notice.dart';
 import '../../../core/layout/page_padding.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/util/lap_time.dart';
@@ -118,7 +119,7 @@ class _LapDetailPageState extends ConsumerState<LapDetailPage> with SingleTicker
 
   /// 지금 주소(탭·비교 포함)를 클립보드에 복사한다.
   Future<void> _share() async {
-    final messenger = ScaffoldMessenger.of(context);
+    final messenger = AppToaster.of(context);
     final location = lapDetailLocation(
       widget.lapId,
       tab: widget.tab == null ? null : _tab,
@@ -127,9 +128,9 @@ class _LapDetailPageState extends ConsumerState<LapDetailPage> with SingleTicker
     final url = shareUrlFor(ref.read(shareBaseUriProvider), location);
     try {
       await Clipboard.setData(ClipboardData(text: url));
-      messenger.showSnackBar(const SnackBar(content: Text(_sharedText)));
+      messenger.show(_sharedText, tone: NoticeTone.success);
     } on PlatformException {
-      messenger.showSnackBar(const SnackBar(content: Text(_shareFailedText)));
+      messenger.show(_shareFailedText, tone: NoticeTone.error);
     }
   }
 

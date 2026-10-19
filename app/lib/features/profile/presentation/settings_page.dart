@@ -4,16 +4,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/layout/page_padding.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../core/widgets/app_notice.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../auth/application/sign_out.dart';
 import '../application/profile_form_controller.dart';
+import '../application/settings_notice.dart';
 import 'settings_sections.dart';
 
-const double _sectionGap = 16;
+const double _sectionGap = 32;
+const double _titleGap = 20;
+const double _contentMaxWidth = 760;
 const double _saveBarBreakpoint = 520;
-const double _buttonHeight = 44;
 const double _buttonMinWidth = 96;
+const double _buttonHeight = 36;
 
 /// 계정 설정(Edit Profile, docs/14 §8): 프로필 · 설정 · 프로필 사진 + 아래에 고정된 저장/취소 바.
 /// 사이드바 하단 프로필(사진·이름·"계정 설정")을 누르면 열린다. 결제·비밀번호 변경·계정 삭제는 없다(범위 밖).
@@ -34,31 +38,42 @@ class SettingsPage extends ConsumerWidget {
           child: ListView(
             padding: pagePadding(context),
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Edit Profile',
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
-                    ),
+              Align(
+                alignment: Alignment.topLeft,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: _contentMaxWidth),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Edit Profile',
+                              style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          OutlinedButton(
+                            key: const ValueKey('settings-logout'),
+                            onPressed: () => signOut(ref),
+                            child: const Text('로그아웃'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: _titleGap),
+                      if (loaded) ...const [
+                        _SavedBanner(),
+                        ProfileSection(),
+                        SizedBox(height: _sectionGap),
+                        PreferencesSection(),
+                        SizedBox(height: _sectionGap),
+                        AvatarSection(),
+                      ] else
+                        const _ProfileLoader(),
+                    ],
                   ),
-                  OutlinedButton.icon(
-                    key: const ValueKey('settings-logout'),
-                    onPressed: () => signOut(ref),
-                    icon: const Icon(Icons.logout, size: 18),
-                    label: const Text('로그아웃'),
-                  ),
-                ],
+                ),
               ),
-              const SizedBox(height: 24),
-              if (loaded) ...const [
-                ProfileSection(),
-                SizedBox(height: _sectionGap),
-                PreferencesSection(),
-                SizedBox(height: _sectionGap),
-                AvatarSection(),
-              ] else
-                const _ProfileLoader(),
             ],
           ),
         ),
@@ -115,15 +130,9 @@ class _SaveBar extends ConsumerWidget {
     final buttons = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        OutlinedButton(
-          onPressed: canAct ? form.cancel : null,
-          style: OutlinedButton.styleFrom(minimumSize: const Size(_buttonMinWidth, _buttonHeight)),
-          child: const Text('취소'),
-        ),
-        const SizedBox(width: 8),
         FilledButton(
           key: const ValueKey('settings-save'),
-          onPressed: canAct ? () => _save(context, form) : null,
+          onPressed: canAct ? () => _save(ref, form) : null,
           style: FilledButton.styleFrom(
             backgroundColor: AppColors.success,
             foregroundColor: AppColors.onSuccess,
@@ -132,6 +141,12 @@ class _SaveBar extends ConsumerWidget {
           child: state.saving
               ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
               : const Text('변경 사항 저장'),
+        ),
+        const SizedBox(width: 8),
+        OutlinedButton(
+          onPressed: canAct ? form.cancel : null,
+          style: OutlinedButton.styleFrom(minimumSize: const Size(_buttonMinWidth, _buttonHeight)),
+          child: const Text('취소'),
         ),
       ],
     );
@@ -158,10 +173,28 @@ class _SaveBar extends ConsumerWidget {
     );
   }
 
-  Future<void> _save(BuildContext context, ProfileFormController form) async {
-    final messenger = ScaffoldMessenger.of(context);
+  Future<void> _save(WidgetRef ref, ProfileFormController form) async {
+    final notice = ref.read(settingsNoticeProvider.notifier);
     if (await form.save()) {
-      messenger.showSnackBar(const SnackBar(content: Text('변경 사항을 저장했어요.')));
+      notice.show('변경 사항을 저장했어요.');
     }
+  }
+}
+
+/// 제목 아래 성공 배너(웹 화면의 "Changes saved successfully."). 다시 수정하기 시작하면 감춘다.
+class _SavedBanner extends ConsumerWidget {
+  const _SavedBanner();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final message = ref.watch(settingsNoticeProvider);
+    final dirty = ref.watch(profileFormControllerProvider.select((s) => s.isDirty));
+    if (message == null || dirty) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: _titleGap),
+      child: NoticeBanner(key: const ValueKey('settings-saved-banner'), message: message),
+    );
   }
 }

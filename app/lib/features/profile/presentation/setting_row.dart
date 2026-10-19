@@ -4,10 +4,31 @@ import '../../../core/theme/app_palette.dart';
 
 /// 이 폭보다 좁으면 이름표를 값 위에 쌓는다(휴대폰 폭에서 넘침 방지).
 const double _stackBelowWidth = 520;
-const double _labelWidth = 150;
-const double _rowPadding = 10;
+const double _labelWidth = 180;
+const double _rowPadding = 12;
+const double _sectionTitleGap = 8;
 
-/// 설정 화면의 한 줄: 왼쪽 이름표 + 오른쪽 값·컨트롤. 좁으면 위아래로 쌓는다(반응형, docs/14 §8).
+/// 설정 화면의 구획: 카드 없이 제목 + 구분선으로 나뉜 줄들(웹 대시보드 배치, F1Laps 참고).
+class SettingsSection extends StatelessWidget {
+  const SettingsSection({super.key, required this.title, required this.child});
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+        const SizedBox(height: _sectionTitleGap),
+        child,
+      ],
+    );
+  }
+}
+
+/// 설정 화면의 한 줄: 왼쪽 이름표 + 오른쪽 값·컨트롤, 아래 얇은 구분선. 좁으면 위아래로 쌓는다(반응형, docs/14 §8).
 class SettingRow extends StatelessWidget {
   const SettingRow({super.key, required this.label, required this.child});
 
@@ -16,9 +37,10 @@ class SettingRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final labelText = Text(label, style: TextStyle(color: context.palette.textMuted));
-    return Padding(
+    final labelText = Text(label, style: TextStyle(color: context.palette.textMuted, fontWeight: FontWeight.w600));
+    return Container(
       padding: const EdgeInsets.symmetric(vertical: _rowPadding),
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: context.palette.border))),
       child: LayoutBuilder(
         builder: (context, constraints) {
           if (constraints.maxWidth < _stackBelowWidth) {
@@ -39,7 +61,7 @@ class SettingRow extends StatelessWidget {
   }
 }
 
-/// 값 글자 + 오른쪽 "변경" 버튼(이메일·닉네임 줄).
+/// 값 글자 + 줄 오른쪽 끝의 "변경" 링크(이메일·닉네임 줄).
 class ValueWithChange extends StatelessWidget {
   const ValueWithChange({super.key, required this.value, required this.onChange, required this.buttonKey});
 
@@ -51,7 +73,7 @@ class ValueWithChange extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Flexible(
+        Expanded(
           child: Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
         ),
         const SizedBox(width: 8),

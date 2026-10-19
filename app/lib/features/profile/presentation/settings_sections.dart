@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_palette.dart';
-import '../../../core/widgets/section_card.dart';
+
 import '../../auth/application/auth_controller.dart';
 import '../../auth/domain/user_preferences.dart';
 import '../application/profile_form_controller.dart';
+import '../application/settings_notice.dart';
 import '../domain/game_options.dart';
 import '../domain/time_zones.dart';
 import 'avatar_picker.dart';
@@ -25,7 +26,7 @@ class ProfileSection extends ConsumerWidget {
     final draft = ref.watch(profileFormControllerProvider.select((s) => s.draft));
     final form = ref.read(profileFormControllerProvider.notifier);
 
-    return SectionCard(
+    return SettingsSection(
       title: '프로필',
       child: Column(
         children: [
@@ -34,7 +35,7 @@ class ProfileSection extends ConsumerWidget {
             child: ValueWithChange(
               value: email,
               buttonKey: const ValueKey('change-email'),
-              onChange: () => _changeEmail(context, form),
+              onChange: () => _changeEmail(context, ref, form),
             ),
           ),
           SettingRow(
@@ -62,14 +63,14 @@ class ProfileSection extends ConsumerWidget {
     );
   }
 
-  Future<void> _changeEmail(BuildContext context, ProfileFormController form) async {
-    final messenger = ScaffoldMessenger.of(context);
+  Future<void> _changeEmail(BuildContext context, WidgetRef ref, ProfileFormController form) async {
+    final notice = ref.read(settingsNoticeProvider.notifier);
     final changed = await showChangeEmailDialog(
       context,
       onSubmit: (newEmail, password) => form.changeEmail(newEmail: newEmail, currentPassword: password),
     );
     if (changed == true) {
-      messenger.showSnackBar(const SnackBar(content: Text('이메일을 변경했어요. 다음 로그인부터 새 이메일을 쓰세요.')));
+      notice.show('이메일을 변경했어요. 다음 로그인부터 새 이메일을 쓰세요.');
     }
   }
 }
@@ -122,7 +123,7 @@ class PreferencesSection extends ConsumerWidget {
     final prefs = ref.watch(profileFormControllerProvider.select((s) => s.draft.preferences));
     final form = ref.read(profileFormControllerProvider.notifier);
 
-    return SectionCard(
+    return SettingsSection(
       title: '설정',
       child: Column(
         children: [
@@ -199,7 +200,7 @@ class AvatarSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final draft = ref.watch(profileFormControllerProvider.select((s) => s.draft));
-    return SectionCard(
+    return SettingsSection(
       title: '프로필 사진',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

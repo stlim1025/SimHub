@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/widgets/menu_items.dart';
 import '../../../core/layout/page_padding.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/empty_state_card.dart';
@@ -136,11 +137,7 @@ class SessionFilterMenu extends StatelessWidget {
       onSelected: onSelected,
       itemBuilder: (_) => [
         for (final filter in kSessionFilters)
-          CheckedPopupMenuItem<String>(
-            value: filter,
-            checked: filter == selected,
-            child: Text(kSessionFilterLabels[filter]!),
-          ),
+          CheckMenuItem<String>(value: filter, checked: filter == selected, label: kSessionFilterLabels[filter]!),
       ],
       child: Container(
         height: _menuFaceHeight,

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:simcenter_app/core/widgets/menu_items.dart';
 import 'package:simcenter_app/core/theme/app_theme.dart';
 import 'package:simcenter_app/core/widgets/pagination_bar.dart';
 import 'package:simcenter_app/features/laps/domain/lap_models.dart';
@@ -84,7 +85,7 @@ OutlinedButton _button(WidgetTester tester, String label) =>
 Future<void> _pickFilter(WidgetTester t, String label) async {
   await t.tap(find.byKey(const ValueKey('sessions-filter-menu')));
   await t.pumpAndSettle();
-  await t.tap(find.widgetWithText(CheckedPopupMenuItem<String>, label));
+  await t.tap(find.widgetWithText(CheckMenuItem<String>, label));
   await t.pumpAndSettle();
 }
 
@@ -232,9 +233,9 @@ void main() {
 
       await t.tap(find.byKey(const ValueKey('sessions-filter-menu')));
       await t.pumpAndSettle();
-      final items = t.widgetList<CheckedPopupMenuItem<String>>(find.byType(CheckedPopupMenuItem<String>));
+      final items = t.widgetList<CheckMenuItem<String>>(find.byType(CheckMenuItem<String>));
       expect([for (final item in items) item.checked], [false, true, false, false]);
-      await t.tap(find.widgetWithText(CheckedPopupMenuItem<String>, 'Race'));
+      await t.tap(find.widgetWithText(CheckMenuItem<String>, 'Race'));
       await t.pumpAndSettle();
 
       expect(repo.requests.length, calls);

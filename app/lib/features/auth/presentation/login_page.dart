@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/network/api_exception.dart';
+import '../../../core/widgets/app_notice.dart';
 import '../application/auth_controller.dart';
 import '../domain/user_input_rules.dart';
 
@@ -23,6 +24,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   bool _registerMode = false;
   bool _submitting = false;
 
+  /// 폼 위 오류 배너 문구(웹 화면처럼 그 자리에서 알린다 — 아래에서 올라오는 알림은 쓰지 않는다). null = 없음.
+  String? _error;
+
   @override
   void dispose() {
     _email.dispose();
@@ -36,7 +40,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     if (_submitting || !_formKey.currentState!.validate()) {
       return;
     }
-    setState(() => _submitting = true);
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
     try {
       final controller = ref.read(authControllerProvider.notifier);
       if (_registerMode) {
@@ -47,13 +54,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       // 성공 시 라우터 redirect가 Dashboard(/)로 이동시킨다.
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+        setState(() => _error = e.message);
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('로그인 중 문제가 발생했어요. 잠시 후 다시 시도해 주세요.')),
-        );
+        setState(() => _error = '로그인 중 문제가 발생했어요. 잠시 후 다시 시도해 주세요.');
       }
     } finally {
       if (mounted) {
@@ -82,6 +87,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     const SizedBox(height: 4),
                     Text(_registerMode ? '회원가입' : '로그인', style: theme.textTheme.titleMedium),
                     const SizedBox(height: 24),
+                    if (_error != null) ...[
+                      NoticeBanner(key: const ValueKey('login-error'), message: _error!, tone: NoticeTone.error),
+                      const SizedBox(height: 16),
+                    ],
                     TextFormField(
                       controller: _email,
                       keyboardType: TextInputType.emailAddress,
@@ -127,7 +136,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     TextButton(
                       onPressed: _submitting
                           ? null
-                          : () => setState(() => _registerMode = !_registerMode),
+                          : () => setState(() {
+                                _registerMode = !_registerMode;
+                                _error = null;
+                              }),
                       child: Text(_registerMode ? '이미 계정이 있어요 · 로그인' : '처음이신가요? · 회원가입'),
                     ),
                   ],

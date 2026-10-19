@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/widgets/app_notice.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/section_card.dart';
 import '../../../core/widgets/track_flag.dart';
@@ -117,12 +118,12 @@ class _LapIdValue extends StatelessWidget {
   final String lapId;
 
   Future<void> _copy(BuildContext context) async {
-    final messenger = ScaffoldMessenger.of(context);
+    final messenger = AppToaster.of(context);
     try {
       await Clipboard.setData(ClipboardData(text: lapId));
-      messenger.showSnackBar(const SnackBar(content: Text(_copiedText)));
+      messenger.show(_copiedText, tone: NoticeTone.success);
     } on PlatformException {
-      messenger.showSnackBar(const SnackBar(content: Text(_copyFailedText)));
+      messenger.show(_copyFailedText, tone: NoticeTone.error);
     }
   }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:simcenter_app/core/widgets/app_notice.dart';
 import 'package:simcenter_app/core/realtime/ranking_hub_client.dart';
 import 'package:simcenter_app/core/shell/app_shell.dart';
 import 'package:simcenter_app/core/time/clock_provider.dart';
@@ -274,7 +275,7 @@ void main() {
       hub.laps.add(lapRecordedPayload('l9'));
       await t.pump();
       await t.pump(const Duration(milliseconds: 500));
-      expect(find.byType(SnackBar), findsOneWidget);
+      expect(find.byType(AppToast), findsOneWidget);
 
       // 실제 앱처럼 프레임을 계속 흘려 알림 시간이 지나가게 한다(긴 pump 한 번은 사라질 타이머를 늦게 건다).
       for (var s = 0; s <= kNewLapSnackBarDuration.inSeconds + 1; s++) {
@@ -282,7 +283,7 @@ void main() {
       }
       await t.pumpAndSettle();
 
-      expect(find.byType(SnackBar), findsNothing);
+      expect(find.byType(AppToast), findsNothing);
     });
 
     testWidgets('Laps 표에 새 행이 바로 나타나 잠깐 강조된다', (t) async {
