@@ -35,17 +35,8 @@ builder.Services.AddScoped<IRankingNotifier, RankingNotifier>();
 // SignalR 사용자 식별 = JWT sub → Clients.User(userId)로 랩 주인에게만 보낸다(docs/15 §9, D-50).
 builder.Services.AddSingleton<Microsoft.AspNetCore.SignalR.IUserIdProvider, JwtSubjectUserIdProvider>();
 
-// Flutter 웹 dev 실행을 위한 CORS(Development 전용). 루프백 오리진만 반사 허용 → 운영은 미개방.
-const string DevCorsPolicy = "DevCors";
-if (builder.Environment.IsDevelopment())
-{
-    builder.Services.AddCors(options =>
-        options.AddPolicy(DevCorsPolicy, policy =>
-            policy.SetIsOriginAllowed(origin => Uri.TryCreate(origin, UriKind.Absolute, out var uri) && uri.IsLoopback)
-                .AllowAnyHeader()
-                .AllowAnyMethod()
-                .AllowCredentials()));
-}
+// CORS(16 §4.4): Development는 루프백 오리진(Flutter 웹 dev), 운영은 Cors:AllowedOrigins(GitHub Pages)만. 설정이 없으면 미개방.
+builder.Services.AddSimCenterCors(builder.Configuration, builder.Environment);
 
 builder.Services.AddControllers();
 
@@ -113,10 +104,8 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseHttpsRedirection();
 }
-else
-{
-    app.UseCors(DevCorsPolicy);
-}
+
+app.UseCors();
 
 app.UseAuthentication();
 app.UseAuthorization();
