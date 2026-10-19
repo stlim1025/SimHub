@@ -102,6 +102,8 @@ Tailscale Funnel :8443 ──► 127.0.0.1:5290  SimCenter.Api (Production)
 
 - 웹(`stlim1025.github.io`)과 API(`*.ts.net:8443`)의 오리진이 다르므로 운영 CORS가 필요하다.
 - 설정 `Cors:AllowedOrigins`(문자열 배열)를 추가하고, 운영은 웹 주소만 허용한다: `https://www.simhub.kro.kr`, `https://simhub.kro.kr`, `https://stlim1025.github.io`(커스텀 도메인 전환 전 주소, 2026-10-19). 와일드카드는 쓰지 않는다.
+- ⚠ **임시(2026-10-19):** GitHub Pages의 `www.simhub.kro.kr` HTTPS 인증서가 발급되기 전에는 웹이 `http://`로만 열려 로그인이 CORS에 막히므로 `http://www.simhub.kro.kr`을 함께 허용했다.
+  **인증서 발급 → Enforce HTTPS를 켠 뒤 이 항목을 `appsettings.Production.json`에서 빼고 다시 배포한다**(http 페이지에서 토큰을 다루는 위험 때문).
 - 정책 내용은 개발 정책과 같다: 지정 오리진, `AllowAnyHeader`, `AllowAnyMethod`, `AllowCredentials`(SignalR negotiate).
 - Development는 기존 루프백 반사 정책을 유지한다. 운영에서 설정이 비어 있으면 CORS를 열지 않는다(동일 오리진만).
 - Agent의 `TelemetryHub` 연결은 브라우저가 아니므로 CORS와 무관하다.
