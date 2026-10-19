@@ -24,6 +24,21 @@ namespace SimCenter.Agent.Tray;
 /// </summary>
 public partial class App : Application
 {
+    /// <summary>트레이 툴팁·창 제목에 보이는 이름(웹 서비스 이름 SimHub와 맞춘다).</summary>
+    internal const string DisplayName = "SimHub Agent";
+
+    /// <summary>csproj의 EmbeddedResource LogicalName.</summary>
+    private const string LogoResourceName = "SimCenter.Agent.Tray.simhub.ico";
+
+    private const int WindowIconSize = 32;
+
+    /// <summary>트레이 아이콘 한 변 대비 상태 점 지름·테두리 두께 비율.</summary>
+    private const double StatusDotRatio = 0.5;
+    private const double StatusRingRatio = 0.08;
+
+    /// <summary>상태 점 테두리 색(앱 다크 배경 #12141C).</summary>
+    private static readonly Color StatusRingColor = Color.FromArgb(18, 20, 28);
+
     private IHost? _host;
     private GameConnectionMonitor? _monitor;
     private System.Windows.Forms.NotifyIcon? _notifyIcon;
@@ -61,6 +76,7 @@ public partial class App : Application
             _host.Services.GetRequiredService<IAgentPairingClient>(),
             _host.Services.GetRequiredService<IDeviceCredentialStore>(),
             _host.Services.GetRequiredService<UploadStatusTracker>());
+        _window.Icon = CreateWindowIcon();
         _window.Show();
 
         // 트레이 아이콘/툴팁은 창보다 느리게(1s) 갱신해도 충분.
@@ -106,7 +122,7 @@ public partial class App : Application
         {
             Icon = _stateIcons[ConnectionState.Disconnected],
             Visible = true,
-            Text = "SimCenter Agent",
+            Text = DisplayName,
             ContextMenuStrip = menu,
         };
         _notifyIcon.DoubleClick += (_, _) => ShowWindow();
@@ -121,7 +137,7 @@ public partial class App : Application
 
         var state = _monitor.GetSnapshot().State;
         _notifyIcon.Icon = _stateIcons[state];
-        _notifyIcon.Text = $"SimCenter Agent — {ConnectionStatusText.Describe(state)}";
+        _notifyIcon.Text = $"{DisplayName} — {ConnectionStatusText.Describe(state)}";
     }
 
     private void ShowWindow()
@@ -148,21 +164,51 @@ public partial class App : Application
 
     private void BuildStateIcons()
     {
-        _stateIcons[ConnectionState.Disconnected] = CreateDotIcon(Color.FromArgb(220, 53, 69));  // 🔴
-        _stateIcons[ConnectionState.Waiting] = CreateDotIcon(Color.FromArgb(255, 193, 7));       // 🟡
-        _stateIcons[ConnectionState.Connected] = CreateDotIcon(Color.FromArgb(40, 167, 69));     // 🟢
+        // 시스템 작은 아이콘 크기(배율 100% = 16px, 150% = 24px …)에 맞춰 그려야 트레이에서 흐려지지 않는다.
+        var size = System.Windows.Forms.SystemInformation.SmallIconSize;
+        using var logo = LoadLogoIcon(size);
+
+        _stateIcons[ConnectionState.Disconnected] = CreateStatusIcon(logo, Color.FromArgb(220, 53, 69), size);  // 🔴
+        _stateIcons[ConnectionState.Waiting] = CreateStatusIcon(logo, Color.FromArgb(255, 193, 7), size);       // 🟡
+        _stateIcons[ConnectionState.Connected] = CreateStatusIcon(logo, Color.FromArgb(40, 167, 69), size);     // 🟢
     }
 
-    /// <summary>상태 색상 원형 트레이 아이콘을 생성한다(앱 수명 동안 재사용).</summary>
-    private static Icon CreateDotIcon(Color color)
+    /// <summary>내장 리소스의 SimHub 로고(.ico)에서 <paramref name="size"/>에 가장 가까운 이미지를 읽는다.</summary>
+    private static Icon LoadLogoIcon(System.Drawing.Size size)
     {
-        using var bmp = new Bitmap(16, 16);
+        using var stream = typeof(App).Assembly.GetManifestResourceStream(LogoResourceName)
+            ?? throw new InvalidOperationException($"Embedded resource not found: {LogoResourceName}");
+        return new Icon(stream, size);
+    }
+
+    /// <summary>창 제목 표시줄·작업 표시줄용 로고(WPF 이미지). exe 아이콘에 기대지 않고 명시한다.</summary>
+    private static System.Windows.Media.ImageSource CreateWindowIcon()
+    {
+        using var logo = LoadLogoIcon(new System.Drawing.Size(WindowIconSize, WindowIconSize));
+        return System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(
+            logo.Handle, Int32Rect.Empty, System.Windows.Media.Imaging.BitmapSizeOptions.FromEmptyOptions());
+    }
+
+    /// <summary>로고 오른쪽 아래에 연결 상태 색 점을 겹친 트레이 아이콘을 생성한다(앱 수명 동안 재사용).</summary>
+    private static Icon CreateStatusIcon(Icon logo, Color color, System.Drawing.Size size)
+    {
+        using var bmp = new Bitmap(size.Width, size.Height);
         using (var g = Graphics.FromImage(bmp))
         {
             g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
             g.Clear(Color.Transparent);
+            g.DrawIcon(logo, new Rectangle(0, 0, size.Width, size.Height));
+
+            // 점 둘레를 로고 배경과 대비되는 어두운 테두리로 감싸 어떤 작업 표시줄 색에서도 보이게 한다.
+            var dot = (int)Math.Round(size.Width * StatusDotRatio);
+            var ring = Math.Max(1, (int)Math.Round(size.Width * StatusRingRatio));
+            var x = size.Width - dot;
+            var y = size.Height - dot;
+            using var ringBrush = new SolidBrush(StatusRingColor);
+            g.FillEllipse(ringBrush, x - ring, y - ring, dot + ring, dot + ring);
             using var brush = new SolidBrush(color);
-            g.FillEllipse(brush, 2, 2, 12, 12);
+            g.FillEllipse(brush, x, y, dot - 1, dot - 1);
         }
 
         IntPtr hIcon = bmp.GetHicon();

@@ -1,11 +1,11 @@
 {
-    "name": "simcenter_app",
-    "short_name": "simcenter_app",
+    "name": "SimHub",
+    "short_name": "SimHub",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#12141C",
+    "theme_color": "#12141C",
+    "description": "F1 25 랩타임·시즌·텔레메트리를 기록하고 랭킹으로 확인하는 개인 레이싱 기록 서비스",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

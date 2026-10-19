@@ -7,6 +7,7 @@ import '../../features/auth/application/sign_out.dart';
 import '../../features/live_laps/application/live_laps_controller.dart';
 import '../../features/live_laps/presentation/new_lap_snack_bar.dart';
 import '../../features/profile/presentation/team_avatar.dart';
+import '../config/app_config.dart';
 import '../layout/page_padding.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_palette.dart';
@@ -25,7 +26,7 @@ const double _sidebarPadding = 12;
 const double _selectedTileAlpha = 0.14;
 const double _footerRadius = 8;
 const double _footerAvatarSize = 32;
-const String _brandName = 'SimCenter';
+const String _brandName = AppConfig.brandName;
 const String _accountSettingsLabel = '계정 설정';
 
 /// 로그인 후 화면의 공통 셸(docs/11 §7.2). 넓으면 왼쪽 사이드바, 좁으면 상단 바 + 서랍.

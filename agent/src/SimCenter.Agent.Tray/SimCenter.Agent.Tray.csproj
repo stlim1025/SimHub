@@ -7,7 +7,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationIcon>Assets\simhub.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 트레이·창 아이콘 원본(exe 아이콘과 같은 파일). App.xaml.cs가 LogicalName으로 읽는다. -->
+    <EmbeddedResource Include="Assets\simhub.ico" LogicalName="SimCenter.Agent.Tray.simhub.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\SimCenter.Agent.Core\SimCenter.Agent.Core.csproj" />

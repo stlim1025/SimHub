@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/config/app_config.dart';
 import '../../../core/network/api_exception.dart';
 import '../application/auth_controller.dart';
 import '../domain/user_input_rules.dart';
@@ -76,7 +77,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text('SimCenter',
+                    Text(AppConfig.brandName,
                         style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 4),
                     Text(_registerMode ? '회원가입' : '로그인', style: theme.textTheme.titleMedium),

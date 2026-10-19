@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:SimCenter.Agent.Tray"
         mc:Ignorable="d"
-        Title="SimCenter Agent" Height="660" Width="440"
+        Title="SimHub Agent" Height="660" Width="440"
         ResizeMode="CanMinimize"
         WindowStartupLocation="CenterScreen"
         Background="#1E1E22">
