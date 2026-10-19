@@ -124,6 +124,27 @@ public class SeasonCalendarTests
     }
 
     [Fact]
+    public void Build_SprintWeekendBeforeMainRace_SprintInSprintColumn_RaceEmpty()
+    {
+        // 슛아웃 → 스프린트(Race)까지만 달렸고 본 레이스(Race2)는 아직이다.
+        WeekendRow[] weekends = [Weekend(21, 102, "Shanghai", 1, 2)];
+        SeasonResultRow[] rows =
+        [
+            Row(2, 21, "player", 6, 0, SessionType.Qualifying, SessionKind.SprintShootout3, 2, isPlayer: true, isAi: false),
+            Row(3, 21, "player", 1, 8, SessionType.Race, SessionKind.Race, 3, isPlayer: true, isAi: false),
+        ];
+
+        var round = Build(weekends, rows)[1];
+
+        Assert.True(round.IsSprintWeekend);
+        Assert.Equal(1, round.SprintPosition);
+        Assert.Null(round.RacePosition);
+        Assert.Null(round.RaceSessionId);
+        Assert.Equal(8, round.Points);                  // 스프린트 점수는 그대로 더한다
+        Assert.Equal(new[] { Id(2), Id(3) }, round.Sessions.Select(s => s.SessionId));
+    }
+
+    [Fact]
     public void Build_NormalWeekend_NoSprint()
     {
         WeekendRow[] weekends = [Weekend(21, 101, "Melbourne", 1, 1)];

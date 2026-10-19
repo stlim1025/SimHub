@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SimCenter.Application.Common.Interfaces;
+using SimCenter.Application.Seasons.Queries;
 using SimCenter.Application.Seasons.Queries.Detail;
 using SimCenter.Domain.Enums;
 
@@ -96,7 +97,7 @@ public sealed class SessionDetailQueryRepository : ISessionDetailQueryRepository
     public Task<bool> IsMySprintWeekendAsync(Guid userId, Guid raceWeekendId, CancellationToken cancellationToken = default)
         => _context.GameSessions
             .AsNoTracking()
-            .AnyAsync(s => s.UserId == userId && s.RaceWeekendId == raceWeekendId && s.SessionKind == SessionKind.Race2, cancellationToken);
+            .AnyAsync(s => s.UserId == userId && s.RaceWeekendId == raceWeekendId && SessionPositions.SprintWeekendMarkers.Contains(s.SessionKind), cancellationToken);
 
     public async Task<IReadOnlyList<SeasonOrderRow>> GetMySeasonOrderAsync(Guid userId, CancellationToken cancellationToken = default)
         => await _context.Seasons

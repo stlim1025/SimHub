@@ -52,9 +52,9 @@ public sealed class GameSessionQueryRepository : IGameSessionQueryRepository
                         .OrderBy(r => r.CarIndex)
                         .Select(r => new { r.Position, r.GridPosition, r.ResultStatus, r.BestLapTimeMs, r.Points, r.TeamId })
                         .FirstOrDefault(),
-                    // 같은 주말에 Race2가 있으면 스프린트 주말(그 주말 Race = 스프린트).
+                    // 같은 주말에 Race2나 스프린트 슛아웃이 있으면 스프린트 주말(그 주말 Race = 스프린트, SessionPositions).
                     IsSprintWeekend = session.RaceWeekendId != null && _context.GameSessions.Any(o =>
-                        o.UserId == userId && o.RaceWeekendId == session.RaceWeekendId && o.SessionKind == SessionKind.Race2),
+                        o.UserId == userId && o.RaceWeekendId == session.RaceWeekendId && SessionPositions.SprintWeekendMarkers.Contains(o.SessionKind)),
                 })
             .Skip(skip)
             .Take(take)
