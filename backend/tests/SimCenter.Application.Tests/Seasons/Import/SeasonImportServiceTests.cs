@@ -142,6 +142,12 @@ public sealed class SeasonImportServiceTests
                 ? new Season { GameCode = gameCode, SeasonLinkId = seasonLinkId, ImportedFrom = "F1Laps" }
                 : AddedSeasons.FirstOrDefault(s => s.SeasonLinkId == seasonLinkId));
 
+        public Task<Season?> GetDeletedByLinkAsync(Guid userId, string gameCode, long seasonLinkId, CancellationToken cancellationToken = default)
+            => Task.FromResult<Season?>(null);
+
+        public Task<Season?> GetMineAsync(Guid userId, Guid seasonId, CancellationToken cancellationToken = default)
+            => Task.FromResult<Season?>(null);
+
         public Task<RaceWeekend?> GetWeekendAsync(Guid seasonId, long weekendLinkId, CancellationToken cancellationToken = default)
             => Task.FromResult<RaceWeekend?>(null);
 

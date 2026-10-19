@@ -48,6 +48,30 @@ String seasonHeaderTitle(SeasonSummary season) {
   return number == null ? seasonTitle(season) : gameModeLine(season.gameMode, number);
 }
 
+/// 시즌 이름의 최대 글자 수(`PUT /me/seasons/{id}/name`, 넘으면 서버가 400).
+const int kSeasonNameMaxLength = 60;
+
+/// 화면에 보이는 시즌 이름: 사용자가 붙인 이름이 있으면 그것, 없으면(빈 값 포함) [seasonHeaderTitle].
+String seasonDisplayTitle(SeasonSummary season) {
+  final name = season.name?.trim();
+  return name == null || name.isEmpty ? seasonHeaderTitle(season) : name;
+}
+
+/// 마지막 세션 시각 내림차순(최근 시즌 먼저)으로 정렬한 새 목록.
+List<SeasonSummary> sortSeasonsByRecent(Iterable<SeasonSummary> seasons) =>
+    [...seasons]..sort((a, b) => b.lastSessionAt.compareTo(a.lastSessionAt));
+
+/// `/seasons`를 열면 바로 보여 줄 시즌: 가장 최근의 진행 중인 시즌, 없으면 가장 최근 시즌. 시즌이 없으면 null.
+SeasonSummary? landingSeason(List<SeasonSummary> seasons) {
+  final sorted = sortSeasonsByRecent(seasons);
+  for (final season in sorted) {
+    if (!season.isCompleted) {
+      return season;
+    }
+  }
+  return sorted.isEmpty ? null : sorted.first;
+}
+
 // -- Season 탭 표(docs/15 §12) -------------------------------------------------
 
 /// PTS 머리글: `Pts (87)`(시즌 내 합계, 없으면 0). 머리글은 표가 대문자로 그린다.

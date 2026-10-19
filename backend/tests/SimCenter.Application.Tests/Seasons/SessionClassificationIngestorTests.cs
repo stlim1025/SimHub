@@ -748,6 +748,44 @@ public class SessionClassificationIngestorTests
         AssertNothingAdded();
     }
 
+    // ---- 지운 시즌 ----
+
+    [Fact]
+    public async Task Apply_SeasonSoftDeleted_RestoresItInsteadOfAddingDuplicate()
+    {
+        var deletedAt = Now.AddDays(-1);
+        var deleted = new Season
+        {
+            Id = Guid.Parse("00000000-0000-0000-0000-0000000000d1"),
+            UserId = _ownerId,
+            GameCode = GameCode,
+            SeasonLinkId = 11,
+            GameMode = GameMode.DriverCareer,
+            FirstSessionAt = Now.AddDays(-10),
+            LastSessionAt = Now.AddDays(-9),
+            CreatedAt = Now.AddDays(-10),
+            UpdatedAt = deletedAt,
+            IsDeleted = true,
+            Name = "My Career",
+        };
+        _seasons.Seasons.Add(deleted);
+
+        await ApplyStored(Envelope(BasePayload()));
+
+        Assert.Equal(0, _seasons.SeasonAddCalls);
+        var season = Assert.Single(_seasons.Seasons);
+        Assert.Same(deleted, season);
+        Assert.False(season.IsDeleted);
+        Assert.Equal(Now, season.UpdatedAt);
+        Assert.Equal(OccurredAt, season.LastSessionAt);
+        Assert.Equal("My Career", season.Name);
+
+        var weekend = Assert.Single(_seasons.Weekends);
+        Assert.Equal(deleted.Id, weekend.SeasonId);
+        var session = Assert.Single(_sessions.Items);
+        Assert.Equal(deleted.Id, session.SeasonId);
+    }
+
     // ---- Fakes ----
 
     private sealed class FakeSeasons : ISeasonRepository
@@ -760,6 +798,13 @@ public class SessionClassificationIngestorTests
         public Task<Season?> GetByLinkAsync(Guid userId, string gameCode, long seasonLinkId, CancellationToken cancellationToken = default)
             => Task.FromResult(Seasons.FirstOrDefault(s =>
                 !s.IsDeleted && s.UserId == userId && s.GameCode == gameCode && s.SeasonLinkId == seasonLinkId));
+
+        public Task<Season?> GetDeletedByLinkAsync(Guid userId, string gameCode, long seasonLinkId, CancellationToken cancellationToken = default)
+            => Task.FromResult(Seasons.LastOrDefault(s =>
+                s.IsDeleted && s.UserId == userId && s.GameCode == gameCode && s.SeasonLinkId == seasonLinkId));
+
+        public Task<Season?> GetMineAsync(Guid userId, Guid seasonId, CancellationToken cancellationToken = default)
+            => Task.FromResult(Seasons.FirstOrDefault(s => !s.IsDeleted && s.UserId == userId && s.Id == seasonId));
 
         public Task<RaceWeekend?> GetWeekendAsync(Guid seasonId, long weekendLinkId, CancellationToken cancellationToken = default)
             => Task.FromResult(Weekends.FirstOrDefault(w =>

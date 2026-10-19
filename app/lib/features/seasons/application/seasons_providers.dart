@@ -4,10 +4,19 @@ import '../data/seasons_repository.dart';
 import '../domain/season_display.dart';
 import '../domain/season_models.dart';
 
-/// 시즌 목록 한 페이지([kSeasonsPageSize]개씩). 키는 1부터 시작하는 페이지 번호.
-final seasonsProvider = FutureProvider.autoDispose.family<SeasonSummaryPage, int>(
-  (ref, page) => ref.watch(seasonsRepositoryProvider).getMySeasons(page: page, pageSize: kSeasonsPageSize),
-);
+/// 내 시즌 전부(서버 정렬 = 마지막 세션 시각 내림차순). [kSeasonsPageSize]개씩 끝 페이지까지 이어 읽는다.
+/// `/seasons` 진입 시 열 시즌 고르기와 시즌 메뉴(진행 중·완료 묶음)가 쓴다.
+final allSeasonsProvider = FutureProvider.autoDispose<List<SeasonSummary>>((ref) async {
+  final repo = ref.watch(seasonsRepositoryProvider);
+  final seasons = <SeasonSummary>[];
+  for (var page = 1;; page++) {
+    final result = await repo.getMySeasons(page: page, pageSize: kSeasonsPageSize);
+    seasons.addAll(result.items);
+    if (result.items.isEmpty || seasons.length >= result.total) {
+      return seasons;
+    }
+  }
+});
 
 /// 시즌 하나의 상세(라운드 + Standings). 세 탭이 같은 스냅샷을 쓰고, 화면을 다시 열면 새로 불러온다.
 final seasonDetailProvider = FutureProvider.autoDispose.family<SeasonDetail, String>(

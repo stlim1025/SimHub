@@ -18,6 +18,18 @@ public sealed class SeasonRepository : ISeasonRepository
         => _context.Seasons.FirstOrDefaultAsync(
             s => s.UserId == userId && s.GameCode == gameCode && s.SeasonLinkId == seasonLinkId, cancellationToken);
 
+    /// <remarks>지운 행만 보므로 전역 필터를 끈다.</remarks>
+    public Task<Season?> GetDeletedByLinkAsync(Guid userId, string gameCode, long seasonLinkId, CancellationToken cancellationToken = default)
+        => _context.Seasons
+            .IgnoreQueryFilters()
+            .Where(s => s.IsDeleted && s.UserId == userId && s.GameCode == gameCode && s.SeasonLinkId == seasonLinkId)
+            .OrderByDescending(s => s.UpdatedAt)
+            .ThenByDescending(s => s.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    public Task<Season?> GetMineAsync(Guid userId, Guid seasonId, CancellationToken cancellationToken = default)
+        => _context.Seasons.FirstOrDefaultAsync(s => s.UserId == userId && s.Id == seasonId, cancellationToken);
+
     public Task<RaceWeekend?> GetWeekendAsync(Guid seasonId, long weekendLinkId, CancellationToken cancellationToken = default)
         => _context.RaceWeekends.FirstOrDefaultAsync(
             w => w.SeasonId == seasonId && w.WeekendLinkId == weekendLinkId, cancellationToken);

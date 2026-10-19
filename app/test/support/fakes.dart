@@ -666,6 +666,30 @@ class FakeSeasonsRepository implements SeasonsRepository {
     if (importError case final error?) throw error;
     return importedSeasonId;
   }
+
+  /// 이름 변경·완료 표시·삭제 요청 기록. [mutationError]가 있으면 그것을 던진다.
+  final renameRequests = <({String seasonId, String? name})>[];
+  final completionRequests = <({String seasonId, bool completed})>[];
+  final deleteRequests = <String>[];
+  ApiException? mutationError;
+
+  @override
+  Future<void> renameSeason(String seasonId, String? name) async {
+    renameRequests.add((seasonId: seasonId, name: name));
+    if (mutationError case final error?) throw error;
+  }
+
+  @override
+  Future<void> setSeasonCompleted(String seasonId, {required bool completed}) async {
+    completionRequests.add((seasonId: seasonId, completed: completed));
+    if (mutationError case final error?) throw error;
+  }
+
+  @override
+  Future<void> deleteSeason(String seasonId) async {
+    deleteRequests.add(seasonId);
+    if (mutationError case final error?) throw error;
+  }
 }
 
 /// 시즌 요약. 시각은 로컬 시간대로 만들어 날짜 표기가 PC의 시간대에 흔들리지 않게 한다.
@@ -681,6 +705,8 @@ SeasonSummary seasonOf(
   DateTime? lastSessionAt,
   int? seasonNumber,
   String? myDriverName,
+  String? name,
+  DateTime? completedAt,
 }) =>
     SeasonSummary(
       seasonId: id,
@@ -695,6 +721,8 @@ SeasonSummary seasonOf(
       leaderPoints: leaderPoints,
       seasonNumber: seasonNumber,
       myDriverName: myDriverName,
+      name: name,
+      completedAt: completedAt,
     );
 
 /// Season 탭 표 한 줄(docs/15 §12). 기본은 달리지 않은 라운드.

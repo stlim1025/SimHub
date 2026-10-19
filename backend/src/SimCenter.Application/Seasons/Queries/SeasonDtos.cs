@@ -5,6 +5,7 @@ namespace SimCenter.Application.Seasons.Queries;
 /// 점수는 <c>int</c> 상한으로 자른 값이다(순서는 실제 합계 기준). 열거형은 문자열로 직렬화한다.
 /// <c>ImportedFrom</c> = 가져온 출처(docs/15 §12, D-55, 없으면 null). <c>MyTeam*</c> = Standings의 내 팀(내 결과가 없으면 null) — 헤더의 "모드 · 팀".
 /// <c>SeasonNumber</c> = 같은 게임·모드 안 시즌 번호(D-54, 헤더 "Driver Career Season 1"), <c>MyDriverName</c> = Standings의 내 이름(없으면 null).
+/// <c>Name</c> = 사용자가 붙인 이름(null = 기본 이름), <c>CompletedAt</c> = 완료로 표시한 시각(UTC, 진행 중이면 null).
 /// </summary>
 public sealed record SeasonSummaryDto(
     Guid SeasonId,
@@ -21,7 +22,9 @@ public sealed record SeasonSummaryDto(
     string? MyTeamName = null,
     string? MyTeamColor = null,
     int? SeasonNumber = null,
-    string? MyDriverName = null);
+    string? MyDriverName = null,
+    string? Name = null,
+    DateTime? CompletedAt = null);
 
 /// <summary>
 /// 시즌 상세: 헤더 + 라운드 + Standings(결과표 칸 포함) + 캘린더(시즌 탭, docs/15 §12). 세 탭이 같은 스냅샷을 쓴다.

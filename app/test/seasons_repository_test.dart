@@ -113,4 +113,67 @@ void main() {
       throwsA(isA<ApiException>().having((e) => e.statusCode, 'statusCode', 500)),
     );
   });
+
+  test('목록 항목은 name·completedAt을 읽고, 없으면 null(진행 중)이다', () async {
+    const named = '{"seasonId":"se2","gameCode":"F1_25","gameMode":"DriverCareer",'
+        '"firstSessionAt":"2026-10-17T09:00:00Z","lastSessionAt":"2026-10-24T11:30:00Z","roundCount":6,'
+        '"myPosition":null,"myPoints":null,"leaderName":null,"leaderPoints":null,'
+        '"name":"Ferrari Dream","completedAt":"2026-10-25T00:00:00Z"}';
+    final (repo, _) = _repoReturning(200, '{"page":1,"pageSize":20,"total":2,"items":[$_summary,$named]}');
+
+    final page = await repo.getMySeasons();
+
+    expect(page.items[0].name, isNull);
+    expect(page.items[0].completedAt, isNull);
+    expect(page.items[0].isCompleted, isFalse);
+    expect(page.items[1].name, 'Ferrari Dream');
+    expect(page.items[1].completedAt, DateTime.utc(2026, 10, 25));
+    expect(page.items[1].isCompleted, isTrue);
+  });
+
+  test('renameSeason은 PUT /me/seasons/{id}/name에 이름(null = 기본 이름)을 보낸다', () async {
+    final (repo, adapter) = _repoReturning(204);
+
+    await repo.renameSeason('se1', 'My Season');
+    await repo.renameSeason('se1', null);
+
+    expect(adapter.requests[0].method, 'PUT');
+    expect(adapter.requests[0].path, '/me/seasons/se1/name');
+    expect(adapter.requests[0].data, {'name': 'My Season'});
+    expect(adapter.requests[1].data, {'name': null});
+  });
+
+  test('renameSeason 400은 ApiException이다', () async {
+    final (repo, _) = _repoReturning(400, '{"title":"Bad Request","status":400}');
+
+    await expectLater(
+      repo.renameSeason('se1', 'x'),
+      throwsA(isA<ApiException>().having((e) => e.statusCode, 'statusCode', 400)),
+    );
+  });
+
+  test('setSeasonCompleted는 PUT /me/seasons/{id}/completion에 completed를 보낸다', () async {
+    final (repo, adapter) = _repoReturning(204);
+
+    await repo.setSeasonCompleted('se1', completed: true);
+
+    expect(adapter.requests.single.method, 'PUT');
+    expect(adapter.requests.single.path, '/me/seasons/se1/completion');
+    expect(adapter.requests.single.data, {'completed': true});
+  });
+
+  test('deleteSeason은 DELETE /me/seasons/{id}를 호출하고 404는 ApiException이다', () async {
+    final (repo, adapter) = _repoReturning(204);
+
+    await repo.deleteSeason('se1');
+
+    expect(adapter.requests.single.method, 'DELETE');
+    expect(adapter.requests.single.path, '/me/seasons/se1');
+
+    final (missing, _) = _repoReturning(404, '{"title":"Not Found","status":404}');
+    await expectLater(
+      missing.deleteSeason('nope'),
+      throwsA(isA<ApiException>().having((e) => e.statusCode, 'statusCode', 404)),
+    );
+  });
 }

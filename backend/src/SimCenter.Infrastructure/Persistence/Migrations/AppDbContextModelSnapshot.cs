@@ -742,6 +742,10 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -782,6 +786,11 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("LastSessionAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_session_at");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("name");
 
                     b.Property<long>("SeasonLinkId")
                         .HasColumnType("bigint")

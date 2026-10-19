@@ -19,6 +19,8 @@ class SeasonSummary {
     this.myTeamName,
     this.seasonNumber,
     this.myDriverName,
+    this.name,
+    this.completedAt,
   });
 
   final String seasonId;
@@ -44,6 +46,15 @@ class SeasonSummary {
   /// Standings의 내 드라이버 이름(헤더 아래 흐린 줄). 내 결과가 없으면 null.
   final String? myDriverName;
 
+  /// 사용자가 붙인 시즌 이름. null이면 기본 제목(`seasonHeaderTitle`)을 쓴다.
+  final String? name;
+
+  /// 완료로 표시한 시각(UTC). null이면 진행 중인 시즌.
+  final DateTime? completedAt;
+
+  /// 완료로 표시된 시즌인가.
+  bool get isCompleted => completedAt != null;
+
   factory SeasonSummary.fromJson(Map<String, dynamic> json) => SeasonSummary(
         seasonId: json['seasonId'] as String,
         gameCode: json['gameCode'] as String,
@@ -59,6 +70,11 @@ class SeasonSummary {
         myTeamName: json['myTeamName'] as String?,
         seasonNumber: json['seasonNumber'] as int?,
         myDriverName: json['myDriverName'] as String?,
+        name: json['name'] as String?,
+        completedAt: switch (json['completedAt']) {
+          final String value => DateTime.parse(value),
+          _ => null,
+        },
       );
 }
 

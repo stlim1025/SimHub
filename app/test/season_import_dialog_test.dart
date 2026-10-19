@@ -134,7 +134,7 @@ void main() {
       await t.pumpAndSettle();
 
       expect(repo.importRequests, ['preview', 'import']);
-      expect(router.routeInformationProvider.value.uri.toString(), '/seasons/new-season');
+      expect(router.routeInformationProvider.value.uri.toString(), '/seasons/new-season?tab=season');
       expect(find.text('detail:new-season'), findsOneWidget);
     });
 

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:simcenter_app/core/widgets/pagination_bar.dart';
 import 'package:simcenter_app/features/seasons/data/seasons_repository.dart';
 import 'package:simcenter_app/features/seasons/domain/season_models.dart';
 import 'package:simcenter_app/features/seasons/presentation/seasons_page.dart';
@@ -33,7 +32,10 @@ Future<GoRouter> _pump(
   setViewSize(tester, size);
   final router = GoRouter(initialLocation: '/seasons', routes: [
     GoRoute(path: '/seasons', builder: (_, _) => const Scaffold(body: SeasonsPage())),
-    GoRoute(path: '/seasons/:seasonId', builder: (_, state) => Text('detail:${state.pathParameters['seasonId']}')),
+    GoRoute(
+      path: '/seasons/:seasonId',
+      builder: (_, state) => Text('detail:${state.pathParameters['seasonId']}:${state.uri.queryParameters['tab']}'),
+    ),
     GoRoute(path: '/telemetry-app', builder: (_, _) => const Text('telemetry-app')),
   ]);
 
@@ -47,21 +49,21 @@ Future<GoRouter> _pump(
 
 String _location(GoRouter router) => router.routeInformationProvider.value.uri.toString();
 
+/// 마지막 세션 날짜가 1월 1일부터 하루씩 늦어지는 시즌 [count]개(se0이 가장 오래됨).
 List<SeasonSummary> _seasons(int count) => [
       for (var i = 0; i < count; i++)
         seasonOf('se$i', firstSessionAt: DateTime(2026, 1, 1 + i, 12), lastSessionAt: DateTime(2026, 1, 1 + i, 12)),
     ];
 
-OutlinedButton _button(WidgetTester tester, String label) =>
-    tester.widget<OutlinedButton>(find.widgetWithText(OutlinedButton, label));
-
 void main() {
   group('SeasonsPage', () {
-    testWidgets('SeasonsPage_Empty_ShowsGuide', (t) async {
+    testWidgets('SeasonsPage_Empty_ShowsGuideAndImport', (t) async {
       final router = await _pump(t, FakeSeasonsRepository());
 
       expect(find.text(_guideText), findsOneWidget);
-      expect(find.textContaining('Showing'), findsNothing);
+      expect(find.text('Seasons'), findsOneWidget);
+      expect(find.text('F1Laps에서 가져오기'), findsOneWidget);
+      expect(_location(router), '/seasons');
 
       await t.tap(find.text('Telemetry App'));
       await t.pumpAndSettle();
@@ -69,115 +71,46 @@ void main() {
       expect(_location(router), '/telemetry-app');
     });
 
-    testWidgets('SeasonsPage_Initial_RequestsFirstPageOf20', (t) async {
-      final repo = FakeSeasonsRepository(seasons: _seasons(1));
-      await _pump(t, repo);
-
-      expect(repo.requests, [(page: 1, pageSize: _pageSize)]);
-    });
-
-    testWidgets('SeasonsPage_ShowsCardWithMyStandingAndLeader', (t) async {
+    testWidgets('SeasonsPage_OpensMostRecentActiveSeason', (t) async {
       final repo = FakeSeasonsRepository(seasons: [
-        seasonOf(
-          'se1',
-          gameMode: 'DriverCareer',
-          roundCount: 6,
-          myPosition: 3,
-          myPoints: 87,
-          leaderName: 'VERSTAPPEN',
-          leaderPoints: 120,
-          firstSessionAt: DateTime(2026, 10, 17, 12),
-          lastSessionAt: DateTime(2026, 10, 24, 12),
-        ),
+        seasonOf('done-new', lastSessionAt: DateTime(2026, 3, 1, 12), completedAt: DateTime.utc(2026, 3, 2)),
+        seasonOf('active-old', lastSessionAt: DateTime(2026, 1, 1, 12)),
+        seasonOf('active-new', lastSessionAt: DateTime(2026, 2, 1, 12)),
       ]);
-      await _pump(t, repo);
-
-      expect(find.text('Driver Career · 2026.10.17'), findsOneWidget); // 제목
-      expect(find.text('Driver Career'), findsOneWidget); // 게임 모드 배지
-      expect(find.text('2026.10.17 ~ 2026.10.24'), findsOneWidget);
-      expect(find.text('6 rounds'), findsOneWidget);
-      expect(find.text('P3 · 87 pts'), findsOneWidget);
-      expect(find.text('VERSTAPPEN 120'), findsOneWidget);
-    });
-
-    testWidgets('SeasonsPage_PlayerAbsent_ShowsDash', (t) async {
-      final repo = FakeSeasonsRepository(seasons: [seasonOf('se1', myPosition: null, myPoints: null)]);
-      await _pump(t, repo);
-
-      expect(find.text('VERSTAPPEN 120'), findsOneWidget);
-      expect(find.text('-'), findsOneWidget); // 내 순위만 없다
-      expect(find.textContaining('pts'), findsNothing);
-    });
-
-    testWidgets('SeasonsPage_NoResultsAtAll_ShowsDashForMeAndLeader', (t) async {
-      final repo = FakeSeasonsRepository(seasons: [
-        seasonOf('se1', myPosition: null, myPoints: null, leaderName: null, leaderPoints: null),
-      ]);
-      await _pump(t, repo);
-
-      expect(find.text('-'), findsNWidgets(2));
-    });
-
-    testWidgets('SeasonsPage_Paginates', (t) async {
-      final repo = FakeSeasonsRepository(seasons: _seasons(25));
-      await _pump(t, repo);
-
-      expect(find.byType(PaginationBar), findsOneWidget);
-      expect(find.text('Showing 1 to 20 of 25'), findsOneWidget);
-      expect(find.text('Driver Career · 2026.01.01'), findsOneWidget);
-      expect(find.text('Driver Career · 2026.01.20'), findsOneWidget);
-      expect(find.text('Driver Career · 2026.01.21'), findsNothing);
-      expect(_button(t, '이전').onPressed, isNull);
-
-      await t.tap(find.text('다음'));
-      await t.pumpAndSettle();
-
-      expect(repo.requests.last, (page: 2, pageSize: _pageSize));
-      expect(find.text('Showing 21 to 25 of 25'), findsOneWidget);
-      expect(find.text('Driver Career · 2026.01.21'), findsOneWidget);
-      expect(find.text('Driver Career · 2026.01.01'), findsNothing);
-      expect(_button(t, '다음').onPressed, isNull);
-    });
-
-    testWidgets('SeasonsPage_TapCard_OpensSeasonDetail', (t) async {
-      final repo = FakeSeasonsRepository(seasons: _seasons(2));
       final router = await _pump(t, repo);
 
-      await t.tap(find.text('Driver Career · 2026.01.02'));
-      await t.pumpAndSettle();
+      expect(_location(router), '/seasons/active-new?tab=season');
+      expect(find.text('detail:active-new:season'), findsOneWidget);
+    });
 
-      expect(_location(router), '/seasons/se1');
-      expect(find.text('detail:se1'), findsOneWidget);
+    testWidgets('SeasonsPage_AllCompleted_OpensMostRecentSeason', (t) async {
+      final repo = FakeSeasonsRepository(seasons: [
+        seasonOf('old', lastSessionAt: DateTime(2026, 1, 1, 12), completedAt: DateTime.utc(2026, 1, 2)),
+        seasonOf('new', lastSessionAt: DateTime(2026, 2, 1, 12), completedAt: DateTime.utc(2026, 2, 2)),
+      ]);
+      final router = await _pump(t, repo);
+
+      expect(_location(router), '/seasons/new?tab=season');
+    });
+
+    testWidgets('SeasonsPage_LoadsEveryPageBeforeChoosing', (t) async {
+      final repo = FakeSeasonsRepository(seasons: _seasons(25));
+      final router = await _pump(t, repo);
+
+      expect(repo.requests, [(page: 1, pageSize: _pageSize), (page: 2, pageSize: _pageSize)]);
+      expect(_location(router), '/seasons/se24?tab=season'); // 2페이지에 있는 가장 최근 시즌
     });
 
     testWidgets('SeasonsPage_LoadFails_RetryReloads', (t) async {
       final repo = _FlakySeasonsRepository(seasons: _seasons(1));
-      await _pump(t, repo);
+      final router = await _pump(t, repo);
 
       expect(find.text('다시 시도'), findsOneWidget);
 
       await t.tap(find.text('다시 시도'));
       await t.pumpAndSettle();
 
-      expect(find.text('Driver Career · 2026.01.01'), findsOneWidget);
-    });
-
-    testWidgets('SeasonsPage_NarrowScreen_DoesNotOverflow', (t) async {
-      final repo = FakeSeasonsRepository(seasons: [
-        ..._seasons(19),
-        seasonOf(
-          'long',
-          leaderName: 'A VERY LONG LEADER NAME FOR OVERFLOW CHECKING',
-          leaderPoints: 1234,
-          myPosition: 22,
-          myPoints: 1234,
-          roundCount: 24,
-        ),
-      ]);
-      await _pump(t, repo, size: const Size(320, 8000));
-
-      expect(t.takeException(), isNull);
-      expect(find.text('Showing 1 to 20 of 20'), findsOneWidget);
+      expect(_location(router), '/seasons/se0?tab=season');
     });
 
     testWidgets('SeasonsPage_NarrowScreen_EmptyDoesNotOverflow', (t) async {

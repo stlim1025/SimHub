@@ -248,7 +248,7 @@ public sealed class SessionClassificationIngestor : ISessionClassificationIngest
         => stored.TrackId == request.Track.Id && stored.SessionKind == request.Classification.SessionKind;
 
     /// <summary>
-    /// 시즌을 <c>(UserId, GameCode, SeasonLinkId)</c>로, 주말을 <c>(SeasonId, WeekendLinkId)</c>로 찾거나 만든다.
+    /// 시즌을 <c>(UserId, GameCode, SeasonLinkId)</c>로(없으면 같은 키의 지운 시즌 — 합류할 때 되살린다), 주말을 <c>(SeasonId, WeekendLinkId)</c>로 찾거나 만든다.
     /// 새로 만들 때는 첫·마지막 시각을 분류 시각으로 직접 채운다 — <c>Touch</c>는 이미 채워진 범위만 넓힌다.
     /// <para>
     /// 시즌·주말을 건드리기 전에 주말부터 찾는다. 이미 있는 주말의 트랙이 이 세션의 트랙과 다르면 합류시키지 않고
@@ -258,7 +258,9 @@ public sealed class SessionClassificationIngestor : ISessionClassificationIngest
     private async Task<SeasonMembership?> UpsertSeasonAndWeekendAsync(StoreRequest request, CancellationToken cancellationToken)
     {
         var payload = request.Payload;
-        var season = await _seasons.GetByLinkAsync(request.Device.UserId, request.GameCode, payload.SeasonLinkId, cancellationToken);
+        // 사용자가 지운 시즌의 링크로 세션이 다시 오면 새로 만들지 않고 되살린다(UpsertSeasonAsync).
+        var season = await _seasons.GetByLinkAsync(request.Device.UserId, request.GameCode, payload.SeasonLinkId, cancellationToken)
+            ?? await _seasons.GetDeletedByLinkAsync(request.Device.UserId, request.GameCode, payload.SeasonLinkId, cancellationToken);
         var weekend = season is null
             ? null
             : await _seasons.GetWeekendAsync(season.Id, payload.WeekendLinkId, cancellationToken);
@@ -281,6 +283,14 @@ public sealed class SessionClassificationIngestor : ISessionClassificationIngest
     {
         if (season is not null)
         {
+            if (season.IsDeleted)
+            {
+                season.Restore(request.Now);
+                _logger.LogInformation(
+                    "지운 시즌에 세션 도착 → 시즌 복원 season={SeasonId} seasonLinkId={SeasonLinkId} sessionRef={SessionRef}",
+                    season.Id, season.SeasonLinkId, request.Payload.SessionRef);
+            }
+
             season.Touch(request.ClassifiedAt, request.Now);
             return season;
         }

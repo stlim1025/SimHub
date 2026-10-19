@@ -13,13 +13,17 @@ import '../domain/season_models.dart';
 
 const double _flagGap = 8;
 const double _teamDotGap = 8;
-const double _positionColumnWidth = 52;
-const double _pointsColumnWidth = 72;
-const double _diffColumnWidth = 112;
 const String _diffSeparator = ' / ';
 
-/// DIFF 열을 숨기는 표 폭(이보다 좁으면 이름 칸이 너무 좁아진다).
-const double _diffHideBelowWidth = 760;
+/// 숫자 열 폭: 넓은 표에서는 머리글·값이 붙어 보이지 않게 넉넉히, 좁은 표([kCompactTableDefaultWidth] 미만)에서는 촘촘히.
+const double _positionColumnWidth = 84;
+const double _pointsColumnWidth = 100;
+const double _diffColumnWidth = 150;
+const double _narrowPositionColumnWidth = 52;
+const double _narrowPointsColumnWidth = 72;
+
+/// DIFF 열을 숨기는 표 폭(이보다 좁으면 이름 칸이 너무 좁아진다). 보통 데스크톱 폭(표 약 1000)에서는 보인다.
+const double _diffHideBelowWidth = 880;
 
 /// 그랑프리 세션 메뉴 폭·항목 사이 간격.
 const double _sessionMenuWidth = 240;
@@ -49,7 +53,14 @@ class SeasonCalendarTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, constraints) => _table(constraints.maxWidth >= kCompactTableDefaultWidth));
+  }
+
+  /// [roomy]면 넓은 숫자 열, 아니면 좁은 화면용 촘촘한 열.
+  Widget _table(bool roomy) {
     final hasSprint = calendar.any((r) => r.isSprintWeekend);
+    final positionWidth = roomy ? _positionColumnWidth : _narrowPositionColumnWidth;
+    final pointsWidth = roomy ? _pointsColumnWidth : _narrowPointsColumnWidth;
     return CompactTable<SeasonCalendarRound>(
       rows: calendar,
       rowKey: (r) => ValueKey('season-calendar-${r.round}'),
@@ -59,17 +70,17 @@ class SeasonCalendarTab extends StatelessWidget {
         if (hasSprint)
           CompactColumn(
             label: 'Sprint',
-            width: _positionColumnWidth,
+            width: positionWidth,
             compactHidden: true,
             cell: (r) => _PositionCell(position: r.sprintPosition),
           ),
-        CompactColumn(label: 'Race', width: _positionColumnWidth, cell: (r) => _PositionCell(position: r.racePosition)),
+        CompactColumn(label: 'Race', width: positionWidth, cell: (r) => _PositionCell(position: r.racePosition)),
         CompactColumn(
           label: calendarPointsHeader(totalPoints),
-          width: _pointsColumnWidth,
+          width: pointsWidth,
           cell: (r) => Text(r.points == null ? '' : '${r.points}', style: kTabularStyle),
         ),
-        CompactColumn(label: 'Quali', width: _positionColumnWidth, cell: (r) => _PositionCell(position: r.qualiPosition)),
+        CompactColumn(label: 'Quali', width: positionWidth, cell: (r) => _PositionCell(position: r.qualiPosition)),
         CompactColumn(
           label: 'Diff',
           width: _diffColumnWidth,

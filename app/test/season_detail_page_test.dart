@@ -98,7 +98,14 @@ SeasonDetail _sprintDetail() => seasonDetailOf(
     );
 
 /// 라운드 2개 · 드라이버 3명(AI 2명 + 나) · 팀 2개.
-SeasonDetail _detail({String id = 'se1', int seasonNumber = 1}) => seasonDetailOf(
+SeasonDetail _detail({
+  String id = 'se1',
+  int seasonNumber = 1,
+  String? name,
+  DateTime? completedAt,
+  DateTime? lastSessionAt,
+}) =>
+    seasonDetailOf(
       id,
       calendar: _calendar,
       season: seasonOf(
@@ -108,9 +115,11 @@ SeasonDetail _detail({String id = 'se1', int seasonNumber = 1}) => seasonDetailO
         myPosition: 3,
         myPoints: 87,
         firstSessionAt: DateTime(2026, 10, 17, 12),
-        lastSessionAt: DateTime(2026, 10, 24, 12),
+        lastSessionAt: lastSessionAt ?? DateTime(2026, 10, 24, 12),
         seasonNumber: seasonNumber,
         myDriverName: 'GOM',
+        name: name,
+        completedAt: completedAt,
       ),
       rounds: [
         seasonRoundOf(
@@ -216,6 +225,7 @@ Future<GoRouter> _pumpPage(
         ),
       ),
     ),
+    GoRoute(path: '/sessions', builder: (_, _) => const Text('sessions-list')),
     GoRoute(path: '/sessions/:sessionId', builder: (_, state) => Text('session:${state.pathParameters['sessionId']}')),
   ]);
 
@@ -337,27 +347,6 @@ void main() {
       expect(find.text('GOM'), findsOneWidget);
     });
 
-    testWidgets('SeasonDetail_SeasonPicker_ListsMySeasons_AndSwitches', (t) async {
-      final repo = FakeSeasonsRepository(
-        seasons: [_detail(id: 'se2', seasonNumber: 2).season, _detail().season],
-        details: {'se1': _detail(), 'se2': _detail(id: 'se2', seasonNumber: 2)},
-      );
-      final router = await _pumpPage(t, repo);
-
-      await t.tap(find.byKey(const ValueKey('track-picker')));
-      await t.pumpAndSettle();
-
-      expect(find.byKey(const ValueKey('track-option-se2')), findsOneWidget);
-      expect(find.byKey(const ValueKey('track-option-se1')), findsOneWidget);
-      expect(find.byKey(const ValueKey('track-flag-fallback')), findsNothing); // 국기 없음
-
-      await t.tap(find.byKey(const ValueKey('track-option-se2')));
-      await t.pumpAndSettle();
-
-      expect(_location(router), '/seasons/se2?tab=season');
-      expect(find.text('Driver Career Season 2'), findsOneWidget);
-    });
-
     testWidgets('SeasonDetail_Season_375_HidesTeamAndDiff_NoOverflow_BothThemes', (t) async {
       for (final theme in [AppTheme.dark, AppTheme.light]) {
         final repo = FakeSeasonsRepository(details: {'se1': _detail()});
@@ -371,14 +360,229 @@ void main() {
       }
     });
 
-    testWidgets('SeasonDetail_Back_ReturnsToSeasonList', (t) async {
-      final repo = FakeSeasonsRepository(details: {'se1': _detail()});
-      final router = await _pumpPage(t, repo);
+    testWidgets('SeasonDetail_Header_NoBackButton_CustomNameReplacesTitle', (t) async {
+      final repo = FakeSeasonsRepository(details: {'se1': _detail(name: 'Ferrari Dream')});
+      await _pumpPage(t, repo);
 
-      await t.tap(find.byTooltip('시즌 목록'));
+      expect(find.byTooltip('시즌 목록'), findsNothing);
+      expect(find.byIcon(Icons.arrow_back), findsNothing);
+      expect(find.text('Ferrari Dream'), findsOneWidget);
+      expect(find.text('Driver Career Season 1'), findsNothing);
+      expect(find.byKey(const ValueKey('season-options')), findsOneWidget);
+    });
+  });
+
+  group('SeasonDetailPage - 시즌 메뉴', () {
+    /// se1(지금, 진행 중) · se2(진행 중, 더 최근) · se3(완료).
+    FakeSeasonsRepository switcherRepo() {
+      final se1 = _detail();
+      final se2 = _detail(id: 'se2', seasonNumber: 2, lastSessionAt: DateTime(2026, 11, 24, 12));
+      final se3 = _detail(id: 'se3', seasonNumber: 3, completedAt: DateTime.utc(2026, 9, 1));
+      return FakeSeasonsRepository(
+        seasons: [se2.season, se1.season, se3.season],
+        details: {'se1': se1, 'se2': se2, 'se3': se3},
+      );
+    }
+
+    double topOf(WidgetTester t, Finder finder) => t.getTopLeft(finder).dy;
+
+    testWidgets('SeasonSwitcher_GroupsActiveAndCompleted_AndSwitches', (t) async {
+      final router = await _pumpPage(t, switcherRepo());
+
+      await t.tap(find.byKey(const ValueKey('season-switcher')));
       await t.pumpAndSettle();
 
+      expect(find.text('진행 중인 시즌'), findsOneWidget);
+      expect(find.text('완료된 시즌'), findsOneWidget);
+      expect(find.text('F1 25 · Driver Career · GOM'), findsOneWidget);
+      // 진행 중(최근 순: se2 → se1) 다음에 완료(se3).
+      final order = [
+        topOf(t, find.text('진행 중인 시즌')),
+        topOf(t, find.byKey(const ValueKey('season-switch-se2'))),
+        topOf(t, find.byKey(const ValueKey('season-switch-se1'))),
+        topOf(t, find.text('완료된 시즌')),
+        topOf(t, find.byKey(const ValueKey('season-switch-se3'))),
+      ];
+      expect(order, [...order]..sort());
+      // 지금 시즌만 링크 색.
+      Finder titleIn(String id, String title) =>
+          find.descendant(of: find.byKey(ValueKey('season-switch-$id')), matching: find.text(title));
+      expect(
+        _textColor(t, titleIn('se1', 'Driver Career Season 1')),
+        isNot(_textColor(t, titleIn('se2', 'Driver Career Season 2'))),
+      );
+
+      await t.tap(find.byKey(const ValueKey('season-switch-se3')));
+      await t.pumpAndSettle();
+
+      expect(_location(router), '/seasons/se3?tab=season');
+      expect(find.text('Driver Career Season 3'), findsOneWidget);
+    });
+
+    testWidgets('SeasonSwitcher_Close_And_AllSessions', (t) async {
+      final router = await _pumpPage(t, switcherRepo());
+
+      await t.tap(find.byKey(const ValueKey('season-switcher')));
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const ValueKey('season-switcher-close')));
+      await t.pumpAndSettle();
+
+      expect(find.text('진행 중인 시즌'), findsNothing);
+
+      await t.tap(find.byKey(const ValueKey('season-switcher')));
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const ValueKey('season-switcher-sessions')));
+      await t.pumpAndSettle();
+
+      expect(_location(router), '/sessions');
+    });
+
+    testWidgets('SeasonSwitcher_AddSeason_OpensImportDialog', (t) async {
+      await _pumpPage(t, switcherRepo());
+
+      await t.tap(find.byKey(const ValueKey('season-switcher')));
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const ValueKey('season-switcher-add')));
+      await t.pumpAndSettle();
+
+      expect(find.byKey(const Key('season-import-markdown')), findsOneWidget);
+    });
+  });
+
+  group('SeasonDetailPage - 옵션', () {
+    Future<void> openOptions(WidgetTester t) async {
+      await t.tap(find.byKey(const ValueKey('season-options')));
+      await t.pumpAndSettle();
+    }
+
+    Future<void> rename(WidgetTester t, String text) async {
+      await t.tap(find.byKey(const ValueKey('season-options-rename')));
+      await t.pumpAndSettle();
+      await t.enterText(find.byKey(const ValueKey('season-rename-field')), text);
+      await t.tap(find.byKey(const ValueKey('season-rename-confirm')));
+      await t.pumpAndSettle();
+    }
+
+    testWidgets('SeasonOptions_ShowsItems_CompleteLabelDependsOnState', (t) async {
+      await _pumpPage(t, FakeSeasonsRepository(details: {'se1': _detail()}));
+      await openOptions(t);
+
+      for (final label in ['이름 변경', '완료로 표시', '시즌 추가 (F1Laps 가져오기)', '삭제']) {
+        expect(find.text(label), findsOneWidget, reason: label);
+      }
+      expect(find.text('진행 중으로 되돌리기'), findsNothing);
+    });
+
+    testWidgets('SeasonOptions_Rename_CallsRepoAndRefreshes', (t) async {
+      final repo = FakeSeasonsRepository(details: {'se1': _detail()});
+      await _pumpPage(t, repo);
+      await openOptions(t);
+
+      await rename(t, '  My Season  ');
+
+      expect(repo.renameRequests, [(seasonId: 'se1', name: 'My Season')]);
+      expect(repo.detailRequests, ['se1', 'se1']); // 상세를 새로 읽었다
+      expect(find.text('시즌 이름을 바꿨어요.'), findsOneWidget);
+    });
+
+    testWidgets('SeasonOptions_RenameEmpty_ResetsToDefault', (t) async {
+      final repo = FakeSeasonsRepository(details: {'se1': _detail(name: 'Old')});
+      await _pumpPage(t, repo);
+      await openOptions(t);
+
+      await t.tap(find.byKey(const ValueKey('season-options-rename')));
+      await t.pumpAndSettle();
+      expect(
+        t.widget<TextField>(find.byKey(const ValueKey('season-rename-field'))).controller!.text,
+        'Old', // 지금 이름이 채워져 있다
+      );
+      await t.enterText(find.byKey(const ValueKey('season-rename-field')), '   ');
+      await t.tap(find.byKey(const ValueKey('season-rename-confirm')));
+      await t.pumpAndSettle();
+
+      expect(repo.renameRequests, [(seasonId: 'se1', name: null)]);
+    });
+
+    testWidgets('SeasonOptions_Rename_ApiError_ShowsErrorToast', (t) async {
+      final repo = FakeSeasonsRepository(details: {'se1': _detail()})
+        ..mutationError = ApiException('이름이 너무 길어요.', statusCode: 400);
+      await _pumpPage(t, repo);
+      await openOptions(t);
+
+      await rename(t, 'x');
+
+      expect(find.text('이름이 너무 길어요.'), findsOneWidget);
+      expect(repo.detailRequests, ['se1']); // 실패하면 다시 읽지 않는다
+    });
+
+    testWidgets('SeasonOptions_Complete_And_Reopen', (t) async {
+      final repo = FakeSeasonsRepository(details: {'se1': _detail()});
+      await _pumpPage(t, repo);
+      await openOptions(t);
+
+      await t.tap(find.byKey(const ValueKey('season-options-complete')));
+      await t.pumpAndSettle();
+
+      expect(repo.completionRequests, [(seasonId: 'se1', completed: true)]);
+      expect(find.text('시즌을 완료로 표시했어요.'), findsOneWidget);
+
+      final completedRepo = FakeSeasonsRepository(details: {'se1': _detail(completedAt: DateTime.utc(2026, 10, 25))});
+      await _pumpPage(t, completedRepo);
+      await openOptions(t);
+
+      expect(find.text('진행 중으로 되돌리기'), findsOneWidget);
+      expect(find.text('완료로 표시'), findsNothing);
+
+      await t.tap(find.byKey(const ValueKey('season-options-complete')));
+      await t.pumpAndSettle();
+
+      expect(completedRepo.completionRequests, [(seasonId: 'se1', completed: false)]);
+    });
+
+    testWidgets('SeasonOptions_Delete_ConfirmsThenDeletesAndGoesToSeasons', (t) async {
+      final repo = FakeSeasonsRepository(details: {'se1': _detail()});
+      final router = await _pumpPage(t, repo);
+      await openOptions(t);
+
+      await t.tap(find.byKey(const ValueKey('season-options-delete')));
+      await t.pumpAndSettle();
+
+      expect(find.textContaining('세션과 랩 기록은 그대로 남지만'), findsOneWidget);
+
+      await t.tap(find.text('취소'));
+      await t.pumpAndSettle();
+      expect(repo.deleteRequests, isEmpty);
+
+      await openOptions(t);
+      await t.tap(find.byKey(const ValueKey('season-options-delete')));
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const ValueKey('season-delete-confirm')));
+      await t.pumpAndSettle();
+
+      expect(repo.deleteRequests, ['se1']);
       expect(_location(router), '/seasons');
+      expect(find.text('seasons-list'), findsOneWidget);
+      expect(find.text('시즌을 삭제했어요.'), findsOneWidget);
+    });
+
+    testWidgets('SeasonOptions_Import_OpensImportDialog', (t) async {
+      await _pumpPage(t, FakeSeasonsRepository(details: {'se1': _detail()}));
+      await openOptions(t);
+
+      await t.tap(find.byKey(const ValueKey('season-options-import')));
+      await t.pumpAndSettle();
+
+      expect(find.byKey(const Key('season-import-markdown')), findsOneWidget);
+    });
+
+    testWidgets('SeasonHeader_Narrow_DoesNotOverflow', (t) async {
+      final repo = FakeSeasonsRepository(
+        details: {'se1': _detail(name: 'A VERY LONG CUSTOM SEASON NAME THAT DOES NOT FIT ON A PHONE')},
+      );
+      await _pumpPage(t, repo, size: const Size(320, 2400));
+
+      expect(t.takeException(), isNull);
+      expect(find.byKey(const ValueKey('season-options')), findsOneWidget);
     });
   });
 

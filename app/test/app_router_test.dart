@@ -225,17 +225,20 @@ void main() {
     expect(find.byType(SessionsPage), findsOneWidget);
   });
 
-  testWidgets('/seasons는 셸 안에서 Seasons 화면을 연다', (t) async {
-    final repo = FakeSeasonsRepository(seasons: [seasonOf('se1', gameMode: 'GrandPrix')]);
+  testWidgets('/seasons는 셸 안에서 가장 최근 진행 중인 시즌 상세를 바로 연다', (t) async {
+    final repo = FakeSeasonsRepository(
+      seasons: [seasonOf('se1', gameMode: 'GrandPrix', seasonNumber: 1)],
+      details: {'se1': seasonDetailOf('se1', season: seasonOf('se1', gameMode: 'GrandPrix', seasonNumber: 1))},
+    );
     final router = await _pumpApp(t, seasonsRepo: repo);
 
     router.go('/seasons');
     await t.pumpAndSettle();
 
-    expect(_location(router), '/seasons');
-    expect(find.byType(SeasonsPage), findsOneWidget);
+    expect(_location(router), '/seasons/se1?tab=season');
+    expect(find.byType(SeasonDetailPage), findsOneWidget);
     expect(repo.requests, [(page: 1, pageSize: 20)]);
-    expect(find.textContaining('Grand Prix'), findsWidgets);
+    expect(find.text('Grand Prix Season 1'), findsOneWidget);
     expect(find.text('Dashboard'), findsOneWidget); // 사이드바가 그대로 있다.
   });
 

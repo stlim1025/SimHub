@@ -10,6 +10,9 @@ namespace SimCenter.Domain.Entities;
 /// </summary>
 public class Season : BaseEntity
 {
+    /// <summary>사용자가 붙인 시즌 이름의 최대 길이(앞뒤 공백 제거 후).</summary>
+    public const int NameMaxLength = 60;
+
     public Guid UserId { get; set; }
 
     /// <summary>게임 코드(예: "F1_25").</summary>
@@ -39,7 +42,48 @@ public class Season : BaseEntity
     /// </summary>
     public string? ImportedStandings { get; set; }
 
+    /// <summary>사용자가 붙인 표시 이름. null이면 기본 이름(모드·시즌 번호)을 쓴다.</summary>
+    public string? Name { get; set; }
+
+    /// <summary>사용자가 시즌을 완료로 표시한 시각(UTC). 진행 중이면 null.</summary>
+    public DateTime? CompletedAt { get; set; }
+
     public ICollection<RaceWeekend> Weekends { get; set; } = new List<RaceWeekend>();
+
+    /// <summary>표시 이름을 바꾼다. <paramref name="name"/>은 정규화된 값(공백 제거·빈 값은 null)이어야 한다.</summary>
+    public void Rename(string? name, DateTime now)
+    {
+        Name = name;
+        UpdatedAt = now;
+    }
+
+    /// <summary>완료로 표시한다. 이미 완료면 처음 시각을 그대로 둔다(수정 시각만 바꾼다).</summary>
+    public void MarkCompleted(DateTime now)
+    {
+        CompletedAt ??= now;
+        UpdatedAt = now;
+    }
+
+    /// <summary>완료 표시를 지운다(다시 진행 중).</summary>
+    public void Reopen(DateTime now)
+    {
+        CompletedAt = null;
+        UpdatedAt = now;
+    }
+
+    /// <summary>시즌을 지운다(soft delete). 주말·세션은 그대로 두고, 시즌 조회에서만 빠진다.</summary>
+    public void SoftDelete(DateTime now)
+    {
+        IsDeleted = true;
+        UpdatedAt = now;
+    }
+
+    /// <summary>지운 시즌을 되살린다 — 같은 시즌 링크의 세션이 다시 들어올 때(이름·완료 표시는 그대로).</summary>
+    public void Restore(DateTime now)
+    {
+        IsDeleted = false;
+        UpdatedAt = now;
+    }
 
     /// <summary>
     /// 새 세션의 분류 시각으로 범위를 넓힌다. 범위가 실제로 넓어질 때만 <see cref="BaseEntity.UpdatedAt"/>을 <paramref name="now"/>로 바꾼다.

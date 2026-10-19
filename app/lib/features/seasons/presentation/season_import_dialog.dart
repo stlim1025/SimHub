@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../sessions/domain/session_display.dart';
+import '../application/seasons_providers.dart';
 import '../data/seasons_repository.dart';
+import '../domain/season_display.dart';
 import '../domain/season_import_models.dart';
 
 const String kSeasonImportTitle = 'F1Laps에서 가져오기';
@@ -28,6 +31,14 @@ const Map<String, String> _documentKinds = {
   'F1LapsSeason': 'F1Laps 시즌 요약',
   'F1LapsSession': 'F1Laps 세션',
 };
+
+/// 가져오기 대화상자를 열고, 시즌을 가져오면 시즌 목록을 새로 읽은 뒤 만든 시즌으로 간다(Seasons 빈 화면·시즌 메뉴·옵션 공용).
+Future<void> openSeasonImport(BuildContext context, WidgetRef ref) async {
+  final seasonId = await showDialog<String>(context: context, builder: (_) => const SeasonImportDialog());
+  if (seasonId == null || !context.mounted) return;
+  ref.invalidate(allSeasonsProvider);
+  context.go(seasonLocation(seasonId));
+}
 
 /// 시즌 가져오기 대화상자(docs/15 §12, D-55): 붙여넣기 → [미리보기] → [가져오기]. 가져오면 만든 시즌 Id로 닫힌다.
 /// 오류(형식·409)는 대화상자 안에 보여 주고 닫지 않는다.

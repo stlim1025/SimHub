@@ -109,6 +109,10 @@ public sealed class SessionQueryService : ISessionQueryService
 
     // ---- 매핑: 목록 ----
 
+    /// <summary>번호가 있는(= 지우지 않은 내) 시즌만 Id를 낸다. 지운 시즌을 가리키는 세션은 시즌 없음(null)으로 보인다.</summary>
+    private static Guid? ActiveSeasonId(IReadOnlyDictionary<Guid, int> seasonNumbers, Guid? seasonId)
+        => SeasonNumbering.Of(seasonNumbers, seasonId) is null ? null : seasonId;
+
     private static SessionSummaryDto ToSummary(SessionSummaryRow row, IReadOnlyDictionary<Guid, int> seasonNumbers) => new(
         row.SessionId,
         row.ClassifiedAt,
@@ -116,7 +120,8 @@ public sealed class SessionQueryService : ISessionQueryService
         row.SessionType.ToString(),
         row.SessionKind.ToString(),
         row.GameMode.ToString(),
-        row.SeasonId,
+        // 지운 시즌(번호가 없다)은 가리키지 않는다.
+        ActiveSeasonId(seasonNumbers, row.SeasonId),
         row.CarCount,
         SessionPositions.Known(row.MyPosition),
         SessionPositions.Known(row.MyGridPosition),
@@ -143,7 +148,8 @@ public sealed class SessionQueryService : ISessionQueryService
             session.SessionType.ToString(),
             session.SessionKind.ToString(),
             session.GameMode.ToString(),
-            session.SeasonId,
+            // 지운 시즌(번호가 없다)은 가리키지 않는다.
+            seasonNumber is null ? null : session.SeasonId,
             results.Count,
             SessionPositions.Known(me?.Position),
             SessionPositions.Known(me?.GridPosition),

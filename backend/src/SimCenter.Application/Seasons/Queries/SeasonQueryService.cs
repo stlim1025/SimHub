@@ -121,7 +121,9 @@ public sealed class SeasonQueryService : ISeasonQueryService
             myTeam?.Name,
             myTeam?.Color,
             SeasonNumbering.Of(seasonNumbers, season.Id),
-            me?.Name);
+            me?.Name,
+            season.Name,
+            season.CompletedAt);
     }
 
     // ---- 매핑: 라운드 ----

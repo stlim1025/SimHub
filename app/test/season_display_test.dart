@@ -132,4 +132,32 @@ void main() {
       expect(calendarRoundTarget(seasonCalendarRoundOf(1)), isNull);
     });
   });
+
+  group('seasonDisplayTitle', () {
+    test('이름이 있으면 이름, 없거나 공백이면 기본 제목이다', () {
+      expect(seasonDisplayTitle(seasonOf('se1', seasonNumber: 1, name: 'Ferrari Dream')), 'Ferrari Dream');
+      expect(seasonDisplayTitle(seasonOf('se1', seasonNumber: 1)), 'Driver Career Season 1');
+      expect(seasonDisplayTitle(seasonOf('se1', seasonNumber: 1, name: '  ')), 'Driver Career Season 1');
+    });
+  });
+
+  group('landingSeason', () {
+    test('가장 최근의 진행 중인 시즌을 고른다', () {
+      final seasons = [
+        seasonOf('done', lastSessionAt: DateTime(2026, 3, 1), completedAt: DateTime.utc(2026, 3, 2)),
+        seasonOf('old', lastSessionAt: DateTime(2026, 1, 1)),
+        seasonOf('new', lastSessionAt: DateTime(2026, 2, 1)),
+      ];
+      expect(landingSeason(seasons)?.seasonId, 'new');
+    });
+
+    test('모두 완료면 가장 최근 시즌, 없으면 null', () {
+      final seasons = [
+        seasonOf('a', lastSessionAt: DateTime(2026, 1, 1), completedAt: DateTime.utc(2026, 1, 2)),
+        seasonOf('b', lastSessionAt: DateTime(2026, 2, 1), completedAt: DateTime.utc(2026, 2, 2)),
+      ];
+      expect(landingSeason(seasons)?.seasonId, 'b');
+      expect(landingSeason(const []), isNull);
+    });
+  });
 }

@@ -29,12 +29,41 @@ class SeasonsRepository {
   /// 내 시즌 상세(헤더 + 라운드 + Standings). 남의 시즌이거나 없으면 404 [ApiException].
   Future<SeasonDetail> getMySeason(String seasonId) async {
     try {
-      final res = await _dio.get<Map<String, dynamic>>('/me/seasons/${Uri.encodeComponent(seasonId)}');
+      final res = await _dio.get<Map<String, dynamic>>(_seasonPath(seasonId));
       return SeasonDetail.fromJson(res.data!);
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }
   }
+
+  /// 시즌 이름 바꾸기. [name]이 null이거나 비어 있으면 기본 이름으로 되돌린다. 60자를 넘으면 400 [ApiException].
+  Future<void> renameSeason(String seasonId, String? name) async {
+    try {
+      await _dio.put<void>('${_seasonPath(seasonId)}/name', data: {'name': name});
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// 시즌을 완료로 표시하거나([completed] = true) 진행 중으로 되돌린다.
+  Future<void> setSeasonCompleted(String seasonId, {required bool completed}) async {
+    try {
+      await _dio.put<void>('${_seasonPath(seasonId)}/completion', data: {'completed': completed});
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// 시즌 삭제(세션·랩은 남는다). 없으면 404 [ApiException].
+  Future<void> deleteSeason(String seasonId) async {
+    try {
+      await _dio.delete<void>(_seasonPath(seasonId));
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  static String _seasonPath(String seasonId) => '/me/seasons/${Uri.encodeComponent(seasonId)}';
 
   /// 시즌 가져오기 미리보기(docs/15 §12, D-55). 형식 오류는 400 [ApiException](메시지에 줄 번호).
   Future<SeasonImportPreview> previewImport(String markdown) async {

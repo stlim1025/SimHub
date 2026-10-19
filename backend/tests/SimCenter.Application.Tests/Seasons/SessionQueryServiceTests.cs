@@ -118,6 +118,7 @@ public class SessionQueryServiceTests
     [Fact]
     public async Task GetSessions_MapsSummary()
     {
+        _details.Seasons.Add(new SeasonOrderRow(Id(900), GameCode, GameMode.DriverCareer, At(1)));
         _sessions.Page = ([SummaryRow()], 1);
 
         var page = await _sut.GetMySessionsAsync(UserId, null, 1, 15);
@@ -353,6 +354,7 @@ public class SessionQueryServiceTests
     [Fact]
     public async Task GetSession_InSeason_HasRoundMatchingSeason()
     {
+        _details.Seasons.Add(new SeasonOrderRow(Id(900), GameCode, GameMode.DriverCareer, At(1)));
         // 저장소가 뒤집어 돌려주어도 FirstSessionAt 순서(라운드 번호 계산)를 따른다. 이 세션의 주말은 두 번째 라운드다.
         _seasons.Weekends.AddRange(
         [
@@ -384,12 +386,36 @@ public class SessionQueryServiceTests
     [Fact]
     public async Task GetSession_WeekendMissingFromSeasonRows_RoundNull()
     {
+        _details.Seasons.Add(new SeasonOrderRow(Id(900), GameCode, GameMode.DriverCareer, At(1)));
         _seasons.Weekends.Add(new WeekendRow(Id(11), Id(900), "Bahrain", At(10)));
         AddSession(seasonId: Id(900), weekendId: Id(77), results: [Result(carIndex: 0, position: 1)]);
 
         var header = (await _sut.GetMySessionAsync(UserId, Id(1))).Session;
 
         Assert.Equal(Id(900), header.SeasonId);
+        Assert.Null(header.Round);
+    }
+
+    [Fact]
+    public async Task GetSessions_SeasonDeleted_SeasonIdNull()
+    {
+        // 지운 시즌은 번호 매기기 재료(활성 시즌)에 없다 → 세션은 시즌 없음으로 보인다.
+        _sessions.Page = ([SummaryRow()], 1);
+
+        var dto = Assert.Single((await _sut.GetMySessionsAsync(UserId, null, 1, 15)).Items);
+
+        Assert.Null(dto.SeasonId);
+        Assert.Null(dto.SeasonNumber);
+    }
+
+    [Fact]
+    public async Task GetSession_SeasonDeleted_SeasonIdAndRoundNull()
+    {
+        AddSession(seasonId: Id(900), weekendId: Id(22), results: [Result(carIndex: 0, position: 1)]);
+
+        var header = (await _sut.GetMySessionAsync(UserId, Id(1))).Session;
+
+        Assert.Null(header.SeasonId);
         Assert.Null(header.Round);
     }
 
