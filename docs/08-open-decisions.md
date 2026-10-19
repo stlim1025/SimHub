@@ -379,7 +379,35 @@ invalid 랩도 우선 기록은 해두고 랭킹 집계에서는 사용하지 �
 
 ---
 
-## 결정 요약 (전체 확정 ✅ · 2026-07-06, 2026-10-17 P6 갱신, 2026-10-18 P7 갱신)
+## M. 외부 공개 배포 결정 (2026-10-19 확정, 상세: [16](./16-deployment.md))
+
+> 사용자 요청: DB와 웹서버를 내 PC가 아닌 곳에 올려 외부에서도 보고 싶다, 비용은 들지 않게.
+
+### D-55. 외부 공개 = 웹 GitHub Pages + 백엔드 Tailscale Funnel
+- 웹은 `https://stlim1025.github.io/SimHub/`, 백엔드는 항상 켜져 있는 `DESKTOP-JC07560`에서 Funnel `:8443` → `127.0.0.1:5290`, DB는 로컬 `simcenter_prod`(공개 안 함). 비용 0.
+- 같은 PC의 개발 환경(`:5284`, 개발 DB)과 포트·DB를 분리한다. 기존 Funnel `:443`(다른 서비스)은 건드리지 않는다.
+- 검토한 대안: 유료 VPS·Azure(비용), Oracle Always Free VM(가입·자원 확보 부담, 회사 규정 문제가 생기면 이전 대상), 잠드는 무료 PaaS(Agent의 상시 SignalR 연결과 맞지 않음).
+
+### D-56. 운영 설정 = 시크릿은 환경 변수, 비시크릿은 `appsettings.Production.json`
+- `ConnectionStrings__Postgres`·`Jwt__Key`는 환경 변수로만. `Database:MigrateOnStartup`(Development 기본 true)·`Cors:AllowedOrigins`(운영 = github.io 한 곳)를 추가한다.
+- 트랙 시드는 운영에도 필요하므로(D-41) 마이그레이션과 함께 기동 시 실행한다.
+
+### D-57. 상시 실행 = Windows 작업 스케줄러
+- publish 폴더 `D:\SimCenterServer\app`, 시스템 시작 시 실행, 실패 시 재시작. Windows 서비스 래퍼(패키지 추가)는 제외.
+
+### D-58. 프록시 헤더는 루프백만 신뢰, 로그인 IP당 분당 10회
+- `UseForwardedHeaders`(For·Proto)를 루프백 프록시만 신뢰해 켠다([11](./11-personal-mode.md) §9 배포 메모 이행). `POST /auth/login`에 IP당 요청 제한을 추가한다.
+
+### D-59. 운영 회원가입 차단
+- 사용자: "가입을 막고 내 계정만 쓸게." `Auth:AllowRegistration`(기본 true), 운영 false → `POST /auth/register` 403.
+- 첫 계정은 환경 변수 `Auth__AllowRegistration=true`로 잠깐 열고 만든 뒤 닫는다. "사용자 0명일 때만 허용"은 공개 상태에서 남이 먼저 가입할 수 있어 제외.
+
+### D-60. 웹 API 주소 = 저장소 변수 `API_BASE_URL`
+- GitHub Actions가 `--dart-define`으로 주입한다. 주소가 바뀌어도 코드는 고치지 않는다. 해시 URL 방식이라 Pages의 404 우회가 필요 없다.
+
+---
+
+## 결정 요약 (전체 확정 ✅ · 2026-07-06, 2026-10-17 P6 갱신, 2026-10-18 P7 갱신, 2026-10-19 배포 갱신)
 
 | ID | 결정 | 반영 문서 |
 |---|---|---|
@@ -435,6 +463,12 @@ invalid 랩도 우선 기록은 해두고 랭킹 집계에서는 사용하지 �
 | D-52 | F1 25 v1.26 팀 ID 220~230(2026 그리드, 실제 결과의 드라이버 이름으로 확인)을 `TeamCatalog`에, 게임 모드 78 = DriverCareer(예전 Other 세션 키는 유지) | 12, 15, agent, backend |
 | D-53 | 세션 상세 = Details · Final Classification · Laps · Engine Wear · Tyre Stints 2종 · Penalties(D-49 수집 값으로 서버가 조립), 벌칙·침해 이름은 서버 정적 카탈로그 | 04, 15, backend, app |
 | D-54 | 세션 목록 = F1Laps 배치(국기 · 내 팀 · 모드 + 시즌 번호(같은 게임·모드 안 순서) · P 배지 · 날짜/시각) | 15, backend, app |
+| D-55 | 외부 공개 = 웹 GitHub Pages(`/SimHub/`) + 백엔드 `DESKTOP-JC07560` Funnel `:8443` → `127.0.0.1:5290`, DB 로컬 `simcenter_prod` | 16 |
+| D-56 | 운영 설정 = 시크릿 환경 변수, 비시크릿 `appsettings.Production.json`, `Database:MigrateOnStartup`·`Cors:AllowedOrigins` | 16, backend |
+| D-57 | 상시 실행 = 작업 스케줄러 + publish 폴더 `D:\SimCenterServer\app` | 16 |
+| D-58 | 프록시 헤더 루프백만 신뢰, `POST /auth/login` IP당 분당 10회 | 11, 16, backend |
+| D-59 | 운영 회원가입 차단(`Auth:AllowRegistration=false` → 403), 첫 계정은 환경 변수로 잠깐 열어 생성 | 16, backend |
+| D-60 | 웹 API 주소 = 저장소 변수 `API_BASE_URL` → `--dart-define` | 16, app |
 
 **MVP 관련 결정은 모두 확정되어 각 문서에 반영 완료.** 본 설계 문서 세트 최종 승인 시,
 **Phase 0(계약 & 스캐폴딩)** 상세 설계로 진입합니다.
