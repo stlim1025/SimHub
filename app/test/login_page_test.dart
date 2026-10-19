@@ -108,7 +108,7 @@ void main() {
 
   testWidgets('회원가입 모드에서는 비밀번호 엔터가 닉네임으로 이동하고 닉네임 엔터가 제출한다', (t) async {
     final controller = await _pumpLogin(t);
-    await t.tap(find.text('처음이신가요? · 회원가입'));
+    await t.tap(find.text('회원가입하기'));
     await t.pumpAndSettle();
 
     await _type(t, '이메일', 'a@b.com');
