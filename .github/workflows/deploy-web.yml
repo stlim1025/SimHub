@@ -33,8 +33,8 @@ jobs:
     env:
       # 변수 값을 셸에 직접 끼워 넣지 않고 환경 변수로 넘긴다.
       API_BASE_URL: ${{ vars.API_BASE_URL }}
-      # 커스텀 도메인(www.simhub.kro.kr)은 루트에서 열린다. github.io 하위 경로로 되돌릴 때만 저장소 변수 PAGES_BASE_HREF=/SimHub/.
-      BASE_HREF: ${{ vars.PAGES_BASE_HREF || '/' }}
+      # 기본 = github.io 프로젝트 경로(/SimHub/). 커스텀 도메인(루트에서 열림)을 쓸 때만 저장소 변수 PAGES_BASE_HREF=/.
+      BASE_HREF: ${{ vars.PAGES_BASE_HREF || format('/{0}/', github.event.repository.name) }}
     steps:
       - uses: actions/checkout@v4
 

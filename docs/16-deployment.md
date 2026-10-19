@@ -11,7 +11,7 @@
 
 | 구성 요소 | 위치 | 공개 주소 | 비용 |
 |---|---|---|---|
-| 웹(Flutter Web) | GitHub Pages + 커스텀 도메인(2026-10-19) | `https://www.simhub.kro.kr/` (`simhub.kro.kr`·`stlim1025.github.io/SimHub/`는 이 주소로 넘어감) | 0 |
+| 웹(Flutter Web) | GitHub Pages | `https://stlim1025.github.io/SimHub/` (커스텀 도메인 시도·철회 경위는 §7.4) | 0 |
 | 백엔드(ASP.NET Core 10, REST·SignalR) | `DESKTOP-JC07560`, `127.0.0.1:5290` | `https://desktop-jc07560.tail4a150e.ts.net:8443` (Funnel) | 0 |
 | PostgreSQL | `DESKTOP-JC07560`, DB `simcenter_prod` | 공개하지 않음 | 0 |
 | Agent | 각자의 게임 PC | — | 0 |
@@ -60,9 +60,8 @@ Tailscale Funnel :8443 ──► 127.0.0.1:5290  SimCenter.Api (Production)
 | 운영 백엔드 바인딩 | `http://127.0.0.1:5290` | 루프백만. 회사 LAN에 직접 노출하지 않는다 |
 | 개발 백엔드 | `http://localhost:5284` | 기존 그대로 |
 | Funnel | `https://desktop-jc07560.tail4a150e.ts.net:8443` → `http://127.0.0.1:5290` | HTTPS 종료는 Tailscale이 한다 |
-| 웹 오리진 | `https://www.simhub.kro.kr` (+ `https://simhub.kro.kr`, `https://stlim1025.github.io`) | CORS 허용 대상(§4.4) |
-| 웹 base href | `/` | 커스텀 도메인은 루트에서 열린다. github.io 하위 경로로 되돌리려면 저장소 변수 `PAGES_BASE_HREF=/SimHub/` |
-| 커스텀 도메인 DNS | `www` CNAME → `stlim1025.github.io`, 루트 A 4개 → GitHub Pages IP | `simhub.kro.kr`은 GitHub이 서브도메인으로 보아 A 레코드를 거부(InvalidARecordError)하므로 `www`를 주 주소로 쓴다 |
+| 웹 오리진 | `https://stlim1025.github.io` (+ 커스텀 도메인 재시도용 `https://www.simhub.kro.kr`, `https://simhub.kro.kr`) | CORS 허용 대상(§4.4) |
+| 웹 base href | `/SimHub/` | 워크플로 기본값(저장소 이름). 커스텀 도메인(루트)을 쓸 때만 저장소 변수 `PAGES_BASE_HREF=/` |
 | 운영 DB | 로컬 PostgreSQL의 `simcenter_prod` | 개발·E2E·통합 테스트 DB와 분리 |
 | `ASPNETCORE_ENVIRONMENT` | `Production` | |
 
@@ -101,9 +100,8 @@ Tailscale Funnel :8443 ──► 127.0.0.1:5290  SimCenter.Api (Production)
 ### 4.4 운영 CORS
 
 - 웹(`stlim1025.github.io`)과 API(`*.ts.net:8443`)의 오리진이 다르므로 운영 CORS가 필요하다.
-- 설정 `Cors:AllowedOrigins`(문자열 배열)를 추가하고, 운영은 웹 주소만 허용한다: `https://www.simhub.kro.kr`, `https://simhub.kro.kr`, `https://stlim1025.github.io`(커스텀 도메인 전환 전 주소, 2026-10-19). 와일드카드는 쓰지 않는다.
-- ⚠ **임시(2026-10-19):** GitHub Pages의 `www.simhub.kro.kr` HTTPS 인증서가 발급되기 전에는 웹이 `http://`로만 열려 로그인이 CORS에 막히므로 `http://www.simhub.kro.kr`을 함께 허용했다.
-  **인증서 발급 → Enforce HTTPS를 켠 뒤 이 항목을 `appsettings.Production.json`에서 빼고 다시 배포한다**(http 페이지에서 토큰을 다루는 위험 때문).
+- 설정 `Cors:AllowedOrigins`(문자열 배열)를 추가하고, 운영은 웹 주소만 허용한다: `https://stlim1025.github.io`, 그리고 커스텀 도메인 재시도용 `https://www.simhub.kro.kr`·`https://simhub.kro.kr`. **https만** 허용하고 와일드카드는 쓰지 않는다.
+- http 오리진은 허용하지 않는다(2026-10-19 잠시 허용했다가 제거): http 페이지는 보안 컨텍스트가 아니어서 ① 웹 토큰 저장소(`flutter_secure_storage`, Web Crypto)가 동작하지 않고 ② Tailscale이 켜진 기기에서는 API 주소가 100.x(`local`)로 풀려 브라우저가 요청을 차단한다(Private Network Access). 허용해도 로그인이 되지 않고 위험만 남는다.
 - 정책 내용은 개발 정책과 같다: 지정 오리진, `AllowAnyHeader`, `AllowAnyMethod`, `AllowCredentials`(SignalR negotiate).
 - Development는 기존 루프백 반사 정책을 유지한다. 운영에서 설정이 비어 있으면 CORS를 열지 않는다(동일 오리진만).
 - Agent의 `TelemetryHub` 연결은 브라우저가 아니므로 CORS와 무관하다.
@@ -186,7 +184,8 @@ https://desktop-jc07560.tail4a150e.ts.net:8443 (Funnel on)
 - `RANKING_HUB_URL`은 넣지 않는다. 없으면 `API_BASE_URL + /hubs/ranking`을 쓴다([app_config.dart](../app/lib/core/config/app_config.dart)).
 - 배포는 GitHub 공식 액션(`actions/configure-pages`, `actions/upload-pages-artifact`, `actions/deploy-pages`)을 쓴다.
 - Flutter는 서드파티 설치 액션 대신 **공식 저장소(`flutter/flutter`)의 버전 태그를 받아** 쓴다. 버전은 로컬 개발 SDK와 같은 `3.44.5`(stable)로 고정한다(워크플로의 `FLUTTER_VERSION`).
-- base href는 저장소 변수 `PAGES_BASE_HREF`, 없으면 `/`(커스텀 도메인 루트)다. 위 빌드 명령의 `/SimHub/`는 커스텀 도메인 전의 값이다. 저장소 변수 `API_BASE_URL`이 비어 있으면 빌드 전에 실패한다.
+- base href는 저장소 변수 `PAGES_BASE_HREF`, 없으면 `/<저장소 이름>/`(= `/SimHub/`)다. 커스텀 도메인을 쓸 때만 변수를 `/`로 둔다. 저장소 변수 `API_BASE_URL`이 비어 있으면 빌드 전에 실패한다.
+- 링크 미리보기(`og:url`·`og:image`)는 절대 주소라 `web/index.html`에 웹 주소가 들어 있다. 웹 주소를 바꾸면 함께 고친다.
 
 ### 7.2 사용자가 GitHub에서 할 일
 
@@ -197,6 +196,16 @@ https://desktop-jc07560.tail4a150e.ts.net:8443 (Funnel on)
 
 - 앱은 URL 전략을 따로 정하지 않아 Flutter 기본값인 **해시 방식(`/#/laps`)** 을 쓴다. GitHub Pages에서 하위 화면을 새로고침해도 404가 나지 않으므로 `404.html` 우회는 필요 없다.
 - `web/index.html`은 이미 `$FLUTTER_BASE_HREF`를 쓰므로 수정하지 않는다.
+
+### 7.4 커스텀 도메인 시도와 철회 (2026-10-19)
+
+무료 도메인 `simhub.kro.kr`(내도메인.한국)을 연결했다가 github.io로 되돌렸다. 다시 시도할 때 참고한다.
+
+- **DNS:** `simhub.kro.kr`은 GitHub이 `kro.kr`의 서브도메인으로 보므로 A 레코드를 거부한다(InvalidARecordError). `www` CNAME → `stlim1025.github.io`(값 칸에 자기 이름을 넣으면 순환 CNAME이 된다)로 하고 `www.simhub.kro.kr`을 주 주소로 둔다.
+- **인증서가 발급되지 않음:** DNS 확인은 통과했지만 "Certificate Request Error"가 반복됐다. `kro.kr`을 포함한 내도메인.한국 무료 도메인(`p-e.kr`, `n-e.kr`, `o-r.kr`, `r-e.kr`)은 Public Suffix List에 없어,
+  Let's Encrypt의 등록 도메인당 발급 한도(주당 50장)를 모든 사용자가 나눠 쓴다 — 가장 유력한 원인(확정은 아님). 발급 시점을 예측할 수 없다.
+- **https가 아니면 로그인할 수 없다:** §4.4의 두 이유(웹 토큰 저장소, Private Network Access). 그래서 인증서를 기다리지 않고 github.io로 돌아왔다.
+- **다시 시도하려면:** PSL에 등록된 도메인(예: `is-a.dev`)이나 개인 도메인을 쓴다. Pages Custom domain 설정 → 저장소 변수 `PAGES_BASE_HREF=/` → `index.html`의 `og:url`·`og:image` 주소 변경 → Enforce HTTPS 확인 순서로 한다.
 
 ---
 
