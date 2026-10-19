@@ -126,12 +126,14 @@ Funnel은 인터넷 전체에 공개된다. 지금 `POST /auth/register`·`POST 
 1. **DB 준비:** 로컬 PostgreSQL에 `simcenter_prod` DB와 전용 계정을 만든다(개발 DB와 분리).
 2. **게시(publish):** 저장소 밖의 고정 폴더로 게시한다.
    ```
-   dotnet publish backend/src/SimCenter.Api -c Release -o D:\SimCenterServer\app
+   dotnet publish backend/src/SimCenter.Api -c Release -o D:\Toy\SimCenterServer\app
    ```
-3. **환경 변수:** 작업 스케줄러 작업이 읽도록 시스템 환경 변수 또는 실행 스크립트(`D:\SimCenterServer\run.cmd`, 저장소 밖)에 설정한다.
+3. **환경 변수:** 작업 스케줄러 작업이 읽도록 시스템 환경 변수 또는 실행 스크립트(`D:\Toy\SimCenterServer\run.cmd`, 저장소 밖)에 설정한다.
    - `ASPNETCORE_ENVIRONMENT=Production`
    - `ASPNETCORE_URLS=http://127.0.0.1:5290`
    - `ConnectionStrings__Postgres=...`, `Jwt__Key=...`
+   - 실제 구성(2026-10-19): 시크릿은 `D:\Toy\SimCenterServer\secrets.cmd`(JWT 키는 무작위 생성, DB 비밀번호는 사용자가 입력)에 두고 `run.cmd`가 `call`한다.
+     파일 로그(§9.3)를 구현하기 전까지는 `run.cmd`가 콘솔 출력을 `logs\server.log`에 덧붙인다. DB `simcenter_prod`는 첫 기동 때 마이그레이션이 만든다.
 4. **작업 스케줄러 등록:** 트리거 "시스템 시작 시", "사용자 로그온 여부에 관계없이 실행", 실패 시 1분 뒤 재시작(최대 3회). 대상 = `run.cmd`(내부에서 `SimCenter.Api.exe` 실행).
 5. 재부팅 후 자동으로 떠 있는지 `curl -i http://127.0.0.1:5290/api/v1/me`가 401(토큰 없음)을 돌려주는지로 확인한다.
 6. **첫 계정(최초 1회):** `run.cmd`에 `Auth__AllowRegistration=true`를 임시로 넣고 기동 → 웹에서 가입 → 그 줄을 지우고 재기동 → `POST /auth/register`가 403인지 확인한다(§4.5).
@@ -205,7 +207,7 @@ https://desktop-jc07560.tail4a150e.ts.net:8443 (Funnel on)
 
 ### 9.1 백업
 
-- 작업 스케줄러로 매일 1회 `pg_dump -Fc simcenter_prod`를 실행해 `D:\SimCenterServer\backup\`에 날짜별로 저장하고, 최근 7개만 남긴다.
+- 작업 스케줄러로 매일 1회 `pg_dump -Fc simcenter_prod`를 실행해 `D:\Toy\SimCenterServer\backup\`에 날짜별로 저장하고, 최근 7개만 남긴다.
 - 회사 PC 회수·재설치에 대비해 가끔 덤프 파일을 PC 밖으로 옮긴다(사용자 수동).
 
 ### 9.2 새 버전 반영
@@ -217,7 +219,7 @@ https://desktop-jc07560.tail4a150e.ts.net:8443 (Funnel on)
 
 ### 9.3 로그
 
-- 작업 스케줄러로 실행하면 콘솔 출력이 남지 않는다. `appsettings.Production.json`의 `Serilog` 섹션에서 파일 출력(`D:\SimCenterServer\logs\`, 일 단위, 14일 보관)을 켠다.
+- 작업 스케줄러로 실행하면 콘솔 출력이 남지 않는다. `appsettings.Production.json`의 `Serilog` 섹션에서 파일 출력(`D:\Toy\SimCenterServer\logs\`, 일 단위, 14일 보관)을 켠다.
 - 파일 싱크는 `Serilog.AspNetCore`에 포함된 `Serilog.Sinks.File`을 쓴다고 보고 있으며, 포함 여부는 구현 시 확인한다. 포함되지 않으면 패키지 추가를 따로 묻는다.
 - 기존 원칙 유지: JWT·장치 키·연결 코드 원문은 로그에 남기지 않는다.
 
@@ -242,7 +244,7 @@ https://desktop-jc07560.tail4a150e.ts.net:8443 (Funnel on)
 |---|---|---|
 | D-55 | 외부 공개 = 웹 GitHub Pages(`/SimHub/`) + 백엔드 `DESKTOP-JC07560` Tailscale Funnel `:8443` → `127.0.0.1:5290`, DB는 로컬 `simcenter_prod` | 비용 0. 같은 PC의 개발 환경과 포트·DB 분리 |
 | D-56 | 운영 설정 = 시크릿은 환경 변수, 비시크릿은 `appsettings.Production.json`. `Database:MigrateOnStartup`·`Cors:AllowedOrigins` 추가 | 트랙 시드는 운영에도 필요 |
-| D-57 | 상시 실행 = 작업 스케줄러(시스템 시작 시) + publish 폴더 `D:\SimCenterServer\app` | Windows 서비스 래퍼는 제외 |
+| D-57 | 상시 실행 = 작업 스케줄러(시스템 시작 시) + publish 폴더 `D:\Toy\SimCenterServer\app` | Windows 서비스 래퍼는 제외 |
 | D-58 | 프록시 헤더는 루프백만 신뢰, `POST /auth/login` IP당 분당 10회 | 11 §9 배포 메모 이행 |
 | D-59 | 운영 회원가입 차단 = `Auth:AllowRegistration=false`(기본값 true), 가입 요청 403. 첫 계정은 환경 변수로 잠깐 열고 만든다 | 사용자 결정 2026-10-19 |
 | D-60 | 웹 API 주소 = 저장소 변수 `API_BASE_URL`, 워크플로가 `--dart-define`으로 주입 | 주소 변경 시 코드 수정 없음 |

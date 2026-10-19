@@ -393,7 +393,7 @@ invalid 랩도 우선 기록은 해두고 랭킹 집계에서는 사용하지 �
 - 트랙 시드는 운영에도 필요하므로(D-41) 마이그레이션과 함께 기동 시 실행한다.
 
 ### D-57. 상시 실행 = Windows 작업 스케줄러
-- publish 폴더 `D:\SimCenterServer\app`, 시스템 시작 시 실행, 실패 시 재시작. Windows 서비스 래퍼(패키지 추가)는 제외.
+- publish 폴더 `D:\Toy\SimCenterServer\app`, 시스템 시작 시 실행, 실패 시 재시작. Windows 서비스 래퍼(패키지 추가)는 제외.
 
 ### D-58. 프록시 헤더는 루프백만 신뢰, 로그인 IP당 분당 10회
 - `UseForwardedHeaders`(For·Proto)를 루프백 프록시만 신뢰해 켠다([11](./11-personal-mode.md) §9 배포 메모 이행). `POST /auth/login`에 IP당 요청 제한을 추가한다.
@@ -465,7 +465,7 @@ invalid 랩도 우선 기록은 해두고 랭킹 집계에서는 사용하지 �
 | D-54 | 세션 목록 = F1Laps 배치(국기 · 내 팀 · 모드 + 시즌 번호(같은 게임·모드 안 순서) · P 배지 · 날짜/시각) | 15, backend, app |
 | D-55 | 외부 공개 = 웹 GitHub Pages(`/SimHub/`) + 백엔드 `DESKTOP-JC07560` Funnel `:8443` → `127.0.0.1:5290`, DB 로컬 `simcenter_prod` | 16 |
 | D-56 | 운영 설정 = 시크릿 환경 변수, 비시크릿 `appsettings.Production.json`, `Database:MigrateOnStartup`·`Cors:AllowedOrigins` | 16, backend |
-| D-57 | 상시 실행 = 작업 스케줄러 + publish 폴더 `D:\SimCenterServer\app` | 16 |
+| D-57 | 상시 실행 = 작업 스케줄러 + publish 폴더 `D:\Toy\SimCenterServer\app` | 16 |
 | D-58 | 프록시 헤더 루프백만 신뢰, `POST /auth/login` IP당 분당 10회 | 11, 16, backend |
 | D-59 | 운영 회원가입 차단(`Auth:AllowRegistration=false` → 403), 첫 계정은 환경 변수로 잠깐 열어 생성 | 16, backend |
 | D-60 | 웹 API 주소 = 저장소 변수 `API_BASE_URL` → `--dart-define` | 16, app |
