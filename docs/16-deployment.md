@@ -131,9 +131,14 @@ Funnel은 인터넷 전체에 공개된다. 지금 `POST /auth/register`·`POST 
    - `ASPNETCORE_ENVIRONMENT=Production`
    - `ASPNETCORE_URLS=http://127.0.0.1:5290`
    - `ConnectionStrings__Postgres=...`, `Jwt__Key=...`
-   - 실제 구성(2026-10-19): 시크릿은 `D:\Toy\SimCenterServer\secrets.cmd`(JWT 키는 무작위 생성, DB 비밀번호는 사용자가 입력)에 두고 `run.cmd`가 `call`한다.
-     파일 로그(§9.3)를 구현하기 전까지는 `run.cmd`가 콘솔 출력을 `logs\server.log`에 덧붙인다. DB `simcenter_prod`는 첫 기동 때 마이그레이션이 만든다.
-4. **작업 스케줄러 등록:** 트리거 "시스템 시작 시", "사용자 로그온 여부에 관계없이 실행", 실패 시 1분 뒤 재시작(최대 3회). 대상 = `run.cmd`(내부에서 `SimCenter.Api.exe` 실행).
+   - 실제 구성(2026-10-19): 시크릿은 `D:\Toy\SimCenterServer\secrets.cmd`(JWT 키는 무작위 생성, DB 비밀번호는 사용자가 입력)에 둔다. DB `simcenter_prod`는 첫 기동 때 마이그레이션이 만든다.
+4. **작업 스케줄러 등록(실제 구성, 2026-10-19):** 작업 `SimCenterServer`
+   - 트리거 = 시스템 시작 시(1분 지연, PostgreSQL 먼저), 실패 시 1분 뒤 재시작(최대 3회), 실행 시간 제한 없음(`ExecutionTimeLimit 0` — 기본 72시간이면 서버가 꺼진다).
+   - 실행 계정 = 사용자 본인(`S4U`, `Limited`): 로그인 없이 실행되고 비밀번호를 저장하지 않는다. 처음에 SYSTEM으로 등록했으나 권한이 과하고 관리할 때마다 관리자 권한이 필요해 바꿨다.
+   - 대상 = `powershell.exe -File run.ps1`(감독 스크립트, Windows PowerShell 5.1). `run.ps1`이 `secrets.cmd`를 읽어 환경 변수로 넣고 `SimCenter.Api.exe`를 자식 프로세스로 띄운다.
+     서버가 꺼지면 5초 뒤 다시 띄우고, `deploy.lock` 파일이 있으면 자식을 직접 종료한 뒤 잠금이 풀릴 때까지 기다린다.
+     작업이 세션 0(별도 로그온)에서 돌아 다른 세션에서는 같은 계정이어도 서버 프로세스를 끌 수 없기 때문에(접근 거부) 감독 스크립트가 끄는 구조로 했다.
+   - `run.cmd`는 수동 실행용으로 남겨 둔다(작업과 동시에 실행하지 않는다 — 포트 충돌).
 5. 재부팅 후 자동으로 떠 있는지 `curl -i http://127.0.0.1:5290/api/v1/me`가 401(토큰 없음)을 돌려주는지로 확인한다.
 6. **첫 계정:** 운영 DB는 비어 있으므로 웹에서 본인 계정을 새로 가입한다(가입은 열려 있음, §4.5).
 
@@ -212,13 +217,16 @@ https://desktop-jc07560.tail4a150e.ts.net:8443 (Funnel on)
 ### 9.2 새 버전 반영
 
 1. 저장소에서 `main` 최신을 받는다.
-2. 작업 스케줄러 작업 중지 → §5-2의 publish 다시 실행 → 작업 시작.
+2. 관리자 권한 없이 `D:\Toy\SimCenterServer\deploy.ps1`을 실행한다(`-RepoPath`로 다른 체크아웃 지정 가능).
+   `deploy.lock` 생성 → 감독 스크립트가 서버 종료 → publish → 잠금 해제 → 감독 스크립트가 재기동 → `GET /api/v1/me` 401 확인. publish가 실패해도 잠금은 풀려 이전 파일로 다시 뜬다.
 3. 마이그레이션은 기동 시 자동 적용된다(§4.2). 적용 전에 §9.1 백업을 한 번 수동으로 돌린다.
 4. 웹은 `main`에 push되면 GitHub Actions가 자동 배포한다.
 
 ### 9.3 로그
 
-- 작업 스케줄러로 실행하면 콘솔 출력이 남지 않는다. `appsettings.Production.json`의 `Serilog` 섹션에서 파일 출력(`D:\Toy\SimCenterServer\logs\`, 일 단위, 14일 보관)을 켠다.
+- 현재(2026-10-19): 감독 스크립트(`run.ps1`)가 콘솔 출력을 기동마다 `logs\server-<시각>.log`(`.err.log`)로 받고 14일 지난 파일을 지운다.
+  남은 문제: 한글이 OEM 코드 페이지로 기록돼 깨져 보이고, EF Core가 실행 SQL을 Information으로 모두 남겨 파일이 크다 — 아래 Serilog 설정 작업에서 함께 정리한다.
+- 계획: `appsettings.Production.json`의 `Serilog` 섹션에서 파일 출력(`D:\Toy\SimCenterServer\logs\`, 일 단위, 14일 보관, UTF-8)을 켜고 `Microsoft.EntityFrameworkCore`를 Warning으로 낮춘다.
 - 파일 싱크는 `Serilog.AspNetCore`에 포함된 `Serilog.Sinks.File`을 쓴다고 보고 있으며, 포함 여부는 구현 시 확인한다. 포함되지 않으면 패키지 추가를 따로 묻는다.
 - 기존 원칙 유지: JWT·장치 키·연결 코드 원문은 로그에 남기지 않는다.
 
