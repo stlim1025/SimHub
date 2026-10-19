@@ -56,7 +56,7 @@ public static class StandingsCalculator
             BuildConstructors(scoringRows, mainRace, gameCode));
     }
 
-    private static bool IsScoringRow(SeasonResultRow row) => row.SessionType == SessionType.Race || row.Points > 0;
+    private static bool IsScoringRow(SeasonResultRow row) => SessionPositions.CountsForPoints(row.SessionType);
 
     private static bool IsMainRaceRow(SeasonResultRow row, IReadOnlyDictionary<Guid, Guid> mainRace)
         => mainRace.TryGetValue(row.WeekendId, out var mainSessionId) && row.SessionId == mainSessionId;

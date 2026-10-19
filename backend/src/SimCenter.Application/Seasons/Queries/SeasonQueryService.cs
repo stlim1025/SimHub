@@ -151,11 +151,13 @@ public sealed class SeasonQueryService : ISeasonQueryService
             .ToList();
     }
 
-    /// <summary>그 주말 내 점수 합(계산 대상 세션만). 내 결과가 없으면 null.</summary>
+    /// <summary>그 주말 내 점수 합(계산 대상 세션 중 레이스만, <see cref="SessionPositions.CountsForPoints"/>). 내 결과가 없으면 null.</summary>
     private static int? MyWeekendPoints(IEnumerable<SeasonResultRow> countedRows)
     {
         var mine = countedRows.Where(r => r.IsPlayer).ToList();
-        return mine.Count == 0 ? null : PointTotals.ToInt(mine.Sum(r => (long)r.Points));
+        return mine.Count == 0
+            ? null
+            : PointTotals.ToInt(mine.Where(r => SessionPositions.CountsForPoints(r.SessionType)).Sum(r => (long)r.Points));
     }
 
     /// <summary>저장된 모든 세션(옛 중복 포함)을 <c>ClassifiedAt</c> 오름차순으로. 칩의 내 값은 <c>IsPlayer</c> 행에서 읽는다.</summary>

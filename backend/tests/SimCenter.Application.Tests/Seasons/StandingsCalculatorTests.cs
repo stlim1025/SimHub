@@ -30,6 +30,19 @@ public class StandingsCalculatorTests
     }
 
     [Fact]
+    public void Calculate_QualifyingCarryingWeekendPoints_IsNotCounted()
+    {
+        // F1 25는 스프린트 뒤 예선 결과에도 그 주말에 딴 점수(스프린트 8점)를 실어 보낸다 — 점수는 레이스에서만 센다.
+        var standings = Calculate(
+            Row(session: 1, weekend: 1, "a", 1, 8, kind: SessionKind.Race, hours: 10),   // 스프린트
+            Row(session: 2, weekend: 1, "a", 6, 8, SessionType.Qualifying, SessionKind.Qualifying1, hours: 11),
+            Row(session: 3, weekend: 1, "a", 2, 8, SessionType.Qualifying, SessionKind.Qualifying2, hours: 12),
+            Row(session: 4, weekend: 1, "a", 1, 8, SessionType.Qualifying, SessionKind.Qualifying3, hours: 13));
+
+        Assert.Equal(new[] { 8 }, standings.Drivers.Select(d => d.Points));
+    }
+
+    [Fact]
     public void Calculate_DuplicateSession_NotDoubleCounted()
     {
         var standings = Calculate(
@@ -143,14 +156,13 @@ public class StandingsCalculatorTests
     }
 
     [Fact]
-    public void Calculate_NonRaceRowWithPoints_MakesDriverAMember()
+    public void Calculate_NonRaceRowWithPoints_IsNotScored()
     {
+        // 예선 결과의 점수 칸은 그 주말에 이미 딴 점수를 다시 실어 보낸 값이다(F1 25 실제 데이터, 2026-10-19) — 점수로 세지 않는다.
         var standings = Calculate(
             Row(session: 1, weekend: 1, "a", 1, 3, type: SessionType.Qualifying, kind: SessionKind.Qualifying1, hours: 5));
 
-        var driver = Assert.Single(standings.Drivers);
-        Assert.Equal(3, driver.Points);
-        Assert.Equal(0, driver.Wins);
+        Assert.Empty(standings.Drivers);
     }
 
     [Fact]

@@ -29,6 +29,12 @@ public static class SessionPositions
     /// <summary>순위 0 이하(모름)를 null로.</summary>
     public static int? Known(int? position) => position is > 0 ? position : null;
 
+    /// <summary>
+    /// 점수를 세는 세션인지: 레이스(스프린트 포함)만. F1 25는 스프린트 뒤 예선 결과에도 그 주말에 딴 점수를 실어 보내므로
+    /// 예선·연습의 점수 칸은 더하지 않는다(더하면 같은 스프린트 점수가 예선 수만큼 다시 더해진다).
+    /// </summary>
+    public static bool CountsForPoints(SessionType type) => type == SessionType.Race;
+
     /// <summary>주말의 세션 종류들로 스프린트 주말인지.</summary>
     public static bool IsSprintWeekend(IEnumerable<SessionKind> weekendKinds) => weekendKinds.Any(SprintWeekendMarkers.Contains);
 

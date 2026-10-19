@@ -19,4 +19,12 @@ public class SessionPositionsTests
     [InlineData(new SessionKind[0], false)]
     public void IsSprintWeekend_Race2OrSprintShootout(SessionKind[] weekendKinds, bool expected)
         => Assert.Equal(expected, SessionPositions.IsSprintWeekend(weekendKinds));
+
+    [Theory]
+    [InlineData(SessionType.Race, true)]          // 레이스·스프린트(둘 다 Race 종류)
+    [InlineData(SessionType.Qualifying, false)]   // 예선 결과에 실린 주말 점수는 세지 않는다
+    [InlineData(SessionType.Practice, false)]
+    [InlineData(SessionType.TimeTrial, false)]
+    public void CountsForPoints_RaceSessionsOnly(SessionType type, bool expected)
+        => Assert.Equal(expected, SessionPositions.CountsForPoints(type));
 }
