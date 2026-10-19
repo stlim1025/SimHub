@@ -95,14 +95,9 @@ public static class SeasonCalendar
         var counted = countedRows.ToList();
         var mine = counted.Where(r => r.IsPlayer).ToList();
 
+        // 스프린트 주말에 본 레이스(Race2) 전이면 선별 규칙이 본 레이스를 고르지 않는다 → 레이스 칸은 비고 스프린트 칸만 찬다.
         Guid? raceSessionId = slot.Weekend is { } w && selection.MainRaceSessionByWeekend.TryGetValue(w.WeekendId, out var id) ? id : null;
         var sprintWeekend = SessionPositions.IsSprintWeekend(counted.Select(r => r.SessionKind));
-        // 선별 규칙(D-31)은 스프린트만 기록된 주말의 스프린트를 본 레이스로 고른다(순위 계산용).
-        // 캘린더 표시는 스프린트 주말인데 본 레이스(Race2)가 아직 없으면 그 세션을 레이스 칸이 아니라 스프린트 칸에 둔다.
-        if (sprintWeekend && counted.Any(r => r.SessionId == raceSessionId && r.SessionKind == SessionKind.Race))
-        {
-            raceSessionId = null;
-        }
 
         var myRace = mine.Where(r => r.SessionId == raceSessionId).OrderBy(r => r.CarIndex).FirstOrDefault();
         var myRaces = mine.Where(r => r.SessionType == SessionType.Race).ToList();

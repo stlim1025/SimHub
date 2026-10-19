@@ -113,6 +113,36 @@ public class SeasonSessionSelectorTests
     }
 
     [Fact]
+    public void Select_SprintWeekendBeforeMainRace_HasNoMainRace()
+    {
+        // 슛아웃이 있으면 스프린트 주말이다 — 그 주말의 Race는 스프린트라 본 레이스(Race2)를 달리기 전에는 본 레이스가 없다.
+        var rows = new[]
+        {
+            Row(session: 1, weekend: 1, "a", position: 3, points: 0, type: SessionType.Qualifying, kind: SessionKind.SprintShootout3, hours: 9),
+            Row(session: 2, weekend: 1, "a", position: 1, points: 8, kind: SessionKind.Race, hours: 10),
+        };
+
+        var selection = SeasonSessionSelector.Select(rows);
+
+        Assert.False(selection.MainRaceSessionByWeekend.ContainsKey(Id(1)));
+        Assert.Equal(2, selection.CountedRows.Count);   // 스프린트 행은 계산 대상으로 남는다(점수)
+    }
+
+    [Fact]
+    public void Select_SprintWeekend_MainRaceIsRace2_EvenIfSprintClassifiedLater()
+    {
+        var rows = new[]
+        {
+            Row(session: 1, weekend: 1, "a", position: 2, points: 18, kind: SessionKind.Race2, hours: 10),
+            Row(session: 2, weekend: 1, "a", position: 1, points: 8, kind: SessionKind.Race, hours: 11),
+        };
+
+        var selection = SeasonSessionSelector.Select(rows);
+
+        Assert.Equal(Id(1), selection.MainRaceSessionByWeekend[Id(1)]);
+    }
+
+    [Fact]
     public void Select_PreservesInputRowOrder()
     {
         var rows = new[]

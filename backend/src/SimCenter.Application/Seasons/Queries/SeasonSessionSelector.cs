@@ -16,7 +16,9 @@ public sealed record SeasonSelection(
 /// <list type="bullet">
 /// <item>같은 <c>(WeekendId, SessionKind)</c>(<see cref="SessionKind.Unknown"/> 제외)는 <c>ClassifiedAt</c>이 가장 늦은 세션 1건만 남긴다
 /// (링크 식별자가 바뀌어 같은 세션이 두 번 저장돼도 점수가 이중으로 더해지지 않게). 시각이 같으면 Id가 큰 쪽이다(결정적).</item>
-/// <item>본 레이스 = 남은 세션 중 <see cref="SessionType.Race"/>이고 <c>ClassifiedAt</c>이 가장 늦은 세션. 스프린트만 기록된 주말은 그 스프린트가 본 레이스다.</item>
+/// <item>본 레이스 = 남은 세션 중 <see cref="SessionType.Race"/>이고 <c>ClassifiedAt</c>이 가장 늦은 세션. 스프린트 주말
+/// (<see cref="SessionPositions.IsSprintWeekend"/>)의 <see cref="SessionKind.Race"/>(스프린트)는 후보가 아니다 — 본 레이스 전이면 그 주말에 본 레이스가 없다.
+/// 슛아웃 없이 Race만 기록된 주말은 스프린트인지 알 수 없어 그 Race가 본 레이스다.</item>
 /// </list>
 /// </summary>
 public static class SeasonSessionSelector
@@ -52,10 +54,21 @@ public static class SeasonSessionSelector
 
     private static Dictionary<Guid, Guid> MainRaceByWeekend(IEnumerable<SeasonResultRow> keptSessions)
     {
-        return keptSessions
-            .Where(s => s.SessionType == SessionType.Race)
-            .GroupBy(s => s.WeekendId)
-            .ToDictionary(g => g.Key, g => Latest(g).SessionId);
+        var mainRaces = new Dictionary<Guid, Guid>();
+        foreach (var weekend in keptSessions.GroupBy(s => s.WeekendId))
+        {
+            // 스프린트 주말(슛아웃·Race2가 있음)의 Race는 스프린트다 — 본 레이스 후보에서 뺀다(본 레이스 전이면 본 레이스 없음).
+            var sprintWeekend = SessionPositions.IsSprintWeekend(weekend.Select(s => s.SessionKind));
+            var races = weekend
+                .Where(s => s.SessionType == SessionType.Race && !(sprintWeekend && s.SessionKind == SessionKind.Race))
+                .ToList();
+            if (races.Count > 0)
+            {
+                mainRaces[weekend.Key] = Latest(races).SessionId;
+            }
+        }
+
+        return mainRaces;
     }
 
     private static SeasonResultRow Latest(IEnumerable<SeasonResultRow> sessions)
