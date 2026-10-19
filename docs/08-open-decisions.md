@@ -398,9 +398,9 @@ invalid 랩도 우선 기록은 해두고 랭킹 집계에서는 사용하지 �
 ### D-58. 프록시 헤더는 루프백만 신뢰, 로그인 IP당 분당 10회
 - `UseForwardedHeaders`(For·Proto)를 루프백 프록시만 신뢰해 켠다([11](./11-personal-mode.md) §9 배포 메모 이행). `POST /auth/login`에 IP당 요청 제한을 추가한다.
 
-### D-59. 운영 회원가입 차단
-- 사용자: "가입을 막고 내 계정만 쓸게." `Auth:AllowRegistration`(기본 true), 운영 false → `POST /auth/register` 403.
-- 첫 계정은 환경 변수 `Auth__AllowRegistration=true`로 잠깐 열고 만든 뒤 닫는다. "사용자 0명일 때만 허용"은 공개 상태에서 남이 먼저 가입할 수 있어 제외.
+### D-59. 운영 회원가입은 열어 둔다 (2026-10-19 변경)
+- 처음 결정("가입을 막고 내 계정만 쓸게" → `Auth:AllowRegistration=false`, 가입 403)을 구현 전에 취소했다. 사용자: "가입차단은 그냥 하지말자 … 나 혼자 쓸 서비스라."
+- 감수하는 위험: Funnel 주소를 아는 사람은 가입할 수 있다. 문제가 되면 위 설정 방식으로 다시 막는다. 로그인 무작위 대입은 D-58의 요청 제한으로 늦춘다.
 
 ### D-60. 웹 API 주소 = 저장소 변수 `API_BASE_URL`
 - GitHub Actions가 `--dart-define`으로 주입한다. 주소가 바뀌어도 코드는 고치지 않는다. 해시 URL 방식이라 Pages의 404 우회가 필요 없다.
@@ -467,7 +467,7 @@ invalid 랩도 우선 기록은 해두고 랭킹 집계에서는 사용하지 �
 | D-56 | 운영 설정 = 시크릿 환경 변수, 비시크릿 `appsettings.Production.json`, `Database:MigrateOnStartup`·`Cors:AllowedOrigins` | 16, backend |
 | D-57 | 상시 실행 = 작업 스케줄러 + publish 폴더 `D:\Toy\SimCenterServer\app` | 16 |
 | D-58 | 프록시 헤더 루프백만 신뢰, `POST /auth/login` IP당 분당 10회 | 11, 16, backend |
-| D-59 | 운영 회원가입 차단(`Auth:AllowRegistration=false` → 403), 첫 계정은 환경 변수로 잠깐 열어 생성 | 16, backend |
+| D-59 | 운영 회원가입은 열어 둔다(차단 결정 취소, 문제가 되면 설정으로 막음) | 16 |
 | D-60 | 웹 API 주소 = 저장소 변수 `API_BASE_URL` → `--dart-define` | 16, app |
 
 **MVP 관련 결정은 모두 확정되어 각 문서에 반영 완료.** 본 설계 문서 세트 최종 승인 시,

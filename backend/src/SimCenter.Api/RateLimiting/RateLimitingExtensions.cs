@@ -10,7 +10,7 @@ public static class RateLimitingExtensions
     private const string UnknownRemoteIp = "unknown";
 
     /// <summary>
-    /// <see cref="RateLimitPolicies.AgentPair"/>(IP 파티션), <see cref="RateLimitPolicies.PairingCodeIssue"/>·<see cref="RateLimitPolicies.EmailChange"/>(사용자 파티션)를 등록한다.
+    /// <see cref="RateLimitPolicies.AgentPair"/>·<see cref="RateLimitPolicies.AuthLogin"/>(IP 파티션), <see cref="RateLimitPolicies.PairingCodeIssue"/>·<see cref="RateLimitPolicies.EmailChange"/>(사용자 파티션)를 등록한다.
     /// 한도를 넘으면 429. 파이프라인에는 <c>UseAuthorization()</c> 뒤에 <c>UseRateLimiter()</c>를 추가해야 한다
     /// (사용자 파티션이 인증된 주체를 읽고, 인증 실패 요청이 한도를 소모하지 않도록).
     /// </summary>
@@ -27,6 +27,9 @@ public static class RateLimitingExtensions
 
             options.AddPolicy(RateLimitPolicies.EmailChange, context =>
                 RateLimitPartition.GetFixedWindowLimiter(GetUserKey(context), _ => CreateFixedWindow()));
+
+            options.AddPolicy(RateLimitPolicies.AuthLogin, context =>
+                RateLimitPartition.GetFixedWindowLimiter(GetRemoteIpKey(context), _ => CreateFixedWindow()));
         });
 
     private static FixedWindowRateLimiterOptions CreateFixedWindow() => new()

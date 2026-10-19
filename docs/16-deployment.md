@@ -110,12 +110,10 @@ Tailscale Funnel :8443 ──► 127.0.0.1:5290  SimCenter.Api (Production)
 Funnel은 인터넷 전체에 공개된다. 지금 `POST /auth/register`·`POST /auth/login`에는 요청 제한이 없다.
 
 - **로그인 요청 제한(제안 D-58):** `POST /auth/login`에 IP당 분당 10회 정책(`auth-login`)을 추가한다. 기존 고정 창 정책(`RateLimitPolicies`)을 재사용한다. §4.3의 IP 판별에 의존한다.
-- **회원가입 차단(D-59, 사용자 결정 2026-10-19: "가입을 막고 내 계정만 쓸게"):**
-  - 설정 `Auth:AllowRegistration`(bool)을 추가한다. 설정이 없으면 `true`(Development·통합 테스트의 기존 동작 유지).
-  - 운영은 `appsettings.Production.json`에 `false`. 이때 `POST /auth/register`는 **403**(ProblemDetails, 기존 예외 매핑 사용)을 돌려주고 사용자를 만들지 않는다.
-  - 로그인·장치 연결 등 다른 API는 영향 없다. 앱의 가입 화면은 그대로 두고 403을 기존 오류 표시로 보여준다(앱 수정 없음).
-  - **첫 계정 만들기:** 운영 DB(`simcenter_prod`)는 비어 있다. 처음 한 번만 환경 변수 `Auth__AllowRegistration=true`로 기동 → 웹에서 본인 계정 가입 → 환경 변수를 지우고 재기동한다(§5-6). 환경 변수가 `appsettings.Production.json`보다 우선한다.
-  - 검토했으나 제외: "사용자가 0명일 때만 가입 허용"(첫 가입 경쟁 시 공개 상태에서 남이 먼저 가입할 수 있음), 초대 코드(YAGNI).
+- **회원가입은 열어 둔다(D-59, 사용자 결정 2026-10-19 변경: "가입차단은 그냥 하지말자 … 나 혼자 쓸 서비스라"):**
+  - 처음에는 `Auth:AllowRegistration=false`로 막기로 했으나 구현 전에 취소했다. 운영에서도 누구나 가입할 수 있다(현재 동작 유지).
+  - 감수하는 위험: Funnel 주소를 아는 사람은 가입해 랩 업로드·리더보드를 쓸 수 있다. 문제가 되면 위 설정 방식(가입 403, 첫 계정은 환경 변수로 잠깐 열기)으로 다시 막는다.
+  - 로그인 무작위 대입은 위 로그인 요청 제한으로 늦춘다.
 
 ---
 
@@ -136,7 +134,7 @@ Funnel은 인터넷 전체에 공개된다. 지금 `POST /auth/register`·`POST 
      파일 로그(§9.3)를 구현하기 전까지는 `run.cmd`가 콘솔 출력을 `logs\server.log`에 덧붙인다. DB `simcenter_prod`는 첫 기동 때 마이그레이션이 만든다.
 4. **작업 스케줄러 등록:** 트리거 "시스템 시작 시", "사용자 로그온 여부에 관계없이 실행", 실패 시 1분 뒤 재시작(최대 3회). 대상 = `run.cmd`(내부에서 `SimCenter.Api.exe` 실행).
 5. 재부팅 후 자동으로 떠 있는지 `curl -i http://127.0.0.1:5290/api/v1/me`가 401(토큰 없음)을 돌려주는지로 확인한다.
-6. **첫 계정(최초 1회):** `run.cmd`에 `Auth__AllowRegistration=true`를 임시로 넣고 기동 → 웹에서 가입 → 그 줄을 지우고 재기동 → `POST /auth/register`가 403인지 확인한다(§4.5).
+6. **첫 계정:** 운영 DB는 비어 있으므로 웹에서 본인 계정을 새로 가입한다(가입은 열려 있음, §4.5).
 
 > 대안: `UseWindowsService`(Windows 서비스 등록)는 `Microsoft.Extensions.Hosting.WindowsServices` 패키지 추가가 필요해 이번 범위에서 제외한다. 운영이 불편하면 그때 다시 판단한다.
 
@@ -246,7 +244,7 @@ https://desktop-jc07560.tail4a150e.ts.net:8443 (Funnel on)
 | D-56 | 운영 설정 = 시크릿은 환경 변수, 비시크릿은 `appsettings.Production.json`. `Database:MigrateOnStartup`·`Cors:AllowedOrigins` 추가 | 트랙 시드는 운영에도 필요 |
 | D-57 | 상시 실행 = 작업 스케줄러(시스템 시작 시) + publish 폴더 `D:\Toy\SimCenterServer\app` | Windows 서비스 래퍼는 제외 |
 | D-58 | 프록시 헤더는 루프백만 신뢰, `POST /auth/login` IP당 분당 10회 | 11 §9 배포 메모 이행 |
-| D-59 | 운영 회원가입 차단 = `Auth:AllowRegistration=false`(기본값 true), 가입 요청 403. 첫 계정은 환경 변수로 잠깐 열고 만든다 | 사용자 결정 2026-10-19 |
+| D-59 | 운영 회원가입은 열어 둔다(차단 결정을 구현 전에 취소). 문제가 되면 설정으로 막는다 | 사용자 결정 2026-10-19 |
 | D-60 | 웹 API 주소 = 저장소 변수 `API_BASE_URL`, 워크플로가 `--dart-define`으로 주입 | 주소 변경 시 코드 수정 없음 |
 
 ---
@@ -260,7 +258,7 @@ https://desktop-jc07560.tail4a150e.ts.net:8443 (Funnel on)
 | 1 | §4.1·§4.2 운영 설정, `MigrateOnStartup` | 통합 테스트: 플래그 true면 마이그레이션·시드 실행, false면 실행 안 함, Development 기본값 유지 |
 | 2 | §4.3 프록시 헤더 | 통합 테스트: 루프백에서 온 `X-Forwarded-Proto: https`는 리다이렉트 없음, `X-Forwarded-For`로 IP당 제한이 분리됨 |
 | 3 | §4.4 운영 CORS | 통합 테스트: 허용 오리진 preflight 성공, 다른 오리진 거부, 설정 비면 CORS 헤더 없음 |
-| 4 | §4.5 로그인 제한·가입 차단 | 통합 테스트: 11번째 로그인 429, `AllowRegistration=false`면 가입 403·사용자 미생성, 설정 없으면 가입 성공 |
+| 4 | §4.5 로그인 요청 제한 | 통합 테스트: 같은 IP의 11번째 로그인 429, 다른 IP는 영향 없음 |
 | 5 | §7 GitHub Pages 워크플로 | PR에서 워크플로 실행 확인, 배포된 페이지 접속 |
 | 6 | §5·§6 이 PC 실행·Funnel 연결 | 수동: §10 확인 항목 1~3, 다른 PC Agent로 랩 1개 전송 → 웹 리더보드 표시 |
 

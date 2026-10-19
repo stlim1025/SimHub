@@ -15,6 +15,9 @@ public static class RateLimitPolicies
     /// <summary><c>POST /me/email</c> — 사용자당. 현재 비밀번호를 맞히려는 반복 시도를 늦춘다.</summary>
     public const string EmailChange = "email-change";
 
+    /// <summary><c>POST /auth/login</c> — 클라이언트 IP당(16 §4.5). 외부 공개 시 비밀번호 무작위 대입을 늦춘다.</summary>
+    public const string AuthLogin = "auth-login";
+
     /// <summary>창당 허용 요청 수.</summary>
     public const int PermitLimit = 10;
 

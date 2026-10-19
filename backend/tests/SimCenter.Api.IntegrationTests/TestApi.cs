@@ -28,12 +28,26 @@ internal static class TestApi
         register.EnsureSuccessStatusCode();
         var userId = (await register.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("userId").GetGuid();
 
-        var login = await client.PostAsJsonAsync("/api/v1/auth/login", new { email, password = Password });
+        using var login = await LoginAsync(client, email, Password);
         login.EnsureSuccessStatusCode();
         var token = (await login.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("accessToken").GetString();
         client.DefaultRequestHeaders.Authorization = new("Bearer", token);
 
         return userId;
+    }
+
+    /// <summary>
+    /// <c>POST /auth/login</c>을 호출한다. 로그인은 IP당 요청 제한이 있으므로(16 §4.5) 요청마다 무작위 원격 IP를 써서
+    /// 같은 호스트를 공유하는 테스트들이 한도를 나눠 쓰지 않게 한다.
+    /// </summary>
+    public static Task<HttpResponseMessage> LoginAsync(HttpClient client, string email, string password)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/login")
+        {
+            Content = JsonContent.Create(new { email, password }),
+        };
+        request.Headers.Add(ApiFactory.RemoteIpHeader, RandomRemoteIp());
+        return client.SendAsync(request);
     }
 
     /// <summary>

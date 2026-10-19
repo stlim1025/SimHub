@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using SimCenter.Api.Common;
+using SimCenter.Api.RateLimiting;
 using SimCenter.Application.Auth;
 
 namespace SimCenter.Api.Controllers;
@@ -20,9 +22,10 @@ public sealed class AuthController(IAuthService authService) : ControllerBase
         return CreatedAtAction(nameof(GetMe), null, result);
     }
 
-    /// <summary>로그인 → JWT 발급.</summary>
+    /// <summary>로그인 → JWT 발급. 클라이언트 IP당 분당 10회(16 §4.5).</summary>
     [AllowAnonymous]
     [HttpPost("auth/login")]
+    [EnableRateLimiting(RateLimitPolicies.AuthLogin)]
     [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<LoginResponse>> Login(LoginRequest request, CancellationToken cancellationToken)
     {

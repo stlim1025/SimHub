@@ -179,7 +179,7 @@ public sealed class ProfileApiE2ETests : IClassFixture<ApiFactory>
         Assert.Equal(newEmail, (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("email").GetString());
         Assert.Equal(newEmail, (await client.GetFromJsonAsync<JsonElement>("/api/v1/me")).GetProperty("email").GetString());
 
-        using var login = await _factory.CreateClient().PostAsJsonAsync("/api/v1/auth/login", new { email = newEmail, password = Password });
+        using var login = await TestApi.LoginAsync(_factory.CreateClient(), newEmail, Password);
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
     }
 
