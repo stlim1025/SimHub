@@ -11,7 +11,7 @@
 
 | 구성 요소 | 위치 | 공개 주소 | 비용 |
 |---|---|---|---|
-| 웹(Flutter Web) | GitHub Pages | `https://stlim1025.github.io/SimHub/` | 0 |
+| 웹(Flutter Web) | GitHub Pages + 커스텀 도메인(2026-10-19) | `https://www.simhub.kro.kr/` (`simhub.kro.kr`·`stlim1025.github.io/SimHub/`는 이 주소로 넘어감) | 0 |
 | 백엔드(ASP.NET Core 10, REST·SignalR) | `DESKTOP-JC07560`, `127.0.0.1:5290` | `https://desktop-jc07560.tail4a150e.ts.net:8443` (Funnel) | 0 |
 | PostgreSQL | `DESKTOP-JC07560`, DB `simcenter_prod` | 공개하지 않음 | 0 |
 | Agent | 각자의 게임 PC | — | 0 |
@@ -60,8 +60,9 @@ Tailscale Funnel :8443 ──► 127.0.0.1:5290  SimCenter.Api (Production)
 | 운영 백엔드 바인딩 | `http://127.0.0.1:5290` | 루프백만. 회사 LAN에 직접 노출하지 않는다 |
 | 개발 백엔드 | `http://localhost:5284` | 기존 그대로 |
 | Funnel | `https://desktop-jc07560.tail4a150e.ts.net:8443` → `http://127.0.0.1:5290` | HTTPS 종료는 Tailscale이 한다 |
-| 웹 오리진 | `https://stlim1025.github.io` | CORS 허용 대상(경로 `/SimHub/`는 오리진에 포함되지 않음) |
-| 웹 base href | `/SimHub/` | 프로젝트 페이지 하위 경로 |
+| 웹 오리진 | `https://www.simhub.kro.kr` (+ `https://simhub.kro.kr`, `https://stlim1025.github.io`) | CORS 허용 대상(§4.4) |
+| 웹 base href | `/` | 커스텀 도메인은 루트에서 열린다. github.io 하위 경로로 되돌리려면 저장소 변수 `PAGES_BASE_HREF=/SimHub/` |
+| 커스텀 도메인 DNS | `www` CNAME → `stlim1025.github.io`, 루트 A 4개 → GitHub Pages IP | `simhub.kro.kr`은 GitHub이 서브도메인으로 보아 A 레코드를 거부(InvalidARecordError)하므로 `www`를 주 주소로 쓴다 |
 | 운영 DB | 로컬 PostgreSQL의 `simcenter_prod` | 개발·E2E·통합 테스트 DB와 분리 |
 | `ASPNETCORE_ENVIRONMENT` | `Production` | |
 
@@ -100,7 +101,7 @@ Tailscale Funnel :8443 ──► 127.0.0.1:5290  SimCenter.Api (Production)
 ### 4.4 운영 CORS
 
 - 웹(`stlim1025.github.io`)과 API(`*.ts.net:8443`)의 오리진이 다르므로 운영 CORS가 필요하다.
-- 설정 `Cors:AllowedOrigins`(문자열 배열)를 추가하고, 운영은 `["https://stlim1025.github.io"]` **한 곳만** 허용한다. 와일드카드는 쓰지 않는다.
+- 설정 `Cors:AllowedOrigins`(문자열 배열)를 추가하고, 운영은 웹 주소만 허용한다: `https://www.simhub.kro.kr`, `https://simhub.kro.kr`, `https://stlim1025.github.io`(커스텀 도메인 전환 전 주소, 2026-10-19). 와일드카드는 쓰지 않는다.
 - 정책 내용은 개발 정책과 같다: 지정 오리진, `AllowAnyHeader`, `AllowAnyMethod`, `AllowCredentials`(SignalR negotiate).
 - Development는 기존 루프백 반사 정책을 유지한다. 운영에서 설정이 비어 있으면 CORS를 열지 않는다(동일 오리진만).
 - Agent의 `TelemetryHub` 연결은 브라우저가 아니므로 CORS와 무관하다.
@@ -178,7 +179,7 @@ https://desktop-jc07560.tail4a150e.ts.net:8443 (Funnel on)
 - `RANKING_HUB_URL`은 넣지 않는다. 없으면 `API_BASE_URL + /hubs/ranking`을 쓴다([app_config.dart](../app/lib/core/config/app_config.dart)).
 - 배포는 GitHub 공식 액션(`actions/configure-pages`, `actions/upload-pages-artifact`, `actions/deploy-pages`)을 쓴다.
 - Flutter는 서드파티 설치 액션 대신 **공식 저장소(`flutter/flutter`)의 버전 태그를 받아** 쓴다. 버전은 로컬 개발 SDK와 같은 `3.44.5`(stable)로 고정한다(워크플로의 `FLUTTER_VERSION`).
-- base href는 저장소 이름에서 만든다(`/SimHub/`). 저장소 변수 `API_BASE_URL`이 비어 있으면 빌드 전에 실패한다.
+- base href는 저장소 변수 `PAGES_BASE_HREF`, 없으면 `/`(커스텀 도메인 루트)다. 위 빌드 명령의 `/SimHub/`는 커스텀 도메인 전의 값이다. 저장소 변수 `API_BASE_URL`이 비어 있으면 빌드 전에 실패한다.
 
 ### 7.2 사용자가 GitHub에서 할 일
 
