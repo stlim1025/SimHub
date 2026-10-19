@@ -34,6 +34,7 @@ const String _fallbackTitle = 'Lap';
 const int _httpNotFound = 404;
 const double _titleFlagSize = 28;
 const double _titleGap = 10;
+const double _titleFontSize = 22;
 const double _sectionGap = 16;
 const double _reloadBarHeight = 2;
 const double _shareIconSize = 18;
@@ -254,7 +255,8 @@ class _Header extends StatelessWidget {
         Expanded(
           child: Text(
             title,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+            // 세션 상세 제목과 같은 한 줄 제목 크기(22px).
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: _titleFontSize, fontWeight: FontWeight.bold),
           ),
         ),
         if (loaded != null)

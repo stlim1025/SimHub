@@ -31,8 +31,9 @@ const String _notFoundBackLabel = 'Sessions';
 const String _fallbackTitle = 'Session';
 
 const int _httpNotFound = 404;
-const double _headerFlagSize = 28;
-const double _headerGap = 10;
+const double _headerFlagSize = 24;
+const double _headerGap = 8;
+const double _headerFontSize = 22;
 const double _cardGap = 20;
 
 /// 세션 상세(docs/15 §11.3, D-53): 헤더(국기 + 트랙 + 세션 종류) + 카드 7장 — Details · Final Classification · Laps ·
@@ -98,7 +99,8 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final value = header;
-    final style = Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold);
+    // F1Laps처럼 "Saudi Arabia Race"를 한 줄 제목(22px)으로 — 페이지 큰 제목(28px)은 이 화면에서 지나치게 크다.
+    final style = Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: _headerFontSize, fontWeight: FontWeight.bold);
     return Row(
       children: [
         IconButton(tooltip: backTooltip, icon: const Icon(Icons.arrow_back), onPressed: onBack),
