@@ -1,0 +1,72 @@
+# Flutter 웹을 GitHub Pages에 배포한다(docs/16 §7, D-55·D-60).
+# 사전 준비(사용자): Settings → Pages → Source = GitHub Actions, Actions 저장소 변수 API_BASE_URL(백엔드 공개 주소).
+name: Deploy web (GitHub Pages)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - '.github/workflows/deploy-web.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 배포가 겹치면 진행 중인 배포를 끊지 않고 다음 배포를 기다리게 한다.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  # 로컬 개발 SDK와 같은 stable 버전으로 고정한다(pubspec.lock: Dart >= 3.11).
+  FLUTTER_VERSION: 3.44.5
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    env:
+      # 변수 값을 셸에 직접 끼워 넣지 않고 환경 변수로 넘긴다.
+      API_BASE_URL: ${{ vars.API_BASE_URL }}
+      BASE_HREF: /${{ github.event.repository.name }}/
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check API_BASE_URL
+        run: |
+          if [ -z "$API_BASE_URL" ]; then
+            echo "::error::저장소 변수 API_BASE_URL이 없습니다(docs/16 §7.2)."
+            exit 1
+          fi
+
+      # 서드파티 액션 대신 Flutter 공식 저장소의 버전 태그를 받는다.
+      - name: Install Flutter ${{ env.FLUTTER_VERSION }}
+        working-directory: ${{ runner.temp }}
+        run: |
+          git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git flutter
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+
+      - run: flutter --version
+      - run: flutter pub get
+      - run: flutter test
+      - run: flutter build web --release --base-href "$BASE_HREF" --dart-define=API_BASE_URL="$API_BASE_URL"
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: app/build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

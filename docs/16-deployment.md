@@ -176,7 +176,9 @@ https://desktop-jc07560.tail4a150e.ts.net:8443 (Funnel on)
   ```
 - `API_BASE_URL`은 코드나 워크플로에 박지 않고 **저장소 변수(Repository variable)** 로 둔다. 값 = `https://desktop-jc07560.tail4a150e.ts.net:8443`. 주소가 바뀌면 변수만 고치고 다시 실행한다.
 - `RANKING_HUB_URL`은 넣지 않는다. 없으면 `API_BASE_URL + /hubs/ranking`을 쓴다([app_config.dart](../app/lib/core/config/app_config.dart)).
-- 배포는 GitHub 공식 액션(`actions/upload-pages-artifact`, `actions/deploy-pages`)을 쓴다. Flutter 설치 액션은 구현 시 선정하고, 버전을 고정한다.
+- 배포는 GitHub 공식 액션(`actions/configure-pages`, `actions/upload-pages-artifact`, `actions/deploy-pages`)을 쓴다.
+- Flutter는 서드파티 설치 액션 대신 **공식 저장소(`flutter/flutter`)의 버전 태그를 받아** 쓴다. 버전은 로컬 개발 SDK와 같은 `3.44.5`(stable)로 고정한다(워크플로의 `FLUTTER_VERSION`).
+- base href는 저장소 이름에서 만든다(`/SimHub/`). 저장소 변수 `API_BASE_URL`이 비어 있으면 빌드 전에 실패한다.
 
 ### 7.2 사용자가 GitHub에서 할 일
 
