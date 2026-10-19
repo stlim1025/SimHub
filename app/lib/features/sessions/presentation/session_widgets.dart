@@ -3,9 +3,12 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/util/hex_color.dart';
+import '../../../core/widgets/section_card.dart';
 import '../domain/session_detail_display.dart';
 
-const double _cardTitlePadding = 16;
+/// 카드 안쪽 여백(웹 대시보드처럼 넉넉하게, F1Laps 참고).
+const double _cardTitlePadding = 24;
+const double _cardTitleGap = 16;
 const double _teamDotSize = 8;
 const double _teamDotGap = 8;
 const double _arrowSize = 14;
@@ -34,11 +37,8 @@ class SessionCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(_cardTitlePadding, _cardTitlePadding, _cardTitlePadding, 12),
-            child: Text(
-              title,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-            ),
+            padding: const EdgeInsets.fromLTRB(_cardTitlePadding, _cardTitlePadding, _cardTitlePadding, _cardTitleGap),
+            child: Text(title, style: cardTitleStyle(context)),
           ),
           if (padded)
             Padding(

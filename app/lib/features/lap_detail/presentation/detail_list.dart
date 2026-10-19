@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_palette.dart';
 
-const double _rowVerticalPadding = 8;
+const double _rowVerticalPadding = 11;
 const double _labelValueGap = 12;
 
-/// 상세 목록의 한 줄: 왼쪽 흐린 라벨 + 오른쪽 값(글자 또는 위젯).
+/// 상세 목록의 한 줄: 왼쪽 라벨 + 오른쪽 값(글자 또는 위젯).
 class DetailItem {
   const DetailItem(this.label, {this.text, this.value}) : assert((text == null) != (value == null), 'text와 value 중 하나만 준다.');
 
@@ -54,7 +54,8 @@ class _DetailRow extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Text(item.label, style: TextStyle(color: context.palette.textMuted)),
+            // F1Laps처럼 이름표도 밝게·굵게(흐린 회색 이름표는 화면이 지저분해 보인다).
+            child: Text(item.label, style: TextStyle(color: context.palette.textPrimary, fontWeight: FontWeight.w600)),
           ),
           const SizedBox(width: _labelValueGap),
           Flexible(child: Align(alignment: Alignment.centerRight, child: value)),

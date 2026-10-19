@@ -13,7 +13,7 @@ import 'lap_time_cards.dart';
 /// 이 콘텐츠 폭(논리 px) 이상이면 2열, 미만이면 1열(docs/15 §2.3).
 const double kLapDetailTwoColumnWidth = 900;
 
-const double _cardGap = 16;
+const double _cardGap = 20;
 
 /// 위젯 사이에 세로 간격을 끼운다.
 List<Widget> _spaced(List<Widget> children) => [

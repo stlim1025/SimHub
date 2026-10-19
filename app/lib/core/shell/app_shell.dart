@@ -24,6 +24,18 @@ const String kSettingsPath = '/settings';
 
 const double _sidebarPadding = 12;
 const double _selectedTileAlpha = 0.14;
+
+// 좌측 메뉴 치수(웹 대시보드처럼 글자·아이콘을 키우고 줄 간격을 둔다, F1Laps 참고).
+const double _navItemHeight = 40;
+const double _navItemGap = 2;
+const double _navItemPaddingX = 12;
+const double _navIconSize = 20;
+const double _navIconGap = 12;
+const double _navFontSize = 14;
+const double _navRadius = 6;
+const double _brandMarkSize = 28;
+const double _brandMarkRadius = 7;
+const double _brandMarkIconSize = 20;
 const double _footerRadius = 8;
 const double _footerAvatarSize = 32;
 const String _brandName = AppConfig.brandName;
@@ -178,7 +190,16 @@ class _Brand extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
       child: Row(
         children: [
-          const Icon(Icons.speed, color: AppColors.accent),
+          // 웹 아이콘과 같은 모양의 로고: 인디고 둥근 사각형 + 흰 ≫(docs: app/web/favicon.svg).
+          Container(
+            width: _brandMarkSize,
+            height: _brandMarkSize,
+            decoration: BoxDecoration(
+              color: AppColors.accent,
+              borderRadius: BorderRadius.circular(_brandMarkRadius),
+            ),
+            child: const Icon(Icons.keyboard_double_arrow_right, color: AppColors.onAccent, size: _brandMarkIconSize),
+          ),
           const SizedBox(width: 10),
           Flexible(
             child: Text(
@@ -203,17 +224,27 @@ class _NavTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.only(bottom: _navItemGap),
       child: ListTile(
-        dense: true,
         selected: selected,
-        selectedColor: context.palette.textPrimary,
+        minTileHeight: _navItemHeight,
+        contentPadding: const EdgeInsets.symmetric(horizontal: _navItemPaddingX),
+        horizontalTitleGap: _navIconGap,
+        minLeadingWidth: _navIconSize,
+        visualDensity: VisualDensity.compact,
+        // 선택 = 인디고 글자·아이콘 + 옅은 인디고 줄(F1Laps), 나머지는 밝은 글자 + 흐린 아이콘.
+        selectedColor: palette.link,
         selectedTileColor: AppColors.accent.withValues(alpha: _selectedTileAlpha),
-        iconColor: context.palette.textMuted,
-        textColor: context.palette.textMuted,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        leading: Icon(item.icon, color: selected ? AppColors.accent : null),
+        iconColor: palette.textMuted,
+        textColor: palette.textPrimary,
+        titleTextStyle: TextStyle(
+          fontSize: _navFontSize,
+          fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_navRadius)),
+        leading: Icon(item.icon, size: _navIconSize),
         title: Text(item.label),
         onTap: onTap,
       ),

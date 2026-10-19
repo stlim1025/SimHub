@@ -33,7 +33,7 @@ const String _fallbackTitle = 'Session';
 const int _httpNotFound = 404;
 const double _headerFlagSize = 28;
 const double _headerGap = 10;
-const double _cardGap = 16;
+const double _cardGap = 20;
 
 /// 세션 상세(docs/15 §11.3, D-53): 헤더(국기 + 트랙 + 세션 종류) + 카드 7장 — Details · Final Classification · Laps ·
 /// Engine Wear · Tyre Stints 2종 · Penalties. 콘텐츠 폭 900px 이상이면 2열(Laps는 열이 많아 한 줄 전체), 미만이면 1열.
