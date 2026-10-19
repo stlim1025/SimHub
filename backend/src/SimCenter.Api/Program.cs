@@ -6,6 +6,7 @@ using SimCenter.Api.Hubs;
 using SimCenter.Api.Middleware;
 using SimCenter.Api.Notifications;
 using SimCenter.Api.RateLimiting;
+using SimCenter.Api.Startup;
 using SimCenter.Application;
 using SimCenter.Application.Rankings.Notifications;
 using SimCenter.Infrastructure;
@@ -84,10 +85,14 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
-// 개발 환경: 마이그레이션 적용 + 시드.
-if (app.Environment.IsDevelopment())
+// 마이그레이션 적용 + 시드: Database:MigrateOnStartup(없으면 Development만, 16 §4.2).
+if (DatabaseStartup.ShouldMigrate(app.Environment, app.Configuration))
 {
     await MigrateAndSeedAsync(app);
+}
+
+if (app.Environment.IsDevelopment())
+{
     app.UseSwagger();
     app.UseSwaggerUI();
 }

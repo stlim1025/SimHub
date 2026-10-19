@@ -13,21 +13,40 @@ namespace SimCenter.Api.IntegrationTests;
 /// 연결 문자열은 Database만 테스트 DB(<see cref="TestDatabase.Name"/>)로 바꿔, 개발 DB에 테스트 데이터가 쌓이지 않게 한다.
 /// TestServer는 원격 IP를 제공하지 않으므로, 테스트가 <see cref="RemoteIpHeader"/> 헤더로 요청별 원격 IP를 지정할 수 있게 한다
 /// (IP 기반 요청 제한을 테스트 간에 격리하기 위함). 헤더가 없으면 원격 IP는 null이다.
+/// 운영 설정을 시험할 때는 환경 이름과 추가 설정을 지정하는 생성자를 쓴다(추가 설정은 appsettings·user-secrets보다 우선한다).
 /// </summary>
 public sealed class ApiFactory : WebApplicationFactory<Program>
 {
     /// <summary>요청의 <c>Connection.RemoteIpAddress</c>를 지정하는 테스트 전용 헤더.</summary>
     public const string RemoteIpHeader = "X-Test-Remote-IP";
 
+    private readonly string _environmentName;
+    private readonly IReadOnlyDictionary<string, string?> _settings;
+
+    public ApiFactory()
+        : this(Environments.Development, new Dictionary<string, string?>())
+    {
+    }
+
+    /// <param name="environmentName">호스트 환경 이름(예: <see cref="Environments.Production"/>).</param>
+    /// <param name="settings">테스트 DB 연결 문자열에 더해 넣을 설정.</param>
+    /// <remarks>xUnit 클래스 픽스처는 public 생성자가 하나여야 하므로 internal로 둔다.</remarks>
+    internal ApiFactory(string environmentName, IReadOnlyDictionary<string, string?> settings)
+    {
+        _environmentName = environmentName;
+        _settings = settings;
+    }
+
     protected override IHost CreateHost(IHostBuilder builder)
     {
-        builder.UseEnvironment("Development");
+        builder.UseEnvironment(_environmentName);
         // 호스트 설정은 Program에 명령줄 인수로 전달되어 서비스 등록 시점(AddInfrastructure가 연결 문자열을 읽을 때)에 보인다.
         // ConfigureAppConfiguration은 Program의 등록 코드가 끝난 뒤 적용되어 개발 DB 연결 문자열이 그대로 쓰인다.
-        builder.ConfigureHostConfiguration(config => config.AddInMemoryCollection(new Dictionary<string, string?>
+        var hostSettings = new Dictionary<string, string?>(_settings)
         {
             [TestDatabase.ConnectionStringKey] = TestDatabase.BuildConnectionString(),
-        }));
+        };
+        builder.ConfigureHostConfiguration(config => config.AddInMemoryCollection(hostSettings));
         builder.ConfigureServices(services => services.AddSingleton<IStartupFilter, TestRemoteIpStartupFilter>());
         return base.CreateHost(builder);
     }
