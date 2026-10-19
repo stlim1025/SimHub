@@ -52,6 +52,9 @@ builder.Services.AddControllers();
 // ── 연결 API 요청 제한(11 §4.4): /agent/pair는 IP당, 코드 발급은 사용자당 분당 10회. ──
 builder.Services.AddSimCenterRateLimiting();
 
+// ── 프록시 헤더(16 §4.3): 같은 PC의 Tailscale Funnel(루프백)이 보낸 X-Forwarded-For·Proto만 믿는다. ──
+builder.Services.AddSimCenterForwardedHeaders();
+
 // ── SignalR(실시간 인입, 05-signalr-design). JSON은 camelCase + enum 문자열로 계약 고정. ──
 builder.Services.AddSignalR()
     .AddJsonProtocol(options =>
@@ -96,6 +99,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+// 프록시 헤더를 가장 먼저 반영해야 요청 로그·HTTPS 리다이렉트·IP당 요청 제한이 실제 클라이언트 주소·스킴을 본다.
+app.UseForwardedHeaders();
 
 // 요청 로깅이 예외 매핑을 감싸야(바깥) 처리된 4xx(ProblemDetails)가 실제 상태 코드로 기록된다.
 // 반대 순서면 요청 로깅이 매핑 전의 예외를 먼저 보고 400·403·404도 "responded 500"(Error)으로 남긴다.
