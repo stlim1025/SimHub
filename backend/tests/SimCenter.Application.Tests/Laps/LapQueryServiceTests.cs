@@ -263,6 +263,48 @@ public class LapQueryServiceTests
         await Assert.ThrowsAsync<InvalidDataException>(() => _sut.GetMyLapTraceAsync(Me, lap.LapId));
     }
 
+    [Fact]
+    public async Task PublicDetail_AnyOwnersLap_ShowsPublicNameAndSnapshot()
+    {
+        var lap = AddLap(Other, 98_448, teamId: 8, weather: Weather.Overcast, hasTrace: true, sessionKey: SessionKey);
+        _laps.Snapshots[lap.LapId] = FullSnapshot(lap.LapId);
+        _laps.Drivers[Other] = new LapDriverRow("공개 드라이버", ShowOnLeaderboard: true);
+
+        var detail = await _sut.GetPublicLapAsync(lap.LapId);
+
+        Assert.Equal(lap.LapId, detail.Lap.LapId);
+        Assert.Equal(Jeddah, detail.TrackId);
+        Assert.Equal("SA", detail.CountryCode);
+        Assert.Equal("공개 드라이버", detail.DisplayName);
+        Assert.Equal(16, detail.Car?.VisualTyreCompound);
+        Assert.Equal(new LapConditionsDto("Overcast", 21, 31, 4), detail.Conditions);
+        Assert.Equal(0, _sessions.CallCount); // 세션 연결은 주인의 것 — 공유 화면에서는 찾지 않는다.
+    }
+
+    [Fact]
+    public async Task PublicDetail_HiddenOrDeletedOwner_IsAnonymous()
+    {
+        var hidden = AddLap(Other, 98_448);
+        var deleted = AddLap(Me, 98_448);
+        _laps.Drivers[Other] = new LapDriverRow("숨긴 드라이버", ShowOnLeaderboard: false);
+
+        Assert.Equal(RankingPrivacy.AnonymousDisplayName, (await _sut.GetPublicLapAsync(hidden.LapId)).DisplayName);
+        Assert.Equal(RankingPrivacy.AnonymousDisplayName, (await _sut.GetPublicLapAsync(deleted.LapId)).DisplayName);
+    }
+
+    [Fact]
+    public async Task PublicDetailAndTrace_MissingLapOrTrace_IsNotFound()
+    {
+        var withoutTrace = AddLap(Other, 97_003);
+        var withTrace = AddLap(Other, 97_100, hasTrace: true);
+        _laps.Traces[withTrace.LapId] = Trace(withTrace.LapId, new LapTraceChannels([0, 1], [1, 2], [0, 0], [0, 0], [0, 0], [1, 1], [1, 1]));
+
+        await Assert.ThrowsAsync<NotFoundException>(() => _sut.GetPublicLapAsync(Guid.NewGuid()));
+        await Assert.ThrowsAsync<NotFoundException>(() => _sut.GetPublicLapTraceAsync(withoutTrace.LapId));
+        await Assert.ThrowsAsync<NotFoundException>(() => _sut.GetPublicLapTraceAsync(Guid.NewGuid()));
+        Assert.Equal(new[] { 1, 2 }, (await _sut.GetPublicLapTraceAsync(withTrace.LapId)).SpeedKph);
+    }
+
     private static LapSnapshot FullSnapshot(Guid lapId) => new()
     {
         LapId = lapId,

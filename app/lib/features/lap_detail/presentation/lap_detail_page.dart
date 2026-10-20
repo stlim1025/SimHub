@@ -118,14 +118,10 @@ class _LapDetailPageState extends ConsumerState<LapDetailPage> with SingleTicker
     }
   }
 
-  /// 지금 주소(탭·비교 포함)를 클립보드에 복사한다.
+  /// 로그인 없이 볼 수 있는 공유 주소(`/share/laps/{id}`, Telemetry 탭이면 그 탭)를 클립보드에 복사한다.
   Future<void> _share() async {
     final messenger = AppToaster.of(context);
-    final location = lapDetailLocation(
-      widget.lapId,
-      tab: widget.tab == null ? null : _tab,
-      compare: widget.compare,
-    );
+    final location = sharedLapLocation(widget.lapId, tab: _tab);
     final url = shareUrlFor(ref.read(shareBaseUriProvider), location);
     try {
       await Clipboard.setData(ClipboardData(text: url));

@@ -210,10 +210,10 @@ void main() {
   testWidgets('프로필 사진을 고른 사용자는 사이드바에 팀 코드 원이 보인다', (t) async {
     setViewSize(t, _wide);
     final user = testUser.copyWith(preferences: testUser.preferences.copyWith(avatarTeam: 'MCL'));
-    // 로고 파일 유무(PC마다 다름)와 상관없이 코드 원을 본다.
+    // 서버 로고(네트워크)와 상관없이 코드 원을 본다.
     final container = ProviderContainer(overrides: [
       fakeAuth(user),
-      teamLogoPathsProvider.overrideWith((ref) async => const {}),
+      teamLogoUrlProvider.overrideWithValue((_) => null),
     ]);
     addTearDown(container.dispose);
     await container.read(authControllerProvider.future);

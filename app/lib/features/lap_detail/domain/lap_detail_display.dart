@@ -40,6 +40,21 @@ String lapDetailLocation(String lapId, {String? tab, LapCompareSelection? compar
   return query.isEmpty ? path : Uri(path: path, queryParameters: query).toString();
 }
 
+// -- 공유 링크 (`/share/laps/:lapId?tab=`) ------------------------------------------
+
+/// 공유 링크 화면의 탭(로그인 없이 볼 수 있는 탭만, 화면 순서).
+const List<String> kSharedLapTabs = [kLapTabDetails, kLapTabTelemetry];
+
+/// 공유 링크 주소의 `tab` 값을 탭으로 바꾼다. 없거나 모르는 값(`best` 포함)이면 `details`.
+String normalizeSharedLapTab(String? value) => kSharedLapTabs.contains(value) ? value! : kLapTabDetails;
+
+/// 로그인 없이 여는 공유 랩 주소(Share 버튼이 복사한다). Telemetry 탭이면 `?tab=telemetry`를 붙이고,
+/// 그 밖의 탭(기본·Your Best Laps)과 비교 선택은 싣지 않는다 — 비교는 로그인한 주인의 것이다.
+String sharedLapLocation(String lapId, {String? tab}) {
+  final path = '/share/laps/$lapId';
+  return tab == kLapTabTelemetry ? Uri(path: path, queryParameters: {'tab': tab}).toString() : path;
+}
+
 // -- 비교 Delta -------------------------------------------------------------------
 
 /// Delta 색 구분: 빠름(초록) · 느림(빨강) · 같음.

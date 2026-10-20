@@ -9,6 +9,7 @@ import '../../features/dashboard/presentation/dashboard_page.dart';
 import '../../features/devices/presentation/telemetry_app_page.dart';
 import '../../features/lap_detail/domain/lap_compare.dart';
 import '../../features/lap_detail/presentation/lap_detail_page.dart';
+import '../../features/lap_detail/presentation/shared_lap_page.dart';
 import '../../features/laps/presentation/laps_page.dart';
 import '../../features/laps/presentation/track_laps_page.dart';
 import '../../features/profile/presentation/settings_page.dart';
@@ -62,6 +63,14 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       _screen('/splash', (_) => const SplashPage()),
       _screen('/login', (_) => const LoginPage()),
+      // 공유 링크 랩(로그인 없음): 셸 밖 화면이고 리다이렉트하지 않는다([isSharePath]). 탭은 `?tab=details|telemetry`.
+      _screen(
+        '/share/laps/:lapId',
+        (state) => SharedLapPage(
+          lapId: state.pathParameters['lapId']!,
+          tab: state.uri.queryParameters['tab'],
+        ),
+      ),
       // 예전 랭킹 경로(P5)는 셸 안의 Leaderboard로 보낸다(11 §7.4).
       GoRoute(
         path: '/rankings/:trackId',

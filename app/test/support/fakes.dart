@@ -11,8 +11,10 @@ import 'package:simcenter_app/features/auth/domain/auth_models.dart';
 import 'package:simcenter_app/features/devices/data/devices_repository.dart';
 import 'package:simcenter_app/features/devices/domain/device_models.dart';
 import 'package:simcenter_app/features/lap_detail/data/lap_detail_repository.dart';
+import 'package:simcenter_app/features/lap_detail/data/public_lap_repository.dart';
 import 'package:simcenter_app/features/lap_detail/domain/lap_compare.dart';
 import 'package:simcenter_app/features/lap_detail/domain/lap_detail_models.dart';
+import 'package:simcenter_app/features/lap_detail/domain/shared_lap.dart';
 import 'package:simcenter_app/features/laps/data/laps_repository.dart';
 import 'package:simcenter_app/features/laps/domain/lap_models.dart';
 import 'package:simcenter_app/features/profile/data/profile_repository.dart';
@@ -306,6 +308,32 @@ class FakeLapDetailRepository implements LapDetailRepository {
   @override
   Future<LapTrace?> getComparisonTrace(String lapId) async {
     comparisonTraceRequests.add(lapId);
+    return traces[lapId];
+  }
+}
+
+/// 공유 링크 랩 저장소(로그인 없음). 없는 랩은 404.
+class FakePublicLapRepository implements PublicLapRepository {
+  FakePublicLapRepository({this.laps = const {}, this.traces = const {}});
+
+  final Map<String, SharedLap> laps;
+  final Map<String, LapTrace> traces;
+  final lapRequests = <String>[];
+  final traceRequests = <String>[];
+
+  @override
+  Future<SharedLap> getLap(String lapId) async {
+    lapRequests.add(lapId);
+    final lap = laps[lapId];
+    if (lap == null) {
+      throw ApiException('대상을 찾을 수 없어요.', statusCode: 404);
+    }
+    return lap;
+  }
+
+  @override
+  Future<LapTrace?> getTrace(String lapId) async {
+    traceRequests.add(lapId);
     return traces[lapId];
   }
 }

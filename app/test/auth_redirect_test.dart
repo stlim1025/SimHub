@@ -44,4 +44,18 @@ void main() {
     expect(resolveAuthRedirect(loading: false, loggedIn: true, uri: u('/home')), '/');
     expect(resolveAuthRedirect(loading: false, loggedIn: true, uri: u('/laps/l1')), isNull);
   });
+
+  test('공유 링크(/share/**)는 복원 중·로그아웃·로그인 모두 리다이렉트하지 않는다', () {
+    for (final loading in [true, false]) {
+      for (final loggedIn in [true, false]) {
+        expect(
+          resolveAuthRedirect(loading: loading, loggedIn: loggedIn, uri: u('/share/laps/l1?tab=telemetry')),
+          isNull,
+          reason: 'loading=$loading loggedIn=$loggedIn',
+        );
+      }
+    }
+    expect(isSharePath('/share/laps/l1'), isTrue);
+    expect(isSharePath('/shared'), isFalse);
+  });
 }

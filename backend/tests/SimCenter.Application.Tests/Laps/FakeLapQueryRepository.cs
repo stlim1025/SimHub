@@ -86,6 +86,19 @@ internal sealed class FakeLapQueryRepository : ILapQueryRepository
         return Task.FromResult(Comparable(userId).FirstOrDefault(r => r.LapId == lapId));
     }
 
+    public Task<LapRow?> GetSharedAsync(Guid lapId, CancellationToken cancellationToken = default)
+    {
+        CallCount++;
+        return Task.FromResult(Laps.Select(l => l.Row).FirstOrDefault(r => r.LapId == lapId));
+    }
+
+    public Task<LapTelemetryTrace?> GetSharedTraceAsync(Guid lapId, CancellationToken cancellationToken = default)
+    {
+        CallCount++;
+        var exists = Laps.Any(l => l.Row.LapId == lapId);
+        return Task.FromResult(exists ? Traces.GetValueOrDefault(lapId) : null);
+    }
+
     public Task<LapDriverRow?> GetDriverAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         CallCount++;

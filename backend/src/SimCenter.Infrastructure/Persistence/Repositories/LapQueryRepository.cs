@@ -84,6 +84,9 @@ public sealed class LapQueryRepository : ILapQueryRepository
     public Task<LapRow?> GetComparableAsync(Guid userId, Guid lapId, CancellationToken cancellationToken = default)
         => Project(Comparable(userId).Where(l => l.Id == lapId)).FirstOrDefaultAsync(cancellationToken);
 
+    public Task<LapRow?> GetSharedAsync(Guid lapId, CancellationToken cancellationToken = default)
+        => Project(Shared().Where(l => l.Id == lapId)).FirstOrDefaultAsync(cancellationToken);
+
     public Task<LapDriverRow?> GetDriverAsync(Guid userId, CancellationToken cancellationToken = default)
         => _context.Users
             .AsNoTracking()
@@ -100,6 +103,9 @@ public sealed class LapQueryRepository : ILapQueryRepository
     public Task<LapTelemetryTrace?> GetComparableTraceAsync(Guid userId, Guid lapId, CancellationToken cancellationToken = default)
         => TraceOf(Comparable(userId), lapId, cancellationToken);
 
+    public Task<LapTelemetryTrace?> GetSharedTraceAsync(Guid lapId, CancellationToken cancellationToken = default)
+        => TraceOf(Shared(), lapId, cancellationToken);
+
     private Task<LapTelemetryTrace?> TraceOf(IQueryable<Lap> laps, Guid lapId, CancellationToken cancellationToken)
         => (from trace in _context.LapTelemetryTraces.AsNoTracking()
             join lap in laps on trace.LapId equals lap.Id
@@ -108,6 +114,9 @@ public sealed class LapQueryRepository : ILapQueryRepository
             .FirstOrDefaultAsync(cancellationToken);
 
     private IQueryable<Lap> Mine(Guid userId) => _context.Laps.AsNoTracking().Where(l => l.UserId == userId);
+
+    /// <summary>공유 링크로 여는 랩: 주인과 관계없이 지우지 않은 랩.</summary>
+    private IQueryable<Lap> Shared() => _context.Laps.AsNoTracking().Where(l => !l.IsDeleted);
 
     /// <summary>비교할 수 있는 랩(D-51): 내 것이면 무엇이든, 남의 것이면 랭킹 적격만. 남의 비공개 랩은 없는 것과 같다.</summary>
     private IQueryable<Lap> Comparable(Guid userId)

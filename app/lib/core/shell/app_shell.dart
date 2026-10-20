@@ -11,6 +11,7 @@ import '../config/app_config.dart';
 import '../layout/page_padding.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_palette.dart';
+import '../widgets/brand_mark.dart';
 import 'nav_items.dart';
 
 /// 이 너비(논리 px) 이상이면 고정 사이드바, 미만이면 상단 바 + 서랍 메뉴.
@@ -33,9 +34,6 @@ const double _navIconSize = 20;
 const double _navIconGap = 12;
 const double _navFontSize = 14;
 const double _navRadius = 6;
-const double _brandMarkSize = 28;
-const double _brandMarkRadius = 7;
-const double _brandMarkIconSize = 20;
 const double _footerRadius = 8;
 const double _footerAvatarSize = 32;
 const String _brandName = AppConfig.brandName;
@@ -190,16 +188,7 @@ class _Brand extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
       child: Row(
         children: [
-          // 웹 아이콘과 같은 모양의 로고: 인디고 둥근 사각형 + 흰 ≫(docs: app/web/favicon.svg).
-          Container(
-            width: _brandMarkSize,
-            height: _brandMarkSize,
-            decoration: BoxDecoration(
-              color: AppColors.accent,
-              borderRadius: BorderRadius.circular(_brandMarkRadius),
-            ),
-            child: const Icon(Icons.keyboard_double_arrow_right, color: AppColors.onAccent, size: _brandMarkIconSize),
-          ),
+          const BrandMark(),
           const SizedBox(width: 10),
           Flexible(
             child: Text(

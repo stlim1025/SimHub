@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../laps/data/laps_repository.dart';
 import '../../laps/domain/lap_models.dart';
 import '../data/lap_detail_repository.dart';
+import '../data/public_lap_repository.dart';
 import '../domain/lap_compare.dart';
 import '../domain/lap_detail_models.dart';
+import '../domain/shared_lap.dart';
 
 /// Your Best Laps 탭이 보여 주는 랩 수(docs/15 §2.3).
 const int kBestLapsCount = 10;
@@ -22,6 +24,16 @@ final lapTraceProvider = FutureProvider.autoDispose.family<LapTrace?, String>(
 /// 비교 랩 트레이스(남의 공개 랩 포함, D-51). 없거나 볼 수 없으면 null.
 final comparisonTraceProvider = FutureProvider.autoDispose.family<LapTrace?, String>(
   (ref, lapId) => ref.watch(lapDetailRepositoryProvider).getComparisonTrace(lapId),
+);
+
+/// 공유 링크로 보는 랩(로그인 없음).
+final sharedLapProvider = FutureProvider.autoDispose.family<SharedLap, String>(
+  (ref, lapId) => ref.watch(publicLapRepositoryProvider).getLap(lapId),
+);
+
+/// 공유 링크로 보는 랩의 트레이스. 저장되지 않았으면(404) null.
+final sharedLapTraceProvider = FutureProvider.autoDispose.family<LapTrace?, String>(
+  (ref, lapId) => ref.watch(publicLapRepositoryProvider).getTrace(lapId),
 );
 
 /// Share 버튼이 쓰는 지금 주소의 바탕(웹 = 브라우저 주소). 테스트에서 바꾼다.

@@ -853,10 +853,16 @@ public class TelemetryIngestServiceTests
         public Task<LapRow?> GetComparableAsync(Guid userId, Guid lapId, CancellationToken ct = default)
             => throw new NotImplementedException();
 
+        public Task<LapRow?> GetSharedAsync(Guid lapId, CancellationToken ct = default)
+            => throw new NotImplementedException();
+
         public Task<LapDriverRow?> GetDriverAsync(Guid userId, CancellationToken ct = default)
             => throw new NotImplementedException();
 
         public Task<LapSnapshot?> GetSnapshotAsync(Guid lapId, CancellationToken ct = default)
+            => throw new NotImplementedException();
+
+        public Task<LapTelemetryTrace?> GetSharedTraceAsync(Guid lapId, CancellationToken ct = default)
             => throw new NotImplementedException();
 
         public Task<LapTelemetryTrace?> GetMyTraceAsync(Guid userId, Guid lapId, CancellationToken ct = default)

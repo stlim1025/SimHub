@@ -194,7 +194,7 @@ void main() {
   });
 
   group('머리줄 · Share', () {
-    testWidgets('머리줄은 "{트랙} Lap {랩타임}"이고 Share는 지금 주소(탭·비교 포함)를 복사한다', (t) async {
+    testWidgets('머리줄은 "{트랙} Lap {랩타임}"이고 Share는 로그인 없이 보는 공유 주소(Telemetry 탭만, 비교 없음)를 복사한다', (t) async {
       String? clipboardText;
       t.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
         if (call.method == 'Clipboard.setData') {
@@ -213,8 +213,29 @@ void main() {
       expect(find.text('Jeddah Lap 1:38.448'), findsOneWidget);
       await _tapText(t, 'Share');
 
-      expect(clipboardText, 'https://simcenter.test/#/laps/l1?tab=telemetry&compare=leaderboard');
+      expect(clipboardText, 'https://simcenter.test/#/share/laps/l1?tab=telemetry');
       expect(find.text('주소를 복사했어요'), findsOneWidget);
+    });
+
+    testWidgets('Your Best Laps 탭에서 누른 Share도 탭 없는 공유 주소를 복사한다', (t) async {
+      String? clipboardText;
+      t.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') {
+          clipboardText = (call.arguments as Map)['text'] as String?;
+        }
+        return null;
+      });
+      addTearDown(() => t.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+      await pumpLapDetail(
+        t,
+        detailRepo: _repo(),
+        location: '/laps/l1?tab=best',
+        shareBase: Uri.parse('https://stlim1025.github.io/SimHub/#/laps/l1?tab=best'),
+      );
+
+      await _tapText(t, 'Share');
+
+      expect(clipboardText, 'https://stlim1025.github.io/SimHub/#/share/laps/l1');
     });
   });
 

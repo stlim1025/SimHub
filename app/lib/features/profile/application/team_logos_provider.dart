@@ -1,37 +1,20 @@
-import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/assets/asset_bundle_provider.dart';
+import '../../../core/config/app_config.dart';
 
-/// 팀 로고 이미지 폴더(D-48, docs/15 §2.4). 파일 이름 = 팀 코드(`FER.png`), 저장소에는 넣지 않는다(상표).
-const String kTeamLogoDirectory = 'assets/team_logos/';
+/// 팀 로고 URL 경로(D-48). 서버가 자기 PC 폴더(`TeamLogos:Directory`)의 `{코드}.png`를 내보낸다.
+/// 로고는 상표라 저장소·앱 번들에 넣지 않는다.
+const String kTeamLogoPath = '/team-logos/';
 const String _logoExtension = '.png';
 
-/// 자산 목록 → 로고가 있는 팀 코드(대문자) → 자산 경로. [kTeamLogoDirectory] 바로 아래의 PNG만 쓴다
-/// (폴더 안내 `README.md`·하위 폴더·다른 폴더는 뺀다). 순수 함수.
-Map<String, String> teamLogoPathsFrom(Iterable<String> assets) => {
-      for (final asset in assets)
-        if (_isTeamLogo(asset))
-          asset.substring(kTeamLogoDirectory.length, asset.length - _logoExtension.length).toUpperCase(): asset,
-    };
+/// 팀 코드 → 로고 URL. null이면 로고를 요청하지 않는다(팀 색 원 + 코드).
+typedef TeamLogoUrlBuilder = String? Function(String teamCode);
 
-bool _isTeamLogo(String asset) {
-  if (!asset.startsWith(kTeamLogoDirectory) || !asset.toLowerCase().endsWith(_logoExtension)) {
-    return false;
-  }
-  final name = asset.substring(kTeamLogoDirectory.length);
-  return !name.contains('/') && name.length > _logoExtension.length;
-}
+/// 서버 [apiBaseUrl]의 로고 URL(`{apiBaseUrl}/team-logos/FER.png`, 코드는 대문자). 순수 함수.
+String teamLogoUrlFor(String apiBaseUrl, String teamCode) =>
+    '$apiBaseUrl$kTeamLogoPath${Uri.encodeComponent(teamCode.toUpperCase())}$_logoExtension';
 
-/// 로고가 있는 팀 코드 → 자산 경로. 앱이 시작한 뒤 AssetManifest를 한 번 읽는다 — 없는 파일을 요청해 404를 내지 않는다.
-/// 목록을 읽지 못하면 로고 없음(빈 맵)으로 보고 팀 색 원 + 코드를 그린다.
-final teamLogoPathsProvider = FutureProvider<Map<String, String>>((ref) async {
-  try {
-    final manifest = await AssetManifest.loadFromAssetBundle(ref.watch(assetBundleProvider));
-    return teamLogoPathsFrom(manifest.listAssets());
-  } catch (e) {
-    debugPrint('팀 로고 목록을 읽지 못했어요(코드 원으로 표시): $e');
-    return const {};
-  }
-});
+/// 로고 URL을 만드는 함수. 기본은 API 서버([AppConfig.apiBaseUrl]), 테스트에서 바꿔 끼운다(네트워크 이미지 없이 코드 원으로).
+final teamLogoUrlProvider = Provider<TeamLogoUrlBuilder>(
+  (ref) => (teamCode) => teamLogoUrlFor(AppConfig.apiBaseUrl, teamCode),
+);

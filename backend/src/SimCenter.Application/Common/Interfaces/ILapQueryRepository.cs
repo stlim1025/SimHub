@@ -31,6 +31,12 @@ public interface ILapQueryRepository
     /// </summary>
     Task<LapRow?> GetComparableAsync(Guid userId, Guid lapId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// 공유 링크로 여는 랩 1건(로그인 없이, 주인 무관). 지운 랩·없는 랩은 null.
+    /// 랩 ID는 UUID v7이라 추측해 훑을 수 없다 — 링크를 받은 사람만 본다.
+    /// </summary>
+    Task<LapRow?> GetSharedAsync(Guid lapId, CancellationToken cancellationToken = default);
+
     /// <summary>남의 랩 주인의 표시 이름·공개 설정(D-39). 사용자 행이 없으면 null(서비스가 익명으로 보인다).</summary>
     Task<LapDriverRow?> GetDriverAsync(Guid userId, CancellationToken cancellationToken = default);
 
@@ -39,6 +45,9 @@ public interface ILapQueryRepository
 
     /// <summary>내 랩의 트레이스. 트레이스가 없거나 남의 랩이면 null.</summary>
     Task<LapTelemetryTrace?> GetMyTraceAsync(Guid userId, Guid lapId, CancellationToken cancellationToken = default);
+
+    /// <summary>공유 링크로 여는 랩의 트레이스(<see cref="GetSharedAsync"/>와 같은 규칙). 트레이스가 없거나 지운·없는 랩이면 null.</summary>
+    Task<LapTelemetryTrace?> GetSharedTraceAsync(Guid lapId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 비교할 수 있는 랩의 트레이스(D-51, <see cref="GetComparableAsync"/>와 같은 공개 규칙). 트레이스가 없거나 비교할 수 없는 랩이면 null.

@@ -12,7 +12,10 @@ import 'package:simcenter_app/features/dashboard/presentation/dashboard_page.dar
 import 'package:simcenter_app/features/devices/data/devices_repository.dart';
 import 'package:simcenter_app/features/devices/presentation/telemetry_app_page.dart';
 import 'package:simcenter_app/features/lap_detail/data/lap_detail_repository.dart';
+import 'package:simcenter_app/features/lap_detail/data/public_lap_repository.dart';
+import 'package:simcenter_app/features/lap_detail/domain/shared_lap.dart';
 import 'package:simcenter_app/features/lap_detail/presentation/lap_detail_page.dart';
+import 'package:simcenter_app/features/lap_detail/presentation/shared_lap_page.dart';
 import 'package:simcenter_app/features/laps/data/laps_repository.dart';
 import 'package:simcenter_app/features/laps/presentation/laps_page.dart';
 import 'package:simcenter_app/features/laps/presentation/track_laps_page.dart';
@@ -35,12 +38,14 @@ Future<GoRouter> _pumpApp(
   FakeSessionsRepository? sessionsRepo,
   FakeSeasonsRepository? seasonsRepo,
   FakeLapDetailRepository? lapDetailRepo,
+  FakePublicLapRepository? publicLapRepo,
 }) async {
   setViewSize(tester, const Size(1000, 800));
   final container = ProviderContainer(overrides: [
     fakeAuth(user),
     lapsRepositoryProvider.overrideWithValue(FakeLapsRepository()),
     lapDetailRepositoryProvider.overrideWithValue(lapDetailRepo ?? FakeLapDetailRepository()),
+    publicLapRepositoryProvider.overrideWithValue(publicLapRepo ?? FakePublicLapRepository()),
     seasonsRepositoryProvider.overrideWithValue(seasonsRepo ?? FakeSeasonsRepository()),
     sessionsRepositoryProvider.overrideWithValue(sessionsRepo ?? FakeSessionsRepository()),
     devicesRepositoryProvider.overrideWithValue(FakeDevicesRepository()),
@@ -283,6 +288,48 @@ void main() {
     expect(repo.detailRequests, ['l1']);
     expect(find.text('Jeddah Lap 1:38.448'), findsOneWidget);
     expect(t.widget<ListTile>(find.widgetWithText(ListTile, 'Laps')).selected, isTrue);
+  });
+
+  group('공유 링크 /share/laps/:lapId', () {
+    FakePublicLapRepository publicRepo() => FakePublicLapRepository(laps: {
+          'l1': SharedLap(detail: lapDetailOf(lapOf('l1', 'Jeddah', 98448)), displayName: '공유 드라이버'),
+        });
+
+    testWidgets('로그아웃 상태여도 로그인으로 보내지 않고 셸 밖 공유 화면을 연다', (t) async {
+      final repo = publicRepo();
+      final router = await _pumpApp(t, user: null, publicLapRepo: repo);
+
+      router.go('/share/laps/l1?tab=telemetry');
+      await t.pumpAndSettle();
+
+      expect(_location(router), '/share/laps/l1?tab=telemetry');
+      final page = t.widget<SharedLapPage>(find.byType(SharedLapPage));
+      expect(page.lapId, 'l1');
+      expect(page.tab, 'telemetry');
+      expect(repo.lapRequests, ['l1']);
+      expect(find.text('Jeddah Lap 1:38.448'), findsOneWidget);
+      expect(find.byType(AppShell), findsNothing);
+      expect(find.text('로그인'), findsOneWidget);
+
+      await t.tap(find.text('로그인'));
+      await t.pumpAndSettle();
+      expect(_location(router), '/login');
+    });
+
+    testWidgets('로그인 상태면 그대로 열고 [내 기록으로]가 Dashboard로 간다', (t) async {
+      final router = await _pumpApp(t, publicLapRepo: publicRepo());
+
+      router.go('/share/laps/l1');
+      await t.pumpAndSettle();
+
+      expect(_location(router), '/share/laps/l1');
+      expect(find.byType(AppShell), findsNothing);
+      expect(find.text('로그인'), findsNothing);
+
+      await t.tap(find.text('내 기록으로'));
+      await t.pumpAndSettle();
+      expect(_location(router), '/');
+    });
   });
 
   testWidgets('/laps/tracks/:trackId도 셸 안에서 열린다', (t) async {

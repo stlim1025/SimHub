@@ -71,6 +71,31 @@ public sealed class LapQueryService : ILapQueryService
         return ToTraceResponse(lapId, trace);
     }
 
+    public async Task<PublicLapDetailResponse> GetPublicLapAsync(Guid lapId, CancellationToken cancellationToken = default)
+    {
+        var lap = await _laps.GetSharedAsync(lapId, cancellationToken)
+            ?? throw new NotFoundException(LapNotFoundMessage);
+
+        var snapshot = await _laps.GetSnapshotAsync(lap.LapId, cancellationToken);
+        var displayName = await PublicDisplayNameAsync(lap.UserId, cancellationToken);
+
+        return new PublicLapDetailResponse(
+            LapDtoMapper.ToLapDto(lap),
+            lap.TrackId,
+            lap.CountryCode,
+            displayName,
+            LapDtoMapper.ToCar(snapshot),
+            LapDtoMapper.ToConditions(snapshot),
+            LapAssistNames.ToDto(LapAssistValues.From(snapshot)));
+    }
+
+    public async Task<LapTraceResponse> GetPublicLapTraceAsync(Guid lapId, CancellationToken cancellationToken = default)
+    {
+        var trace = await _laps.GetSharedTraceAsync(lapId, cancellationToken)
+            ?? throw new NotFoundException(TraceNotFoundMessage);
+        return ToTraceResponse(lapId, trace);
+    }
+
     private static void Validate(LapComparisonRequest request)
     {
         if (!Enum.IsDefined(request.Kind))
@@ -149,11 +174,17 @@ public sealed class LapQueryService : ILapQueryService
         string? displayName = null;
         if (!isMine)
         {
-            var driver = await _laps.GetDriverAsync(row.UserId, cancellationToken);
-            displayName = driver is { ShowOnLeaderboard: true } ? driver.DisplayName : RankingPrivacy.AnonymousDisplayName;
+            displayName = await PublicDisplayNameAsync(row.UserId, cancellationToken);
         }
 
         return LapDtoMapper.ToComparison(row, kind, isMine, displayName, applied);
+    }
+
+    /// <summary>남에게 보이는 랩 주인 이름: 랭킹과 같은 규칙(D-39) — 이름 비공개·지운 사용자(행 없음)는 익명 드라이버.</summary>
+    private async Task<string> PublicDisplayNameAsync(Guid ownerId, CancellationToken cancellationToken)
+    {
+        var driver = await _laps.GetDriverAsync(ownerId, cancellationToken);
+        return driver is { ShowOnLeaderboard: true } ? driver.DisplayName : RankingPrivacy.AnonymousDisplayName;
     }
 
     private LapTraceResponse ToTraceResponse(Guid lapId, LapTelemetryTrace trace)
