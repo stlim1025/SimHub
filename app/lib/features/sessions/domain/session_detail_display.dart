@@ -151,8 +151,8 @@ enum PositionTrend { up, down, same }
 /// 그래프 점 하나(x = 스틴트 안 랩, y = 값).
 typedef StintPoint = ({int x, double y});
 
-/// 그래프 선 하나 = 스틴트 하나(컴파운드 색).
-typedef StintLine = ({String label, String compound, List<StintPoint> points});
+/// 그래프 선 하나 = 스틴트 하나(컴파운드 색). [startLap] = 스틴트 첫 랩(세션 랩 번호, 모르면 null).
+typedef StintLine = ({String label, String compound, int? startLap, List<StintPoint> points});
 
 /// `Stint 1 · Medium` (`L1–L12`가 있으면 덧붙인다).
 String _stintLabel(int index, SessionTyreStint stint) {
@@ -170,7 +170,12 @@ List<StintLine> _linesOf(List<SessionTyreStint> stints, double? Function(StintLa
         if (valueOf(lap) case final y?) (x: lap.lapInStint, y: y),
     ]..sort((a, b) => a.x.compareTo(b.x));
     if (points.isNotEmpty) {
-      lines.add((label: _stintLabel(i, stints[i]), compound: stints[i].visualCompound, points: points));
+      lines.add((
+        label: _stintLabel(i, stints[i]),
+        compound: stints[i].visualCompound,
+        startLap: stints[i].startLap,
+        points: points,
+      ));
     }
   }
   return lines;

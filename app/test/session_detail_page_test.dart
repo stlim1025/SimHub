@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -418,6 +419,79 @@ void main() {
       expect(charts.first.maxX, 2);
       expect(find.text('Stint 1 · Medium (L1–L2)'), findsNWidgets(2));
       expect(find.text('Lap in stint'), findsNWidgets(2));
+    });
+
+    testWidgets('Lap Times 그래프에 마우스를 올리면 그 랩의 랩타임 툴팁과 안내선', (t) async {
+      await _pumpPage(t, _repo(_fullDetail()));
+
+      final lapTimes = find.byType(StintLineChart).last;
+      final paint = find.descendant(
+        of: lapTimes,
+        matching: find.byWidgetPredicate((w) => w is CustomPaint && w.painter is StintChartPainter),
+      );
+      await t.ensureVisible(paint);
+      await t.pumpAndSettle();
+      final box = t.getRect(paint);
+      // 오른쪽 끝(그림 영역 끝 근처) = 스틴트 안 랩 2.
+      final mouse = await t.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: Offset.zero);
+      addTearDown(mouse.removePointer);
+      await mouse.moveTo(Offset(box.right - 10, box.center.dy));
+      await t.pump();
+
+      expect(find.text('Lap 2 · 1:30.088 · Medium'), findsOneWidget);
+      final painter = t.widget<CustomPaint>(paint).painter! as StintChartPainter;
+      expect(painter.hoverX, 2);
+
+      // 왼쪽 끝 = 랩 1: 두 스틴트가 한 줄씩(Soft 스틴트는 세션 랩 3).
+      await mouse.moveTo(Offset(box.left + 70, box.center.dy));
+      await t.pump();
+      expect(find.text('Lap 1 · 1:35.000 · Medium'), findsOneWidget);
+      expect(find.text('Lap 3 · 1:50.123 · Soft'), findsOneWidget);
+
+      await mouse.moveTo(Offset(box.center.dx, box.bottom + 200));
+      await t.pump();
+      expect(find.byKey(const ValueKey('stint-chart-tooltip')), findsNothing);
+    });
+
+    testWidgets('Lap Times 그래프를 누르면(터치) 툴팁이 보인다', (t) async {
+      await _pumpPage(t, _repo(_fullDetail()));
+
+      final paint = find.descendant(
+        of: find.byType(StintLineChart).last,
+        matching: find.byWidgetPredicate((w) => w is CustomPaint && w.painter is StintChartPainter),
+      );
+      await t.ensureVisible(paint);
+      await t.pumpAndSettle();
+      final box = t.getRect(paint);
+      await t.tapAt(Offset(box.right - 10, box.center.dy));
+      await t.pump();
+
+      expect(find.text('Lap 2 · 1:30.088 · Medium'), findsOneWidget);
+    });
+
+    test('stintHoverX: 가로 위치 → 가장 가까운 스틴트 안 랩(1~maxX)', () {
+      // 그림 영역 = 64 ~ 492(폭 428).
+      expect(stintHoverX(dx: 0, width: 500, maxX: 5), 1);
+      expect(stintHoverX(dx: 64 + 428 / 2, width: 500, maxX: 5), 3);
+      expect(stintHoverX(dx: 999, width: 500, maxX: 5), 5);
+      expect(stintHoverX(dx: 100, width: 500, maxX: 1), 1);
+      expect(stintHoverX(dx: 10, width: 50, maxX: 5), isNull);
+    });
+
+    test('stintTooltipText: 첫 랩을 알면 세션 랩 번호, 모르면 스틴트 안 랩', () {
+      const known = StintChartSeries(
+        label: 'Stint 2',
+        color: AppColors.tyreSoft,
+        points: [(x: 1, y: 90088)],
+        startLap: 12,
+        compound: 'Soft',
+      );
+      const unknown = StintChartSeries(label: 'Stint 1', color: AppColors.tyreSoft, points: []);
+      String fmt(double v) => '${v.round()}';
+
+      expect(stintTooltipText(known, 1, 90088, fmt), 'Lap 12 · 90088 · Soft');
+      expect(stintTooltipText(unknown, 3, 95, fmt), 'Lap 3 in stint · 95');
     });
 
     testWidgets('패널티: 랩·You·침해·벌칙(시간이면 초)', (t) async {

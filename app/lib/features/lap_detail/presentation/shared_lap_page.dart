@@ -300,6 +300,7 @@ class _SharedTelemetry extends ConsumerWidget {
               lapTimeMs: lap.lapTimeMs,
               referenceLapTimeMs: null,
               units: units,
+              sectors: lap.sectors,
             ),
     );
   }

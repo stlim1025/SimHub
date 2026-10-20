@@ -9,6 +9,7 @@ import '../../../core/util/lap_time.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../auth/domain/user_preferences.dart';
+import '../../laps/domain/lap_models.dart';
 import '../../laps/presentation/empty_laps_card.dart';
 import '../application/lap_detail_providers.dart';
 import '../domain/lap_compare.dart';
@@ -17,6 +18,7 @@ import '../domain/telemetry_channels.dart';
 import '../domain/telemetry_math.dart';
 import 'lap_time_cards.dart';
 import 'telemetry_chart.dart';
+import 'track_map.dart';
 
 const String _noTraceText = '이 랩은 텔레메트리가 저장되지 않았어요(새 Agent로 달린 랩부터 저장돼요)';
 const String _thisLapLabel = '이 랩';
@@ -25,9 +27,10 @@ const double _chartGap = 20;
 const double _legendSpacing = 16;
 const double _legendDotGap = 6;
 const double _deltaChartHeight = 90;
+const double _panelGap = 16;
 const EdgeInsets _cardPadding = EdgeInsets.all(16);
 
-/// Telemetry 탭(docs/15 §2.3): 위에서부터 (비교 랩 트레이스가 있으면) Delta · Speed · Throttle · Brake · Gear · Steering · RPM.
+/// Telemetry 탭(docs/15 §2.3): 맨 위 트랙 지도·Lap Telemetry 통계, 그 아래 (비교 랩 트레이스가 있으면) Delta · Speed · Throttle · Brake · Gear · Steering · RPM.
 /// 가로 = 랩 거리, 이 랩은 강조색, 비교 랩(내 최고 랩)은 청록. 그래프 위에 마우스를 올리거나 누르면 모든 그래프에 같은 거리의 십자선과
 /// 두 랩의 값이 보인다. 속도 단위는 사용자 설정(`units`). 트레이스가 없으면 안내.
 class TelemetryTab extends ConsumerWidget {
@@ -76,6 +79,7 @@ class TelemetryTab extends ConsumerWidget {
               referenceLapTimeMs: comparison?.lapTimeMs,
               referenceLabel: comparison == null ? _bestLapLabel : referenceLegendLabel(comparison),
               units: units,
+              sectors: lap.sectors,
             ),
     );
   }
@@ -98,6 +102,7 @@ class TelemetryCharts extends StatefulWidget {
     required this.referenceLapTimeMs,
     required this.units,
     this.referenceLabel = _bestLapLabel,
+    this.sectors = const [],
   });
 
   final LapTrace trace;
@@ -110,6 +115,9 @@ class TelemetryCharts extends StatefulWidget {
 
   /// 범례의 비교 랩 이름(`내 최고 랩`·`리더보드 랩 · 익명 드라이버` …).
   final String referenceLabel;
+
+  /// 이 랩의 섹터 시간 — 트랙 지도의 섹터 색 경계를 정한다. 비어 있으면 한 색.
+  final List<LapSector> sectors;
 
   @override
   State<TelemetryCharts> createState() => _TelemetryChartsState();
@@ -159,7 +167,7 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
       for (final channel in kTelemetryChannels) channelChart(channel),
     ];
 
-    return Card(
+    final chartsCard = Card(
       child: Padding(
         padding: _cardPadding,
         child: Column(
@@ -178,6 +186,15 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
           ],
         ),
       ),
+    );
+    // 맨 위: 트랙 지도(같은 십자선 거리에 점) + Lap Telemetry 통계.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        LapTelemetryPanel(trace: trace, sectors: widget.sectors, cursor: _cursor, units: widget.units),
+        const SizedBox(height: _panelGap),
+        chartsCard,
+      ],
     );
   }
 

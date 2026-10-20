@@ -222,6 +222,34 @@ void main() {
       expect(t.rpm, [11000, 11500]);
     });
 
+    test('extra의 worldPosX·worldPosZ를 월드 위치로 읽는다(없으면 빈 목록)', () {
+      final t = LapTrace.fromJson(traceJson({
+        'extra': {
+          'worldPosX': [1.5, 2, -3.25],
+          'worldPosZ': [10, 20.5, 30],
+          'gForceLateral': [0.1, 0.2, 0.3],
+        },
+      }));
+
+      expect(t.worldPosX, [1.5, 2.0, -3.25]);
+      expect(t.worldPosZ, [10.0, 20.5, 30.0]);
+      expect(t.hasPositions, isTrue);
+      expect(LapTrace.fromJson(traceJson()).hasPositions, isFalse);
+    });
+
+    test('위치 채널이 하나만 있거나 길이가 다르면 위치가 없는 것으로 본다', () {
+      final onlyX = LapTrace.fromJson(traceJson({
+        'extra': {'worldPosX': [1, 2, 3]},
+      }));
+      final short = LapTrace.fromJson(traceJson({
+        'extra': {'worldPosX': [1, 2], 'worldPosZ': [1, 2]},
+      }));
+
+      expect(onlyX.hasPositions, isFalse);
+      expect(onlyX.worldPosX, isEmpty);
+      expect(short.hasPositions, isFalse);
+    });
+
     test('빠진 채널이 있으면 길이 0으로 본다', () {
       final t = LapTrace.fromJson(traceJson()..remove('gear'));
 

@@ -333,8 +333,13 @@ class LapDetail {
       );
 }
 
+/// 트레이스 extra 채널(D-49) 중 플레이어 차 월드 위치(m, 소수 첫째 자리). 이름은 `shared/telemetry/f1_25_udp_spec.md` §6 카탈로그.
+const String kWorldPosXChannel = 'worldPosX';
+const String kWorldPosZChannel = 'worldPosZ';
+
 /// 1랩 텔레메트리 트레이스(docs/15 §3.3·§4.2, D-45). 표본 i의 랩 거리 = i × [resolutionM].
 /// 채널 길이가 다르면 가장 짧은 길이로 자르고, 빠진 채널이 있으면 빈 트레이스로 본다.
+/// 월드 위치([worldPosX]·[worldPosZ])는 extra 채널에서 읽고, 없거나 길이가 7채널과 다르면 둘 다 빈 목록이다(트랙 모양을 그리지 않는다).
 class LapTrace {
   const LapTrace({
     required this.lapId,
@@ -346,6 +351,8 @@ class LapTrace {
     required this.steer,
     required this.gear,
     required this.rpm,
+    this.worldPosX = const [],
+    this.worldPosZ = const [],
   });
 
   final String lapId;
@@ -368,7 +375,16 @@ class LapTrace {
   final List<int> gear;
   final List<int> rpm;
 
+  /// 표본마다 플레이어 차 월드 X(m). 없으면 빈 목록.
+  final List<double> worldPosX;
+
+  /// 표본마다 플레이어 차 월드 Z(m). 없으면 빈 목록.
+  final List<double> worldPosZ;
+
   int get length => timeMs.length;
+
+  /// 표본마다 월드 위치가 있는지(트랙 모양을 그릴 수 있는지).
+  bool get hasPositions => length > 0 && worldPosX.length == length && worldPosZ.length == length;
 
   bool get isEmpty => length == 0;
 
@@ -389,6 +405,10 @@ class LapTrace {
     ];
     final length = lists.map((l) => l.length).reduce(math.min);
     List<int> channel(int i) => List.unmodifiable(lists[i].take(length));
+    final extra = _mapOrNull(json['extra']);
+    final posX = _positionChannel(extra?[kWorldPosXChannel], length);
+    final posZ = _positionChannel(extra?[kWorldPosZChannel], length);
+    final hasBoth = posX.isNotEmpty && posZ.isNotEmpty;
     return LapTrace(
       lapId: json['lapId'] as String,
       resolutionM: math.max(_minResolutionM, _intOrNull(json['resolutionM']) ?? _minResolutionM),
@@ -399,6 +419,16 @@ class LapTrace {
       steer: channel(4),
       gear: channel(5),
       rpm: channel(6),
+      worldPosX: hasBoth ? posX : const [],
+      worldPosZ: hasBoth ? posZ : const [],
     );
+  }
+
+  /// extra 위치 채널 → 실수 목록. 숫자가 아닌 표본이 있거나 길이가 [length]와 다르면 빈 목록.
+  static List<double> _positionChannel(Object? raw, int length) {
+    if (raw is! List || raw.length != length || !raw.every((e) => e is num)) {
+      return const [];
+    }
+    return List.unmodifiable([for (final e in raw) (e as num).toDouble()]);
   }
 }

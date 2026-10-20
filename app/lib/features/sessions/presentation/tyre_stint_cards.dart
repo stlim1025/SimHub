@@ -22,7 +22,13 @@ Color stintLineColor(String compound, AppPalette palette) =>
 
 List<StintChartSeries> _seriesOf(List<StintLine> lines, AppPalette palette) => [
       for (final line in lines)
-        StintChartSeries(label: line.label, color: stintLineColor(line.compound, palette), points: line.points),
+        StintChartSeries(
+          label: line.label,
+          color: stintLineColor(line.compound, palette),
+          points: line.points,
+          startLap: line.startLap,
+          compound: line.compound,
+        ),
     ];
 
 /// Tyre Stints: Tyre Life Remaining 카드(docs/15 §11.3): x = 스틴트 안 랩, y = 100 − 평균 마모(%).

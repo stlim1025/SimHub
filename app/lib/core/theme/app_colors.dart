@@ -95,4 +95,16 @@ class AppColors {
   static const Color wearMedium = Color(0xFFFACC15);
   static const Color wearHigh = Color(0xFFF97316);
   static const Color wearCritical = Color(0xFFEF4444);
+
+  /// 트랙 지도 섹터 색(F1Laps처럼 S1 빨강 · S2 파랑 · S3 노랑, 타이어 색과 같은 계열 — 두 테마 공통).
+  static const Color trackSector1 = Color(0xFFEF4444);
+  static const Color trackSector2 = Color(0xFF3B82F6);
+  static const Color trackSector3 = Color(0xFFFACC15);
+
+  /// 트랙 지도 바깥 테두리(굵은 어두운 선, 두 테마 공통).
+  static const Color trackOutline = Color(0xFF0B0D12);
+
+  /// 트랙 지도 위치 점: 검은 고리 + 흰 가운데(두 테마 공통).
+  static const Color trackDotRing = Color(0xFF000000);
+  static const Color trackDotCenter = Color(0xFFFFFFFF);
 }
