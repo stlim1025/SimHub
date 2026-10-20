@@ -113,6 +113,8 @@ try {
         -p:PublishSingleFile=true `
         -p:IncludeNativeLibrariesForSelfExtract=true `
         -p:DebugType=None `
+        "-p:InformationalVersion=$Version" `
+        -p:IncludeSourceRevisionInInformationalVersion=false `
         -o $publishDir
     if ($LASTEXITCODE -ne 0) {
         throw "dotnet publish failed with exit code $LASTEXITCODE"

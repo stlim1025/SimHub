@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Reflection;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -62,6 +63,7 @@ public partial class MainWindow : Window
         InitializeComponent();
 
         PortValue.Text = _options.UdpPort.ToString();
+        FooterText.Text = $"창을 닫아도 트레이에서 계속 실행됩니다. · 버전 {AgentVersion()}";
 
         // 업로더가 아직 Disabled일 수 있으니 현재 상태를 한 번 읽어 그리고, 이후 변화는 이벤트로 받는다.
         _uploadStatus.StateChanged += OnUploadStateChanged;
@@ -71,6 +73,18 @@ public partial class MainWindow : Window
         _timer.Tick += (_, _) => Refresh();
         _timer.Start();
         Refresh();
+    }
+
+    /// <summary>
+    /// 배포 스크립트(publish-agent.ps1)가 넣은 버전(InformationalVersion, 예: <c>37d2230-20261020</c>).
+    /// 개발 빌드에서 SDK가 붙이는 <c>+커밋</c> 꼬리는 뗀다.
+    /// </summary>
+    private static string AgentVersion()
+    {
+        var version = typeof(MainWindow).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "?";
+        var plus = version.IndexOf('+');
+        return plus < 0 ? version : version[..plus];
     }
 
     private void Refresh()
