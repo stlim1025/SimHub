@@ -40,11 +40,13 @@ public class TelemetryPipelineAnalyzerTests
         ILogger<TelemetryPipeline>? logger = null)
     {
         var clock = new FixedClock();
+        var edition = new GameEditionDetector(GameEditions.F1_25);
         return new TelemetryPipeline(
             new UdpTelemetryListener(port: 0, NullLogger<UdpTelemetryListener>.Instance),
             new F1PacketMapper(ExpectedPacketFormat, NullLogger<F1PacketMapper>.Instance),
             analyzers,
-            new DomainEventFactory(clock, new SequentialIds(), new AgentIdentity("F1_25")),
+            new DomainEventFactory(clock, new SequentialIds(), edition),
+            edition,
             sink,
             new GameConnectionMonitor(clock, new ConnectionThresholds()),
             logger ?? NullLogger<TelemetryPipeline>.Instance);
@@ -64,6 +66,27 @@ public class TelemetryPipelineAnalyzerTests
 
         var envelope = Assert.Single(sink.Envelopes);
         Assert.Equal(TelemetryEventType.LapStarted, envelope.Type);
+    }
+
+    [Fact]
+    public async Task ParticipantsWith2026Team_TagsEnvelopesF1_26_FromThatFrame_UntilNewSession()
+    {
+        var sink = new CapturingSink();
+        var sut = NewPipeline([Emitting(new LapStarted("s1", 1))], sink);
+        ParticipantInfo Car(int teamId) => new(0, "DRIVER", 1, teamId, 1, IsAiControlled: true);
+
+        await sut.ProcessFramesAsync(
+            [
+                new ParticipantsFrame("s1", [Car(104), Car(2)]),
+                new ParticipantsFrame("s1", [Car(104), Car(229)]),
+                Frame("s1"),
+                new ParticipantsFrame("s2", [Car(2)]),
+            ],
+            CancellationToken.None);
+
+        Assert.Equal(
+            new[] { GameEditions.F1_25, GameEditions.F1_26, GameEditions.F1_26, GameEditions.F1_25 },
+            sink.Envelopes.Select(e => e.GameCode));
     }
 
     [Fact]

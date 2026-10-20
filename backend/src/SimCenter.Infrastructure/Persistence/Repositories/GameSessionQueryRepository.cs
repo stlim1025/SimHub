@@ -21,12 +21,17 @@ public sealed class GameSessionQueryRepository : IGameSessionQueryRepository
     /// 세션마다 결과를 따로 읽지 않는다. 플레이어 행이 둘 이상이면(비정상) 차 번호가 가장 작은 행을 쓴다.
     /// </remarks>
     public async Task<(IReadOnlyList<SessionSummaryRow> Items, int Total)> GetMyPageAsync(
-        Guid userId, SessionType? sessionType, int skip, int take, CancellationToken cancellationToken = default)
+        Guid userId, SessionType? sessionType, int skip, int take, string? gameCode = null, CancellationToken cancellationToken = default)
     {
         var sessions = _context.GameSessions.AsNoTracking().Where(s => s.UserId == userId);
         if (sessionType is { } type)
         {
             sessions = sessions.Where(s => s.SessionType == type);
+        }
+
+        if (gameCode is not null)
+        {
+            sessions = sessions.Where(s => s.GameCode == gameCode);
         }
 
         var total = await sessions.CountAsync(cancellationToken);

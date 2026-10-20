@@ -13,8 +13,8 @@ public interface IRankingService
         DateOnly? date,
         CancellationToken cancellationToken = default);
 
-    /// <summary>트랙 마스터 목록(04 §3.8).</summary>
-    Task<TrackListResponse> GetTracksAsync(CancellationToken cancellationToken = default);
+    /// <summary>트랙 마스터 목록(04 §3.8). <paramref name="gameCode"/>가 있으면 그 게임의 트랙만.</summary>
+    Task<TrackListResponse> GetTracksAsync(string? gameCode = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 내 랩 기록(무효 랩 포함, <paramref name="validOnly"/>면 유효 랩만). trackId 지정 시 해당 트랙 개인 최고를 함께 반환.
@@ -30,6 +30,9 @@ public interface IRankingService
         int pageSize,
         CancellationToken cancellationToken = default);
 
-    /// <summary>내 트랙별 요약(랩 수·유효 랩 최고·마지막 세운 시각). 마지막으로 랩을 세운 트랙이 먼저 온다(11 §8).</summary>
-    Task<MyTracksResponse> GetMyTracksAsync(Guid userId, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// 내 트랙별 요약(랩 수·유효 랩 최고·마지막 세운 시각). 마지막으로 랩을 세운 트랙이 먼저 온다(11 §8).
+    /// <paramref name="gameCode"/>가 있으면 그 게임의 트랙만.
+    /// </summary>
+    Task<MyTracksResponse> GetMyTracksAsync(Guid userId, string? gameCode = null, CancellationToken cancellationToken = default);
 }

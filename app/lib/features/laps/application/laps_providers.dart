@@ -1,15 +1,16 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../profile/application/selected_game_provider.dart';
 import '../data/laps_repository.dart';
 import '../domain/lap_models.dart';
 
 /// 트랙별 랩 표의 한 페이지 크기(docs/11 §7.3).
 const int kTrackLapsPageSize = 15;
 
-/// 내 랩이 있는 트랙 목록(마지막 주행 순). 화면을 다시 열면 새로 불러온다.
+/// 내 랩이 있는 트랙 목록(마지막 주행 순, 선택한 게임만). 화면을 다시 열면 새로 불러온다.
 final myTracksProvider = FutureProvider.autoDispose<List<MyTrack>>(
-  (ref) => ref.watch(lapsRepositoryProvider).getMyTracks(),
+  (ref) => ref.watch(lapsRepositoryProvider).getMyTracks(gameCode: ref.watch(selectedGameProvider)),
 );
 
 /// 트랙별 랩 조회 조건(트랙 + 정렬 + 유효 랩만 + 페이지). 값 동등성으로 provider family 키가 된다.

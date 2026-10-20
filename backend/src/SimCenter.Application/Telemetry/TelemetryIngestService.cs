@@ -220,6 +220,10 @@ public sealed class TelemetryIngestService : ITelemetryIngestService
         TelemetryEnvelopeDto envelope, LapFinishedPayloadDto payload, AgentDevice device, DateTime now, bool lastSeenChanged,
         CancellationToken cancellationToken)
     {
+        // 5-1. 게임 에디션: 옛 Agent가 F1 25로 보낸 2026 시즌팩 랩(차량 팀이 2026 팀)은 F1 26으로 저장한다.
+        //      이후 트랙 매핑·랩 GameCode·PB·랭킹 브로드캐스트가 모두 이 코드를 쓴다.
+        envelope = envelope with { GameCode = GameEditionResolver.ForLap(envelope.GameCode, payload.Car) };
+
         // 6. Track 매핑. 없으면 영구 무효(시드 누락) → Reject.
         var track = await _tracks.GetByGameTrackIdAsync(envelope.GameCode, payload.TrackId, cancellationToken);
         if (track is null)

@@ -18,9 +18,13 @@ public sealed class SeasonQueryRepository : ISeasonQueryRepository
     public SeasonQueryRepository(AppDbContext context) => _context = context;
 
     public async Task<(IReadOnlyList<Season> Items, int Total)> GetMyPageAsync(
-        Guid userId, int skip, int take, CancellationToken cancellationToken = default)
+        Guid userId, int skip, int take, string? gameCode = null, CancellationToken cancellationToken = default)
     {
         var query = _context.Seasons.AsNoTracking().Where(s => s.UserId == userId);
+        if (gameCode is not null)
+        {
+            query = query.Where(s => s.GameCode == gameCode);
+        }
 
         var total = await query.CountAsync(cancellationToken);
         var items = await query

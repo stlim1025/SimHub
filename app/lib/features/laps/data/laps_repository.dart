@@ -38,10 +38,13 @@ class LapsRepository {
     }
   }
 
-  /// 내 랩이 1개 이상 있는 트랙(마지막 주행일 내림차순).
-  Future<List<MyTrack>> getMyTracks() async {
+  /// 내 랩이 1개 이상 있는 트랙(마지막 주행일 내림차순). [gameCode]가 있으면 그 게임의 트랙만.
+  Future<List<MyTrack>> getMyTracks({String? gameCode}) async {
     try {
-      final res = await _dio.get<Map<String, dynamic>>('/me/tracks');
+      final res = await _dio.get<Map<String, dynamic>>(
+        '/me/tracks',
+        queryParameters: {'gameCode': ?gameCode},
+      );
       return (res.data!['items'] as List<dynamic>)
           .map((e) => MyTrack.fromJson(e as Map<String, dynamic>))
           .toList();

@@ -34,9 +34,9 @@ class _FlakyLapsRepository extends FakeLapsRepository {
   int failuresLeft = 1;
 
   @override
-  Future<List<MyTrack>> getMyTracks() async {
+  Future<List<MyTrack>> getMyTracks({String? gameCode}) async {
     if (failuresLeft-- > 0) throw Exception('boom');
-    return super.getMyTracks();
+    return super.getMyTracks(gameCode: gameCode);
   }
 
   @override

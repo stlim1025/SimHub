@@ -119,6 +119,44 @@ public class RankingServiceTests
     }
 
     [Fact]
+    public async Task GetMyLapsAsync_PersonalBest_UsesTheTracksGameCode()
+    {
+        var track2026 = Guid.NewGuid();
+        _tracks.Items.Add(new Track { Id = track2026, GameCode = "F1_26", GameTrackId = 7, Name = "Silverstone" });
+
+        await _sut.GetMyLapsAsync(UserId, track2026, null, validOnly: false, MyLapsSort.Recent, 1, 20);
+
+        Assert.Equal("F1_26", _laps.LastPersonalBestGameCode);
+    }
+
+    [Fact]
+    public async Task GetMyTracks_WithGameCode_KeepsOnlyThatGame()
+    {
+        var at = new DateTime(2026, 7, 14, 10, 0, 0, DateTimeKind.Utc);
+        _laps.TrackSummaries =
+        [
+            new MyTrackSummaryRow(TrackId, "Silverstone", GameCode, 5, 83452, at, "GB", 12),
+            new MyTrackSummaryRow(Guid.NewGuid(), "Madrid (Madring)", "F1_26", 2, null, at, "ES", 16),
+        ];
+
+        var only2026 = await _sut.GetMyTracksAsync(UserId, "F1_26");
+        var all = await _sut.GetMyTracksAsync(UserId);
+
+        Assert.Equal("Madrid (Madring)", Assert.Single(only2026.Items).TrackName);
+        Assert.Equal(2, all.Items.Count);
+    }
+
+    [Fact]
+    public async Task GetTracks_WithGameCode_KeepsOnlyThatGame()
+    {
+        _tracks.Items.Add(new Track { Id = Guid.NewGuid(), GameCode = "F1_26", GameTrackId = 7, Name = "Silverstone 26" });
+
+        var result = await _sut.GetTracksAsync("F1_26");
+
+        Assert.Equal("Silverstone 26", Assert.Single(result.Items).Name);
+    }
+
+    [Fact]
     public async Task GetMyLapsAsync_WithoutTrack_OmitsPersonalBest()
     {
         var result = await _sut.GetMyLapsAsync(
@@ -301,8 +339,13 @@ public class RankingServiceTests
             return Task.FromResult(TrackSummaries);
         }
 
+        public string? LastPersonalBestGameCode { get; private set; }
+
         public Task<Lap?> GetPersonalBestLapAsync(Guid userId, Guid trackId, string gameCode, CancellationToken ct = default)
-            => Task.FromResult(PersonalBest);
+        {
+            LastPersonalBestGameCode = gameCode;
+            return Task.FromResult(PersonalBest);
+        }
     }
 
     private sealed class FakeTrackRepository : ITrackRepository

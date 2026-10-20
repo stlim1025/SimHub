@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/realtime/ranking_hub_client.dart';
+import '../../profile/application/selected_game_provider.dart';
 import '../data/ranking_repository.dart';
 import '../domain/ranking_models.dart';
 
@@ -15,9 +16,9 @@ const String kRankingPeriodYearly = 'yearly';
 /// RankingHub가 브로드캐스트하는 스냅샷의 기간. 허브는 월별 랭킹만 보낸다(05 §3).
 const String kHubSnapshotPeriod = kRankingPeriodMonthly;
 
-/// 트랙 마스터 목록.
+/// 트랙 마스터 목록(선택한 게임의 트랙만).
 final tracksProvider = FutureProvider<List<Track>>(
-  (ref) => ref.watch(rankingRepositoryProvider).getTracks(),
+  (ref) => ref.watch(rankingRepositoryProvider).getTracks(gameCode: ref.watch(selectedGameProvider)),
 );
 
 /// 랭킹 조회 조건(트랙 + 기간). 값 동등성으로 provider family 키가 된다.
@@ -70,6 +71,7 @@ class RankingController extends AutoDisposeFamilyAsyncNotifier<RankingSnapshot, 
   Future<RankingSnapshot> build(RankingQuery arg) async {
     final hub = ref.watch(rankingHubClientProvider);
     final repo = ref.watch(rankingRepositoryProvider);
+    final gameCode = ref.watch(selectedGameProvider);
     var disposed = false;
     ref.onDispose(() => disposed = true);
 
@@ -77,7 +79,7 @@ class RankingController extends AutoDisposeFamilyAsyncNotifier<RankingSnapshot, 
 
     Future<void> reload() async {
       try {
-        final fresh = await repo.getRanking(arg.trackId, period: arg.period);
+        final fresh = await repo.getRanking(arg.trackId, period: arg.period, gameCode: gameCode);
         if (!disposed) {
           state = AsyncData(fresh);
         }
@@ -97,7 +99,7 @@ class RankingController extends AutoDisposeFamilyAsyncNotifier<RankingSnapshot, 
     ref.onDispose(sub.cancel);
 
     // 초기 스냅샷은 REST로 로드(놓친 이벤트 보정, 05 §5).
-    return repo.getRanking(arg.trackId, period: arg.period);
+    return repo.getRanking(arg.trackId, period: arg.period, gameCode: gameCode);
   }
 }
 

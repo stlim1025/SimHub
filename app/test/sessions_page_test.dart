@@ -30,9 +30,10 @@ class _FlakySessionsRepository extends FakeSessionsRepository {
     String? sessionType,
     int page = 1,
     int pageSize = _pageSize,
+    String? gameCode,
   }) async {
     if (failuresLeft-- > 0) throw Exception('boom');
-    return super.getMySessions(sessionType: sessionType, page: page, pageSize: pageSize);
+    return super.getMySessions(sessionType: sessionType, page: page, pageSize: pageSize, gameCode: gameCode);
   }
 }
 

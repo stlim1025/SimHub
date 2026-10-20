@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../profile/application/selected_game_provider.dart';
 import '../data/sessions_repository.dart';
 import '../domain/session_display.dart';
 import '../domain/session_models.dart';
@@ -27,12 +28,13 @@ class SessionsQuery {
   String toString() => 'SessionsQuery($filter, $page)';
 }
 
-/// 세션 목록 한 페이지([kSessionsPageSize]개씩).
+/// 세션 목록 한 페이지([kSessionsPageSize]개씩, 선택한 게임만).
 final sessionsProvider = FutureProvider.autoDispose.family<SessionSummaryPage, SessionsQuery>(
   (ref, query) => ref.watch(sessionsRepositoryProvider).getMySessions(
         sessionType: sessionTypeForFilter(query.filter),
         page: query.page,
         pageSize: kSessionsPageSize,
+        gameCode: ref.watch(selectedGameProvider),
       ),
 );
 

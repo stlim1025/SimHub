@@ -36,6 +36,17 @@ public sealed class TrackSeedE2ETests : IClassFixture<ApiFactory>
         (41, "NL"), (40, "AT"), (39, "GB"), (42, "ES"), (1, "FR"), (8, "DE"), (28, "PT"),
     ];
 
+    /// <summary>
+    /// F1 26(2026 시즌팩) 표시 순서: 2026 캘린더 24개(Canada가 Miami 다음, Madrid가 Monza 다음, Imola 없음) → Imola → 리버스 3개 → 옛 트랙 3개.
+    /// </summary>
+    private static readonly (int GameTrackId, string CountryCode)[] Expected2026Calendar =
+    [
+        (0, "AU"), (2, "CN"), (13, "JP"), (3, "BH"), (29, "SA"), (30, "US"), (6, "CA"), (5, "MC"),
+        (4, "ES"), (17, "AT"), (7, "GB"), (10, "BE"), (9, "HU"), (26, "NL"), (11, "IT"), (42, "ES"),
+        (20, "AZ"), (12, "SG"), (15, "US"), (19, "MX"), (16, "BR"), (31, "US"), (32, "QA"), (14, "AE"),
+        (27, "IT"), (41, "NL"), (40, "AT"), (39, "GB"), (1, "FR"), (8, "DE"), (28, "PT"),
+    ];
+
     private readonly ApiFactory _factory;
 
     public TrackSeedE2ETests(ApiFactory factory) => _factory = factory;
@@ -45,9 +56,8 @@ public sealed class TrackSeedE2ETests : IClassFixture<ApiFactory>
     {
         _ = _factory.CreateClient(); // 호스트 시작 = 마이그레이션·시드 실행
 
-        var seeded = await ReadF1TracksAsync();
-
-        AssertMatchesCalendar(seeded);
+        AssertMatchesCalendar(await ReadF1TracksAsync(), ExpectedCalendar);
+        AssertMatchesCalendar(await ReadF1TracksAsync(GameCodes.F1_26), Expected2026Calendar);
     }
 
     [Fact]
@@ -72,7 +82,7 @@ public sealed class TrackSeedE2ETests : IClassFixture<ApiFactory>
             await RunSeederAsync();
 
             var seeded = await ReadF1TracksAsync();
-            AssertMatchesCalendar(seeded);
+            AssertMatchesCalendar(seeded, ExpectedCalendar);
             Assert.Equal(CustomName, seeded.Single(t => t.GameTrackId == JeddahId).Name);
         }
         finally
@@ -104,14 +114,42 @@ public sealed class TrackSeedE2ETests : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task Seed_CoversEveryF1GameUdpTrackId()
+    public async Task GetTracks_WithGameCode_ReturnsOnlyThatGame_In2026Order()
+    {
+        var client = _factory.CreateClient();
+        await TestApi.RegisterAndLoginAsync(client);
+
+        var body = await client.GetFromJsonAsync<JsonElement>("/api/v1/tracks?gameCode=F1_26");
+
+        var items = body.GetProperty("items").EnumerateArray().ToList();
+        Assert.All(items, t => Assert.Equal(GameCodes.F1_26, t.GetProperty("gameCode").GetString()));
+        Assert.Equal(Expected2026Calendar.Length, items.Count);
+        Assert.Equal("Madrid (Madring)", items[15].GetProperty("name").GetString());
+        Assert.Equal("Montreal", items[6].GetProperty("name").GetString());
+    }
+
+    [Fact]
+    public async Task GetTracks_UnknownGameCode_Is400()
+    {
+        var client = _factory.CreateClient();
+        await TestApi.RegisterAndLoginAsync(client);
+
+        var response = await client.GetAsync("/api/v1/tracks?gameCode=ACC");
+
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(GameCodes.F1_25)]
+    [InlineData(GameCodes.F1_26)]
+    public async Task Seed_CoversEveryF1GameUdpTrackId(string gameCode)
     {
         _ = _factory.CreateClient(); // 호스트 시작 = 마이그레이션·시드 실행
 
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var seeded = await db.Tracks
-            .Where(t => t.GameCode == GameCodes.F1_25)
+            .Where(t => t.GameCode == gameCode)
             .Select(t => t.GameTrackId)
             .ToListAsync();
 
@@ -119,7 +157,7 @@ public sealed class TrackSeedE2ETests : IClassFixture<ApiFactory>
         Assert.NotEmpty(contract);
 
         var missing = contract.Except(seeded).ToList();
-        Assert.True(missing.Count == 0, $"시드에 없는 F1 25 트랙 ID: {string.Join(", ", missing)}");
+        Assert.True(missing.Count == 0, $"시드에 없는 {gameCode} 트랙 ID: {string.Join(", ", missing)}");
     }
 
     [Theory]
@@ -165,11 +203,11 @@ public sealed class TrackSeedE2ETests : IClassFixture<ApiFactory>
         },
     };
 
-    private async Task<List<Track>> ReadF1TracksAsync()
+    private async Task<List<Track>> ReadF1TracksAsync(string gameCode = GameCodes.F1_25)
     {
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        return await db.Tracks.AsNoTracking().Where(t => t.GameCode == GameCodes.F1_25).ToListAsync();
+        return await db.Tracks.AsNoTracking().Where(t => t.GameCode == gameCode).ToListAsync();
     }
 
     private async Task RunSeederAsync()
@@ -178,15 +216,15 @@ public sealed class TrackSeedE2ETests : IClassFixture<ApiFactory>
         await scope.ServiceProvider.GetRequiredService<DbSeeder>().SeedAsync();
     }
 
-    /// <summary>시드된 F1 25 트랙이 정확히 표의 31개이고, 각자 표의 국가·순서(1부터)를 가졌는지.</summary>
-    private static void AssertMatchesCalendar(IReadOnlyList<Track> seeded)
+    /// <summary>시드된 한 게임의 트랙이 정확히 표의 31개이고, 각자 표의 국가·순서(1부터)를 가졌는지.</summary>
+    private static void AssertMatchesCalendar(IReadOnlyList<Track> seeded, (int GameTrackId, string CountryCode)[] expected)
     {
-        Assert.Equal(ExpectedCalendar.Length, seeded.Count);
+        Assert.Equal(expected.Length, seeded.Count);
 
         var byGameId = seeded.ToDictionary(t => t.GameTrackId);
-        for (var i = 0; i < ExpectedCalendar.Length; i++)
+        for (var i = 0; i < expected.Length; i++)
         {
-            var (gameTrackId, countryCode) = ExpectedCalendar[i];
+            var (gameTrackId, countryCode) = expected[i];
             var track = byGameId[gameTrackId];
             Assert.True(countryCode == track.CountryCode, $"트랙 {gameTrackId}: 국가 {track.CountryCode} (기대 {countryCode})");
             Assert.True(i + 1 == track.DisplayOrder, $"트랙 {gameTrackId}: 순서 {track.DisplayOrder} (기대 {i + 1})");

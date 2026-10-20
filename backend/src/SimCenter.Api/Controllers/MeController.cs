@@ -65,12 +65,17 @@ public sealed class MeController(IRankingService rankingService, ILapQueryServic
     public async Task<ActionResult<LapTraceResponse>> GetMyLapTrace(Guid lapId, CancellationToken cancellationToken)
         => Ok(await lapQueryService.GetMyLapTraceAsync(User.GetRequiredUserId(), lapId, cancellationToken));
 
-    /// <summary>내 트랙별 요약(랩 수·유효 랩 최고·마지막 세운 시각). 마지막으로 랩을 세운 트랙 우선.</summary>
+    /// <summary>
+    /// 내 트랙별 요약(랩 수·유효 랩 최고·마지막 세운 시각). 마지막으로 랩을 세운 트랙 우선. gameCode(선택)가 있으면 그 게임의 트랙만.
+    /// </summary>
     [HttpGet("tracks")]
     [ProducesResponseType(typeof(MyTracksResponse), StatusCodes.Status200OK)]
-    public async Task<ActionResult<MyTracksResponse>> GetMyTracks(CancellationToken cancellationToken = default)
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<MyTracksResponse>> GetMyTracks(
+        [FromQuery] string? gameCode, CancellationToken cancellationToken = default)
     {
-        var result = await rankingService.GetMyTracksAsync(User.GetRequiredUserId(), cancellationToken);
+        var result = await rankingService.GetMyTracksAsync(
+            User.GetRequiredUserId(), GameCodeQuery.ParseOptional(gameCode), cancellationToken);
         return Ok(result);
     }
 }

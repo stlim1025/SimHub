@@ -335,7 +335,7 @@ public class LapQueryServiceTests
         }
 
         public Task<(IReadOnlyList<SessionSummaryRow> Items, int Total)> GetMyPageAsync(
-            Guid userId, SessionType? sessionType, int skip, int take, CancellationToken cancellationToken = default)
+            Guid userId, SessionType? sessionType, int skip, int take, string? gameCode = null, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
 
         public Task<GameSession?> GetMineDetailAsync(Guid userId, Guid sessionId, CancellationToken cancellationToken = default)

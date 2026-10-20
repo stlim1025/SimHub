@@ -18,9 +18,10 @@ public interface ISeasonQueryService
     /// <summary>
     /// 내 시즌 목록(<c>LastSessionAt</c> 내림차순 → Id 내림차순). 페이지 보정은 <c>RankingService.GetMyLapsAsync</c>와 같다
     /// (page &lt; 1 → 1, pageSize &lt; 1 → <see cref="DefaultPageSize"/>, 최대 초과 → <see cref="MaxPageSize"/>).
+    /// <paramref name="gameCode"/>가 있으면 그 게임의 시즌만(시즌 번호는 게임과 무관하게 내 시즌 전체 기준).
     /// </summary>
     Task<PagedResult<SeasonSummaryDto>> GetMySeasonsAsync(
-        Guid userId, int page, int pageSize, CancellationToken cancellationToken = default);
+        Guid userId, int page, int pageSize, string? gameCode = null, CancellationToken cancellationToken = default);
 
     /// <summary>내 시즌 상세(헤더 + 라운드 + Standings).</summary>
     /// <exception cref="Common.Exceptions.NotFoundException">남의 시즌이거나 없는 시즌.</exception>

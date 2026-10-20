@@ -12,9 +12,13 @@ class RankingRepository {
 
   final Dio _dio;
 
-  Future<List<Track>> getTracks() async {
+  /// 트랙 마스터. [gameCode]가 있으면 그 게임의 트랙만(`gameCode` 쿼리).
+  Future<List<Track>> getTracks({String? gameCode}) async {
     try {
-      final res = await _dio.get<Map<String, dynamic>>('/tracks');
+      final res = await _dio.get<Map<String, dynamic>>(
+        '/tracks',
+        queryParameters: {'gameCode': ?gameCode},
+      );
       final items = (res.data!['items'] as List<dynamic>);
       return items.map((e) => Track.fromJson(e as Map<String, dynamic>)).toList();
     } on DioException catch (e) {

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SimCenter.Api.Common;
 using SimCenter.Application.Common.Exceptions;
 using SimCenter.Application.Rankings;
 using SimCenter.Domain.Constants;
@@ -28,7 +29,8 @@ public sealed class RankingsController(IRankingService rankingService) : Control
         }
 
         var parsedPeriod = ParsePeriod(period);
-        var game = string.IsNullOrWhiteSpace(gameCode) ? GameCodes.F1_25 : gameCode.Trim();
+        // 생략하면 F1 25. 지원하지 않는 게임 코드는 400.
+        var game = GameCodeQuery.ParseOptional(gameCode) ?? GameCodes.F1_25;
 
         var result = await rankingService.GetRankingAsync(trackId, game, parsedPeriod, date, cancellationToken);
         return Ok(result);

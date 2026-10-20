@@ -22,6 +22,7 @@ internal static class SessionClassifiedPayloads
     /// 스틴트의 실제 컴파운드 라벨은 <paramref name="actualCompound"/>(기본 null이면 스틴트마다 <c>C0</c>~<c>C5</c>)다.
     /// 점수는 <paramref name="awardsPoints"/>가 true면 <c>max(0, 25 - 3 × carIndex)</c>, false면 전부 0(예선 등)이다.
     /// <paramref name="playerCarIndex"/>가 차 범위 밖(예: -1)이면 플레이어 차가 없는 순위표다.
+    /// 팀 ID는 <c>firstTeamId + carIndex % 10</c>이다(2026 시즌팩 순위표는 220).
     /// </summary>
     public static object Build(
         int carCount,
@@ -37,11 +38,12 @@ internal static class SessionClassifiedPayloads
         string? actualCompound = null,
         bool awardsPoints = true,
         string gameMode = "DriverCareer",
-        string sessionRef = SessionRef)
+        string sessionRef = SessionRef,
+        int firstTeamId = 0)
     {
         var results = Enumerable.Range(0, carCount)
             .Select(carIndex => BuildResult(
-                carIndex, stintsPerCar, carIndex == playerCarIndex, namePrefix, actualCompound, awardsPoints))
+                carIndex, stintsPerCar, carIndex == playerCarIndex, namePrefix, actualCompound, awardsPoints, firstTeamId))
             .ToArray();
 
         return new
@@ -62,7 +64,7 @@ internal static class SessionClassifiedPayloads
     }
 
     private static object BuildResult(
-        int carIndex, int stintsPerCar, bool isPlayer, string namePrefix, string? actualCompound, bool awardsPoints)
+        int carIndex, int stintsPerCar, bool isPlayer, string namePrefix, string? actualCompound, bool awardsPoints, int firstTeamId)
     {
         var tyreStints = Enumerable.Range(1, stintsPerCar)
             .Select(stint => new
@@ -89,7 +91,7 @@ internal static class SessionClassifiedPayloads
             penaltiesTimeMs = 0,
             driverName = $"{namePrefix} {carIndex}",
             gameDriverId = isPlayer ? (int?)null : carIndex,
-            teamId = carIndex % 10,
+            teamId = firstTeamId + (carIndex % 10),
             raceNumber = carIndex + 1,
             isAiControlled = !isPlayer,
             tyreStints,

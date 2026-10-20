@@ -43,64 +43,19 @@ public class SeasonCalendarTests
         Assert.Equal(new[] { ("A", "AU", 1), ("B", (string?)null, 2) }, calendar.Select(c => (c.Name, c.CountryCode, c.DisplayOrder)));
     }
 
-    /// <summary>시드 트랙 일부(게임 m_trackId·F1 25 캘린더 순서) — 2026 캘린더 순서 확인용.</summary>
-    private static Track[] SeededTracks() =>
-    [
-        new Track { Id = Id(300), GameCode = GameCode, GameTrackId = 30, Name = "Miami", DisplayOrder = 6 },
-        new Track { Id = Id(327), GameCode = GameCode, GameTrackId = 27, Name = "Imola", DisplayOrder = 7 },
-        new Track { Id = Id(305), GameCode = GameCode, GameTrackId = 5, Name = "Monaco", DisplayOrder = 8 },
-        new Track { Id = Id(306), GameCode = GameCode, GameTrackId = 6, Name = "Montreal", DisplayOrder = 10 },
-        new Track { Id = Id(311), GameCode = GameCode, GameTrackId = 11, Name = "Monza", DisplayOrder = 16 },
-        new Track { Id = Id(320), GameCode = GameCode, GameTrackId = 20, Name = "Baku", DisplayOrder = 17 },
-        new Track { Id = Id(342), GameCode = GameCode, GameTrackId = 42, Name = "Madrid (Madring)", DisplayOrder = 28 },
-    ];
-
     [Fact]
-    public void CalendarOf_Season2026_UsesThe2026Order_WithMadridAndWithoutImola()
+    public void CalendarOf_F1_26_Uses24RoundsOfItsOwnTracks()
     {
-        var calendar = SeasonCalendar.CalendarOf(SeededTracks(), GameCode, season2026: true);
+        var tracks = Enumerable.Range(1, 31)
+            .Select(i => new Track { Id = Id(500 + i), GameCode = "F1_26", Name = $"T{i}", DisplayOrder = i })
+            .Append(new Track { Id = Id(900), GameCode = GameCode, Name = "F1 25 track", DisplayOrder = 1 })
+            .ToList();
 
-        Assert.Equal(
-            new[] { "Miami", "Montreal", "Monaco", "Monza", "Madrid (Madring)", "Baku" },
-            calendar.Select(c => c.Name));
-        Assert.Equal(new[] { 1, 2, 3, 4, 5, 6 }, calendar.Select(c => c.DisplayOrder));
-    }
+        var calendar = SeasonCalendar.CalendarOf(tracks, "F1_26");
 
-    [Fact]
-    public void CalendarOf_Default_KeepsF125Order()
-    {
-        var calendar = SeasonCalendar.CalendarOf(SeededTracks(), GameCode);
-
-        Assert.Equal(new[] { "Miami", "Imola", "Monaco", "Montreal", "Monza", "Baku" }, calendar.Select(c => c.Name));
-    }
-
-    [Theory]
-    [InlineData(220, true)]
-    [InlineData(230, true)]
-    [InlineData(476, true)]
-    [InlineData(486, true)]
-    [InlineData(1, false)]
-    [InlineData(185, false)]
-    public void IsSeason2026_DetectsSeasonPackTeams(int teamId, bool expected)
-    {
-        var rows = new[] { Row(1, 1, "a", 1, 25, teamId: teamId) };
-
-        Assert.Equal(expected, SeasonCalendar.IsSeason2026(GameCode, rows));
-    }
-
-    [Fact]
-    public void WithCalendarOrder_RenumbersWeekendsByCalendar_OutsideTracksGetZero()
-    {
-        var calendar = SeasonCalendar.CalendarOf(SeededTracks(), GameCode, season2026: true);
-        var weekends = new[]
-        {
-            new WeekendRow(Id(1), Id(9), "Montreal", At(1), DisplayOrder: 10, CalendarRounds: true, TrackId: Id(306)),
-            new WeekendRow(Id(2), Id(9), "Imola", At(2), DisplayOrder: 7, CalendarRounds: true, TrackId: Id(327)),
-        };
-
-        var renumbered = SeasonCalendar.WithCalendarOrder(weekends, calendar);
-
-        Assert.Equal(new[] { 2, 0 }, renumbered.Select(w => w.DisplayOrder));
+        Assert.Equal(24, calendar.Count);
+        Assert.Equal(Enumerable.Range(1, 24), calendar.Select(c => c.DisplayOrder));
+        Assert.DoesNotContain(calendar, c => c.Name == "F1 25 track");
     }
 
     [Fact]

@@ -17,16 +17,18 @@ namespace SimCenter.Api.Controllers;
 [Authorize]
 public sealed class MySeasonsController(ISeasonQueryService seasonService, ISeasonCommandService seasonCommands) : ControllerBase
 {
-    /// <summary>내 시즌 목록(마지막 세션 시각 내림차순). pageSize 기본 20, 최대 20.</summary>
+    /// <summary>내 시즌 목록(마지막 세션 시각 내림차순). pageSize 기본 20, 최대 20. gameCode(선택)가 있으면 그 게임의 시즌만.</summary>
     [HttpGet]
     [ProducesResponseType(typeof(PagedResult<SeasonSummaryDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<PagedResult<SeasonSummaryDto>>> GetMySeasons(
+        [FromQuery] string? gameCode,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = ISeasonQueryService.DefaultPageSize,
         CancellationToken cancellationToken = default)
     {
-        var result = await seasonService.GetMySeasonsAsync(User.GetRequiredUserId(), page, pageSize, cancellationToken);
+        var result = await seasonService.GetMySeasonsAsync(
+            User.GetRequiredUserId(), page, pageSize, GameCodeQuery.ParseOptional(gameCode), cancellationToken);
         return Ok(result);
     }
 

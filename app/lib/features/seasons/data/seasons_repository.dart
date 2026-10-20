@@ -13,12 +13,12 @@ class SeasonsRepository {
 
   final Dio _dio;
 
-  /// 내 시즌 목록(마지막 세션 시각 내림차순).
-  Future<SeasonSummaryPage> getMySeasons({int page = 1, int pageSize = kSeasonsPageSize}) async {
+  /// 내 시즌 목록(마지막 세션 시각 내림차순). [gameCode]가 있으면 그 게임의 시즌만.
+  Future<SeasonSummaryPage> getMySeasons({int page = 1, int pageSize = kSeasonsPageSize, String? gameCode}) async {
     try {
       final res = await _dio.get<Map<String, dynamic>>(
         '/me/seasons',
-        queryParameters: {'page': page, 'pageSize': pageSize},
+        queryParameters: {'page': page, 'pageSize': pageSize, 'gameCode': ?gameCode},
       );
       return SeasonSummaryPage.fromJson(res.data!);
     } on DioException catch (e) {

@@ -16,10 +16,11 @@ public interface ISessionQueryService
 
     /// <summary>
     /// 내 세션 목록(<c>ClassifiedAt</c> 내림차순 → Id 내림차순). <paramref name="sessionType"/>이 있으면 그 유형만.
-    /// 페이지 보정은 <c>RankingService.GetMyLapsAsync</c>와 같다.
+    /// 페이지 보정은 <c>RankingService.GetMyLapsAsync</c>와 같다. <paramref name="gameCode"/>가 있으면 그 게임의 세션만.
     /// </summary>
     Task<PagedResult<SessionSummaryDto>> GetMySessionsAsync(
-        Guid userId, SessionType? sessionType, int page, int pageSize, CancellationToken cancellationToken = default);
+        Guid userId, SessionType? sessionType, int page, int pageSize, string? gameCode = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>내 세션 상세(헤더 + 결과).</summary>
     /// <exception cref="Common.Exceptions.NotFoundException">남의 세션이거나 없는 세션.</exception>

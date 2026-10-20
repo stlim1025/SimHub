@@ -87,7 +87,7 @@ public sealed class LapRecordedE2ETests : IClassFixture<ApiFactory>
 
     private static async Task<Guid> FindTrackIdAsync(HttpClient client, string name)
     {
-        var tracks = await client.GetFromJsonAsync<JsonElement>("/api/v1/tracks");
+        var tracks = await client.GetFromJsonAsync<JsonElement>("/api/v1/tracks?gameCode=F1_25");
         return tracks.GetProperty("items").EnumerateArray()
             .Single(t => t.GetProperty("name").GetString() == name)
             .GetProperty("trackId").GetGuid();

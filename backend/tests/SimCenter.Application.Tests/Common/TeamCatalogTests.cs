@@ -76,6 +76,15 @@ public class TeamCatalogTests
         Assert.Equal(FallbackColor, team.Color);
     }
 
+    [Theory]
+    [InlineData(229, "Audi")]
+    [InlineData(486, "Cadillac")]
+    [InlineData(2, "Red Bull Racing")]
+    public void Resolve_F1_26_UsesTheSameTable(int id, string name)
+    {
+        Assert.Equal(name, TeamCatalog.Resolve("F1_26", id).Name);
+    }
+
     [Fact]
     public void Resolve_OtherGameCode_UsesFallback()
     {

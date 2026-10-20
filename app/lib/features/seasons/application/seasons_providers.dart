@@ -1,16 +1,18 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../profile/application/selected_game_provider.dart';
 import '../data/seasons_repository.dart';
 import '../domain/season_display.dart';
 import '../domain/season_models.dart';
 
-/// 내 시즌 전부(서버 정렬 = 마지막 세션 시각 내림차순). [kSeasonsPageSize]개씩 끝 페이지까지 이어 읽는다.
+/// 내 시즌 전부(선택한 게임만, 서버 정렬 = 마지막 세션 시각 내림차순). [kSeasonsPageSize]개씩 끝 페이지까지 이어 읽는다.
 /// `/seasons` 진입 시 열 시즌 고르기와 시즌 메뉴(진행 중·완료 묶음)가 쓴다.
 final allSeasonsProvider = FutureProvider.autoDispose<List<SeasonSummary>>((ref) async {
   final repo = ref.watch(seasonsRepositoryProvider);
+  final gameCode = ref.watch(selectedGameProvider);
   final seasons = <SeasonSummary>[];
   for (var page = 1;; page++) {
-    final result = await repo.getMySeasons(page: page, pageSize: kSeasonsPageSize);
+    final result = await repo.getMySeasons(page: page, pageSize: kSeasonsPageSize, gameCode: gameCode);
     seasons.addAll(result.items);
     if (result.items.isEmpty || seasons.length >= result.total) {
       return seasons;

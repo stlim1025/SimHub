@@ -1,7 +1,6 @@
 using SimCenter.Application.Common.Exceptions;
 using SimCenter.Application.Common.Interfaces;
 using SimCenter.Application.Laps;
-using SimCenter.Domain.Constants;
 using SimCenter.Domain.Enums;
 
 namespace SimCenter.Application.Rankings;
@@ -64,11 +63,12 @@ public sealed class RankingService : IRankingService
             track.Id, track.Name, gameCode, period.ToString().ToLowerInvariant(), range.PeriodKey, entries);
     }
 
-    public async Task<TrackListResponse> GetTracksAsync(CancellationToken cancellationToken = default)
+    public async Task<TrackListResponse> GetTracksAsync(string? gameCode = null, CancellationToken cancellationToken = default)
     {
-        // 순서(게임 → 표시 순서 → 이름, D-43)는 리포지토리가 보장한다 — 그대로 매핑한다.
+        // 순서(게임 → 표시 순서 → 이름, D-43)는 리포지토리가 보장한다 — 그대로 매핑한다. 트랙 마스터는 작아 게임 필터는 메모리에서 건다.
         var tracks = await _tracks.GetAllAsync(cancellationToken);
         var items = tracks
+            .Where(t => gameCode is null || t.GameCode == gameCode)
             .Select(t => new TrackDto(t.Id, t.GameCode, t.Name, t.CountryCode, t.DisplayOrder))
             .ToList();
 
@@ -99,11 +99,11 @@ public sealed class RankingService : IRankingService
 
         var items = rows.Select(LapDtoMapper.ToLapDto).ToList();
 
-        // 개인 최고는 트랙이 지정된 경우에만 의미가 있다(랭킹적격 기준). MVP 단일 게임(F1_25) 기준.
+        // 개인 최고는 트랙이 지정된 경우에만 의미가 있다(랭킹적격 기준). 트랙은 게임별 행이라 그 트랙의 게임 코드로 찾는다.
         PersonalBestDto? personalBest = null;
-        if (trackId.HasValue)
+        if (trackId.HasValue && await _tracks.GetByIdAsync(trackId.Value, cancellationToken) is { } track)
         {
-            var best = await _laps.GetPersonalBestLapAsync(userId, trackId.Value, GameCodes.F1_25, cancellationToken);
+            var best = await _laps.GetPersonalBestLapAsync(userId, track.Id, track.GameCode, cancellationToken);
             if (best is not null)
             {
                 personalBest = new PersonalBestDto(best.TrackId, best.LapTimeMs, best.SetAt);
@@ -113,12 +113,14 @@ public sealed class RankingService : IRankingService
         return new MyLapsResponse(personalBest, new PagedResult<LapDto>(page, pageSize, total, items));
     }
 
-    public async Task<MyTracksResponse> GetMyTracksAsync(Guid userId, CancellationToken cancellationToken = default)
+    public async Task<MyTracksResponse> GetMyTracksAsync(
+        Guid userId, string? gameCode = null, CancellationToken cancellationToken = default)
     {
         var rows = await _laps.GetMyTrackSummariesAsync(userId, cancellationToken);
 
-        // 순서(마지막 세운 시각 내림차순)는 리포지토리가 보장한다 — 그대로 매핑한다.
+        // 순서(마지막 세운 시각 내림차순)는 리포지토리가 보장한다 — 그대로 매핑한다. 요약 행은 트랙 수만큼이라 게임 필터는 메모리에서 건다.
         var items = rows
+            .Where(r => gameCode is null || r.GameCode == gameCode)
             .Select(r => new MyTrackDto(
                 r.TrackId, r.TrackName, r.GameCode, r.LapCount, r.BestValidLapTimeMs, r.LastSetAt, r.CountryCode, r.DisplayOrder))
             .ToList();

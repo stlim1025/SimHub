@@ -170,6 +170,33 @@ public class TelemetryIngestServiceTests
         Assert.Single(_processed.Items); // 멱등 기록됨
     }
 
+    [Fact]
+    public async Task LapFinished_F1_25EnvelopeWith2026Team_IsStoredAsF1_26OnItsTrack()
+    {
+        var track2026 = Guid.NewGuid();
+        _tracks.Items.Add(new Track { Id = track2026, GameCode = "F1_26", GameTrackId = GameTrackId, Name = "Silverstone" });
+
+        var result = await _sut.IngestAsync(LapFinishedWithDetail(car: new { teamId = 229 }), _deviceId);
+
+        Assert.True(result.Acknowledged, result.RejectReason);
+        var lap = Assert.Single(_laps.Items);
+        Assert.Equal("F1_26", lap.GameCode);
+        Assert.Equal(track2026, lap.TrackId);
+        Assert.Equal("F1_26", Assert.Single(_notifier.RankingUpdates).GameCode);
+    }
+
+    [Fact]
+    public async Task LapFinished_F1_25EnvelopeWith2025Team_StaysF1_25()
+    {
+        _tracks.Items.Add(new Track { Id = Guid.NewGuid(), GameCode = "F1_26", GameTrackId = GameTrackId, Name = "Silverstone" });
+
+        await _sut.IngestAsync(LapFinishedWithDetail(car: new { teamId = 2 }), _deviceId);
+
+        var lap = Assert.Single(_laps.Items);
+        Assert.Equal(GameCode, lap.GameCode);
+        Assert.Equal(_trackId, lap.TrackId);
+    }
+
     [Theory]
     [InlineData("missing")]
     [InlineData("revoked")]
@@ -762,7 +789,7 @@ public class TelemetryIngestServiceTests
                 new List<RankingEntryDto>()));
         }
 
-        public Task<TrackListResponse> GetTracksAsync(CancellationToken ct = default)
+        public Task<TrackListResponse> GetTracksAsync(string? gameCode = null, CancellationToken ct = default)
             => throw new NotImplementedException();
 
         public Task<MyLapsResponse> GetMyLapsAsync(
@@ -770,7 +797,7 @@ public class TelemetryIngestServiceTests
             CancellationToken ct = default)
             => throw new NotImplementedException();
 
-        public Task<MyTracksResponse> GetMyTracksAsync(Guid userId, CancellationToken ct = default)
+        public Task<MyTracksResponse> GetMyTracksAsync(Guid userId, string? gameCode = null, CancellationToken ct = default)
             => throw new NotImplementedException();
     }
 

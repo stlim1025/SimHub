@@ -41,11 +41,13 @@ public static class DependencyInjection
             return new F1PacketMapper(options.ExpectedPacketFormat, sp.GetRequiredService<ILogger<F1PacketMapper>>());
         });
 
+        // 세션별 게임 에디션(F1 25 / F1 26 = 2026 시즌팩) 판별. 파이프라인이 프레임을 먹이고 봉투 생성기가 현재 값을 쓴다 — 같은 인스턴스.
         services.AddSingleton(sp =>
         {
             var options = sp.GetRequiredService<IOptions<AgentOptions>>().Value;
-            return new AgentIdentity(options.GameCode);
+            return new GameEditionDetector(options.GameCode);
         });
+        services.AddSingleton<IGameCodeSource>(sp => sp.GetRequiredService<GameEditionDetector>());
 
         // 분석기는 상태 저장 — 각각 단일 인스턴스로 파이프라인이 순차 소비한다(P7: 분석기 목록, 순서 무관).
         // 목록의 LapAnalyzer·SessionResultTracker는 위 구체 타입과 같은 인스턴스다.

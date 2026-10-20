@@ -119,6 +119,7 @@ public sealed class SessionDetailApiE2ETests : IClassFixture<ApiFactory>
             payload["weekendLinkId"] = 42L;
             payload["sessionLinkId"] = 43L;
             payload["car"]!["details"] = SnapshotDetails(lapNumber);
+            payload["car"]!["teamId"] = FerrariV126TeamId; // 같은 세션의 내 차 = v1.26 팀(2026 시즌팩 → F1 26)
             await SubmitAsync(connection, envelope);
         }
 

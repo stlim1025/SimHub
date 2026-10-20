@@ -142,8 +142,15 @@ class FakeRankingRepository implements RankingRepository {
 
   final requests = <({String trackId, String period})>[];
 
+  /// 요청마다 넘어온 게임 코드(트랙 목록·랭킹 순서대로).
+  final trackGameCodes = <String?>[];
+  final rankingGameCodes = <String>[];
+
   @override
-  Future<List<Track>> getTracks() async => tracks;
+  Future<List<Track>> getTracks({String? gameCode}) async {
+    trackGameCodes.add(gameCode);
+    return tracks;
+  }
 
   @override
   Future<RankingSnapshot> getRanking(
@@ -152,6 +159,7 @@ class FakeRankingRepository implements RankingRepository {
     String gameCode = AppConfig.defaultGameCode,
   }) async {
     requests.add((trackId: trackId, period: period));
+    rankingGameCodes.add(gameCode);
     final entries = entriesFor?.call(trackId, period, requests.length) ?? const <RankingEntry>[];
     return snapshotOf(trackId, period, entries);
   }
@@ -226,9 +234,13 @@ class FakeLapsRepository implements LapsRepository {
     return MyLaps(personalBest: null, page: page, pageSize: pageSize, total: matching.length, laps: items);
   }
 
+  /// `getMyTracks`마다 넘어온 게임 코드.
+  final myTracksGameCodes = <String?>[];
+
   @override
-  Future<List<MyTrack>> getMyTracks() async {
+  Future<List<MyTrack>> getMyTracks({String? gameCode}) async {
     tracksCalls++;
+    myTracksGameCodes.add(gameCode);
     return tracks;
   }
 }
@@ -472,6 +484,7 @@ class FakeSessionsRepository implements SessionsRepository {
   final List<SessionSummary> sessions;
   final Map<String, SessionDetail> details;
   final requests = <({String? sessionType, int page, int pageSize})>[];
+  final gameCodes = <String?>[];
   final detailRequests = <String>[];
 
   @override
@@ -479,8 +492,10 @@ class FakeSessionsRepository implements SessionsRepository {
     String? sessionType,
     int page = 1,
     int pageSize = kSessionsPageSize,
+    String? gameCode,
   }) async {
     requests.add((sessionType: sessionType, page: page, pageSize: pageSize));
+    gameCodes.add(gameCode);
     final matching = [
       for (final s in sessions)
         if (sessionType == null || s.sessionType == sessionType) s,
@@ -655,11 +670,13 @@ class FakeSeasonsRepository implements SeasonsRepository {
   final List<SeasonSummary> seasons;
   final Map<String, SeasonDetail> details;
   final requests = <({int page, int pageSize})>[];
+  final gameCodes = <String?>[];
   final detailRequests = <String>[];
 
   @override
-  Future<SeasonSummaryPage> getMySeasons({int page = 1, int pageSize = kSeasonsPageSize}) async {
+  Future<SeasonSummaryPage> getMySeasons({int page = 1, int pageSize = kSeasonsPageSize, String? gameCode}) async {
     requests.add((page: page, pageSize: pageSize));
+    gameCodes.add(gameCode);
     final items = seasons.skip((page - 1) * pageSize).take(pageSize).toList();
     return SeasonSummaryPage(page: page, pageSize: pageSize, total: seasons.length, items: items);
   }

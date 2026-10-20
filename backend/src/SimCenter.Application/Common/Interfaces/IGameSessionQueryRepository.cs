@@ -11,11 +11,11 @@ namespace SimCenter.Application.Common.Interfaces;
 public interface IGameSessionQueryRepository
 {
     /// <summary>
-    /// 내 세션 페이지(삭제 제외). <paramref name="sessionType"/>이 있으면 그 유형만.
+    /// 내 세션 페이지(삭제 제외). <paramref name="sessionType"/>이 있으면 그 유형만, <paramref name="gameCode"/>가 있으면 그 게임만.
     /// 정렬: <c>ClassifiedAt</c> 내림차순 → Id 내림차순. 총 개수 함께 반환.
     /// </summary>
     Task<(IReadOnlyList<SessionSummaryRow> Items, int Total)> GetMyPageAsync(
-        Guid userId, SessionType? sessionType, int skip, int take, CancellationToken cancellationToken = default);
+        Guid userId, SessionType? sessionType, int skip, int take, string? gameCode = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 내 세션 1건과 <see cref="GameSession.Track"/>·활성 <see cref="GameSession.Results"/>·활성 스틴트. 남의 것·없는 것은 null.

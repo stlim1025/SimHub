@@ -4,7 +4,9 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Serilog;
+using SimCenter.Agent.Core.Analysis;
 using SimCenter.Agent.Core.Connection;
+using SimCenter.Agent.Core.Telemetry;
 using SimCenter.Agent.Infrastructure.Configuration;
 using SimCenter.Agent.Infrastructure.Credentials;
 using SimCenter.Agent.Infrastructure.Pairing;
@@ -37,6 +39,7 @@ public partial class MainWindow : Window
     private readonly IAgentPairingClient _pairingClient;
     private readonly IDeviceCredentialStore _credentials;
     private readonly UploadStatusTracker _uploadStatus;
+    private readonly GameEditionDetector _edition;
     private readonly DispatcherTimer _timer;
     private readonly CancellationTokenSource _lifetime = new();
 
@@ -53,13 +56,15 @@ public partial class MainWindow : Window
         AgentOptions options,
         IAgentPairingClient pairingClient,
         IDeviceCredentialStore credentials,
-        UploadStatusTracker uploadStatus)
+        UploadStatusTracker uploadStatus,
+        GameEditionDetector edition)
     {
         _monitor = monitor;
         _options = options;
         _pairingClient = pairingClient;
         _credentials = credentials;
         _uploadStatus = uploadStatus;
+        _edition = edition;
         InitializeComponent();
 
         PortValue.Text = _options.UdpPort.ToString();
@@ -105,8 +110,10 @@ public partial class MainWindow : Window
             ? secs < 1 ? "방금" : $"{secs:F1}초 전"
             : "—";
 
+        // 패킷 포맷 옆에 지금 세션의 게임(F1 25 / 2026 시즌팩 = F1 26)을 함께 보인다.
         PacketFormatValue.Text = snapshot.DetectedPacketFormat is { } fmt
-            ? fmt == _options.ExpectedPacketFormat ? fmt.ToString() : $"{fmt} (기대 {_options.ExpectedPacketFormat})"
+            ? (fmt == _options.ExpectedPacketFormat ? fmt.ToString() : $"{fmt} (기대 {_options.ExpectedPacketFormat})")
+              + $" · {GameEditions.DisplayName(_edition.GameCode)}"
             : "—";
 
         if (snapshot.ListenerError is { } error)

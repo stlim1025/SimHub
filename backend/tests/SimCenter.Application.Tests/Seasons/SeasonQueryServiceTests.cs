@@ -110,6 +110,14 @@ public class SeasonQueryServiceTests
     }
 
     [Fact]
+    public async Task GetSeasons_PassesGameCodeFilterToRepository()
+    {
+        await _sut.GetMySeasonsAsync(UserId, 1, 20, "F1_26");
+
+        Assert.Equal("F1_26", _repo.LastGameCode);
+    }
+
+    [Fact]
     public async Task GetSeasons_PlayerAbsent_MyFieldsNull()
     {
         AddSeason(1);
@@ -468,12 +476,14 @@ public class SeasonQueryServiceTests
         public Guid? LastUserId { get; private set; }
         public int? LastSkip { get; private set; }
         public int? LastTake { get; private set; }
+        public string? LastGameCode { get; private set; }
 
-        public Task<(IReadOnlyList<Season> Items, int Total)> GetMyPageAsync(Guid userId, int skip, int take, CancellationToken cancellationToken = default)
+        public Task<(IReadOnlyList<Season> Items, int Total)> GetMyPageAsync(Guid userId, int skip, int take, string? gameCode = null, CancellationToken cancellationToken = default)
         {
             LastUserId = userId;
             LastSkip = skip;
             LastTake = take;
+            LastGameCode = gameCode;
 
             var mine = Seasons.Where(s => s.UserId == userId).ToList();
             IReadOnlyList<Season> items = mine

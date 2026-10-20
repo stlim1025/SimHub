@@ -8,7 +8,7 @@ public sealed record TeamInfo(string Name, string Color);
 /// <summary>
 /// 게임별 팀 이름·색 정적 카탈로그(D-33, 12 §7.4). 불변 상수 표라 헌장의 "Global Static 금지"(가변 전역 상태)에 해당하지 않는다.
 /// 시즌·세션 결과와 랩 목록·상세의 팀(15 §4.2)이 함께 쓴다.
-/// 지금은 <see cref="GameCodes.F1_25"/>만 등록한다 — 2025 팀 10개, 2024 차량 10개(ID 185~), 2026 시즌팩 팀 9개(ID 476~) + Audi·Cadillac,
+/// <see cref="GameCodes.F1_25"/>와 <see cref="GameCodes.F1_26"/>(같은 표)를 등록한다 — 2025 팀 10개, 2024 차량 10개(ID 185~), 2026 시즌팩 팀 9개(ID 476~) + Audi·Cadillac,
 /// v1.26 2026 그리드(ID 220~230, docs/15 §11.1 D-52), F1 Generic(41), My Team(104). 없는 ID는 <c>Team {id}</c> + 중립 회색, 팀이 없으면 <c>Unknown Team</c> + 중립 회색.
 /// </summary>
 public static class TeamCatalog
@@ -50,12 +50,6 @@ public static class TeamCatalog
     private static readonly IReadOnlyDictionary<int, TeamInfo> F125Teams = BuildF125Teams();
 
     /// <summary>(게임 코드, 팀 ID) → 표시 이름·색. 팀 ID가 null이면 <c>Unknown Team</c>.</summary>
-    /// <summary>F1 25 2026 시즌팩의 팀 ID인지(476~486 또는 v1.26 그리드 220~230). 2026 시즌 캘린더를 고르는 데 쓴다.</summary>
-    public static bool IsSeason2026Team(string gameCode, int? teamId) =>
-        gameCode == GameCodes.F1_25
-        && teamId is { } id
-        && (id is >= Season2026FirstTeamId and <= CadillacTeamId || id is >= Grid2026FirstTeamId and <= Grid2026CadillacTeamId);
-
     public static TeamInfo Resolve(string gameCode, int? teamId)
     {
         if (teamId is not { } id)
@@ -63,7 +57,8 @@ public static class TeamCatalog
             return UnknownTeam;
         }
 
-        if (gameCode == GameCodes.F1_25 && F125Teams.TryGetValue(id, out var team))
+        // F1 26(2026 시즌팩)은 F1 25와 같은 팀 ID 표를 쓴다.
+        if ((gameCode is GameCodes.F1_25 or GameCodes.F1_26) && F125Teams.TryGetValue(id, out var team))
         {
             return team;
         }

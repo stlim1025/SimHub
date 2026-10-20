@@ -22,21 +22,23 @@ public sealed class MySessionsController(ISessionQueryService sessionService) : 
 
     /// <summary>
     /// 내 세션 목록(분류 시각 내림차순). sessionType = Practice|Qualifying|Race(대소문자 무시, 생략하면 전체).
-    /// pageSize 기본 20, 최대 100.
+    /// pageSize 기본 20, 최대 100. gameCode(선택)가 있으면 그 게임의 세션만.
     /// </summary>
     [HttpGet]
     [ProducesResponseType(typeof(PagedResult<SessionSummaryDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<PagedResult<SessionSummaryDto>>> GetMySessions(
         [FromQuery] string? sessionType,
+        [FromQuery] string? gameCode,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = ISessionQueryService.DefaultPageSize,
         CancellationToken cancellationToken = default)
     {
         var parsedSessionType = ParseSessionType(sessionType);
+        var parsedGameCode = GameCodeQuery.ParseOptional(gameCode);
 
         var result = await sessionService.GetMySessionsAsync(
-            User.GetRequiredUserId(), parsedSessionType, page, pageSize, cancellationToken);
+            User.GetRequiredUserId(), parsedSessionType, page, pageSize, parsedGameCode, cancellationToken);
         return Ok(result);
     }
 

@@ -18,27 +18,23 @@ public sealed class SessionQueryService : ISessionQueryService
     private readonly IGameSessionQueryRepository _sessions;
     private readonly ISeasonQueryRepository _seasons;
     private readonly ISessionDetailQueryRepository _details;
-    private readonly ITrackRepository _tracks;
 
     public SessionQueryService(
-        IGameSessionQueryRepository sessions,
-        ISeasonQueryRepository seasons,
-        ISessionDetailQueryRepository details,
-        ITrackRepository tracks)
+        IGameSessionQueryRepository sessions, ISeasonQueryRepository seasons, ISessionDetailQueryRepository details)
     {
         _sessions = sessions;
         _seasons = seasons;
         _details = details;
-        _tracks = tracks;
     }
 
     public async Task<PagedResult<SessionSummaryDto>> GetMySessionsAsync(
-        Guid userId, SessionType? sessionType, int page, int pageSize, CancellationToken cancellationToken = default)
+        Guid userId, SessionType? sessionType, int page, int pageSize, string? gameCode = null,
+        CancellationToken cancellationToken = default)
     {
         var window = PageWindow.Resolve(page, pageSize, ISessionQueryService.DefaultPageSize, ISessionQueryService.MaxPageSize);
 
         var (rows, total) = await _sessions.GetMyPageAsync(
-            userId, sessionType, window.Skip, window.PageSize, cancellationToken);
+            userId, sessionType, window.Skip, window.PageSize, gameCode, cancellationToken);
 
         var seasonNumbers = rows.Any(r => r.SeasonId.HasValue)
             ? SeasonNumbering.Assign(await _details.GetMySeasonOrderAsync(userId, cancellationToken))
@@ -61,7 +57,7 @@ public sealed class SessionQueryService : ISessionQueryService
             .ThenBy(r => r.CarIndex)
             .ToList();
 
-        var round = await FindRoundAsync(session, results, cancellationToken);
+        var round = await FindRoundAsync(session, cancellationToken);
         var sprintWeekend = session.RaceWeekendId is { } sprintWeekendId
             && await _details.IsMySprintWeekendAsync(userId, sprintWeekendId, cancellationToken);
         var seasonNumber = await FindSeasonNumberAsync(userId, session.SeasonId, cancellationToken);
@@ -89,25 +85,14 @@ public sealed class SessionQueryService : ISessionQueryService
     }
 
     /// <summary>시즌에 속한 세션이면 그 시즌의 주말 순서에서 라운드 번호를 찾는다. 아니면(또는 주말 행이 없으면) null.</summary>
-    /// <remarks>
-    /// 2026 시즌팩 세션(이 세션 결과에 2026 팀이 있음)이고 가져온 시즌이면 라운드를 2026 캘린더 순서로 매긴다(시즌 상세와 같은 규칙).
-    /// </remarks>
-    private async Task<int?> FindRoundAsync(
-        GameSession session, IReadOnlyList<SessionResult> results, CancellationToken cancellationToken)
+    private async Task<int?> FindRoundAsync(GameSession session, CancellationToken cancellationToken)
     {
         if (session.SeasonId is not { } seasonId || session.RaceWeekendId is not { } weekendId)
         {
             return null;
         }
 
-        IReadOnlyList<WeekendRow> weekends = await _seasons.GetWeekendRowsAsync(new[] { seasonId }, cancellationToken);
-        if (weekends.Any(w => w.CalendarRounds)
-            && results.Any(r => TeamCatalog.IsSeason2026Team(session.GameCode, r.TeamId)))
-        {
-            var calendar = SeasonCalendar.CalendarOf(await _tracks.GetAllAsync(cancellationToken), session.GameCode, season2026: true);
-            weekends = SeasonCalendar.WithCalendarOrder(weekends, calendar);
-        }
-
+        var weekends = await _seasons.GetWeekendRowsAsync(new[] { seasonId }, cancellationToken);
         var rounds = RoundNumbering.Assign(weekends);
         return rounds.TryGetValue(weekendId, out var round) ? round : null;
     }

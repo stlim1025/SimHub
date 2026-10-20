@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Serilog;
+using SimCenter.Agent.Core.Analysis;
 using SimCenter.Agent.Core.Connection;
 using SimCenter.Agent.Infrastructure;
 using SimCenter.Agent.Infrastructure.Configuration;
@@ -78,7 +79,8 @@ public partial class App : Application
             options,
             _host.Services.GetRequiredService<IAgentPairingClient>(),
             _host.Services.GetRequiredService<IDeviceCredentialStore>(),
-            _host.Services.GetRequiredService<UploadStatusTracker>());
+            _host.Services.GetRequiredService<UploadStatusTracker>(),
+            _host.Services.GetRequiredService<GameEditionDetector>());
         _window.Icon = CreateWindowIcon();
         _window.Show();
 

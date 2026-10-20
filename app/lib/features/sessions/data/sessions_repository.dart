@@ -13,16 +13,19 @@ class SessionsRepository {
   final Dio _dio;
 
   /// 내 세션 목록(분류 시각 내림차순). [sessionType]은 `Race`·`Qualifying`·`Practice`, null이면 전체.
+  /// [gameCode]가 있으면 그 게임의 세션만.
   Future<SessionSummaryPage> getMySessions({
     String? sessionType,
     int page = 1,
     int pageSize = kSessionsPageSize,
+    String? gameCode,
   }) async {
     try {
       final res = await _dio.get<Map<String, dynamic>>(
         '/me/sessions',
         queryParameters: {
           'sessionType': ?sessionType,
+          'gameCode': ?gameCode,
           'page': page,
           'pageSize': pageSize,
         },

@@ -17,7 +17,7 @@ class AppConfig {
   static String get rankingHubUrl =>
       _hubOverride.isNotEmpty ? _hubOverride : '$apiBaseUrl/hubs/ranking';
 
-  /// 기본 게임 코드(MVP 단일 게임, D-14).
+  /// 기본 게임 코드(D-14). 사용자 설정(선호 게임)이 없을 때 쓴다.
   static const String defaultGameCode = 'F1_25';
 
   /// 화면에 보이는 서비스 이름(탭 제목·스플래시·로그인·사이드바). 도메인(simhub.kro.kr)과 맞춘다.

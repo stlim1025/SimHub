@@ -18,9 +18,9 @@ class _FlakySeasonsRepository extends FakeSeasonsRepository {
   int failuresLeft = 1;
 
   @override
-  Future<SeasonSummaryPage> getMySeasons({int page = 1, int pageSize = _pageSize}) async {
+  Future<SeasonSummaryPage> getMySeasons({int page = 1, int pageSize = _pageSize, String? gameCode}) async {
     if (failuresLeft-- > 0) throw Exception('boom');
-    return super.getMySeasons(page: page, pageSize: pageSize);
+    return super.getMySeasons(page: page, pageSize: pageSize, gameCode: gameCode);
   }
 }
 

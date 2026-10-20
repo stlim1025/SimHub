@@ -63,6 +63,13 @@ public sealed class SessionClassificationIngestor : ISessionClassificationIngest
             return rejection;
         }
 
+        // 2-1. 게임 에디션: 옛 Agent가 F1 25로 보낸 2026 시즌팩 세션(순위표에 2026 팀)은 F1 26으로 저장한다.
+        //      이후 트랙 매핑·시즌·세션 GameCode가 모두 이 코드를 쓴다.
+        envelope = envelope with
+        {
+            GameCode = GameEditionResolver.ForClassification(envelope.GameCode, payload.Results?.Select(r => r.TeamId)),
+        };
+
         var classification = new ClassificationKinds(
             LenientEnum.Parse<SessionType>(payload.SessionType),
             LenientEnum.Parse<SessionKind>(payload.SessionKind),

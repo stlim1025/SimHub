@@ -10,10 +10,10 @@ namespace SimCenter.Application.Common.Interfaces;
 public interface ISeasonQueryRepository
 {
     /// <summary>
-    /// 내 시즌 페이지(삭제 제외). 정렬: <c>LastSessionAt</c> 내림차순 → Id 내림차순. 총 개수 함께 반환.
+    /// 내 시즌 페이지(삭제 제외). <paramref name="gameCode"/>가 있으면 그 게임만. 정렬: <c>LastSessionAt</c> 내림차순 → Id 내림차순. 총 개수 함께 반환.
     /// </summary>
     Task<(IReadOnlyList<Season> Items, int Total)> GetMyPageAsync(
-        Guid userId, int skip, int take, CancellationToken cancellationToken = default);
+        Guid userId, int skip, int take, string? gameCode = null, CancellationToken cancellationToken = default);
 
     /// <summary>내 시즌 1건(삭제 제외). 남의 것·없는 것은 null.</summary>
     Task<Season?> GetMineAsync(Guid userId, Guid seasonId, CancellationToken cancellationToken = default);

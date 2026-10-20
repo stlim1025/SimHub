@@ -180,6 +180,26 @@ public class SessionClassificationIngestorTests
     }
 
     [Fact]
+    public async Task Apply_F1_25EnvelopeWith2026Rivals_StoresSeasonAndSessionAsF1_26()
+    {
+        var track2026 = Guid.Parse("00000000-0000-0000-0000-0000000000c6");
+        _tracks.Items.Add(new Track { Id = track2026, GameCode = "F1_26", GameTrackId = GameTrackId, Name = "Silverstone" });
+        // My Team 커리어: 내 팀은 104(My Team)여도 AI 라이벌이 2026 팀(229 Audi)이면 2026 시즌팩이다.
+        var payload = BasePayload() with
+        {
+            Results = new List<ClassifiedResultDto> { PlayerCar() with { TeamId = 104 }, AiCar() with { TeamId = 229 } },
+        };
+
+        await ApplyStored(Envelope(payload));
+
+        Assert.Equal("F1_26", Assert.Single(_seasons.Seasons).GameCode);
+        Assert.Equal(track2026, Assert.Single(_seasons.Weekends).TrackId);
+        var session = Assert.Single(_sessions.Items);
+        Assert.Equal("F1_26", session.GameCode);
+        Assert.Equal(track2026, session.TrackId);
+    }
+
+    [Fact]
     public async Task Apply_NonSeasonMode_CreatesSessionOnly()
     {
         var outcome = await Apply(Envelope(BasePayload() with { GameMode = "Online" }));

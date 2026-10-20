@@ -21,7 +21,7 @@ public class SessionQueryServiceTests
 
     public SessionQueryServiceTests()
     {
-        _sut = new SessionQueryService(_sessions, _seasons, _details, new NoTracks());
+        _sut = new SessionQueryService(_sessions, _seasons, _details);
     }
 
     // ---- 입력 구성 ----
@@ -106,10 +106,11 @@ public class SessionQueryServiceTests
     {
         _sessions.Page = ([SummaryRow()], 31);
 
-        var page = await _sut.GetMySessionsAsync(UserId, SessionType.Race, page: 2, pageSize: 15);
+        var page = await _sut.GetMySessionsAsync(UserId, SessionType.Race, page: 2, pageSize: 15, gameCode: "F1_26");
 
         Assert.Equal(UserId, _sessions.LastUserId);
         Assert.Equal(SessionType.Race, _sessions.LastSessionType);
+        Assert.Equal("F1_26", _sessions.LastGameCode);
         Assert.Equal(15, _sessions.LastSkip);
         Assert.Equal(15, _sessions.LastTake);
         Assert.Equal((2, 15, 31), (page.Page, page.PageSize, page.Total));
@@ -595,10 +596,12 @@ public class SessionQueryServiceTests
         public SessionType? LastSessionType { get; private set; }
         public int? LastSkip { get; private set; }
         public int? LastTake { get; private set; }
+        public string? LastGameCode { get; private set; }
 
         public Task<(IReadOnlyList<SessionSummaryRow> Items, int Total)> GetMyPageAsync(
-            Guid userId, SessionType? sessionType, int skip, int take, CancellationToken cancellationToken = default)
+            Guid userId, SessionType? sessionType, int skip, int take, string? gameCode = null, CancellationToken cancellationToken = default)
         {
+            LastGameCode = gameCode;
             LastUserId = userId;
             LastSessionType = sessionType;
             LastSkip = skip;
@@ -628,7 +631,7 @@ public class SessionQueryServiceTests
             return Task.FromResult<IReadOnlyList<WeekendRow>>(Weekends.Where(w => seasonIds.Contains(w.SeasonId)).ToList());
         }
 
-        public Task<(IReadOnlyList<Season> Items, int Total)> GetMyPageAsync(Guid userId, int skip, int take, CancellationToken cancellationToken = default)
+        public Task<(IReadOnlyList<Season> Items, int Total)> GetMyPageAsync(Guid userId, int skip, int take, string? gameCode = null, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
         public Task<Season?> GetMineAsync(Guid userId, Guid seasonId, CancellationToken cancellationToken = default)
@@ -636,18 +639,5 @@ public class SessionQueryServiceTests
 
         public Task<IReadOnlyList<SeasonResultRow>> GetResultRowsAsync(IReadOnlyCollection<Guid> seasonIds, bool scoringRowsOnly, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
-    }
-
-    /// <summary>트랙 마스터 없음(2026 시즌팩 가져온 시즌이 아닌 한 읽지 않는다).</summary>
-    private sealed class NoTracks : ITrackRepository
-    {
-        public Task<Track?> GetByGameTrackIdAsync(string gameCode, int gameTrackId, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public Task<Track?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public Task<IReadOnlyList<Track>> GetAllAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult<IReadOnlyList<Track>>([]);
     }
 }
