@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/layout/page_padding.dart';
 import '../../../core/widgets/empty_state_card.dart';
 import '../../../core/widgets/error_retry.dart';
+import '../../../core/widgets/page_loading_bar.dart';
 import '../application/seasons_providers.dart';
 import '../domain/season_display.dart';
 import '../domain/season_models.dart';
@@ -41,10 +42,7 @@ class _SeasonsPageState extends ConsumerState<SeasonsPage> {
   @override
   Widget build(BuildContext context) {
     final seasons = ref.watch(allSeasonsProvider);
-    const loading = Padding(
-      padding: EdgeInsets.all(32),
-      child: Center(child: CircularProgressIndicator()),
-    );
+    const loading = PageLoadingBar();
 
     return ListView(
       padding: pagePadding(context),

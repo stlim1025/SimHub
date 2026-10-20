@@ -7,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/util/lap_time.dart';
 import '../../../core/widgets/error_retry.dart';
+import '../../../core/widgets/page_loading_bar.dart';
 import '../../../core/widgets/track_picker.dart';
 import '../application/ranking_providers.dart';
 import '../domain/ranking_models.dart';
@@ -65,10 +66,7 @@ class _LeaderboardPageState extends ConsumerState<LeaderboardPage> {
         ),
         const SizedBox(height: 20),
         tracks.when(
-          loading: () => const Padding(
-            padding: EdgeInsets.all(32),
-            child: Center(child: CircularProgressIndicator()),
-          ),
+          loading: () => const PageLoadingBar(),
           error: (e, _) => ErrorRetry(
             error: e,
             fallbackMessage: '트랙을 불러오지 못했어요.',
@@ -147,10 +145,7 @@ class _RankingSection extends ConsumerWidget {
     final ranking = ref.watch(rankingControllerProvider(query));
 
     return ranking.when(
-      loading: () => const Padding(
-        padding: EdgeInsets.all(32),
-        child: Center(child: CircularProgressIndicator()),
-      ),
+      loading: () => const PageLoadingBar(),
       error: (e, _) => ErrorRetry(
         error: e,
         fallbackMessage: '랭킹을 불러오지 못했어요.',

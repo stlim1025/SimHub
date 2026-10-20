@@ -56,6 +56,9 @@ const String kSessionFromSeason = 'season';
 String sessionLocation(String sessionId, {bool fromSeason = false}) =>
     fromSeason ? '/sessions/$sessionId?from=$kSessionFromSeason' : '/sessions/$sessionId';
 
+/// 세션 셋업 화면 주소(`/sessions/:id/setup`). 세션 상세 Details 카드의 View Setup이 연다.
+String sessionSetupLocation(String sessionId) => '/sessions/$sessionId/setup';
+
 // -- 라벨 --------------------------------------------------------------------
 
 const Map<String, String> _sessionKindLabels = {

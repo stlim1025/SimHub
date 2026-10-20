@@ -153,6 +153,7 @@ Future<GoRouter> _pumpPage(
   final router = GoRouter(initialLocation: initialLocation ?? '/sessions/$sessionId', routes: [
     GoRoute(path: '/sessions', builder: (_, _) => const Text('sessions-list')),
     GoRoute(path: '/laps/:lapId', builder: (_, state) => Text('lap:${state.pathParameters['lapId']}')),
+    GoRoute(path: '/sessions/:sessionId/setup', builder: (_, state) => Text('setup:${state.pathParameters['sessionId']}')),
     GoRoute(
       path: '/seasons/:seasonId',
       builder: (_, state) => Text('season:${state.pathParameters['seasonId']}:${state.uri.queryParameters['tab']}'),
@@ -257,22 +258,15 @@ void main() {
       expect(_location(router), '/laps/lap-9');
     });
 
-    testWidgets('View Setup → 묶음별 대화상자, 모르는 키는 Other에 그대로', (t) async {
-      await _pumpPage(t, _repo(_fullDetail()));
+    testWidgets('View Setup을 누르면 그 세션의 셋업 화면으로 간다(대화상자 아님)', (t) async {
+      final router = await _pumpPage(t, _repo(_fullDetail()));
 
       await t.tap(find.text('View Setup'));
       await t.pumpAndSettle();
 
-      expect(find.text('Aerodynamics'), findsOneWidget);
-      expect(find.text('Front Wing Aero'), findsOneWidget);
-      expect(find.text('Tyres'), findsOneWidget);
-      expect(find.text('22.5 psi'), findsOneWidget);
-      expect(find.text('Other'), findsOneWidget);
-      expect(find.text('mystery'), findsOneWidget);
-
-      await t.tap(find.text('닫기'));
-      await t.pumpAndSettle();
-      expect(find.text('Aerodynamics'), findsNothing);
+      expect(_location(router), '/sessions/d1/setup');
+      expect(find.byType(Dialog), findsNothing);
+      expect(find.text('setup:d1'), findsOneWidget);
     });
 
     testWidgets('예선이면 같은 주말 Q1·Q2·Q3 내 순위', (t) async {

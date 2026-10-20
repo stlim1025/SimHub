@@ -7,6 +7,7 @@ import '../../../core/layout/page_padding.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/error_retry.dart';
+import '../../../core/widgets/page_loading_bar.dart';
 import '../../../core/widgets/not_found_state.dart';
 import '../../../core/widgets/track_flag.dart';
 import '../../seasons/domain/season_display.dart';
@@ -64,10 +65,7 @@ class SessionDetailPage extends ConsumerWidget {
         ),
         const SizedBox(height: 16),
         detail.when(
-          loading: () => const Padding(
-            padding: EdgeInsets.all(32),
-            child: Center(child: CircularProgressIndicator()),
-          ),
+          loading: () => const PageLoadingBar(),
           error: (e, _) => _isNotFound(e)
               ? const NotFoundState(
                   message: _notFoundMessage,

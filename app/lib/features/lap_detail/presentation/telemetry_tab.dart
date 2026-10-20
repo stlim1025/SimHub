@@ -7,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/util/lap_time.dart';
 import '../../../core/widgets/error_retry.dart';
+import '../../../core/widgets/page_loading_bar.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../auth/domain/user_preferences.dart';
 import '../../laps/domain/lap_models.dart';
@@ -58,10 +59,7 @@ class TelemetryTab extends ConsumerWidget {
 
     // 비교 랩 트레이스가 아직 오는 중이면 기다린다. 실패하면 이 랩만 그린다.
     if (trace.isLoading || (reference?.isLoading ?? false)) {
-      return const Padding(
-        padding: EdgeInsets.all(32),
-        child: Center(child: CircularProgressIndicator()),
-      );
+      return const PageLoadingBar();
     }
     return trace.when(
       loading: () => const SizedBox.shrink(),

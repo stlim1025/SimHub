@@ -17,6 +17,7 @@ import '../../features/ranking/presentation/leaderboard_page.dart';
 import '../../features/seasons/presentation/season_detail_page.dart';
 import '../../features/seasons/presentation/seasons_page.dart';
 import '../../features/sessions/presentation/session_detail_page.dart';
+import '../../features/sessions/presentation/session_setup_page.dart';
 import '../../features/sessions/presentation/sessions_page.dart';
 import '../shell/app_shell.dart';
 import 'auth_redirect.dart';
@@ -103,7 +104,12 @@ final routerProvider = Provider<GoRouter>((ref) {
               from: state.uri.queryParameters['from'],
             ),
           ),
-          _screen('/laps', (_) => const LapsPage()),
+          // 세션 셋업(세션 상세 Details 카드의 View Setup, F1Laps 셋업 페이지 모양). 뒤로 가기는 그 세션 상세로.
+          _screen(
+            '/sessions/:sessionId/setup',
+            (state) => SessionSetupPage(sessionId: state.pathParameters['sessionId']!),
+          ),
+          _screen('/laps',(_) => const LapsPage()),
           _screen(
             '/laps/tracks/:trackId',
             (state) => TrackLapsPage(trackId: state.pathParameters['trackId']!),

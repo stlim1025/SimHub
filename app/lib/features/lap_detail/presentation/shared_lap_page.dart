@@ -10,6 +10,7 @@ import '../../../core/theme/app_palette.dart';
 import '../../../core/util/lap_time.dart';
 import '../../../core/widgets/brand_mark.dart';
 import '../../../core/widgets/error_retry.dart';
+import '../../../core/widgets/page_loading_bar.dart';
 import '../../../core/widgets/not_found_state.dart';
 import '../../../core/widgets/track_flag.dart';
 import '../../auth/application/auth_controller.dart';
@@ -115,41 +116,40 @@ class _SharedLapPageState extends ConsumerState<SharedLapPage> with SingleTicker
           const _TopBar(),
           const Divider(height: 1),
           Expanded(
-            child: ListView(
-              padding: kPagePadding,
-              children: [
-                Align(
-                  alignment: Alignment.topLeft,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: kContentMaxWidth),
-                    child: loaded != null
-                        ? _SharedBody(
-                            shared: loaded,
-                            tab: _tab,
-                            tabController: _tabController,
-                            onTab: _selectTab,
-                          )
-                        : shared.when(
-                            loading: () => const Padding(
-                              padding: EdgeInsets.all(32),
-                              child: Center(child: CircularProgressIndicator()),
+            child: PageLoadingHost(
+              child: ListView(
+                padding: kPagePadding,
+                children: [
+                  Align(
+                    alignment: Alignment.topLeft,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: kContentMaxWidth),
+                      child: loaded != null
+                          ? _SharedBody(
+                              shared: loaded,
+                              tab: _tab,
+                              tabController: _tabController,
+                              onTab: _selectTab,
+                            )
+                          : shared.when(
+                              loading: () => const PageLoadingBar(),
+                              error: (e, _) => _isNotFound(e)
+                                  ? const NotFoundState(
+                                      message: _notFoundMessage,
+                                      backLabel: AppConfig.brandName,
+                                      backPath: _dashboardPath,
+                                    )
+                                  : ErrorRetry(
+                                      error: e,
+                                      fallbackMessage: '랩을 불러오지 못했어요.',
+                                      onRetry: () => ref.invalidate(sharedLapProvider(widget.lapId)),
+                                    ),
+                              data: (_) => const SizedBox.shrink(),
                             ),
-                            error: (e, _) => _isNotFound(e)
-                                ? const NotFoundState(
-                                    message: _notFoundMessage,
-                                    backLabel: AppConfig.brandName,
-                                    backPath: _dashboardPath,
-                                  )
-                                : ErrorRetry(
-                                    error: e,
-                                    fallbackMessage: '랩을 불러오지 못했어요.',
-                                    onRetry: () => ref.invalidate(sharedLapProvider(widget.lapId)),
-                                  ),
-                            data: (_) => const SizedBox.shrink(),
-                          ),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
@@ -283,10 +283,7 @@ class _SharedTelemetry extends ConsumerWidget {
     final trace = ref.watch(sharedLapTraceProvider(lap.lapId));
     final units = ref.watch(authControllerProvider).valueOrNull?.preferences.units ?? UnitSystem.metric;
     return trace.when(
-      loading: () => const Padding(
-        padding: EdgeInsets.all(32),
-        child: Center(child: CircularProgressIndicator()),
-      ),
+      loading: () => const PageLoadingBar(),
       error: (e, _) => ErrorRetry(
         error: e,
         fallbackMessage: '텔레메트리를 불러오지 못했어요.',

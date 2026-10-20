@@ -7,6 +7,7 @@ import '../../../core/layout/page_padding.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/empty_state_card.dart';
 import '../../../core/widgets/error_retry.dart';
+import '../../../core/widgets/page_loading_bar.dart';
 import '../../../core/widgets/pagination_bar.dart';
 import '../application/sessions_providers.dart';
 import '../domain/session_display.dart';
@@ -94,10 +95,7 @@ class _SessionsPageState extends ConsumerState<SessionsPage> {
         ),
         const SizedBox(height: 16),
         sessions.when(
-          loading: () => const Padding(
-            padding: EdgeInsets.all(32),
-            child: Center(child: CircularProgressIndicator()),
-          ),
+          loading: () => const PageLoadingBar(),
           error: (e, _) => ErrorRetry(
             error: e,
             fallbackMessage: '세션 목록을 불러오지 못했어요.',

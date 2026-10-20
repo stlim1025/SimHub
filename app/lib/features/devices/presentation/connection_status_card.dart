@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/time/clock_provider.dart';
 import '../../../core/widgets/error_retry.dart';
+import '../../../core/widgets/page_loading_bar.dart';
 import '../application/devices_providers.dart';
 import '../domain/connection_status.dart';
 import '../domain/device_models.dart';
@@ -30,9 +31,7 @@ class ConnectionStatusCard extends ConsumerWidget {
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: devices.when(
-          loading: () => const Center(
-            child: Padding(padding: EdgeInsets.all(8), child: CircularProgressIndicator()),
-          ),
+          loading: () => const PageLoadingBar(),
           error: (e, _) => ErrorRetry(
             error: e,
             fallbackMessage: '연결 상태를 불러오지 못했어요.',

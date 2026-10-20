@@ -28,6 +28,7 @@ import 'package:simcenter_app/features/seasons/presentation/season_detail_page.d
 import 'package:simcenter_app/features/seasons/presentation/seasons_page.dart';
 import 'package:simcenter_app/features/sessions/data/sessions_repository.dart';
 import 'package:simcenter_app/features/sessions/presentation/session_detail_page.dart';
+import 'package:simcenter_app/features/sessions/presentation/session_setup_page.dart';
 import 'package:simcenter_app/features/sessions/presentation/sessions_page.dart';
 
 import 'support/fakes.dart';
@@ -179,6 +180,22 @@ void main() {
     expect(repo.detailRequests, ['abc']);
     expect(find.text('Monza'), findsOneWidget);
     expect(find.text('NORRIS'), findsOneWidget);
+    expect(find.text('Dashboard'), findsOneWidget); // 사이드바가 그대로 있다.
+  });
+
+  testWidgets('/sessions/:sessionId/setup은 셸 안에서 셋업 화면을 연다', (t) async {
+    final repo = FakeSessionsRepository(details: {
+      'abc': detailOf('abc', trackName: 'Monza', weather: 'Clear', setup: const {'frontWing': 10}),
+    });
+    final router = await _pumpApp(t, sessionsRepo: repo);
+
+    router.go('/sessions/abc/setup');
+    await t.pumpAndSettle();
+
+    expect(_location(router), '/sessions/abc/setup');
+    expect(t.widget<SessionSetupPage>(find.byType(SessionSetupPage)).sessionId, 'abc');
+    expect(find.text('Monza Setup (Clear)'), findsOneWidget);
+    expect(find.text('Front Wing Aero'), findsOneWidget);
     expect(find.text('Dashboard'), findsOneWidget); // 사이드바가 그대로 있다.
   });
 

@@ -12,6 +12,7 @@ import '../layout/page_padding.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_palette.dart';
 import '../widgets/brand_mark.dart';
+import '../widgets/page_loading_bar.dart';
 import 'nav_items.dart';
 
 /// 이 너비(논리 px) 이상이면 고정 사이드바, 미만이면 상단 바 + 서랍 메뉴.
@@ -64,10 +65,13 @@ class AppShell extends ConsumerWidget {
     final content = Expanded(
       key: _contentKey,
       // 본문은 전체 폭(스크롤 영역이 화면 끝까지), 내용 정렬·최대 폭은 각 화면의 pagePadding이 맡는다.
-      child: LayoutBuilder(
-        builder: (context, constraints) => ContentAreaWidth(
-          width: constraints.maxWidth,
-          child: child,
+      // 화면이 데이터를 불러오는 동안에는 본문 맨 위 전체 폭에 얇은 로딩 막대가 지나간다(F1Laps).
+      child: PageLoadingHost(
+        child: LayoutBuilder(
+          builder: (context, constraints) => ContentAreaWidth(
+            width: constraints.maxWidth,
+            child: child,
+          ),
         ),
       ),
     );

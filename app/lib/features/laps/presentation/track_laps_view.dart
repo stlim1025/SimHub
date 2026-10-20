@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/layout/page_padding.dart';
 import '../../../core/widgets/button_group.dart';
 import '../../../core/widgets/error_retry.dart';
+import '../../../core/widgets/page_loading_bar.dart';
 import '../../../core/widgets/pagination_bar.dart';
 import '../application/laps_providers.dart';
 import '../domain/lap_models.dart';
@@ -104,17 +105,14 @@ class _TrackLapsViewState extends ConsumerState<TrackLapsView> {
             ),
           ],
         ),
-        // 정렬·필터·페이지를 바꾸는 동안에는 직전 표를 그대로 두고 얇은 진행 막대만 보인다(표가 스피너로 바뀌어 튀지 않게).
-        SizedBox(height: _progressHeight, child: shown != null && laps.isLoading ? const LinearProgressIndicator() : null),
+        // 정렬·필터·페이지를 바꾸는 동안에는 직전 표를 그대로 두고 얇은 진행 막대만 보인다(표가 비어 튀지 않게, 막대는 본문 맨 위).
+        SizedBox(height: _progressHeight, child: shown != null && laps.isLoading ? const PageLoadingBar() : null),
         const SizedBox(height: _sectionGap - _progressHeight),
         if (shown != null)
           _lapsBody(shown)
         else
           laps.when(
-            loading: () => const Padding(
-              padding: EdgeInsets.all(32),
-              child: Center(child: CircularProgressIndicator()),
-            ),
+            loading: () => const PageLoadingBar(),
             error: (e, _) => ErrorRetry(
               error: e,
               fallbackMessage: '랩 기록을 불러오지 못했어요.',

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/widgets/compact_table.dart';
 import '../../../core/widgets/error_retry.dart';
+import '../../../core/widgets/page_loading_bar.dart';
 import '../../laps/domain/lap_display.dart';
 import '../../laps/domain/lap_models.dart';
 import '../../laps/presentation/empty_laps_card.dart';
@@ -57,10 +58,7 @@ class BestLapsTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final best = ref.watch(bestLapsProvider(detail.trackId));
     return best.when(
-      loading: () => const Padding(
-        padding: EdgeInsets.all(32),
-        child: Center(child: CircularProgressIndicator()),
-      ),
+      loading: () => const PageLoadingBar(),
       error: (e, _) => ErrorRetry(
         error: e,
         fallbackMessage: '최고 기록을 불러오지 못했어요.',

@@ -8,6 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/util/lap_time.dart';
 import '../../../core/widgets/error_retry.dart';
+import '../../../core/widgets/page_loading_bar.dart';
 import '../../../core/widgets/fresh_highlight.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../devices/presentation/connection_status_card.dart';
@@ -49,10 +50,7 @@ class DashboardPage extends ConsumerWidget {
         ),
         const SizedBox(height: 8),
         recent.when(
-          loading: () => const Padding(
-            padding: EdgeInsets.all(32),
-            child: Center(child: CircularProgressIndicator()),
-          ),
+          loading: () => const PageLoadingBar(),
           error: (e, _) => ErrorRetry(
             error: e,
             fallbackMessage: '최근 랩을 불러오지 못했어요.',

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/layout/page_padding.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/widgets/error_retry.dart';
+import '../../../core/widgets/page_loading_bar.dart';
 import '../../../core/widgets/not_found_state.dart';
 import '../application/seasons_providers.dart';
 import '../domain/season_display.dart';
@@ -92,10 +93,7 @@ class _SeasonDetailPageState extends ConsumerState<SeasonDetailPage> with Single
         SeasonHeader(season: season),
         const SizedBox(height: 16),
         detail.when(
-          loading: () => const Padding(
-            padding: EdgeInsets.all(32),
-            child: Center(child: CircularProgressIndicator()),
-          ),
+          loading: () => const PageLoadingBar(),
           error: (e, _) => _isNotFound(e)
               ? const NotFoundState(
                   message: _notFoundMessage,

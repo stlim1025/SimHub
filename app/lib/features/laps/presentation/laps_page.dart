@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/layout/page_padding.dart';
 import '../../../core/widgets/error_retry.dart';
+import '../../../core/widgets/page_loading_bar.dart';
 import '../application/laps_providers.dart';
 import 'empty_laps_card.dart';
 import 'laps_track_picker.dart';
@@ -20,7 +21,7 @@ class LapsPage extends ConsumerWidget {
     final tracks = ref.watch(myTracksProvider);
 
     return tracks.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const PageLoadingBar(),
       error: (e, _) => ErrorRetry(
         error: e,
         fallbackMessage: '트랙 목록을 불러오지 못했어요.',

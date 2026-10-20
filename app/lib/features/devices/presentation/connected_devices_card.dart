@@ -8,6 +8,7 @@ import '../../../core/theme/app_palette.dart';
 import '../../../core/time/clock_provider.dart';
 import '../../../core/util/relative_time.dart';
 import '../../../core/widgets/error_retry.dart';
+import '../../../core/widgets/page_loading_bar.dart';
 import '../../../core/widgets/section_card.dart';
 import '../application/devices_providers.dart';
 import '../data/devices_repository.dart';
@@ -65,10 +66,7 @@ class _ConnectedDevicesCardState extends ConsumerState<ConnectedDevicesCard> {
         onPressed: () => ref.invalidate(agentDevicesProvider),
       ),
       child: devices.when(
-        loading: () => const Padding(
-          padding: EdgeInsets.all(16),
-          child: Center(child: CircularProgressIndicator()),
-        ),
+        loading: () => const PageLoadingBar(),
         error: (e, _) => ErrorRetry(
           error: e,
           fallbackMessage: '연결된 PC를 불러오지 못했어요.',

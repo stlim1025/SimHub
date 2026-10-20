@@ -13,7 +13,6 @@ import '../domain/session_detail_display.dart';
 import '../domain/session_display.dart';
 import '../domain/session_models.dart';
 import 'session_widgets.dart';
-import 'setup_dialog.dart';
 
 const String _viewSetupLabel = 'View Setup';
 const double _chevronSize = 18;
@@ -23,7 +22,7 @@ const double _qualifyingBottomGap = 8;
 
 final DateFormat _dateFormat = DateFormat('yyyy-MM-dd HH:mm');
 
-/// Details 카드(docs/15 §11.3): (예선이면) Q1·Q2·Q3 내 순위 + Best Lap Time(→ 랩 상세) · Setup · Difficulty · Conditions ·
+/// Details 카드(docs/15 §11.3): (예선이면) Q1·Q2·Q3 내 순위 + Best Lap Time(→ 랩 상세) · Setup(→ 셋업 화면) · Difficulty · Conditions ·
 /// Team · Session Type · Game Mode · (시즌이면) Round(→ 시즌) · Date.
 class SessionDetailsCard extends StatelessWidget {
   const SessionDetailsCard({super.key, required this.detail});
@@ -50,7 +49,7 @@ class SessionDetailsCard extends StatelessWidget {
             DetailItem('Best Lap Time', value: _BestLapValue(detail: detail)),
             setup == null
                 ? const DetailItem('Setup', text: kNoValueText)
-                : DetailItem('Setup', value: _LinkValue(text: _viewSetupLabel, onTap: () => showSetupDialog(context, setup))),
+                : DetailItem('Setup', value: _LinkValue(text: _viewSetupLabel, onTap: () => context.go(sessionSetupLocation(header.sessionId)))),
             DetailItem('Difficulty', text: header.aiDifficulty > 0 ? '${header.aiDifficulty}' : kNoValueText),
             DetailItem('Conditions', value: _ConditionsValue(weather: header.weather)),
             DetailItem('Team', value: _TeamValue(header: header)),
