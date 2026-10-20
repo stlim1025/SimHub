@@ -149,7 +149,7 @@ void main() {
     test('팀 코드는 백엔드 AvatarTeamCodes와 같은 10개다', () {
       expect(
         [for (final t in kAvatarTeams) t.code],
-        ['MER', 'FER', 'RBR', 'MCL', 'AST', 'ALP', 'WIL', 'RB', 'AUD', 'HAA'],
+        ['MER', 'FER', 'RBR', 'MCL', 'AST', 'ALP', 'WIL', 'RB', 'AUD', 'CAD', 'HAA'],
       );
       expect(avatarTeamOf('MCL')!.name, 'McLaren');
       expect(avatarTeamOf('XYZ'), isNull);

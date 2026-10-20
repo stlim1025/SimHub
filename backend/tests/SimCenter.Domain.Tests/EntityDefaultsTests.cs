@@ -35,7 +35,7 @@ public class EntityDefaultsTests
     public void AvatarTeamCodes_AreTenUniqueShortCodes()
     {
         Assert.Equal(
-            new[] { "MER", "FER", "RBR", "MCL", "AST", "ALP", "WIL", "RB", "AUD", "HAA" },
+            new[] { "MER", "FER", "RBR", "MCL", "AST", "ALP", "WIL", "RB", "AUD", "CAD", "HAA" },
             AvatarTeamCodes.All);
         Assert.All(AvatarTeamCodes.All, code => Assert.InRange(code.Length, 2, AvatarTeamCodes.MaxLength));
         Assert.True(AvatarTeamCodes.IsKnown("MCL"));

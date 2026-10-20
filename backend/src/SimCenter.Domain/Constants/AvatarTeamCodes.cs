@@ -16,6 +16,7 @@ public static class AvatarTeamCodes
     public const string Williams = "WIL";
     public const string RacingBulls = "RB";
     public const string Audi = "AUD";
+    public const string Cadillac = "CAD";
     public const string Haas = "HAA";
 
     /// <summary>저장 열 길이(가장 긴 코드보다 여유 있게).</summary>
@@ -24,7 +25,7 @@ public static class AvatarTeamCodes
     /// <summary>고를 수 있는 코드 전체(화면 표시 순서).</summary>
     public static readonly IReadOnlyList<string> All =
     [
-        Mercedes, Ferrari, RedBull, McLaren, AstonMartin, Alpine, Williams, RacingBulls, Audi, Haas,
+        Mercedes, Ferrari, RedBull, McLaren, AstonMartin, Alpine, Williams, RacingBulls, Audi, Cadillac, Haas,
     ];
 
     /// <summary>등록된 코드인지(대소문자 구분 — 호출자가 먼저 대문자로 정규화한다).</summary>

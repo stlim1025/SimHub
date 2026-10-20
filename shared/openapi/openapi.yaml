@@ -943,7 +943,7 @@ components:
         avatarTeam:
           type: string
           nullable: true
-          enum: [MER, FER, RBR, MCL, AST, ALP, WIL, RB, AUD, HAA, null]
+          enum: [MER, FER, RBR, MCL, AST, ALP, WIL, RB, AUD, CAD, HAA, null]
           description: 프로필 사진 팀 코드(`AvatarTeamCode` + null). null이면 앱이 이름 첫 글자를 보인다.
           example: "MCL"
         preferredGame:
@@ -988,7 +988,7 @@ components:
         avatarTeam:
           type: string
           nullable: true
-          enum: [MER, FER, RBR, MCL, AST, ALP, WIL, RB, AUD, HAA, null]
+          enum: [MER, FER, RBR, MCL, AST, ALP, WIL, RB, AUD, CAD, HAA, null]
           description: 프로필 사진 팀 코드(`AvatarTeamCode` + null = 사진 없음).
           example: "MCL"
         preferredGame:
@@ -1027,7 +1027,7 @@ components:
     AvatarTeamCode:
       description: 프로필 사진 팀 코드(팀 색 원 + 코드로 그린다 — 실제 로고는 쓰지 않는다, docs/14 §4). 백엔드 `AvatarTeamCodes`·앱 `kAvatarTeams`와 같은 목록.
       type: string
-      enum: [MER, FER, RBR, MCL, AST, ALP, WIL, RB, AUD, HAA]
+      enum: [MER, FER, RBR, MCL, AST, ALP, WIL, RB, AUD, CAD, HAA]
       example: "MCL"
 
     ControllerTypeName:

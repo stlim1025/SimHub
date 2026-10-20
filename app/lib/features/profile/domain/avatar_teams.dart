@@ -31,6 +31,7 @@ const List<AvatarTeam> kAvatarTeams = [
   AvatarTeam(code: 'WIL', name: 'Williams', color: AppColors.teamWilliams, lightColor: true),
   AvatarTeam(code: 'RB', name: 'Racing Bulls', color: AppColors.teamRacingBulls),
   AvatarTeam(code: 'AUD', name: 'Audi', color: AppColors.teamAudi),
+  AvatarTeam(code: 'CAD', name: 'Cadillac', color: AppColors.teamCadillac),
   AvatarTeam(code: 'HAA', name: 'Haas', color: AppColors.teamHaas, lightColor: true),
 ];
 
