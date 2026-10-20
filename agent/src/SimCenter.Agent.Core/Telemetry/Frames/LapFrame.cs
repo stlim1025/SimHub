@@ -15,4 +15,5 @@ public sealed record LapFrame(
     bool IsCurrentLapInvalid,
     bool IsOutOrInLap,
     float LapDistanceM = 0f,    // 이번 랩에서 달린 거리(출발선 전이면 음수)
-    int CurrentLapTimeMs = 0) : ITelemetryFrame;   // 이번 랩 경과 시간
+    int CurrentLapTimeMs = 0,   // 이번 랩 경과 시간
+    bool IsFinished = false) : ITelemetryFrame;   // 체커기를 받아 결과 상태가 Finished(레이스 마지막 랩 끝)

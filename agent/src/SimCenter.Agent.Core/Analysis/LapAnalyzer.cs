@@ -46,6 +46,8 @@ public sealed class LapAnalyzer : ITelemetryAnalyzer
     private int _completedSector1Ms;
     private int _completedSector2Ms;
     private int _currentLapTimeMs;      // 지금 랩의 최신 경과 시간 — 이벤트 시각(D-49)
+    private int _lapStartLastLapTimeMs; // 지금 랩이 시작될 때의 "직전 랩 시간"(마지막 랩 시간이 새로 찍혔는지 가린다)
+    private bool _finalLapEmitted;      // 체커기로 지금 랩을 이미 확정했다(같은 랩을 두 번 내지 않는다)
 
     /// <summary>프레임 1개를 처리하고 그로 인해 발생한 도메인 이벤트(0..N)를 순서대로 반환한다.</summary>
     public IReadOnlyList<TelemetryEvent> Process(ITelemetryFrame frame)
@@ -134,6 +136,12 @@ public sealed class LapAnalyzer : ITelemetryAnalyzer
             return OnLapTransition(lf, _sessionRef);
         }
 
+        if (IsFinalLapCompleted(lf))
+        {
+            _finalLapEmitted = true;
+            return new[] { BuildLapFinished(completedLapNumber: _lastLapNumber, totalMs: lf.LastLapTimeMs) };
+        }
+
         AccumulateLapFlags(lf);
         UpdateTracePosition(lf);
 
@@ -166,7 +174,7 @@ public sealed class LapAnalyzer : ITelemetryAnalyzer
     {
         var events = new List<TelemetryEvent>(2);
         var observedLapStart = _lastLapNumber >= 1 || lf.CurrentLapTimeMs <= FirstLapStartWindowMs;
-        if (_lastLapNumber >= 1)
+        if (_lastLapNumber >= 1 && !_finalLapEmitted)
         {
             events.Add(BuildLapFinished(completedLapNumber: _lastLapNumber, totalMs: lf.LastLapTimeMs));
         }
@@ -175,6 +183,7 @@ public sealed class LapAnalyzer : ITelemetryAnalyzer
 
         _lastLapNumber = lf.CurrentLapNumber;
         _lastSector = lf.CurrentSector;
+        _lapStartLastLapTimeMs = lf.LastLapTimeMs;
         ResetLapAccumulators();
         _carState.StartLap(captureStartValues: observedLapStart);
         _details.StartLap();
@@ -185,6 +194,18 @@ public sealed class LapAnalyzer : ITelemetryAnalyzer
         _currentLapTimeMs = lf.CurrentLapTimeMs;
         return events;
     }
+
+    /// <summary>
+    /// 레이스 마지막 랩 끝: 체커기를 받으면 랩 번호가 더 오르지 않아 랩 전환으로는 잡히지 않는다. 결과 상태가 Finished가 되고
+    /// 직전 랩 시간이 이번 랩 시작 때 값과 달라졌으면(새로 찍혔으면) 지금 랩이 끝난 것이다. 한 랩에 한 번만.
+    /// </summary>
+    private bool IsFinalLapCompleted(LapFrame lf) =>
+        lf.IsFinished
+        && !_finalLapEmitted
+        && _lastLapNumber >= 1
+        && lf.CurrentLapNumber == _lastLapNumber
+        && lf.LastLapTimeMs > 0
+        && lf.LastLapTimeMs != _lapStartLastLapTimeMs;
 
     private IReadOnlyList<TelemetryEvent> OnEvent(EventMarker em)
     {
@@ -273,6 +294,7 @@ public sealed class LapAnalyzer : ITelemetryAnalyzer
 
     private void ResetLapAccumulators()
     {
+        _finalLapEmitted = false;
         _lapInvalid = false;
         _outOrInLapAccum = false;
         _completedSector1Ms = 0;

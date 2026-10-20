@@ -94,6 +94,13 @@ public class F1PacketMapperTests
     }
 
     [Fact]
+    public void MapLap_ResultFinished_MarksFinished()
+    {
+        Assert.True(_sut.MapLap(new LapData { ResultStatus = F1Enums.ResultStatus.Finished }, Header()).IsFinished);
+        Assert.False(_sut.MapLap(new LapData { ResultStatus = F1Enums.ResultStatus.Active }, Header()).IsFinished);
+    }
+
+    [Fact]
     public void MapLap_NormalFlyingLap_NotOutOrInLap()
     {
         var lap = new LapData { DriverStatus = F1Enums.DriverStatus.FlyingLap, PitStatus = F1Enums.PitStatus.None };

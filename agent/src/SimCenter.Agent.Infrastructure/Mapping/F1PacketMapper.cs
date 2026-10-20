@@ -299,7 +299,8 @@ public sealed partial class F1PacketMapper
         IsOutOrInLap: lap.DriverStatus is F1Enums.DriverStatus.InLap or F1Enums.DriverStatus.OutLap
                       || lap.PitStatus != F1Enums.PitStatus.None,
         LapDistanceM: lap.LapDistance,
-        CurrentLapTimeMs: ClampToInt(lap.CurrentLapTimeInMS));
+        CurrentLapTimeMs: ClampToInt(lap.CurrentLapTimeInMS),
+        IsFinished: lap.ResultStatus == F1Enums.ResultStatus.Finished);
 
     /// <summary>플레이어 차 Car Telemetry(트레이스 원천, D-45). 페달·스티어는 게임 값(0~1, −1~1) 그대로.</summary>
     public CarTelemetryFrame MapCarTelemetry(CarTelemetryData car, PacketHeader header) => new(

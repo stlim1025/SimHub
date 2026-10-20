@@ -426,4 +426,76 @@ public class LapAnalyzerTests
         var events = _sut.Process(Lap(2, 0, last: 83452));
         return Assert.IsType<LapFinished>(events[0]);
     }
+
+    // ---- 레이스 마지막 랩: 체커기를 받으면 랩 번호가 오르지 않으므로 결과 상태(Finished)로 랩 끝을 잡는다 ----
+
+    private static LapFrame FinishLap(int lapNo, int last, bool finished = true)
+        => new(S1, lapNo, 0, 0, 0, last, false, false, IsFinished: finished);
+
+    /// <summary>레이스 세션에서 1랩을 마치고 2랩(마지막 랩) S1·S2를 지난 상태를 만든다.</summary>
+    private void DriveToFinalLap()
+    {
+        _sut.Process(new SessionFrame(S1, 7, SessionType.Race, 2025));
+        _sut.Process(Lap(1, 0));
+        _sut.Process(Lap(2, 0, last: 83452));
+        _sut.Process(Lap(2, 1, s1: 27010, last: 83452));
+        _sut.Process(Lap(2, 2, s1: 27010, s2: 30110, last: 83452));
+    }
+
+    [Fact]
+    public void FinalLap_ResultFinished_EmitsLapFinishedForLastLap()
+    {
+        DriveToFinalLap();
+
+        var events = _sut.Process(FinishLap(2, last: 84000));
+
+        var finished = Assert.IsType<LapFinished>(Assert.Single(events));
+        Assert.Equal(2, finished.LapNumber);
+        Assert.Equal(84000, finished.LapTimeMs);
+        Assert.Equal(SessionType.Race, finished.SessionType);
+        Assert.Equal(26880, finished.Sectors[2].SectorTimeMs); // 84000-27010-30110
+    }
+
+    [Fact]
+    public void FinalLap_FinishedRepeated_EmitsOnlyOnce()
+    {
+        DriveToFinalLap();
+        _sut.Process(FinishLap(2, last: 84000));
+
+        Assert.Empty(_sut.Process(FinishLap(2, last: 84000)));
+    }
+
+    [Fact]
+    public void FinalLap_FinishedBeforeLastLapTimeUpdates_WaitsForNewTime()
+    {
+        DriveToFinalLap();
+
+        // 결과 상태가 먼저 바뀌고 직전 랩 시간은 아직 이전 랩 값이면 기다린다.
+        Assert.Empty(_sut.Process(FinishLap(2, last: 83452)));
+
+        var finished = Assert.IsType<LapFinished>(Assert.Single(_sut.Process(FinishLap(2, last: 84000))));
+        Assert.Equal(84000, finished.LapTimeMs);
+    }
+
+    [Fact]
+    public void FinalLap_LapNumberRollsOverAfterFinish_DoesNotEmitTwice()
+    {
+        DriveToFinalLap();
+        _sut.Process(FinishLap(2, last: 84000));
+
+        var events = _sut.Process(FinishLap(3, last: 84000));
+
+        Assert.DoesNotContain(events, e => e is LapFinished);
+    }
+
+    [Fact]
+    public void FinalLap_FirstSeenLapIsFinished_WithoutObservingLap_EmitsNothing()
+    {
+        _sut.Process(new SessionFrame(S1, 7, SessionType.Race, 2025));
+
+        // Agent가 체커기 뒤에 켜졌다 — 지켜본 랩이 없으니 낼 것도 없다(LapStarted만).
+        var events = _sut.Process(FinishLap(5, last: 84000));
+
+        Assert.DoesNotContain(events, e => e is LapFinished);
+    }
 }
