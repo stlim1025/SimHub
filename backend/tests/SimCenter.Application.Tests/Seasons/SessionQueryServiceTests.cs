@@ -21,7 +21,7 @@ public class SessionQueryServiceTests
 
     public SessionQueryServiceTests()
     {
-        _sut = new SessionQueryService(_sessions, _seasons, _details);
+        _sut = new SessionQueryService(_sessions, _seasons, _details, new NoTracks());
     }
 
     // ---- 입력 구성 ----
@@ -636,5 +636,18 @@ public class SessionQueryServiceTests
 
         public Task<IReadOnlyList<SeasonResultRow>> GetResultRowsAsync(IReadOnlyCollection<Guid> seasonIds, bool scoringRowsOnly, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
+    }
+
+    /// <summary>트랙 마스터 없음(2026 시즌팩 가져온 시즌이 아닌 한 읽지 않는다).</summary>
+    private sealed class NoTracks : ITrackRepository
+    {
+        public Task<Track?> GetByGameTrackIdAsync(string gameCode, int gameTrackId, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<Track?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<Track>> GetAllAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<Track>>([]);
     }
 }

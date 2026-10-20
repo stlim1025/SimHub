@@ -50,6 +50,12 @@ public static class TeamCatalog
     private static readonly IReadOnlyDictionary<int, TeamInfo> F125Teams = BuildF125Teams();
 
     /// <summary>(게임 코드, 팀 ID) → 표시 이름·색. 팀 ID가 null이면 <c>Unknown Team</c>.</summary>
+    /// <summary>F1 25 2026 시즌팩의 팀 ID인지(476~486 또는 v1.26 그리드 220~230). 2026 시즌 캘린더를 고르는 데 쓴다.</summary>
+    public static bool IsSeason2026Team(string gameCode, int? teamId) =>
+        gameCode == GameCodes.F1_25
+        && teamId is { } id
+        && (id is >= Season2026FirstTeamId and <= CadillacTeamId || id is >= Grid2026FirstTeamId and <= Grid2026CadillacTeamId);
+
     public static TeamInfo Resolve(string gameCode, int? teamId)
     {
         if (teamId is not { } id)

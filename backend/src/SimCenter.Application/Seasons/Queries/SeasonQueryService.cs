@@ -67,11 +67,14 @@ public sealed class SeasonQueryService : ISeasonQueryService
             ?? throw new NotFoundException("시즌을 찾을 수 없습니다.");
 
         var seasonIds = new[] { season.Id };
-        var weekends = await _seasons.GetWeekendRowsAsync(seasonIds, cancellationToken);
+        var storedWeekends = await _seasons.GetWeekendRowsAsync(seasonIds, cancellationToken);
         var rows = await _seasons.GetResultRowsAsync(seasonIds, scoringRowsOnly: false, cancellationToken);
 
         var numbers = await SeasonNumbersAsync(userId, cancellationToken);
-        var calendar = SeasonCalendar.CalendarOf(await _tracks.GetAllAsync(cancellationToken), season.GameCode);
+        // 2026 시즌팩 시즌이면 2026 캘린더(Canada가 Miami 다음, Madrid 추가)로 표 순서와 가져온 시즌의 라운드 번호를 맞춘다.
+        var season2026 = SeasonCalendar.IsSeason2026(season.GameCode, rows);
+        var calendar = SeasonCalendar.CalendarOf(await _tracks.GetAllAsync(cancellationToken), season.GameCode, season2026);
+        var weekends = season2026 ? SeasonCalendar.WithCalendarOrder(storedWeekends, calendar) : storedWeekends;
 
         var (selection, standings) = Calculate(season, rows);
         var rounds = RoundNumbering.Assign(weekends);

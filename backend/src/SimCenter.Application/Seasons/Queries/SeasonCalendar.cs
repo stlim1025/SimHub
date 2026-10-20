@@ -17,10 +17,65 @@ public sealed record CalendarTrack(Guid TrackId, string Name, string? CountryCod
 /// </summary>
 public static class SeasonCalendar
 {
-    /// <summary>게임의 캘린더 트랙(DisplayOrder 1..캘린더 크기) 순서대로. 캘린더를 모르는 게임은 빈 목록.</summary>
-    public static IReadOnlyList<CalendarTrack> CalendarOf(IEnumerable<Track> tracks, string gameCode)
+    /// <summary>
+    /// F1 25 2026 시즌팩 시즌의 캘린더(게임 m_trackId, 라운드 순서). 실제 2026 일정 발표(2025-06) 그대로 24라운드:
+    /// Imola가 빠지고 Madrid(Madring)가 Monza 다음에 들어가며, Canada가 Miami 바로 뒤로 온다.
+    /// </summary>
+    private static readonly int[] Season2026GameTrackIds =
+    [
+        0,  // Melbourne
+        2,  // Shanghai
+        13, // Suzuka
+        3,  // Sakhir (Bahrain)
+        29, // Jeddah
+        30, // Miami
+        6,  // Montreal
+        5,  // Monaco
+        4,  // Catalunya
+        17, // Austria
+        7,  // Silverstone
+        10, // Spa
+        9,  // Hungaroring
+        26, // Zandvoort
+        11, // Monza
+        42, // Madrid (Madring)
+        20, // Baku
+        12, // Singapore
+        15, // Texas (COTA)
+        19, // Mexico
+        16, // Brazil (Interlagos)
+        31, // Las Vegas
+        32, // Losail (Qatar)
+        14, // Abu Dhabi
+    ];
+
+    /// <summary>시즌 결과에 2026 시즌팩 팀이 있으면 2026 시즌이다(게임이 시즌 연도를 보내지 않아 팀 ID로 가린다).</summary>
+    public static bool IsSeason2026(string gameCode, IEnumerable<SeasonResultRow> rows)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        return rows.Any(r => TeamCatalog.IsSeason2026Team(gameCode, r.TeamId));
+    }
+
+    /// <summary>
+    /// 게임의 캘린더 트랙을 라운드 순서대로. 기본은 F1 25 캘린더(DisplayOrder 1..캘린더 크기),
+    /// <paramref name="season2026"/>이면 2026 시즌팩 캘린더다. 캘린더를 모르는 게임은 빈 목록.
+    /// </summary>
+    public static IReadOnlyList<CalendarTrack> CalendarOf(IEnumerable<Track> tracks, string gameCode, bool season2026 = false)
     {
         ArgumentNullException.ThrowIfNull(tracks);
+
+        if (season2026 && gameCode == GameCodes.F1_25)
+        {
+            var byGameId = tracks
+                .Where(t => t.GameCode == gameCode)
+                .GroupBy(t => t.GameTrackId)
+                .ToDictionary(g => g.Key, g => g.OrderBy(t => t.Id).First());
+            return Season2026GameTrackIds
+                .Select(id => byGameId.GetValueOrDefault(id))
+                .OfType<Track>()
+                .Select((t, index) => new CalendarTrack(t.Id, t.Name, t.CountryCode, index + 1))
+                .ToList();
+        }
 
         var size = CalendarSize(gameCode);
         return tracks
@@ -30,6 +85,19 @@ public static class SeasonCalendar
             .OrderBy(t => t.DisplayOrder)
             .Select(t => new CalendarTrack(t.Id, t.Name, t.CountryCode, t.DisplayOrder))
             .ToList();
+    }
+
+    /// <summary>
+    /// 주말의 캘린더 순서(<see cref="WeekendRow.DisplayOrder"/>, 가져온 시즌의 라운드 번호에 쓰인다)를 주어진 캘린더 기준으로 바꾼다.
+    /// 캘린더 밖 트랙은 0(순서 없음)이다.
+    /// </summary>
+    public static IReadOnlyList<WeekendRow> WithCalendarOrder(IReadOnlyList<WeekendRow> weekends, IReadOnlyList<CalendarTrack> calendar)
+    {
+        ArgumentNullException.ThrowIfNull(weekends);
+        ArgumentNullException.ThrowIfNull(calendar);
+
+        var orderByTrack = calendar.ToDictionary(c => c.TrackId, c => c.DisplayOrder);
+        return weekends.Select(w => w with { DisplayOrder = orderByTrack.GetValueOrDefault(w.TrackId) }).ToList();
     }
 
     public static IReadOnlyList<SeasonCalendarRoundDto> Build(
