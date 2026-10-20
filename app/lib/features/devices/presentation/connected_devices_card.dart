@@ -15,7 +15,7 @@ import '../domain/device_models.dart';
 
 const String _revokeLabel = '연결 해제';
 const String _revokeFailedText = '연결을 해제하지 못했어요. 잠시 후 다시 시도해 주세요.';
-const String _emptyGuide = '위에서 발급한 연결 코드를 Agent에 입력하면 이 목록에 나타나요.';
+const String _emptyGuide = '위에서 발급한 연결 코드를 Agent에 입력하면 이 목록에 나타난다.';
 
 /// 연결된 PC 목록과 [연결 해제](docs/11 §7.3 ④).
 class ConnectedDevicesCard extends ConsumerStatefulWidget {
@@ -151,7 +151,7 @@ class _RevokeDialog extends StatelessWidget {
     return AlertDialog(
       title: const Text('이 PC의 연결을 해제할까요?'),
       content: Text(
-        '"$deviceName"의 Agent는 더 이상 기록을 보낼 수 없어요. 다시 연결하려면 새 연결 코드가 필요해요.',
+        '"$deviceName"의 Agent는 더 이상 기록을 보낼 수 없다. 다시 연결하려면 새 연결 코드가 필요하다.',
       ),
       actions: [
         TextButton(

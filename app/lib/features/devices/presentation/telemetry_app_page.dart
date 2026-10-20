@@ -31,10 +31,10 @@ final DateFormat _buildDateFormat = DateFormat('yyyy.MM.dd');
 
 /// 설치 순서(압축 풀기 → 실행 → UDP 설정 → 연결 코드). 3·4단계는 아래 카드를 가리킨다.
 const List<String> _installSteps = [
-  '내려받은 SimHubAgent.zip의 압축을 모두 풀어요(압축 파일 안에서 바로 실행하지 마세요).',
-  'SimHub Agent.exe를 실행해요. Windows SmartScreen 경고가 뜨면 "추가 정보" → "실행"을 눌러요.',
-  'F1 25에서 아래 UDP 설정을 맞춰요.',
-  '아래에서 연결 코드를 발급해 Agent 창에 입력하고 "연결"을 눌러요.',
+  '내려받은 SimHubAgent.zip의 압축을 모두 푼다(압축 파일 안에서 바로 실행하지 않는다).',
+  'SimHub Agent.exe를 실행한다. Windows SmartScreen 경고가 뜨면 "추가 정보" → "실행"을 누른다.',
+  'F1 25에서 아래 UDP 설정을 맞춘다.',
+  '아래에서 연결 코드를 발급해 Agent 창에 입력하고 "연결"을 누른다.',
 ];
 
 /// F1 25 UDP 텔레메트리 설정(docs/11 §7.3 ③). 포트는 Agent 기본값(20777)과 같다.
@@ -90,7 +90,7 @@ class _DownloadCard extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '게임을 하는 PC에서 실행하는 프로그램이에요. F1 25 텔레메트리를 받아 랩 기록을 이 계정으로 보내요.',
+            '게임을 하는 PC에서 실행하는 프로그램이다. F1 25 텔레메트리를 받아 랩 기록을 이 계정으로 보낸다.',
             style: muted,
           ),
           if (release != null) ...[
@@ -153,7 +153,7 @@ class _UdpSettingsCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'F1 25의 Settings > Telemetry Settings에서 아래처럼 맞춰 주세요.',
+            'F1 25의 Settings > Telemetry Settings에서 아래처럼 맞춘다.',
             style: theme.textTheme.bodySmall?.copyWith(color: context.palette.textMuted),
           ),
           const SizedBox(height: 8),

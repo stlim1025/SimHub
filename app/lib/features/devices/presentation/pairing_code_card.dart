@@ -45,8 +45,8 @@ class PairingCodeCard extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Agent에 코드를 입력하면 이 계정에 PC가 연결돼요. 코드는 10분 동안 한 번만 쓸 수 있고, '
-            '새로 발급하면 이전 코드는 쓸 수 없어요.',
+            'Agent에 코드를 입력하면 이 계정에 PC가 연결된다. 코드는 10분 동안 한 번만 쓸 수 있고, '
+            '새로 발급하면 이전 코드는 쓸 수 없다.',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(color: context.palette.textMuted),
           ),
           const SizedBox(height: 16),
