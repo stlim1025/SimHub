@@ -3,9 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:simcenter_app/core/network/api_exception.dart';
+import 'package:simcenter_app/core/platform/download_launcher.dart';
 import 'package:simcenter_app/core/time/clock_provider.dart';
 import 'package:simcenter_app/features/devices/application/devices_providers.dart';
 import 'package:simcenter_app/features/devices/data/devices_repository.dart';
+import 'package:simcenter_app/features/devices/domain/agent_release.dart';
 import 'package:simcenter_app/features/devices/domain/device_models.dart';
 import 'package:simcenter_app/features/devices/presentation/telemetry_app_page.dart';
 
@@ -39,6 +41,7 @@ Widget _app(_Env env, {List<Override> extra = const []}) => ProviderScope(
         fakeAuth(),
         devicesRepositoryProvider.overrideWithValue(env.repo),
         clockProvider.overrideWithValue(() => env.now),
+        agentReleaseProvider.overrideWith((ref) async => null),
         ...extra,
       ],
       child: const MaterialApp(home: Scaffold(body: TelemetryAppPage())),
@@ -82,6 +85,7 @@ void main() {
       overrides: [
         fakeAuth(),
         agentDevicesProvider.overrideWith((ref) async => const <AgentDevice>[]),
+        agentReleaseProvider.overrideWith((ref) async => null),
       ],
       child: const MaterialApp(home: Scaffold(body: TelemetryAppPage())),
     ));
@@ -89,8 +93,84 @@ void main() {
 
     expect(find.text('연결된 PC가 없습니다'), findsOneWidget);
     expect(find.text('연결 코드 발급'), findsOneWidget);
-    expect(find.text('설치 파일 준비 중'), findsOneWidget);
-    expect(find.textContaining('dotnet run -- pair <코드>'), findsOneWidget);
+    expect(find.text('Windows용 다운로드'), findsOneWidget);
+    expect(find.textContaining('dotnet run'), findsNothing);
+    expect(find.textContaining('SimCenter.Agent.Cli'), findsNothing);
+  });
+
+  group('Agent 다운로드', () {
+    final release = AgentRelease(
+      version: 'e50ef1d-20261020',
+      builtAt: DateTime(2026, 10, 20, 9),
+      sizeBytes: 71366685,
+    );
+
+    Future<List<String>> pumpDownloadCard(WidgetTester t, Future<AgentRelease?> Function() fetch,
+        {bool launcherResult = true}) async {
+      final opened = <String>[];
+      final env = _Env();
+      await t.pumpWidget(_app(env, extra: [
+        agentReleaseProvider.overrideWith((ref) => fetch()),
+        downloadLauncherProvider.overrideWithValue((url) {
+          opened.add(url);
+          return launcherResult;
+        }),
+      ]));
+      await _settle(t);
+      return opened;
+    }
+
+    testWidgets('빌드 정보가 있으면 제목·버전·날짜·크기와 다운로드 버튼·설치 4단계를 보인다', (t) async {
+      setViewSize(t, const Size(1000, 2600));
+      await pumpDownloadCard(t, () async => release);
+
+      expect(find.text('SimHub Agent (Windows)'), findsOneWidget);
+      expect(find.text('버전 e50ef1d-20261020 · 빌드 2026.10.20 · 68.1 MB'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Windows용 다운로드'), findsOneWidget);
+      for (final n in ['1.', '2.', '3.', '4.']) {
+        expect(find.text(n), findsOneWidget);
+      }
+      expect(find.textContaining('추가 정보'), findsOneWidget);
+    });
+
+    testWidgets('빌드 정보 조회가 실패하면 빌드 정보만 숨기고 버튼은 그대로 보인다', (t) async {
+      setViewSize(t, const Size(1000, 2600));
+      await pumpDownloadCard(t, () async => throw ApiException('서버에 연결할 수 없어요.'));
+
+      expect(find.byKey(const ValueKey('agent-release-info')), findsNothing);
+      expect(find.textContaining('버전 '), findsNothing);
+      expect(find.widgetWithText(FilledButton, 'Windows용 다운로드'), findsOneWidget);
+    });
+
+    testWidgets('빌드 정보가 없으면(null) 빌드 정보를 숨긴다', (t) async {
+      setViewSize(t, const Size(1000, 2600));
+      await pumpDownloadCard(t, () async => null);
+
+      expect(find.byKey(const ValueKey('agent-release-info')), findsNothing);
+      expect(find.widgetWithText(FilledButton, 'Windows용 다운로드'), findsOneWidget);
+    });
+
+    testWidgets('다운로드 버튼은 서버의 /downloads/SimHubAgent.zip 주소를 연다', (t) async {
+      setViewSize(t, const Size(1000, 2600));
+      final opened = await pumpDownloadCard(t, () async => release);
+
+      await t.tap(find.text('Windows용 다운로드'));
+      await _settle(t);
+
+      expect(opened, hasLength(1));
+      expect(opened.single, endsWith('/downloads/SimHubAgent.zip'));
+    });
+
+    testWidgets('열 수 없는 플랫폼이면 PC 브라우저에서 받으라고 알린다', (t) async {
+      setViewSize(t, const Size(1000, 2600));
+      await pumpDownloadCard(t, () async => release, launcherResult: false);
+
+      await t.tap(find.text('Windows용 다운로드'));
+      await _settle(t);
+
+      expect(find.textContaining('브라우저에서 이 화면을 열어'), findsOneWidget);
+      await t.pump(const Duration(seconds: 5));
+    });
   });
 
   testWidgets('F1 25 UDP 설정 안내(On · 2025 · 20777 · Agent PC IP)를 보여준다', (t) async {
@@ -345,6 +425,7 @@ void main() {
         overrides: [
           fakeAuth(),
           agentDevicesProvider.overrideWith((ref) async => throw ApiException('서버에 연결할 수 없어요.')),
+          agentReleaseProvider.overrideWith((ref) async => null),
         ],
         child: const MaterialApp(home: Scaffold(body: TelemetryAppPage())),
       ));

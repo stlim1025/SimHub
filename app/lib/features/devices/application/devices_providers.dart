@@ -3,8 +3,15 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../auth/application/auth_controller.dart';
+import '../data/agent_release_repository.dart';
 import '../data/devices_repository.dart';
+import '../domain/agent_release.dart';
 import '../domain/device_models.dart';
+
+/// Agent 최신 빌드 정보(null = 없음·조회 실패, 이때 카드는 빌드 정보만 숨긴다). 화면을 다시 열면 새로 불러온다.
+final agentReleaseProvider = FutureProvider.autoDispose<AgentRelease?>(
+  (ref) => ref.watch(agentReleaseRepositoryProvider).fetchLatest(),
+);
 
 /// 내 Agent 장치 목록. 화면을 다시 열면 새로 불러온다.
 final agentDevicesProvider = FutureProvider.autoDispose<List<AgentDevice>>(

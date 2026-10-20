@@ -110,6 +110,9 @@ app.UseCors();
 // 팀 로고(D-48): CORS 뒤(웹 앱이 XHR로 읽는다), 인증 앞(익명). TeamLogos:Directory가 없으면 아무것도 붙이지 않는다.
 app.UseTeamLogos();
 
+// Agent 내려받기: 팀 로고와 같은 자리(CORS 뒤·인증 앞, 익명). Downloads:Directory가 없으면 아무것도 붙이지 않는다.
+app.UseDownloads();
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter(); // 인증 뒤: 사용자 파티션이 주체를 읽고, 401 요청이 한도를 소모하지 않는다.

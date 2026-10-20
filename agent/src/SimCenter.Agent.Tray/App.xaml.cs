@@ -51,6 +51,9 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        // 바로가기·zip 안 실행 등 시작 폴더가 달라도 exe 옆의 appsettings.json·outbox.db를 쓰도록 작업 폴더를 맞춘다.
+        Environment.CurrentDirectory = AppContext.BaseDirectory;
+
         var builder = Host.CreateApplicationBuilder(e.Args);
 
         builder.Services.AddSerilog((services, config) =>

@@ -1,8 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
+import '../../../core/config/app_config.dart';
 import '../../../core/layout/page_padding.dart';
+import '../../../core/platform/download_launcher.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../core/widgets/app_notice.dart';
 import '../../../core/widgets/section_card.dart';
+import '../application/devices_providers.dart';
+import '../data/agent_release_repository.dart';
+import '../domain/agent_release.dart';
 import 'connected_devices_card.dart';
 import 'connection_status_card.dart';
 import 'pairing_code_card.dart';
@@ -10,6 +18,24 @@ import 'pairing_code_card.dart';
 const double _sectionGap = 16;
 const double _settingLabelWidth = 150;
 const double _settingRowPadding = 10;
+const double _downloadButtonHeight = 44;
+const double _stepNumberWidth = 24;
+const double _stepGap = 8;
+const int _bytesPerMegabyte = 1024 * 1024;
+
+const String _downloadTitle = 'SimHub Agent (Windows)';
+const String _downloadLabel = 'Windows용 다운로드';
+const String _openFailedText = 'Windows PC의 브라우저에서 이 화면을 열어 내려받아 주세요.';
+
+final DateFormat _buildDateFormat = DateFormat('yyyy.MM.dd');
+
+/// 설치 순서(압축 풀기 → 실행 → UDP 설정 → 연결 코드). 3·4단계는 아래 카드를 가리킨다.
+const List<String> _installSteps = [
+  '내려받은 SimHubAgent.zip의 압축을 모두 풀어요(압축 파일 안에서 바로 실행하지 마세요).',
+  'SimHub Agent.exe를 실행해요. Windows SmartScreen 경고가 뜨면 "추가 정보" → "실행"을 눌러요.',
+  'F1 25에서 아래 UDP 설정을 맞춰요.',
+  '아래에서 연결 코드를 발급해 Agent 창에 입력하고 "연결"을 눌러요.',
+];
 
 /// F1 25 UDP 텔레메트리 설정(docs/11 §7.3 ③). 포트는 Agent 기본값(20777)과 같다.
 const List<(String, String)> _udpSettings = [
@@ -47,40 +73,71 @@ class TelemetryAppPage extends StatelessWidget {
   }
 }
 
-/// ① 다운로드. 설치 파일(P11) 전까지는 준비 중 안내와 개발용 실행 방법만 보여준다.
-class _DownloadCard extends StatelessWidget {
+/// ① 다운로드: Windows용 Agent zip 내려받기 + 설치 4단계. 빌드 정보(버전·날짜·크기)는 서버에 있을 때만 보인다.
+class _DownloadCard extends ConsumerWidget {
   const _DownloadCard();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final muted = theme.textTheme.bodySmall?.copyWith(color: context.palette.textMuted);
+    // 빌드 정보는 보조 정보라 로딩·실패를 따로 알리지 않고 없으면 숨긴다.
+    final release = ref.watch(agentReleaseProvider).valueOrNull;
+
     return SectionCard(
-      title: '다운로드',
+      title: _downloadTitle,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('설치 파일 준비 중'),
-          const SizedBox(height: 12),
           Text(
-            '개발용으로는 agent/src/SimCenter.Agent.Cli 폴더에서 아래 명령으로 연결할 수 있어요.',
-            style: theme.textTheme.bodySmall?.copyWith(color: context.palette.textMuted),
+            '게임을 하는 PC에서 실행하는 프로그램이에요. F1 25 텔레메트리를 받아 랩 기록을 이 계정으로 보내요.',
+            style: muted,
           ),
-          const SizedBox(height: 8),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: context.palette.background,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: context.palette.border),
-            ),
-            child: const Padding(
-              padding: EdgeInsets.all(12),
-              child: SelectableText('dotnet run -- pair <코드>'),
+          if (release != null) ...[
+            const SizedBox(height: 8),
+            Text(_releaseSummary(release), key: const ValueKey('agent-release-info'), style: muted),
+          ],
+          const SizedBox(height: 16),
+          SizedBox(
+            height: _downloadButtonHeight,
+            child: FilledButton.icon(
+              onPressed: () => _download(context, ref),
+              icon: const Icon(Icons.download),
+              label: const Text(_downloadLabel),
             ),
           ),
+          const SizedBox(height: 20),
+          for (var i = 0; i < _installSteps.length; i++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: _stepGap),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: _stepNumberWidth,
+                    child: Text('${i + 1}.', style: const TextStyle(fontWeight: FontWeight.w700)),
+                  ),
+                  Expanded(child: Text(_installSteps[i])),
+                ],
+              ),
+            ),
         ],
       ),
     );
   }
+
+  void _download(BuildContext context, WidgetRef ref) {
+    final opened = ref.read(downloadLauncherProvider)(agentDownloadUrlFor(AppConfig.apiBaseUrl));
+    if (!opened) {
+      AppToaster.of(context).show(_openFailedText);
+    }
+  }
+}
+
+/// "버전 e50ef1d-20261020 · 빌드 2026.10.20 · 68.1 MB". 빌드 날짜는 현지 날짜로 보인다.
+String _releaseSummary(AgentRelease release) {
+  final megabytes = (release.sizeBytes / _bytesPerMegabyte).toStringAsFixed(1);
+  return '버전 ${release.version} · 빌드 ${_buildDateFormat.format(release.builtAt.toLocal())} · $megabytes MB';
 }
 
 /// ③ F1 25 UDP 설정 표.

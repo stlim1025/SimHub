@@ -38,6 +38,9 @@ dependencies:
   # 트랙 국기(D-43, docs/15 §2.2). ISO 3166-1 alpha-2 SVG 내장
   country_flags: ^4.1.2
 
+  # 웹 브라우저 API(Agent 내려받기 링크). 이미 다른 패키지가 쓰는 공식 패키지
+  web: ^1.1.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
