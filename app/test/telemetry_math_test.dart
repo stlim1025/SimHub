@@ -119,6 +119,33 @@ void main() {
     });
   });
 
+  group('축 눈금', () {
+    test('niceTickStep: 눈금 수를 넘지 않는 가장 작은 1·2·2.5·5 × 10^k 간격', () {
+      expect(niceTickStep(330, 7), 50);
+      expect(niceTickStep(100, 7), 20);
+      expect(niceTickStep(100, 11), 10);
+      expect(niceTickStep(200, 7), 50);
+      expect(niceTickStep(12000, 7), 2000);
+      expect(niceTickStep(10, 5), 2.5);
+      expect(niceTickStep(0.6, 7), closeTo(0.1, 1e-12));
+      expect(niceTickStep(0, 7), 1);
+    });
+
+    test('axisDecimals: 간격을 쓰는 데 필요한 소수 자릿수', () {
+      expect(axisDecimals(50), 0);
+      expect(axisDecimals(0.2), 1);
+      expect(axisDecimals(0.25), 2);
+    });
+
+    test('axisTicks: 간격의 배수만, 범위 안, 오차·−0 없음', () {
+      expect(axisTicks(const ValueRange(0, 330), maxTicks: 7), [0, 50, 100, 150, 200, 250, 300]);
+      expect(axisTicks(const ValueRange(-1, 8), maxTicks: 7), [0, 2, 4, 6, 8]);
+      expect(axisTicks(const ValueRange(-0.3, 0.3), maxTicks: 7), [-0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3]);
+      expect(axisTicks(const ValueRange(-0.3, 0.3), maxTicks: 7)[3].isNegative, isFalse);
+      expect(axisTicks(const ValueRange(0, 0), maxTicks: 7), isEmpty);
+    });
+  });
+
   test('kphToMph', () {
     expect(kphToMph(100), closeTo(62.137, 0.001));
     expect(kphToMph(0), 0);

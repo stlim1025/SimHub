@@ -39,9 +39,14 @@ Finder _chart(String key) => find.byKey(ValueKey('telemetry-chart-$key'));
 
 Finder _inChart(String key, String text) => find.descendant(of: _chart(key), matching: find.text(text));
 
-/// 그래프 그림(CustomPaint) 영역의 가운데 = 랩 거리 10m(표본 2).
-Offset _paintCenter(WidgetTester tester, String key) =>
-    tester.getCenter(find.descendant(of: _chart(key), matching: find.byType(CustomPaint)).last);
+Finder _paint(String key) => find.descendant(of: _chart(key), matching: find.byType(CustomPaint)).last;
+
+/// 그래프의 그림 영역(축 글자 칸 제외, 화면 좌표).
+Rect _plotRect(WidgetTester tester, String key) =>
+    telemetryPlotRect(tester.getSize(_paint(key))).shift(tester.getTopLeft(_paint(key)));
+
+/// 그림 영역의 가운데 = 랩 거리 10m(표본 2).
+Offset _paintCenter(WidgetTester tester, String key) => _plotRect(tester, key).center;
 
 TelemetryChartPainter _painterOf(WidgetTester tester, String key) => tester
     .widgetList<CustomPaint>(find.descendant(of: _chart(key), matching: find.byType(CustomPaint)))
@@ -81,6 +86,28 @@ void main() {
       expect(formatDeltaSeconds(-0.1234), '-0.123s');
       expect(formatDeltaSeconds(0.0001), '0.000s');
       expect(formatDistance(1234.6), '1,235 m');
+    });
+
+    test('세로축 눈금 글자: 천 단위·간격만큼 소수, 기어는 R·N', () {
+      expect(formatAxisValue(12000, 2000), '12,000');
+      expect(formatAxisValue(-0.2, 0.2), '-0.2');
+      expect(formatAxisValue(0, 0.25), '0.00');
+      expect(gearAxisLabel(0, 1), 'N');
+      expect(gearAxisLabel(-1, 1), 'R');
+      expect(gearAxisLabel(4, 2), '4');
+      expect(TelemetryChannel.gear.axisLabel, gearAxisLabel);
+      expect(TelemetryChannel.speed.axisLabel, formatAxisValue);
+    });
+
+    test('그래프 눈금: 높이·폭에 맞춰 글자가 겹치지 않는 간격', () {
+      // 그림 높이 110 → 눈금 7개까지: 속도 0~330은 50 간격, 스로틀 0~100은 20 간격, 스티어 −100~100은 50 간격.
+      expect(telemetryYTicks(const ValueRange(0, 330), kTelemetryChartHeight), [0, 50, 100, 150, 200, 250, 300]);
+      expect(telemetryYTicks(const ValueRange(0, 100), kTelemetryChartHeight), [0, 20, 40, 60, 80, 100]);
+      expect(telemetryYTicks(const ValueRange(-100, 100), kTelemetryChartHeight), [-100, -50, 0, 50, 100]);
+      // 폭 900px → 눈금 15개까지: 5,300m 랩은 500m 간격. 폭 300px → 5개까지: 2,000m 간격.
+      expect(telemetryXTicks(5300, 900).take(3), [0, 500, 1000]);
+      expect(telemetryXTicks(5300, 900).last, 5000);
+      expect(telemetryXTicks(5300, 300), [0, 2000, 4000]);
     });
 
     test('seriesSegments는 값이 없는 칸에서 선을 끊고 점 하나짜리 조각은 버린다', () {
@@ -204,6 +231,40 @@ void main() {
 
       expect(_inChart('speed', '126 mph'), findsOneWidget); // 202 km/h.
       expect(_inChart('speed', '188 mph'), findsOneWidget); // 302 km/h.
+    });
+
+    testWidgets('그림 영역 왼쪽 끝 = 0m, 오른쪽 끝 = 랩 끝(축 칸을 빼고 거리를 잰다)', (t) async {
+      await _pump(t);
+      final plot = _plotRect(t, 'speed');
+      expect(plot.left, greaterThan(t.getTopLeft(_paint('speed')).dx)); // 왼쪽에 값 눈금 칸
+
+      await t.tapAt(Offset(plot.left, plot.center.dy));
+      await t.pump();
+      expect(_painterOf(t, 'speed').cursor.value, 0);
+
+      await t.tapAt(Offset(plot.right - 1, plot.center.dy));
+      await t.pump();
+      expect(_painterOf(t, 'speed').cursor.value, closeTo(20, 0.1));
+    });
+
+    testWidgets('모든 그래프에 축(값 눈금·거리 눈금)을 그리고 기어 축은 R·N 글자를 쓴다', (t) async {
+      await _pump(t);
+
+      for (final key in ['delta', ..._channelKeys]) {
+        final axes = t
+            .widgetList<CustomPaint>(find.descendant(of: _chart(key), matching: find.byType(CustomPaint)))
+            .map((p) => p.painter)
+            .whereType<TelemetryAxesPainter>()
+            .single;
+        expect(axes.maxDistanceM, 20, reason: key);
+      }
+      final gearAxes = t
+          .widgetList<CustomPaint>(find.descendant(of: _chart('gear'), matching: find.byType(CustomPaint)))
+          .map((p) => p.painter)
+          .whereType<TelemetryAxesPainter>()
+          .single;
+      expect(gearAxes.axisLabel, gearAxisLabel);
+      expect(t.takeException(), isNull);
     });
 
     testWidgets('375px에서 십자선 값이 보여도 넘치지 않는다', (t) async {

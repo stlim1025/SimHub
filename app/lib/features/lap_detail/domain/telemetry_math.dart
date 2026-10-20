@@ -16,6 +16,18 @@ const double _minRangeSpan = 1;
 /// 십자선이 트레이스 끝을 넘어도 마지막 표본으로 보는 거리(표본 간격의 절반).
 const double _halfSample = 0.5;
 
+/// 눈금 간격 후보의 가수(× 10^k): 1·2·2.5·5.
+const List<double> _niceMantissas = [1, 2, 2.5, 5];
+
+/// 10진 자릿수 계산의 밑.
+const int _decimalBase = 10;
+
+/// 눈금 계산의 부동소수 오차 허용치.
+const double _tickEpsilon = 1e-6;
+
+/// 눈금 글자의 최대 소수 자릿수.
+const int _maxAxisDecimals = 6;
+
 /// km/h → mph(순수 함수).
 double kphToMph(num kph) => kph * _mphPerKph;
 
@@ -122,4 +134,54 @@ class ChartGeometry {
     }
     return (x / width * maxDistanceM).clamp(0, maxDistanceM).toDouble();
   }
+}
+
+/// 축 눈금 간격: 폭 [span]에 눈금이 [maxTicks]개를 넘지 않는 가장 작은 "보기 좋은" 간격(1·2·2.5·5 × 10^k).
+/// 예: 0~330, 7개 → 50 · 0~100, 7개 → 20 · 0~100, 11개 → 10. [span]이 0 이하거나 [maxTicks]가 2 미만이면 [span](또는 1)(순수 함수).
+double niceTickStep(double span, int maxTicks) {
+  if (span <= 0) {
+    return 1;
+  }
+  if (maxTicks < 2) {
+    return span;
+  }
+  final raw = span / (maxTicks - 1);
+  // raw보다 한 자리 작은 곳부터 올라가며 처음으로 눈금 수가 맞는 간격을 고른다.
+  var exponent = (math.log(raw) / math.ln10).floor() - 1;
+  while (true) {
+    final magnitude = math.pow(_decimalBase, exponent).toDouble();
+    for (final mantissa in _niceMantissas) {
+      final step = mantissa * magnitude;
+      if ((span / step + _tickEpsilon).floor() + 1 <= maxTicks) {
+        return step;
+      }
+    }
+    exponent++;
+  }
+}
+
+/// 눈금 간격 [step]을 글자로 쓸 때 필요한 소수 자릿수(50 → 0, 0.2 → 1, 0.25 → 2)(순수 함수).
+int axisDecimals(double step) {
+  for (var digits = 0; digits < _maxAxisDecimals; digits++) {
+    final scaled = step * math.pow(_decimalBase, digits);
+    if ((scaled - scaled.round()).abs() < _tickEpsilon) {
+      return digits;
+    }
+  }
+  return _maxAxisDecimals;
+}
+
+/// [range] 안의 눈금 값들(간격 = [niceTickStep], [step]의 배수만, 오름차순). 범위 폭이 0 이하면 빈 목록(순수 함수).
+List<double> axisTicks(ValueRange range, {required int maxTicks}) {
+  if (range.span <= 0) {
+    return const [];
+  }
+  final step = niceTickStep(range.span, maxTicks);
+  final decimals = axisDecimals(step);
+  final first = (range.min / step - _tickEpsilon).ceil();
+  final last = (range.max / step + _tickEpsilon).floor();
+  return [
+    // 0.6000000000000001 같은 오차와 −0을 없앤다.
+    for (var k = first; k <= last; k++) double.parse((k * step).toStringAsFixed(decimals)) + 0.0,
+  ];
 }

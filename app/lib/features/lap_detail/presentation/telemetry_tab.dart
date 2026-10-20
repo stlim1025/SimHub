@@ -159,6 +159,7 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
         maxDistanceM: maxDistanceM,
         cursor: _cursor,
         format: (value) => channel.format(value, widget.units),
+        axisLabel: channel.axisLabel,
       );
     }
 
@@ -181,8 +182,6 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
               cursor: _cursor,
             ),
             for (final chart in charts) ...[const SizedBox(height: _chartGap), chart],
-            const SizedBox(height: _legendDotGap),
-            _DistanceAxis(maxDistanceM: maxDistanceM),
           ],
         ),
       ),
@@ -253,25 +252,6 @@ class _Legend extends StatelessWidget {
                   style: TextStyle(color: palette.textMuted),
                 ),
         ),
-      ],
-    );
-  }
-}
-
-/// 맨 아래 가로축 표시: `0 m` … 랩 길이.
-class _DistanceAxis extends StatelessWidget {
-  const _DistanceAxis({required this.maxDistanceM});
-
-  final double maxDistanceM;
-
-  @override
-  Widget build(BuildContext context) {
-    final style = Theme.of(context).textTheme.bodySmall?.copyWith(color: context.palette.textMuted);
-    return Row(
-      children: [
-        Text(formatDistance(0), style: style),
-        const Spacer(),
-        Text(formatDistance(maxDistanceM), style: style),
       ],
     );
   }

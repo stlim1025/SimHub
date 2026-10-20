@@ -21,9 +21,9 @@ const double _msPerSecond = 1000;
 const double _minExtentM = 1;
 
 /// 트랙 지도 좌표 변환: 월드 X/Z(m)를 상자 [width]×[height]([padding] 안쪽) 안에 가로세로 비율을 지키며 가운데 놓는다.
-/// F1 월드는 X = 오른쪽, Z = 앞쪽이라 위에서 내려다본 모양이 되도록 화면 y = −Z로 그린다(화면 y는 아래로 커진다).
+/// 화면 x = X, 화면 y = +Z로 그린다(화면 y는 아래로 커진다). y = −Z로 그리면 실제 트랙과 좌우가 뒤집힌다(몬트리올 실데이터로 확인).
 class TrackProjection {
-  TrackProjection._(this._minX, this._maxZ, this._scale, this._offsetX, this._offsetY);
+  TrackProjection._(this._minX, this._minZ, this._scale, this._offsetX, this._offsetY);
 
   /// [xs]·[zs](같은 길이, 비어 있지 않음)를 담는 변환을 만든다.
   factory TrackProjection.fit({
@@ -44,17 +44,17 @@ class TrackProjection {
     final scale = math.min(innerWidth / spanX, innerHeight / spanZ);
     final offsetX = padding + (innerWidth - spanX * scale) / 2;
     final offsetY = padding + (innerHeight - spanZ * scale) / 2;
-    return TrackProjection._(minX, maxZ, scale, offsetX, offsetY);
+    return TrackProjection._(minX, minZ, scale, offsetX, offsetY);
   }
 
   final double _minX;
-  final double _maxZ;
+  final double _minZ;
   final double _scale;
   final double _offsetX;
   final double _offsetY;
 
-  /// 월드 (x, z) → 화면 좌표. Z가 클수록 위(화면 y가 작다).
-  Offset project(double x, double z) => Offset(_offsetX + (x - _minX) * _scale, _offsetY + (_maxZ - z) * _scale);
+  /// 월드 (x, z) → 화면 좌표. Z가 클수록 아래(화면 y가 크다).
+  Offset project(double x, double z) => Offset(_offsetX + (x - _minX) * _scale, _offsetY + (z - _minZ) * _scale);
 }
 
 /// 표본마다 섹터 번호(0 = S1, 1 = S2, 2 = S3)를 랩 시간과 섹터 시간으로 정한다: 랩 시간 < S1이면 S1, < S1 + S2이면 S2, 그 밖은 S3.

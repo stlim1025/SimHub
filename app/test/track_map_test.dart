@@ -37,21 +37,21 @@ TrackMapPainter _painter(WidgetTester tester) => tester.widget<CustomPaint>(_map
 
 void main() {
   group('TrackProjection', () {
-    test('가로세로 비율을 지키며 가운데 놓고, Z가 클수록 위(화면 y −Z)', () {
+    test('가로세로 비율을 지키며 가운데 놓고, Z가 클수록 아래(화면 y +Z, 좌우 뒤집힘 없음)', () {
       // 폭 200 × 높이 100 트랙을 300 × 300 상자(여백 0)에: 배율 1.5, 세로 가운데(위아래 75 여백).
       final projection = TrackProjection.fit(xs: const [0, 200], zs: const [0, 100], width: 300, height: 300);
 
-      expect(projection.project(0, 0), const Offset(0, 225));
-      expect(projection.project(200, 0), const Offset(300, 225));
-      expect(projection.project(0, 100), const Offset(0, 75));
+      expect(projection.project(0, 0), const Offset(0, 75));
+      expect(projection.project(200, 0), const Offset(300, 75));
+      expect(projection.project(0, 100), const Offset(0, 225));
     });
 
     test('여백(padding) 안쪽에 맞춘다', () {
       final projection =
           TrackProjection.fit(xs: const [0, 100], zs: const [0, 100], width: 120, height: 120, padding: 10);
 
-      expect(projection.project(0, 100), const Offset(10, 10));
-      expect(projection.project(100, 0), const Offset(110, 110));
+      expect(projection.project(0, 0), const Offset(10, 10));
+      expect(projection.project(100, 100), const Offset(110, 110));
     });
 
     test('한 점뿐이어도 0으로 나누지 않는다', () {
@@ -128,16 +128,16 @@ void main() {
 
       expect(_painter(t).dotOffset(size), isNull);
 
-      cursor.value = 0; // 표본 0 = (0, 0) → 왼쪽 아래
+      cursor.value = 0; // 표본 0 = (0, 0) → 왼쪽 위
       await t.pump();
       final start = _painter(t).dotOffset(size)!;
 
-      cursor.value = 10; // 표본 2 = (100, 100) → 오른쪽 위
+      cursor.value = 10; // 표본 2 = (100, 100) → 오른쪽 아래
       await t.pump();
       final corner = _painter(t).dotOffset(size)!;
 
       expect(corner.dx, greaterThan(start.dx));
-      expect(corner.dy, lessThan(start.dy));
+      expect(corner.dy, greaterThan(start.dy));
       expect(find.text('Sector 1'), findsOneWidget);
     });
   });

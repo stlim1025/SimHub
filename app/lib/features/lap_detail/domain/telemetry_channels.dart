@@ -18,7 +18,8 @@ const double _gearMax = 8;
 const int _reverseGear = -1;
 const int _neutralGear = 0;
 
-final NumberFormat _integerFormat = NumberFormat('#,##0');
+const String _integerPattern = '#,##0';
+final NumberFormat _integerFormat = NumberFormat(_integerPattern);
 
 /// 텔레메트리 그래프 한 장의 채널(docs/15 §2.3, 위에서 아래 순서). Delta는 따로 그린다.
 enum TelemetryChannel { speed, throttle, brake, gear, steer, rpm }
@@ -58,6 +59,9 @@ extension TelemetryChannelInfo on TelemetryChannel {
         TelemetryChannel.speed || TelemetryChannel.rpm => valueRangeOf(values, fixedMin: 0),
       };
 
+  /// 세로축 눈금 글자 함수: 기어는 `R`·`N`·숫자, 그 밖은 [formatAxisValue].
+  AxisLabelFormat get axisLabel => this == TelemetryChannel.gear ? gearAxisLabel : formatAxisValue;
+
   /// 십자선 값 글자: `287 km/h`·`178 mph`·`85%`·`N`·`-34`·`11,500`.
   String format(double value, UnitSystem units) => switch (this) {
         TelemetryChannel.speed => '${value.round()} ${units == UnitSystem.imperial ? 'mph' : 'km/h'}',
@@ -83,6 +87,20 @@ String formatDeltaSeconds(double seconds) {
   }
   return '${seconds < 0 ? '-' : '+'}${text}s';
 }
+
+/// 축 눈금 글자 함수: (눈금 값, 눈금 간격) → 글자.
+typedef AxisLabelFormat = String Function(double value, double step);
+
+/// 축 눈금 글자: 천 단위 쉼표, 소수 자릿수는 간격에 맞춘다(`1,000`·`50`·`-0.2`)(순수 함수).
+String formatAxisValue(double value, double step) {
+  final decimals = axisDecimals(step);
+  final pattern = decimals == 0 ? _integerPattern : '$_integerPattern.${'0' * decimals}';
+  return NumberFormat(pattern).format(value);
+}
+
+/// 기어 축 눈금 글자: 정수면 [gearLabel](`R`·`N`·숫자), 아니면 [formatAxisValue](순수 함수).
+String gearAxisLabel(double value, double step) =>
+    value == value.roundToDouble() ? gearLabel(value.round()) : formatAxisValue(value, step);
 
 /// 거리 글자 `1,235 m`(순수 함수).
 String formatDistance(double meters) => '${_integerFormat.format(meters.round())} m';
