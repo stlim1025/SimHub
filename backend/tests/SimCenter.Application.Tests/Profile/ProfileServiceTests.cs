@@ -122,7 +122,7 @@ public class ProfileServiceTests
     [InlineData("ALP")]
     [InlineData("WIL")]
     [InlineData("RB")]
-    [InlineData("SAU")]
+    [InlineData("AUD")]
     [InlineData("HAA")]
     public async Task UpdateProfile_AcceptsEveryAvatarTeamCode(string code)
     {

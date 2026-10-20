@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/app_notice.dart';
 import '../../../core/widgets/error_retry.dart';
+import '../../../core/widgets/page_loading_bar.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../auth/application/sign_out.dart';
 import '../application/profile_form_controller.dart';
@@ -99,10 +100,7 @@ class _ProfileLoader extends ConsumerWidget {
         fallbackMessage: _fallbackMessage,
         onRetry: () => ref.invalidate(profileReloadProvider),
       ),
-      loading: () => const Padding(
-        padding: EdgeInsets.all(24),
-        child: Center(child: CircularProgressIndicator(key: ValueKey('profile-reload-progress'))),
-      ),
+      loading: () => const PageLoadingBar(key: ValueKey('profile-reload-progress')),
       // 성공하면 인증 상태가 전체 프로필로 바뀌어 이 위젯 대신 폼이 그려진다.
       data: (_) => const SizedBox.shrink(),
     );

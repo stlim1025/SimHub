@@ -67,6 +67,7 @@ class AppColors {
   static const Color teamWilliams = Color(0xFF64C4FF);
   static const Color teamRacingBulls = Color(0xFF6692FF);
   static const Color teamSauber = Color(0xFF52E252);
+  static const Color teamAudi = Color(0xFFBB0A30);
   static const Color teamHaas = Color(0xFFB6BABD);
 
   /// 밝은 팀 색 원 위의 코드 글자색(대비 확보용 진한 남색).

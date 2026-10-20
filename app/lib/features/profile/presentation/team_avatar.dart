@@ -19,8 +19,8 @@ class TeamAvatar extends ConsumerWidget {
   /// 원 지름 대비 글자 크기 비율.
   static const double _fontScale = 0.36;
 
-  /// 원 지름 대비 로고 둘레 여백 비율.
-  static const double _logoPaddingScale = 0.14;
+  /// 원 지름 대비 로고 둘레 여백 비율. 정사각형 로고의 모서리가 원 밖으로 나가지 않도록 1-1/√2의 절반(약 0.146)보다 크게 둔다.
+  static const double _logoPaddingScale = 0.18;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
