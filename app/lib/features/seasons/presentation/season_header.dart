@@ -6,6 +6,7 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/app_notice.dart';
 import '../../../core/widgets/menu_items.dart';
+import '../../../core/widgets/web_dialog.dart';
 import '../../profile/domain/game_options.dart';
 import '../../sessions/domain/session_display.dart';
 import '../application/seasons_providers.dart';
@@ -523,8 +524,8 @@ class _RenameSeasonDialogState extends State<_RenameSeasonDialog> {
   @override
   Widget build(BuildContext context) {
     final defaultTitle = seasonHeaderTitle(widget.season);
-    return AlertDialog(
-      title: const Text('시즌 이름 변경'),
+    return WebDialog(
+      title: '시즌 이름 변경',
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -544,8 +545,8 @@ class _RenameSeasonDialogState extends State<_RenameSeasonDialog> {
         ],
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text(_cancelLabel)),
-        FilledButton(key: const ValueKey('season-rename-confirm'), onPressed: _save, child: const Text(_saveLabel)),
+        const WebDialogCancelButton(label: _cancelLabel),
+        WebDialogPrimaryButton(key: const ValueKey('season-rename-confirm'), label: _saveLabel, onPressed: _save),
       ],
     );
   }
@@ -559,17 +560,16 @@ class _DeleteSeasonDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.palette;
-    return AlertDialog(
-      title: Text('"$title" 시즌을 삭제할까요?'),
+    return WebDialog(
+      title: '"$title" 시즌을 삭제할까요?',
       content: const Text('세션과 랩 기록은 그대로 남지만, 이 시즌 묶음과 순위표는 목록에서 사라져요.'),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text(_cancelLabel)),
-        FilledButton(
+        WebDialogCancelButton(label: _cancelLabel, onPressed: () => Navigator.of(context).pop(false)),
+        WebDialogPrimaryButton(
           key: const ValueKey('season-delete-confirm'),
+          label: _deleteLabel,
+          destructive: true,
           onPressed: () => Navigator.of(context).pop(true),
-          style: FilledButton.styleFrom(backgroundColor: palette.danger, foregroundColor: palette.surface),
-          child: const Text(_deleteLabel),
         ),
       ],
     );

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:simcenter_app/core/realtime/ranking_hub_client.dart';
+import 'package:simcenter_app/core/widgets/button_group.dart';
 import 'package:simcenter_app/core/widgets/track_picker.dart';
 import 'package:simcenter_app/features/ranking/data/ranking_repository.dart';
 import 'package:simcenter_app/features/ranking/domain/ranking_models.dart';
@@ -164,7 +165,7 @@ void main() {
 
         expect(t.takeException(), isNull);
         expect(find.byType(TrackPicker), findsOneWidget);
-        expect(find.byType(SegmentedButton<String>), findsOneWidget);
+        expect(find.byType(ButtonGroup<String>), findsOneWidget);
       });
     }
   });

@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/widgets/menu_items.dart';
+import '../../../core/widgets/web_dialog.dart';
 import '../../../core/theme/app_palette.dart';
 import '../domain/lap_compare.dart';
 
 const double _controlGap = 8;
 const double _menuIconSize = 18;
-const double _dialogWidth = 360;
 const double _faceRadius = 6;
 const EdgeInsets _facePadding = EdgeInsets.symmetric(horizontal: 10, vertical: 6);
 
@@ -163,21 +163,18 @@ class _LapIdDialogState extends State<_LapIdDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text(_lapIdDialogTitle),
-      content: SizedBox(
-        width: _dialogWidth,
-        child: TextField(
-          key: const ValueKey('compare-lap-id-field'),
-          controller: _controller,
-          autofocus: true,
-          decoration: InputDecoration(hintText: _lapIdHint, errorText: _error),
-          onSubmitted: (_) => _submit(),
-        ),
+    return WebDialog(
+      title: _lapIdDialogTitle,
+      content: TextField(
+        key: const ValueKey('compare-lap-id-field'),
+        controller: _controller,
+        autofocus: true,
+        decoration: InputDecoration(hintText: _lapIdHint, errorText: _error),
+        onSubmitted: (_) => _submit(),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text(_cancelLabel)),
-        FilledButton(onPressed: _submit, child: const Text(_confirmLabel)),
+        const WebDialogCancelButton(label: _cancelLabel),
+        WebDialogPrimaryButton(label: _confirmLabel, onPressed: _submit),
       ],
     );
   }

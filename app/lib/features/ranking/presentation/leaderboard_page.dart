@@ -6,6 +6,7 @@ import '../../../core/layout/page_padding.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/util/lap_time.dart';
+import '../../../core/widgets/button_group.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/page_loading_bar.dart';
 import '../../../core/widgets/track_picker.dart';
@@ -14,12 +15,6 @@ import '../domain/ranking_models.dart';
 import 'track_choices.dart';
 
 const double _rankBadgeSize = 32;
-
-/// 기간 버튼 높이. 플랫폼 밀도에 따라 달라지지 않게 고정한다.
-const double _filterControlHeight = kMinInteractiveDimension;
-
-/// 기간 버튼 좌우 여백. 세로 여백은 0으로 두고 라벨 높이([_filterControlHeight])가 버튼 높이를 정한다.
-const double _periodButtonHorizontalPadding = 12;
 
 /// 기간 선택지(서버 period 값 → 표시 라벨).
 const _periodLabels = <String, String>{
@@ -104,27 +99,11 @@ class _LeaderboardPageState extends ConsumerState<LeaderboardPage> {
               onSelected: (choice) => _selectTrack(choice.id),
               textStyle: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
-            SegmentedButton<String>(
-              showSelectedIcon: false,
-              // 플랫폼 밀도·탭 영역 패딩에 따라 높이가 달라지지 않게 고정한다.
-              style: SegmentedButton.styleFrom(
-                visualDensity: VisualDensity.standard,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                padding: const EdgeInsets.symmetric(horizontal: _periodButtonHorizontalPadding),
-              ),
-              segments: [
-                for (final entry in _periodLabels.entries)
-                  ButtonSegment(
-                    value: entry.key,
-                    // 버튼 높이는 라벨 높이로 정해진다(세로 여백 0).
-                    label: SizedBox(
-                      height: _filterControlHeight,
-                      child: Center(child: Text(entry.value)),
-                    ),
-                  ),
-              ],
-              selected: {_period},
-              onSelectionChanged: (selection) => setState(() => _period = selection.first),
+            // 기간: Laps 정렬과 같은 웹식 테두리 버튼 묶음(Material 알약형 SegmentedButton 대신).
+            ButtonGroup<String>(
+              options: [for (final entry in _periodLabels.entries) (value: entry.key, label: entry.value)],
+              selected: _period,
+              onSelected: (period) => setState(() => _period = period),
             ),
           ],
         ),

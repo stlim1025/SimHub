@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../core/widgets/web_dialog.dart';
 import '../../auth/domain/user_input_rules.dart';
 
 /// 닉네임 변경 대화상자. 확인하면 다듬은 새 이름을 돌려준다 — 저장은 "변경 사항 저장"이 한다(docs/14 §8).
@@ -43,8 +44,8 @@ class _ChangeDisplayNameDialogState extends State<_ChangeDisplayNameDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('닉네임 변경'),
+    return WebDialog(
+      title: '닉네임 변경',
       content: Form(
         key: _formKey,
         child: Column(
@@ -68,8 +69,8 @@ class _ChangeDisplayNameDialogState extends State<_ChangeDisplayNameDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('취소')),
-        TextButton(key: const ValueKey('display-name-confirm'), onPressed: _confirm, child: const Text('확인')),
+        const WebDialogCancelButton(),
+        WebDialogPrimaryButton(key: const ValueKey('display-name-confirm'), label: '확인', onPressed: _confirm),
       ],
     );
   }
@@ -146,8 +147,9 @@ class _ChangeEmailDialogState extends State<_ChangeEmailDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('이메일 변경'),
+    return WebDialog(
+      title: '이메일 변경',
+      closeEnabled: !_submitting,
       content: Form(
         key: _formKey,
         child: Column(
@@ -181,11 +183,11 @@ class _ChangeEmailDialogState extends State<_ChangeEmailDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: _submitting ? null : () => Navigator.of(context).pop(), child: const Text('취소')),
-        TextButton(
+        WebDialogCancelButton(enabled: !_submitting),
+        WebDialogPrimaryButton(
           key: const ValueKey('email-submit'),
+          label: '변경',
           onPressed: _submitting ? null : _submit,
-          child: const Text('변경'),
         ),
       ],
     );

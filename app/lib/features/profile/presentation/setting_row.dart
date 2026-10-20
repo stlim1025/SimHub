@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_palette.dart';
+import '../../../core/widgets/button_group.dart';
 
 /// 이 폭보다 좁으면 이름표를 값 위에 쌓는다(휴대폰 폭에서 넘침 방지).
 const double _stackBelowWidth = 520;
@@ -102,17 +103,11 @@ class ChoiceSegments<T extends Enum> extends StatelessWidget {
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      child: SegmentedButton<T>(
-        showSelectedIcon: false,
-        segments: [
-          for (final value in values)
-            ButtonSegment<T>(
-              value: value,
-              label: Text(labelOf(value), key: ValueKey('choice-${value.name}')),
-            ),
-        ],
-        selected: {selected},
-        onSelectionChanged: (selection) => onSelected(selection.first),
+      child: ButtonGroup<T>(
+        options: [for (final value in values) (value: value, label: labelOf(value))],
+        selected: selected,
+        onSelected: onSelected,
+        segmentKeyOf: (value) => ValueKey('choice-${value.name}'),
       ),
     );
   }

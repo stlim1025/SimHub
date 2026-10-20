@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:simcenter_app/core/network/api_exception.dart';
 import 'package:simcenter_app/core/platform/download_launcher.dart';
 import 'package:simcenter_app/core/time/clock_provider.dart';
+import 'package:simcenter_app/core/widgets/web_dialog.dart';
 import 'package:simcenter_app/features/devices/application/devices_providers.dart';
 import 'package:simcenter_app/features/devices/data/devices_repository.dart';
 import 'package:simcenter_app/features/devices/domain/agent_release.dart';
@@ -76,7 +77,7 @@ Finder _deviceRow(String id) => find.byKey(ValueKey('device-$id'));
 
 Finder _inRow(String id, Finder matching) => find.descendant(of: _deviceRow(id), matching: matching);
 
-Finder _inDialog(Finder matching) => find.descendant(of: find.byType(AlertDialog), matching: matching);
+Finder _inDialog(Finder matching) => find.descendant(of: find.byType(WebDialog), matching: matching);
 
 void main() {
   testWidgets('TelemetryAppPage_NoDevices_ShowsGuide', (t) async {
@@ -365,11 +366,11 @@ void main() {
 
       await t.tap(_inRow('d1', find.text('연결 해제')));
       await _settle(t);
-      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(find.byType(WebDialog), findsOneWidget);
       await t.tap(_inDialog(find.text('취소')));
       await _settle(t);
 
-      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.byType(WebDialog), findsNothing);
       expect(env.repo.revoked, isEmpty);
       expect(find.text('RIG-PC'), findsOneWidget);
     });
@@ -406,7 +407,7 @@ void main() {
 
       expect(env.repo.revoked, ['d1']);
       expect(find.text('대상을 찾을 수 없어요.'), findsOneWidget);
-      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.byType(WebDialog), findsNothing);
     });
 
     testWidgets('새로고침 버튼은 목록을 다시 불러온다', (t) async {

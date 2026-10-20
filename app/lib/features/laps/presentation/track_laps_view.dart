@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/layout/page_padding.dart';
 import '../../../core/widgets/button_group.dart';
+import '../../../core/widgets/check_toggle.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/page_loading_bar.dart';
 import '../../../core/widgets/pagination_bar.dart';
@@ -97,12 +98,7 @@ class _TrackLapsViewState extends ConsumerState<TrackLapsView> {
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             ButtonGroup<String>(options: _sortOptions, selected: _sort, onSelected: _changeSort),
-            FilterChip(
-              label: const Text(_validOnlyLabel),
-              selected: _validOnly,
-              visualDensity: VisualDensity.compact,
-              onSelected: _changeValidOnly,
-            ),
+            CheckToggle(label: _validOnlyLabel, value: _validOnly, onChanged: _changeValidOnly),
           ],
         ),
         // 정렬·필터·페이지를 바꾸는 동안에는 직전 표를 그대로 두고 얇은 진행 막대만 보인다(표가 비어 튀지 않게, 막대는 본문 맨 위).

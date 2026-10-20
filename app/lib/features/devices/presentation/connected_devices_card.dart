@@ -10,6 +10,7 @@ import '../../../core/util/relative_time.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/page_loading_bar.dart';
 import '../../../core/widgets/section_card.dart';
+import '../../../core/widgets/web_dialog.dart';
 import '../application/devices_providers.dart';
 import '../data/devices_repository.dart';
 import '../domain/device_models.dart';
@@ -146,20 +147,17 @@ class _RevokeDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('이 PC의 연결을 해제할까요?'),
+    return WebDialog(
+      title: '이 PC의 연결을 해제할까요?',
       content: Text(
         '"$deviceName"의 Agent는 더 이상 기록을 보낼 수 없다. 다시 연결하려면 새 연결 코드가 필요하다.',
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('취소'),
-        ),
-        FilledButton(
+        WebDialogCancelButton(onPressed: () => Navigator.of(context).pop(false)),
+        WebDialogPrimaryButton(
+          label: _revokeLabel,
+          destructive: true,
           onPressed: () => Navigator.of(context).pop(true),
-          style: FilledButton.styleFrom(minimumSize: const Size(96, 44)),
-          child: const Text(_revokeLabel),
         ),
       ],
     );

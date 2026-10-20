@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_palette.dart';
+import '../../../core/widgets/select_box.dart';
 
 import '../../auth/application/auth_controller.dart';
 import '../../auth/domain/user_preferences.dart';
@@ -129,14 +130,13 @@ class PreferencesSection extends ConsumerWidget {
         children: [
           SettingRow(
             label: '게임',
-            child: _Dropdown(
+            child: _Select(
               key: const ValueKey('game-select'),
               value: prefs.preferredGame,
-              items: [
-                for (final code in gameChoices(prefs.preferredGame))
-                  DropdownMenuItem(value: code, child: Text(gameLabelOf(code), maxLines: 1, overflow: TextOverflow.ellipsis)),
+              options: [
+                for (final code in gameChoices(prefs.preferredGame)) (value: code, label: gameLabelOf(code)),
               ],
-              onChanged: (code) => code == null ? null : form.setPreferredGame(code),
+              onChanged: form.setPreferredGame,
             ),
           ),
           SettingRow(
@@ -168,14 +168,13 @@ class PreferencesSection extends ConsumerWidget {
           ),
           SettingRow(
             label: '타임존',
-            child: _Dropdown(
+            child: _Select(
               key: const ValueKey('timezone-select'),
               value: prefs.timeZoneId,
-              items: [
-                for (final id in timeZoneChoices(prefs.timeZoneId))
-                  DropdownMenuItem(value: id, child: Text(id, maxLines: 1, overflow: TextOverflow.ellipsis)),
+              options: [
+                for (final id in timeZoneChoices(prefs.timeZoneId)) (value: id, label: id),
               ],
-              onChanged: (id) => id == null ? null : form.setTimeZone(id),
+              onChanged: form.setTimeZone,
             ),
           ),
           SettingRow(
@@ -221,19 +220,24 @@ class AvatarSection extends ConsumerWidget {
   }
 }
 
-/// 폭에 맞춰 늘고 줄어드는 드롭다운(긴 타임존 이름이 휴대폰 폭에서 넘치지 않게).
-class _Dropdown extends StatelessWidget {
-  const _Dropdown({super.key, required this.value, required this.items, required this.onChanged});
+/// 폭에 맞춰 늘고 줄어드는 웹식 선택 상자(긴 타임존 이름이 휴대폰 폭에서 넘치지 않게).
+class _Select extends StatelessWidget {
+  const _Select({super.key, required this.value, required this.options, required this.onChanged});
 
   final String value;
-  final List<DropdownMenuItem<String>> items;
-  final ValueChanged<String?> onChanged;
+  final List<SelectOption<String>> options;
+  final ValueChanged<String> onChanged;
 
   @override
   Widget build(BuildContext context) {
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: _dropdownMaxWidth),
-      child: DropdownButton<String>(isExpanded: true, value: value, items: items, onChanged: onChanged),
+      child: SelectBox<String>(
+        options: options,
+        selected: value,
+        onSelected: onChanged,
+        optionKeyOf: (v) => ValueKey('select-option-$v'),
+      ),
     );
   }
 }

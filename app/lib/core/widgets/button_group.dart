@@ -13,11 +13,20 @@ typedef ButtonGroupOption<T> = ({T value, String label});
 /// F1Laps 모양의 작은 테두리 버튼 묶음(예: `Recent | Fastest`, docs/15 §2.1). 하나만 고른다.
 /// 고른 칸은 테두리 색 배경 + 진한 글자, 나머지는 흐린 글자. Material `SegmentedButton`보다 낮고 촘촘하다.
 class ButtonGroup<T> extends StatelessWidget {
-  const ButtonGroup({super.key, required this.options, required this.selected, required this.onSelected});
+  const ButtonGroup({
+    super.key,
+    required this.options,
+    required this.selected,
+    required this.onSelected,
+    this.segmentKeyOf,
+  });
 
   final List<ButtonGroupOption<T>> options;
   final T selected;
   final ValueChanged<T> onSelected;
+
+  /// 칸 위젯 키(테스트·자동화용). 없으면 키를 붙이지 않는다.
+  final Key Function(T value)? segmentKeyOf;
 
   @override
   Widget build(BuildContext context) {
@@ -35,6 +44,7 @@ class ButtonGroup<T> extends StatelessWidget {
             for (var i = 0; i < options.length; i++) ...[
               if (i > 0) Container(width: _dividerWidth, height: _groupHeight, color: palette.border),
               _Segment(
+                key: segmentKeyOf?.call(options[i].value),
                 label: options[i].label,
                 selected: options[i].value == selected,
                 onTap: () => onSelected(options[i].value),
@@ -48,7 +58,7 @@ class ButtonGroup<T> extends StatelessWidget {
 }
 
 class _Segment extends StatelessWidget {
-  const _Segment({required this.label, required this.selected, required this.onTap});
+  const _Segment({super.key, required this.label, required this.selected, required this.onTap});
 
   final String label;
   final bool selected;
