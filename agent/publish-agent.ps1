@@ -94,6 +94,7 @@ try {
         --self-contained true `
         -p:PublishSingleFile=true `
         -p:IncludeNativeLibrariesForSelfExtract=true `
+        -p:EnableCompressionInSingleFile=true `
         -p:DebugType=None `
         "-p:InformationalVersion=$Version" `
         -p:IncludeSourceRevisionInInformationalVersion=false `
