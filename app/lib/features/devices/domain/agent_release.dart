@@ -1,5 +1,5 @@
 /// 서버가 내려주는 Agent 설치 묶음의 빌드 정보(`GET /downloads/SimHubAgent.json`).
-/// `agent/publish-agent.ps1`이 zip과 함께 만든다. 다운로드 카드에 버전·빌드 날짜·크기를 보여줄 때만 쓴다.
+/// `agent/publish-agent.ps1`이 exe와 함께 만든다. 다운로드 카드에 버전·빌드 날짜·크기를 보여줄 때만 쓴다.
 class AgentRelease {
   const AgentRelease({required this.version, required this.builtAt, required this.sizeBytes});
 
@@ -9,7 +9,7 @@ class AgentRelease {
   /// 빌드 시각(UTC).
   final DateTime builtAt;
 
-  /// zip 크기(바이트).
+  /// exe 크기(바이트).
   final int sizeBytes;
 
   /// 필드가 빠졌거나 형식이 틀리면 null(카드는 빌드 정보 없이 버튼만 보인다).

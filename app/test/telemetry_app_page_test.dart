@@ -121,14 +121,14 @@ void main() {
       return opened;
     }
 
-    testWidgets('빌드 정보가 있으면 제목·버전·날짜·크기와 다운로드 버튼·설치 4단계를 보인다', (t) async {
+    testWidgets('빌드 정보가 있으면 제목·버전·날짜·크기와 다운로드 버튼·설치 3단계를 보인다', (t) async {
       setViewSize(t, const Size(1000, 2600));
       await pumpDownloadCard(t, () async => release);
 
       expect(find.text('SimHub Agent (Windows)'), findsOneWidget);
       expect(find.text('버전 e50ef1d-20261020 · 빌드 2026.10.20 · 68.1 MB'), findsOneWidget);
       expect(find.widgetWithText(FilledButton, 'Windows용 다운로드'), findsOneWidget);
-      for (final n in ['1.', '2.', '3.', '4.']) {
+      for (final n in ['1.', '2.', '3.']) {
         expect(find.text(n), findsOneWidget);
       }
       expect(find.textContaining('추가 정보'), findsOneWidget);
@@ -151,7 +151,7 @@ void main() {
       expect(find.widgetWithText(FilledButton, 'Windows용 다운로드'), findsOneWidget);
     });
 
-    testWidgets('다운로드 버튼은 서버의 /downloads/SimHubAgent.zip 주소를 연다', (t) async {
+    testWidgets('다운로드 버튼은 서버의 /downloads/SimHubAgent.exe 주소를 연다', (t) async {
       setViewSize(t, const Size(1000, 2600));
       final opened = await pumpDownloadCard(t, () async => release);
 
@@ -159,7 +159,7 @@ void main() {
       await _settle(t);
 
       expect(opened, hasLength(1));
-      expect(opened.single, endsWith('/downloads/SimHubAgent.zip'));
+      expect(opened.single, endsWith('/downloads/SimHubAgent.exe'));
     });
 
     testWidgets('열 수 없는 플랫폼이면 PC 브라우저에서 받으라고 알린다', (t) async {

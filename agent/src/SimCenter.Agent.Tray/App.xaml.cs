@@ -3,6 +3,8 @@ using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Threading;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
@@ -31,6 +33,9 @@ public partial class App : Application
     /// <summary>csproj의 EmbeddedResource LogicalName.</summary>
     private const string LogoResourceName = "SimCenter.Agent.Tray.simhub.ico";
 
+    /// <summary>exe에 내장한 기본 설정(csproj의 EmbeddedResource LogicalName).</summary>
+    private const string SettingsResourceName = "SimCenter.Agent.Tray.appsettings.json";
+
     private const int WindowIconSize = 32;
 
     /// <summary>트레이 아이콘 한 변 대비 상태 점 지름·테두리 두께 비율.</summary>
@@ -52,10 +57,19 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
-        // 바로가기·zip 안 실행 등 시작 폴더가 달라도 exe 옆의 appsettings.json·outbox.db를 쓰도록 작업 폴더를 맞춘다.
-        Environment.CurrentDirectory = AppContext.BaseDirectory;
+        // 배포물은 exe 하나다. 상대 경로 데이터(outbox.db)는 장치 키와 같은 사용자 폴더에 두어 exe 폴더를 깨끗하게 둔다.
+        var dataDirectory = System.IO.Path.GetDirectoryName(DpapiDeviceCredentialStore.DefaultPath)!;
+        System.IO.Directory.CreateDirectory(dataDirectory);
+        Environment.CurrentDirectory = dataDirectory;
 
-        var builder = Host.CreateApplicationBuilder(e.Args);
+        // 설정 = exe에 내장한 기본값 → (있으면) exe 옆 appsettings.json → 환경 변수 → 명령줄 순으로 덮어쓴다.
+        var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
+        {
+            Args = e.Args,
+            ContentRootPath = AppContext.BaseDirectory,
+        });
+        // 메모리 설정으로 맨 앞에 넣는다(스트림 설정은 다시 읽을 수 없어 설정이 재구성되면 깨진다).
+        builder.Configuration.Sources.Insert(0, new MemoryConfigurationSource { InitialData = ReadEmbeddedSettings() });
 
         builder.Services.AddSerilog((services, config) =>
             config.ReadFrom.Configuration(builder.Configuration)
@@ -165,6 +179,19 @@ public partial class App : Application
         }
 
         Shutdown();
+    }
+
+    /// <summary>exe에 내장한 appsettings.json을 설정 키(`Agent:ServerBaseUrl` 등) → 값으로 펼친다.</summary>
+    private static Dictionary<string, string?> ReadEmbeddedSettings()
+    {
+        using var stream = typeof(App).Assembly.GetManifestResourceStream(SettingsResourceName)
+            ?? throw new InvalidOperationException($"Embedded settings not found: {SettingsResourceName}");
+        return new ConfigurationBuilder()
+            .AddJsonStream(stream)
+            .Build()
+            .AsEnumerable()
+            .Where(pair => pair.Value is not null)
+            .ToDictionary(pair => pair.Key, pair => pair.Value);
     }
 
     private void BuildStateIcons()

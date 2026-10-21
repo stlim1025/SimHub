@@ -6,14 +6,14 @@ import '../domain/agent_release.dart';
 
 /// Agent 내려받기 경로(서버 `Downloads:Directory` 폴더, 익명·REST 접두사 없음).
 const String kAgentDownloadsPath = '/downloads';
-const String _agentZipFileName = 'SimHubAgent.zip';
+const String _agentExeFileName = 'SimHubAgent.exe';
 const String _agentMetadataFileName = 'SimHubAgent.json';
 
 const Duration _connectTimeout = Duration(seconds: 10);
 const Duration _receiveTimeout = Duration(seconds: 15);
 
-/// Windows용 Agent zip 주소(`{apiBaseUrl}/downloads/SimHubAgent.zip`). 순수 함수.
-String agentDownloadUrlFor(String apiBaseUrl) => '$apiBaseUrl$kAgentDownloadsPath/$_agentZipFileName';
+/// Windows용 Agent 실행 파일 주소(`{apiBaseUrl}/downloads/SimHubAgent.exe`, 설정 내장 exe 하나). 순수 함수.
+String agentDownloadUrlFor(String apiBaseUrl) => '$apiBaseUrl$kAgentDownloadsPath/$_agentExeFileName';
 
 /// Agent 빌드 정보 조회. 정적 파일이라 인증 헤더·REST 접두사가 없는 별도 Dio를 쓴다.
 class AgentReleaseRepository {

@@ -27,10 +27,16 @@
     <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
   </ItemGroup>
 
+  <!--
+    기본 설정은 exe 안에 넣는다(배포물은 exe 하나). 배포 스크립트는 -p:AgentSettingsFile=<운영 설정>으로 다른 파일을 넣는다.
+    exe 옆에 appsettings.json을 두면 그 값이 내장 설정보다 우선한다(App.xaml.cs).
+  -->
+  <PropertyGroup>
+    <AgentSettingsFile Condition="'$(AgentSettingsFile)' == ''">appsettings.json</AgentSettingsFile>
+  </PropertyGroup>
+
   <ItemGroup>
-    <None Update="appsettings.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+    <EmbeddedResource Include="$(AgentSettingsFile)" LogicalName="SimCenter.Agent.Tray.appsettings.json" />
   </ItemGroup>
 
 </Project>

@@ -29,10 +29,9 @@ const String _openFailedText = 'Windows PC의 브라우저에서 이 화면을 �
 
 final DateFormat _buildDateFormat = DateFormat('yyyy.MM.dd');
 
-/// 설치 순서(압축 풀기 → 실행 → UDP 설정 → 연결 코드). 3·4단계는 아래 카드를 가리킨다.
+/// 설치 순서(실행 → UDP 설정 → 연결 코드). 2·3단계는 아래 카드를 가리킨다.
 const List<String> _installSteps = [
-  '내려받은 SimHubAgent.zip의 압축을 모두 푼다(압축 파일 안에서 바로 실행하지 않는다).',
-  'SimHub Agent.exe를 실행한다. Windows SmartScreen 경고가 뜨면 "추가 정보" → "실행"을 누른다.',
+  '내려받은 SimHubAgent.exe를 원하는 폴더에 두고 실행한다. Windows SmartScreen 경고가 뜨면 "추가 정보" → "실행"을 누른다.',
   'F1 25에서 아래 UDP 설정을 맞춘다.',
   '아래에서 연결 코드를 발급해 Agent 창에 입력하고 "연결"을 누른다.',
 ];
@@ -73,7 +72,7 @@ class TelemetryAppPage extends StatelessWidget {
   }
 }
 
-/// ① 다운로드: Windows용 Agent zip 내려받기 + 설치 4단계. 빌드 정보(버전·날짜·크기)는 서버에 있을 때만 보인다.
+/// ① 다운로드: Windows용 Agent exe 내려받기 + 설치 3단계. 빌드 정보(버전·날짜·크기)는 서버에 있을 때만 보인다.
 class _DownloadCard extends ConsumerWidget {
   const _DownloadCard();
 
