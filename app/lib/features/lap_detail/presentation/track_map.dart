@@ -106,11 +106,28 @@ class TrackMapPainter extends CustomPainter {
 
 /// 트랙 지도(위치가 있는 트레이스만): 그림 + 섹터 범례(섹터를 알 때).
 class TrackMap extends StatelessWidget {
-  const TrackMap({super.key, required this.trace, required this.sectors, required this.cursor});
+  const TrackMap({
+    super.key,
+    required this.trace,
+    required this.sectors,
+    required this.cursor,
+    this.height = kTrackMapHeight,
+    this.showLegend = true,
+    this.paintKey = const ValueKey('track-map'),
+  });
 
   final LapTrace trace;
   final List<LapSector> sectors;
   final ValueListenable<double?> cursor;
+
+  /// 그림 높이(작은 떠 있는 지도는 더 낮게).
+  final double height;
+
+  /// 섹터 범례를 그림 아래에 붙일지.
+  final bool showLegend;
+
+  /// 그림(`CustomPaint`)의 키 — 큰 지도와 작은 지도를 테스트에서 구분한다.
+  final Key paintKey;
 
   @override
   Widget build(BuildContext context) {
@@ -122,16 +139,16 @@ class TrackMap extends StatelessWidget {
           label: _trackSemanticLabel,
           // SizedBox로 높이를 주어 나란히 놓을 때(IntrinsicHeight)도 지도 높이가 계산된다.
           child: SizedBox(
-            height: kTrackMapHeight,
+            height: height,
             child: RepaintBoundary(
               child: CustomPaint(
-                key: const ValueKey('track-map'),
+                key: paintKey,
                 painter: TrackMapPainter(trace: trace, sectorIndexes: sectorIndexes, cursor: cursor),
               ),
             ),
           ),
         ),
-        if (sectorIndexes != null) ...[
+        if (showLegend && sectorIndexes != null) ...[
           const SizedBox(height: _panelGap),
           Wrap(
             alignment: WrapAlignment.center,

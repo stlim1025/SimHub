@@ -1,9 +1,11 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:simcenter_app/core/layout/viewport_pinned.dart';
 import 'package:simcenter_app/core/theme/app_theme.dart';
 import 'package:simcenter_app/features/lap_detail/domain/lap_detail_models.dart';
 import 'package:simcenter_app/features/lap_detail/domain/track_map.dart';
+import 'package:simcenter_app/features/lap_detail/presentation/telemetry_tab.dart';
 import 'package:simcenter_app/features/lap_detail/presentation/track_map.dart';
 import 'package:simcenter_app/features/laps/domain/lap_models.dart';
 
@@ -34,6 +36,13 @@ LapTrace _positionedTrace(String lapId) {
 Finder get _mapPaint => find.byKey(const ValueKey('track-map'));
 
 TrackMapPainter _painter(WidgetTester tester) => tester.widget<CustomPaint>(_mapPaint).painter! as TrackMapPainter;
+
+/// 페이지(탭을 담은 ListView)의 스크롤 위치.
+ScrollPosition _pageScroll(WidgetTester tester) => tester
+    .state<ScrollableState>(
+      find.ancestor(of: find.byKey(const ValueKey('telemetry-chart-speed')), matching: find.byType(Scrollable)).first,
+    )
+    .position;
 
 void main() {
   group('TrackProjection', () {
@@ -154,8 +163,8 @@ void main() {
           size: size,
         );
 
-    testWidgets('위치가 있으면 Track 카드와 Lap Telemetry 통계를 나란히 보인다', (t) async {
-      await pump(t, _positionedTrace('l1'));
+    testWidgets('위치가 있으면 Track 카드와 Lap Telemetry 통계를 나란히 보인다(그래프 옆 칸이 생기기 전 폭)', (t) async {
+      await pump(t, _positionedTrace('l1'), size: const Size(860, 3000));
 
       expect(find.byKey(const ValueKey('track-map-card')), findsOneWidget);
       expect(find.byKey(const ValueKey('lap-telemetry-stats')), findsOneWidget);
@@ -191,6 +200,82 @@ void main() {
       final map = t.getRect(find.byKey(const ValueKey('track-map-card')));
       final stats = t.getRect(find.byKey(const ValueKey('lap-telemetry-stats')));
       expect(map.bottom, lessThanOrEqualTo(stats.top));
+    });
+
+    testWidgets('넓은 화면: 지도·통계 칸이 그래프 오른쪽에 있고, 페이지를 내려도 화면 안에 붙어 있다', (t) async {
+      const viewportHeight = 700.0;
+      await pump(t, _positionedTrace('l1'), size: const Size(1000, viewportHeight));
+
+      final aside = find.byKey(const ValueKey('telemetry-aside'));
+      final speed = find.byKey(const ValueKey('telemetry-chart-speed'));
+      expect(find.byKey(const ValueKey('telemetry-wide-layout')), findsOneWidget);
+      expect(find.descendant(of: aside, matching: _mapPaint), findsOneWidget);
+      expect(t.getRect(speed).right, lessThanOrEqualTo(t.getRect(aside).left)); // 그래프 옆
+      expect(t.getRect(aside).width, kTelemetryAsideWidth);
+
+      final position = _pageScroll(t);
+      expect(position.maxScrollExtent, greaterThan(viewportHeight)); // 충분히 스크롤된다
+      final layout = find.byKey(const ValueKey('telemetry-wide-layout'));
+      for (final pixels in [viewportHeight, position.maxScrollExtent]) {
+        position.jumpTo(pixels);
+        await t.pump();
+        final mapTop = t.getTopLeft(_mapPaint).dy;
+        expect(mapTop, greaterThanOrEqualTo(0), reason: '$pixels');
+        expect(mapTop, lessThan(viewportHeight), reason: '$pixels');
+        expect(t.getRect(aside).bottom, lessThanOrEqualTo(t.getRect(layout).bottom + 0.01), reason: '$pixels');
+      }
+      // 중간쯤에서는 화면 위쪽 + 여백에 붙는다(끝에서는 그래프 아래 끝을 넘지 않게 멈춘다).
+      position.jumpTo(viewportHeight);
+      await t.pump();
+      expect(t.getTopLeft(aside).dy, closeTo(kViewportPinnedMargin, 0.01));
+      // 스크롤 뒤에도 그래프 마우스 십자선이 지도 점을 움직인다.
+      final chartPaint = find.descendant(of: speed, matching: find.byType(CustomPaint)).last;
+      await t.ensureVisible(chartPaint);
+      await t.pump();
+      final mouse = await t.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: Offset.zero);
+      addTearDown(mouse.removePointer);
+      await mouse.moveTo(t.getCenter(chartPaint));
+      await t.pump();
+      expect(_painter(t).dotOffset(t.getSize(_mapPaint)), isNotNull);
+    });
+
+    testWidgets('좁은 화면: 큰 지도를 지나치면 오른쪽 아래에 작은 지도, 접기·펼치기', (t) async {
+      const viewportHeight = 700.0;
+      await pump(t, _positionedTrace('l1'), size: const Size(500, viewportHeight));
+      final mini = find.byKey(const ValueKey('mini-track-map'));
+      final expand = find.byKey(const ValueKey('mini-track-map-expand'));
+
+      expect(find.byKey(const ValueKey('telemetry-narrow-layout')), findsOneWidget);
+      expect(mini, findsNothing);
+
+      final position = _pageScroll(t);
+      final panelBottom = t.getRect(find.byKey(const ValueKey('lap-telemetry-stats'))).bottom;
+      position.jumpTo(panelBottom + 1);
+      await t.pump();
+      await t.pump();
+
+      expect(mini, findsOneWidget);
+      final rect = t.getRect(mini);
+      expect(rect.width, kMiniTrackMapSize);
+      expect(rect.bottom, lessThanOrEqualTo(viewportHeight)); // 보이는 영역 안
+      expect(rect.right, lessThanOrEqualTo(500));
+      expect(find.descendant(of: mini, matching: find.byKey(const ValueKey('mini-track-map-paint'))), findsOneWidget);
+
+      await t.tap(find.byKey(const ValueKey('mini-track-map-collapse')));
+      await t.pump();
+      expect(mini, findsNothing);
+      expect(expand, findsOneWidget);
+
+      await t.tap(expand);
+      await t.pump();
+      expect(mini, findsOneWidget);
+
+      position.jumpTo(0);
+      await t.pump();
+      await t.pump();
+      expect(mini, findsNothing);
+      expect(expand, findsNothing);
     });
 
     testWidgets('위치가 없는 옛 랩은 지도 없이 통계와 안내만', (t) async {
