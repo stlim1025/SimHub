@@ -6,7 +6,10 @@ import 'package:simcenter_app/core/theme/app_colors.dart';
 import 'package:simcenter_app/core/theme/app_palette.dart';
 import 'package:simcenter_app/features/lap_detail/domain/lap_detail_models.dart';
 import 'package:simcenter_app/features/lap_detail/presentation/car_painter.dart';
+import 'package:simcenter_app/features/lap_detail/presentation/car_detail_cards.dart';
 import 'package:simcenter_app/features/lap_detail/presentation/car_tyres_card.dart';
+import 'package:simcenter_app/features/lap_detail/presentation/lap_info_card.dart';
+import 'package:simcenter_app/features/lap_detail/presentation/lap_time_cards.dart';
 import 'package:simcenter_app/features/sessions/presentation/tyre_stints_view.dart';
 
 import 'support/fakes.dart';
@@ -23,6 +26,18 @@ CarPainter _carPainter(WidgetTester tester) =>
     tester.widgetList<CustomPaint>(find.byType(CustomPaint)).map((p) => p.painter).whereType<CarPainter>().single;
 
 void main() {
+  testWidgets('넓은 화면: Car & Tyres는 Lap Time·Comparison과, Damage는 Lap Details 쪽과 같은 줄 높이로 맞춘다', (t) async {
+    await _pump(t, sampleDetail());
+
+    final comparison = t.getRect(find.byType(ComparisonCard));
+    final carTyres = t.getRect(find.byType(CarTyresCard));
+    final lapInfo = t.getRect(find.byType(LapInfoCard));
+    final damage = t.getRect(find.byType(DamageCard));
+    expect(carTyres.left, greaterThan(comparison.right)); // 두 열
+    expect(carTyres.bottom, moreOrLessEquals(comparison.bottom));
+    expect(damage.top, moreOrLessEquals(lapInfo.top));
+  });
+
   group('Lap Time · Comparison', () {
     testWidgets('Lap Time은 링크 색 큰 랩타임과 섹터 3개', (t) async {
       await _pump(t, sampleDetail());

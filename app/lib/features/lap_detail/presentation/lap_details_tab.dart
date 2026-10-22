@@ -35,12 +35,16 @@ class LapDetailsTab extends StatelessWidget {
     final car = detail.car;
     final conditions = detail.conditions;
     final assists = detail.assists;
-    final left = <Widget>[
+    // 왼쪽 위(랩 시간·비교)는 Car & Tyres와, 왼쪽 아래(랩 정보·보조)는 Damage와 한 줄씩 높이를 맞춘다.
+    final leftTop = <Widget>[
       LapTimeCard(lap: detail.lap),
       if (compare.kind != LapCompareKind.none) ComparisonCard(detail: detail, compare: compare),
+    ];
+    final leftBottom = <Widget>[
       LapInfoCard(detail: detail),
       if (assists != null) DriverAssistsCard(assists: assists),
     ];
+    final left = [...leftTop, ...leftBottom];
     final right = car == null ? const <Widget>[NoCarDataCard()] : [CarTyresCard(car: car), DamageCard(car: car)];
     final bottom = <Widget>[
       if (conditions != null) ConditionsCard(conditions: conditions),
@@ -55,17 +59,24 @@ class LapDetailsTab extends StatelessWidget {
             children: _spaced([...left, ...right, ...bottom]),
           );
         }
-        // 두 열은 같은 폭, 짧은 열의 마지막 카드를 늘려 바닥을 맞춘다. 아래 칸들도 같은 높이(docs/15 §2.3).
+        // 두 열은 같은 폭. 차 정보가 있으면 [랩 시간·비교 | Car & Tyres], [랩 정보·보조 | Damage] 두 줄로 나눠
+        // 줄마다 높이를 맞춘다(오른쪽 카드 경계가 왼쪽 카드 경계와 어긋나지 않게). 없으면 짧은 열의 마지막 카드를 늘려 바닥만 맞춘다.
+        final rows = car == null
+            ? [(left, right)]
+            : [(leftTop, [CarTyresCard(car: car)]), (leftBottom, [DamageCard(car: car)])];
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            EqualHeightRow(
-              gap: _cardGap,
-              children: [
-                FillColumn(gap: _cardGap, children: left),
-                FillColumn(gap: _cardGap, children: right),
-              ],
-            ),
+            for (var i = 0; i < rows.length; i++) ...[
+              if (i > 0) const SizedBox(height: _cardGap),
+              EqualHeightRow(
+                gap: _cardGap,
+                children: [
+                  FillColumn(gap: _cardGap, children: rows[i].$1),
+                  FillColumn(gap: _cardGap, children: rows[i].$2),
+                ],
+              ),
+            ],
             if (bottom.isNotEmpty) ...[
               const SizedBox(height: _cardGap),
               EqualHeightRow(gap: _cardGap, children: bottom),
