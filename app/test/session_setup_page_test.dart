@@ -8,6 +8,7 @@ import 'package:simcenter_app/features/laps/domain/lap_models.dart';
 import 'package:simcenter_app/features/sessions/data/sessions_repository.dart';
 import 'package:simcenter_app/features/sessions/domain/session_models.dart';
 import 'package:simcenter_app/features/sessions/presentation/session_setup_page.dart';
+import 'package:simcenter_app/features/sessions/presentation/setup_sections.dart';
 
 import 'support/fakes.dart';
 

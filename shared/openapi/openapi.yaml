@@ -219,6 +219,141 @@ paths:
         '500':
           $ref: '#/components/responses/500ServerError'
 
+  /tracks/{trackId}/overview:
+    get:
+      summary: 트랙 개요 조회
+      description: |
+        트랙 정보(정적 카탈로그: 서킷·그랑프리·길이·F1 랩 레코드, 모르면 null) + 이 트랙의 내 통계 + 전체 기간 Time Trial 상위 3
+        (사용자별 최고 랭킹 적격 랩, 이름은 랭킹 공개 설정 D-39) + 내 유효 랩 빠른 순 10 + 지도용 랩(`mapLapId`, 월드 위치 채널이 있는
+        트레이스를 가진 내 가장 빠른 랩, 없으면 null). 없는 트랙은 404.
+      operationId: getTrackOverview
+      parameters:
+        - name: trackId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 트랙 개요 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrackOverviewResponse'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '404':
+          description: 트랙을 찾을 수 없음
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          $ref: '#/components/responses/500ServerError'
+
+  /setups/tracks:
+    get:
+      summary: 셋업 트랙 목록 (커뮤니티 셋업)
+      description: |
+        게임의 트랙 전체(`displayOrder` 캘린더 순, 리버스 포함)와 조건별 셋업 수(0 가능). 셋업은 F1Laps 공개 셋업 상위 10개를
+        서버가 주기적으로(기본 24시간) 가져온 것이다.
+      operationId: getSetupTracks
+      parameters:
+        - name: gameCode
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [F1_25, F1_26]
+            default: F1_25
+          description: 게임. 생략하면 F1_25, 그 밖의 값은 400.
+      responses:
+        '200':
+          description: 셋업 트랙 목록 조회 성공
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SetupTrack'
+        '400':
+          $ref: '#/components/responses/400ValidationError'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '500':
+          $ref: '#/components/responses/500ServerError'
+
+  /setups:
+    get:
+      summary: 트랙·조건의 셋업 목록 (커뮤니티 셋업)
+      description: 순위 순(1~10). 셋업이 없으면 `items` = [], `fetchedAt` = null. 게임은 트랙이 정한다. 없는 트랙은 404.
+      operationId: getSetups
+      parameters:
+        - name: trackId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: condition
+          in: query
+          required: false
+          description: 노면 조건(대소문자 무시). 생략하면 Dry, 그 밖의 값은 400.
+          schema:
+            type: string
+            enum: [Dry, Wet]
+            default: Dry
+      responses:
+        '200':
+          description: 셋업 목록 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetupListResponse'
+        '400':
+          $ref: '#/components/responses/400ValidationError'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '404':
+          description: 트랙을 찾을 수 없음
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          $ref: '#/components/responses/500ServerError'
+
+  /setups/{id}:
+    get:
+      summary: 셋업 상세 (커뮤니티 셋업)
+      description: 셋업 값 묶음(`sections`, 출처 표기 그대로)을 포함한다. 없는(또는 상위 10에서 빠진) 셋업은 404.
+      operationId: getSetup
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 셋업 상세 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetupDetail'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '404':
+          description: 셋업을 찾을 수 없음
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          $ref: '#/components/responses/500ServerError'
+
   /me/laps:
     get:
       summary: 내 랩 기록 조회 (My Lap Record)
@@ -1183,6 +1318,287 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TrackInfo'
+
+    TrackOverviewResponse:
+      type: object
+      required: [track, myStats, topTimeTrial, myBestLaps, mapLapId]
+      properties:
+        track:
+          $ref: '#/components/schemas/TrackOverviewTrack'
+        myStats:
+          $ref: '#/components/schemas/TrackMyStats'
+        topTimeTrial:
+          type: array
+          maxItems: 3
+          items:
+            $ref: '#/components/schemas/TrackTopLap'
+        myBestLaps:
+          type: array
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/TrackMyLap'
+        mapLapId:
+          type: string
+          format: uuid
+          nullable: true
+          description: 트랙 지도를 그릴 내 랩(트레이스에 worldPosX·worldPosZ 채널). 없으면 null
+
+    TrackOverviewTrack:
+      type: object
+      required: [trackId, name, gameCode]
+      properties:
+        trackId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "Silverstone"
+        countryCode:
+          type: string
+          nullable: true
+          example: "GB"
+        gameCode:
+          type: string
+          example: "F1_25"
+        circuitName:
+          type: string
+          nullable: true
+          example: "Silverstone Circuit"
+        grandPrixName:
+          type: string
+          nullable: true
+          description: 그 게임 캘린더의 그랑프리 이름. 리버스·모르는 트랙은 null
+          example: "British Grand Prix"
+        lengthKm:
+          type: number
+          nullable: true
+          example: 5.891
+        f1LapRecord:
+          type: string
+          nullable: true
+          description: F1 레이스 랩 레코드(m:ss.fff). 확실하지 않으면 null
+          example: "1:27.097"
+
+    TrackMyStats:
+      type: object
+      required: [lapCount, sessionCount]
+      properties:
+        lapCount:
+          type: integer
+          description: 내 랩 수(무효 포함)
+        sessionCount:
+          type: integer
+          description: 랩이 있는 내 세션 수(세션 키 기준)
+        bestLapMs:
+          type: integer
+          nullable: true
+          description: 유효 랩 최고
+        bestTimeTrialLapMs:
+          type: integer
+          nullable: true
+          description: 랭킹 적격 Time Trial 랩 최고
+        averageLapMs:
+          type: integer
+          nullable: true
+          description: 유효 랩 평균(반올림)
+        averageAiDifficulty:
+          type: number
+          nullable: true
+          description: 이 트랙에서 기록된 내 세션의 AI 난이도 평균(소수 1자리, 0·가져온 세션 제외)
+
+    TrackTopLap:
+      type: object
+      required: [rank, displayName, lapTimeMs, lapId]
+      properties:
+        rank:
+          type: integer
+        displayName:
+          type: string
+          description: 이름 비공개 사용자는 "익명 드라이버"(D-39)
+        teamName:
+          type: string
+          nullable: true
+        lapTimeMs:
+          type: integer
+        lapId:
+          type: string
+          format: uuid
+
+    TrackMyLap:
+      type: object
+      required: [lapId, lapTimeMs, sessionType, isValid, setAt]
+      properties:
+        lapId:
+          type: string
+          format: uuid
+        lapTimeMs:
+          type: integer
+        sessionType:
+          type: string
+          example: "TimeTrial"
+        teamName:
+          type: string
+          nullable: true
+        isValid:
+          type: boolean
+        setAt:
+          type: string
+          format: date-time
+
+    SetupTrack:
+      type: object
+      required: [trackId, name, displayOrder, dryCount, wetCount]
+      properties:
+        trackId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "Melbourne"
+        countryCode:
+          type: string
+          nullable: true
+          example: "AU"
+        displayOrder:
+          type: integer
+        circuitName:
+          type: string
+          nullable: true
+          example: "Albert Park Circuit"
+        dryCount:
+          type: integer
+          example: 10
+        wetCount:
+          type: integer
+          example: 10
+
+    SetupTrackRef:
+      type: object
+      required: [trackId, name]
+      properties:
+        trackId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        countryCode:
+          type: string
+          nullable: true
+        circuitName:
+          type: string
+          nullable: true
+
+    SetupListResponse:
+      type: object
+      required: [track, condition, items]
+      properties:
+        track:
+          $ref: '#/components/schemas/SetupTrackRef'
+        condition:
+          type: string
+          enum: [Dry, Wet]
+        fetchedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: 마지막으로 출처를 읽은 시각(UTC). 셋업이 없으면 null
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SetupListItem'
+
+    SetupListItem:
+      type: object
+      required: [id, rank, lapTimeMs, sourceUrl]
+      properties:
+        id:
+          type: string
+          format: uuid
+        rank:
+          type: integer
+          example: 1
+        teamName:
+          type: string
+          nullable: true
+          example: "Aston Martin"
+        sessionType:
+          type: string
+          nullable: true
+          description: 출처 표기 그대로
+          example: "Time Trial"
+        lapTimeMs:
+          type: integer
+          example: 75974
+        sourceUrl:
+          type: string
+          format: uri
+          description: 원문(F1Laps) 셋업 페이지
+
+    SetupDetail:
+      type: object
+      required: [id, rank, gameCode, track, condition, lapTimeMs, sourceUrl, fetchedAt, sections]
+      properties:
+        id:
+          type: string
+          format: uuid
+        rank:
+          type: integer
+        gameCode:
+          type: string
+          example: "F1_25"
+        track:
+          $ref: '#/components/schemas/SetupTrackRef'
+        condition:
+          type: string
+          enum: [Dry, Wet]
+        teamName:
+          type: string
+          nullable: true
+        sessionType:
+          type: string
+          nullable: true
+        lapTimeMs:
+          type: integer
+        steering:
+          type: string
+          nullable: true
+          example: "Wheel"
+        setOn:
+          type: string
+          format: date
+          nullable: true
+          description: 셋업을 기록한 날짜(yyyy-MM-dd). 모르면 null
+        sourceUrl:
+          type: string
+          format: uri
+        fetchedAt:
+          type: string
+          format: date-time
+        sections:
+          type: array
+          items:
+            $ref: '#/components/schemas/SetupSection'
+
+    SetupSection:
+      type: object
+      required: [title, items]
+      properties:
+        title:
+          type: string
+          example: "Suspension Geometry"
+        items:
+          type: array
+          items:
+            type: object
+            required: [label, value]
+            properties:
+              label:
+                type: string
+                example: "Front Camber"
+              value:
+                type: string
+                description: 출처 표기 그대로(단위 포함)
+                example: "-3.50˚"
 
     LapRecord:
       type: object

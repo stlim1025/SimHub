@@ -124,6 +124,107 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                     b.ToTable("agent_pairing_codes", (string)null);
                 });
 
+            modelBuilder.Entity("SimCenter.Domain.Entities.CommunitySetup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Condition")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("condition");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime>("FetchedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fetched_at");
+
+                    b.Property<string>("GameCode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("game_code");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<int>("LapTimeMs")
+                        .HasColumnType("integer")
+                        .HasColumnName("lap_time_ms");
+
+                    b.Property<int>("Rank")
+                        .HasColumnType("integer")
+                        .HasColumnName("rank");
+
+                    b.Property<string>("Sections")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("sections");
+
+                    b.Property<string>("SessionType")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("session_type");
+
+                    b.Property<DateOnly?>("SetOn")
+                        .HasColumnType("date")
+                        .HasColumnName("set_on");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("source");
+
+                    b.Property<string>("SourceId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("source_id");
+
+                    b.Property<string>("SourceUrl")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("source_url");
+
+                    b.Property<string>("Steering")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("steering");
+
+                    b.Property<string>("TeamName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("team_name");
+
+                    b.Property<Guid>("TrackId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("track_id");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_community_setups");
+
+                    b.HasIndex("TrackId")
+                        .HasDatabaseName("ix_community_setups_track_id");
+
+                    b.HasIndex("GameCode", "TrackId", "Condition", "SourceId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_community_setups_game_code_track_id_condition_source_id");
+
+                    b.ToTable("community_setups", (string)null);
+                });
+
             modelBuilder.Entity("SimCenter.Domain.Entities.GameSession", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1153,6 +1254,18 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                         .HasConstraintName("fk_agent_pairing_codes_users_user_id");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("SimCenter.Domain.Entities.CommunitySetup", b =>
+                {
+                    b.HasOne("SimCenter.Domain.Entities.Track", "Track")
+                        .WithMany()
+                        .HasForeignKey("TrackId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_community_setups_tracks_track_id");
+
+                    b.Navigation("Track");
                 });
 
             modelBuilder.Entity("SimCenter.Domain.Entities.GameSession", b =>

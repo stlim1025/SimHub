@@ -20,6 +20,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     /// <summary>요청의 <c>Connection.RemoteIpAddress</c>를 지정하는 테스트 전용 헤더.</summary>
     public const string RemoteIpHeader = "X-Test-Remote-IP";
 
+    /// <summary>커뮤니티 셋업 주기 갱신 스위치 설정 키.</summary>
+    private const string CommunitySetupsEnabledKey = "CommunitySetups:Enabled";
+
     private readonly string _environmentName;
     private readonly IReadOnlyDictionary<string, string?> _settings;
 
@@ -42,9 +45,11 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         builder.UseEnvironment(_environmentName);
         // 호스트 설정은 Program에 명령줄 인수로 전달되어 서비스 등록 시점(AddInfrastructure가 연결 문자열을 읽을 때)에 보인다.
         // ConfigureAppConfiguration은 Program의 등록 코드가 끝난 뒤 적용되어 개발 DB 연결 문자열이 그대로 쓰인다.
+        // 커뮤니티 셋업 갱신(외부 사이트 요청)은 테스트에서 항상 끈다 — 운영 환경으로 부팅하는 테스트도 마찬가지.
         var hostSettings = new Dictionary<string, string?>(_settings)
         {
             [TestDatabase.ConnectionStringKey] = TestDatabase.BuildConnectionString(),
+            [CommunitySetupsEnabledKey] = bool.FalseString,
         };
         builder.ConfigureHostConfiguration(config => config.AddInMemoryCollection(hostSettings));
         builder.ConfigureServices(services => services.AddSingleton<IStartupFilter, TestRemoteIpStartupFilter>());

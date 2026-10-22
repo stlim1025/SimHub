@@ -9,7 +9,10 @@ using SimCenter.Application.Seasons.Commands;
 using SimCenter.Application.Seasons.Import;
 using SimCenter.Application.Seasons.Ingest;
 using SimCenter.Application.Seasons.Queries;
+using SimCenter.Application.Setups;
+using SimCenter.Application.Setups.Refresh;
 using SimCenter.Application.Telemetry;
+using SimCenter.Application.TrackOverviews;
 
 namespace SimCenter.Application;
 
@@ -31,6 +34,9 @@ public static class DependencyInjection
         services.AddScoped<ILapQueryService, LapQueryService>();
         services.AddScoped<IAgentPairingService, AgentPairingService>();
         services.AddScoped<IAgentDeviceService, AgentDeviceService>();
+        services.AddScoped<ICommunitySetupService, CommunitySetupService>();
+        services.AddScoped<ICommunitySetupRefresher, CommunitySetupRefresher>();
+        services.AddScoped<ITrackOverviewService, TrackOverviewService>();
         return services;
     }
 }

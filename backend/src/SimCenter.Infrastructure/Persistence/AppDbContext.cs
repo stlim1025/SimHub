@@ -31,6 +31,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, ITransactionRunner
     public DbSet<GameSession> GameSessions => Set<GameSession>();
     public DbSet<SessionResult> SessionResults => Set<SessionResult>();
     public DbSet<SessionResultTyreStint> SessionResultTyreStints => Set<SessionResultTyreStint>();
+    public DbSet<CommunitySetup> CommunitySetups => Set<CommunitySetup>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

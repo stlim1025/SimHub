@@ -19,6 +19,12 @@ import '../../features/seasons/presentation/seasons_page.dart';
 import '../../features/sessions/presentation/session_detail_page.dart';
 import '../../features/sessions/presentation/session_setup_page.dart';
 import '../../features/sessions/presentation/sessions_page.dart';
+import '../../features/setups/domain/setups_display.dart';
+import '../../features/setups/presentation/setup_detail_page.dart';
+import '../../features/setups/presentation/setup_track_page.dart';
+import '../../features/setups/presentation/setups_page.dart';
+import '../../features/tracks/presentation/track_overview_page.dart';
+import '../../features/tracks/presentation/tracks_page.dart';
 import '../shell/app_shell.dart';
 import 'auth_redirect.dart';
 
@@ -127,6 +133,31 @@ final routerProvider = Provider<GoRouter>((ref) {
           _screen(
             '/leaderboard',
             (state) => LeaderboardPage(trackId: state.uri.queryParameters['trackId']),
+          ),
+          // 셋업 모음(F1Laps 상위 셋업). 조건은 `?condition=wet`(그 밖은 Dry).
+          _screen(
+            kSetupsPath,
+            (state) => SetupsPage(condition: state.uri.queryParameters[kSetupConditionQuery]),
+          ),
+          _screen(
+            '$kSetupsPath/:trackId',
+            (state) => SetupTrackPage(
+              trackId: state.pathParameters['trackId']!,
+              condition: state.uri.queryParameters[kSetupConditionQuery],
+            ),
+          ),
+          _screen(
+            '$kSetupsPath/:trackId/:setupId',
+            (state) => SetupDetailPage(
+              trackId: state.pathParameters['trackId']!,
+              setupId: state.pathParameters['setupId']!,
+            ),
+          ),
+          // 트랙 목록·트랙 개요(F1Laps Tracks 모양).
+          _screen(kTracksPath, (_) => const TracksPage()),
+          _screen(
+            '$kTracksPath/:trackId',
+            (state) => TrackOverviewPage(trackId: state.pathParameters['trackId']!),
           ),
           _screen('/telemetry-app', (_) => const TelemetryAppPage()),
           // 계정 설정(사이드바 하단 프로필에서 연다, docs/14 §8).

@@ -30,8 +30,16 @@ import 'package:simcenter_app/features/sessions/data/sessions_repository.dart';
 import 'package:simcenter_app/features/sessions/presentation/session_detail_page.dart';
 import 'package:simcenter_app/features/sessions/presentation/session_setup_page.dart';
 import 'package:simcenter_app/features/sessions/presentation/sessions_page.dart';
+import 'package:simcenter_app/features/setups/data/setups_repository.dart';
+import 'package:simcenter_app/features/setups/presentation/setup_detail_page.dart';
+import 'package:simcenter_app/features/setups/presentation/setup_track_page.dart';
+import 'package:simcenter_app/features/setups/presentation/setups_page.dart';
+import 'package:simcenter_app/features/tracks/data/tracks_repository.dart';
+import 'package:simcenter_app/features/tracks/presentation/track_overview_page.dart';
+import 'package:simcenter_app/features/tracks/presentation/tracks_page.dart';
 
 import 'support/fakes.dart';
+import 'support/setups_fakes.dart';
 
 Future<GoRouter> _pumpApp(
   WidgetTester tester, {
@@ -40,6 +48,7 @@ Future<GoRouter> _pumpApp(
   FakeSeasonsRepository? seasonsRepo,
   FakeLapDetailRepository? lapDetailRepo,
   FakePublicLapRepository? publicLapRepo,
+  FakeSetupsRepository? setupsRepo,
 }) async {
   setViewSize(tester, const Size(1000, 800));
   final container = ProviderContainer(overrides: [
@@ -55,6 +64,8 @@ Future<GoRouter> _pumpApp(
     )),
     rankingHubClientProvider.overrideWithValue(FakeRankingHub()),
     profileRepositoryProvider.overrideWithValue(FakeProfileRepository()),
+    setupsRepositoryProvider.overrideWithValue(setupsRepo ?? FakeSetupsRepository()),
+    tracksRepositoryProvider.overrideWithValue(FakeTracksRepository(overviews: {'au': trackOverviewOf()})),
   ]);
   addTearDown(container.dispose);
   final router = container.read(routerProvider);
@@ -360,6 +371,57 @@ void main() {
     expect(find.byType(TrackLapsPage), findsOneWidget);
   });
 
+  testWidgets('/setups · /setups/:trackId?condition=wet · /setups/:trackId/:setupId는 셸 안에서 열린다', (t) async {
+    final setupsRepo = FakeSetupsRepository(
+      tracks: [setupTrackOf('au', 'Australia')],
+      details: {'s1': setupDetailOf('s1')},
+    );
+    final router = await _pumpApp(t, setupsRepo: setupsRepo);
+
+    router.go('/setups?condition=wet');
+    await t.pumpAndSettle();
+    expect(t.widget<SetupsPage>(find.byType(SetupsPage)).condition, 'wet');
+    expect(find.text('Dashboard'), findsOneWidget);
+
+    router.go('/setups/au?condition=wet');
+    await t.pumpAndSettle();
+    final trackPage = t.widget<SetupTrackPage>(find.byType(SetupTrackPage));
+    expect(trackPage.trackId, 'au');
+    expect(trackPage.condition, 'wet');
+    expect(setupsRepo.listRequests.last, (trackId: 'au', condition: 'Wet'));
+
+    router.go('/setups/au/s1');
+    await t.pumpAndSettle();
+    final detailPage = t.widget<SetupDetailPage>(find.byType(SetupDetailPage));
+    expect(detailPage.setupId, 's1');
+    expect(detailPage.trackId, 'au');
+  });
+
+  testWidgets('/tracks · /tracks/:trackId는 셸 안에서 열린다', (t) async {
+    final router = await _pumpApp(t);
+
+    router.go('/tracks');
+    await t.pumpAndSettle();
+    expect(find.byType(TracksPage), findsOneWidget);
+    expect(find.text('Dashboard'), findsOneWidget);
+
+    router.go('/tracks/au');
+    await t.pumpAndSettle();
+    expect(t.widget<TrackOverviewPage>(find.byType(TrackOverviewPage)).trackId, 'au');
+  });
+
+  testWidgets('사이드바의 Setups · Tracks 메뉴로 이동한다', (t) async {
+    final router = await _pumpApp(t);
+
+    await t.tap(find.widgetWithText(ListTile, 'Setups'));
+    await t.pumpAndSettle();
+    expect(_location(router), '/setups');
+
+    await t.tap(find.widgetWithText(ListTile, 'Tracks'));
+    await t.pumpAndSettle();
+    expect(_location(router), '/tracks');
+  });
+
   group('화면 전환 애니메이션 없음', () {
     /// 트리 안의 모든 Navigator(루트 + 셸)가 쌓은 페이지.
     List<Page<dynamic>> pagesOf(WidgetTester t) => [
@@ -377,6 +439,8 @@ void main() {
         '/seasons',
         '/sessions',
         '/leaderboard',
+        '/setups',
+        '/tracks/au',
       ]) {
         router.go(location);
         await t.pumpAndSettle();

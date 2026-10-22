@@ -6,12 +6,14 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using SimCenter.Application.Common.Interfaces;
+using SimCenter.Application.Setups.Refresh;
 using SimCenter.Infrastructure.Common;
 using SimCenter.Infrastructure.Configuration;
 using SimCenter.Infrastructure.Identity;
 using SimCenter.Infrastructure.Persistence;
 using SimCenter.Infrastructure.Persistence.Repositories;
 using SimCenter.Infrastructure.Persistence.Seed;
+using SimCenter.Infrastructure.Setups;
 using SimCenter.Infrastructure.Time;
 
 namespace SimCenter.Infrastructure;
@@ -43,6 +45,8 @@ public static class DependencyInjection
         services.AddScoped<ISeasonImportRepository, SeasonImportRepository>();
         services.AddScoped<IGameSessionQueryRepository, GameSessionQueryRepository>();
         services.AddScoped<ISessionDetailQueryRepository, SessionDetailQueryRepository>();
+        services.AddScoped<ICommunitySetupRepository, CommunitySetupRepository>();
+        services.AddScoped<ITrackOverviewQueryRepository, TrackOverviewQueryRepository>();
         services.AddScoped<DbSeeder>();
 
         // ── 어댑터 ──
@@ -61,6 +65,21 @@ public static class DependencyInjection
                 "Ranking:TimeZoneId가 유효한 IANA 타임존이 아닙니다.")
             .ValidateOnStart();
         services.AddSingleton<IRankingTimeZoneProvider, ConfiguredRankingTimeZoneProvider>();
+
+        // ── 커뮤니티 셋업(F1Laps 공개 셋업 상위 N, 기본 꺼짐) ──
+        services.AddOptions<CommunitySetupOptions>()
+            .Bind(configuration.GetSection(CommunitySetupOptions.SectionName))
+            .Validate(o => Uri.TryCreate(o.BaseUrl, UriKind.Absolute, out _), "CommunitySetups:BaseUrl이 절대 주소가 아닙니다.")
+            .Validate(o => o.TopCount > 0 && o.Interval > TimeSpan.Zero && o.RequestDelay >= TimeSpan.Zero,
+                "CommunitySetups의 TopCount·Interval·RequestDelay 값이 올바르지 않습니다.")
+            .ValidateOnStart();
+        services.AddHttpClient<ISetupSource, F1LapsSetupScraper>((sp, client) =>
+        {
+            var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<CommunitySetupOptions>>().Value;
+            client.Timeout = options.RequestTimeout;
+            client.DefaultRequestHeaders.UserAgent.ParseAdd(CommunitySetupOptions.UserAgent);
+        });
+        services.AddHostedService<CommunitySetupRefreshService>();
 
         // ── 인증(JWT Bearer) ──
         services.AddOptions<JwtOptions>()

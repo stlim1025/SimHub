@@ -52,6 +52,8 @@ GoRouter _router({String initialLocation = '/'}) => GoRouter(
             ),
             GoRoute(path: '/laps', builder: (_, _) => const Text('body:laps')),
             GoRoute(path: '/leaderboard', builder: (_, _) => const Text('body:leaderboard')),
+            GoRoute(path: '/setups/:trackId/:setupId', builder: (_, _) => const Text('body:setup')),
+            GoRoute(path: '/tracks/:trackId', builder: (_, _) => const Text('body:track')),
             GoRoute(path: '/telemetry-app', builder: (_, _) => const Text('body:telemetry-app')),
             GoRoute(path: '/settings', builder: (_, _) => const Text('body:settings')),
           ],
@@ -103,10 +105,25 @@ void main() {
     expect(find.text('body:dashboard'), findsOneWidget);
   });
 
-  testWidgets('메뉴 순서는 Dashboard · Seasons · Sessions · Laps · Leaderboard · Telemetry App', (t) async {
+  testWidgets('메뉴 순서는 Dashboard · Seasons · Sessions · Laps · Leaderboard · Setups · Tracks · Telemetry App', (t) async {
     await _pumpShell(t, _wide);
 
-    expect(_menuLabels(t), ['Dashboard', 'Seasons', 'Sessions', 'Laps', 'Leaderboard', 'Telemetry App']);
+    expect(
+      _menuLabels(t),
+      ['Dashboard', 'Seasons', 'Sessions', 'Laps', 'Leaderboard', 'Setups', 'Tracks', 'Telemetry App'],
+    );
+  });
+
+  testWidgets('/setups/au/s1에서 Setups 메뉴가 선택되어 있다', (t) async {
+    await _pumpShell(t, _wide, initialLocation: '/setups/au/s1');
+    expect(_isSelected(t, 'Setups'), isTrue);
+    expect(_isSelected(t, 'Tracks'), isFalse);
+  });
+
+  testWidgets('/tracks/au에서 Tracks 메뉴가 선택되어 있다', (t) async {
+    await _pumpShell(t, _wide, initialLocation: '/tracks/au');
+    expect(_isSelected(t, 'Tracks'), isTrue);
+    expect(_isSelected(t, 'Setups'), isFalse);
   });
 
   testWidgets('Seasons 메뉴를 누르면 /seasons로 이동하고 선택 상태가 된다', (t) async {
