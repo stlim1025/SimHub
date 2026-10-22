@@ -15,6 +15,7 @@ public sealed class SessionResultConfiguration : IEntityTypeConfiguration<Sessio
         builder.Property(x => x.ResultStatus).IsRequired().HasConversion<string>().HasMaxLength(20);
         builder.Property(x => x.DriverKey).IsRequired().HasMaxLength(80);
         builder.Property(x => x.DriverName).HasMaxLength(64);
+        builder.Property(x => x.TeamName).HasMaxLength(SessionResult.TeamNameMaxLength);
 
         // 스틴트는 결과에 종속된다. 지우기는 항상 IsDeleted라 Cascade가 실제로 일어나는 일은 없다.
         builder.HasMany(x => x.TyreStints)

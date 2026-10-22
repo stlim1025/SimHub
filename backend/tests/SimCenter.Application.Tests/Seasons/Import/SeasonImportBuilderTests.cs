@@ -1,3 +1,4 @@
+using SimCenter.Application.Common;
 using SimCenter.Application.Seasons.Import;
 using SimCenter.Application.Seasons.Import.Building;
 using SimCenter.Application.Seasons.Queries.Detail;
@@ -38,12 +39,35 @@ public sealed class SeasonImportBuilderTests
 
         var australia = graph.Sessions.Single(s => s.ClassifiedAt == graph.Sessions.Min(x => x.ClassifiedAt));
         var me = Assert.Single(australia.Results);
-        Assert.Equal((1, 25, 80_953, "GOM", true, 221), (me.Position, me.Points, me.BestLapTimeMs, me.DriverName, me.IsPlayer, me.TeamId));
+        // 인게임 순위표(2026 그리드)가 없으면 F1 25 팀 ID(Ferrari = 1).
+        Assert.Equal((1, 25, 80_953, "GOM", true, 1), (me.Position, me.Points, me.BestLapTimeMs, me.DriverName, me.IsPlayer, me.TeamId));
         Assert.Equal((Weather?)Weather.Clear, australia.Weather);
         Assert.Equal(100, australia.AiDifficulty);
 
         Assert.Equal(("Oscar Piastri", 52), (preview.Drivers[0].Name, preview.Drivers[0].Points));
         Assert.Equal(("GOM", 50, true), (preview.Drivers[1].Name, preview.Drivers[1].Points, preview.Drivers[1].IsPlayer));
+    }
+
+    [Fact]
+    public void My_team_import_keeps_per_session_teams_and_custom_team_name()
+    {
+        var (graph, preview) = Build(MyTeam);
+        var australia = graph.Sessions.Single(s => graph.RoundByWeekend[s.RaceWeekendId!.Value] == 1);
+
+        var teams = australia.Results.ToDictionary(r => r.DriverName!, r => (r.TeamId, r.TeamName));
+        Assert.Equal(((int?)TeamCatalog.MyTeamId, "TEAM ALPHA"), teams["TEAM ALPHA"]);
+        Assert.Equal(((int?)TeamCatalog.MyTeamId, "TEAM ALPHA"), teams["Mark Webber"]);
+        Assert.Equal(((int?)9, (string?)null), teams["Nico Hulkenberg"]);
+        Assert.Equal(((int?)7, (string?)null), teams["Oliver Bearman"]);
+        Assert.Equal(((int?)2, (string?)null), teams["Max Verstappen"]);
+
+        var me = preview.Drivers.Single(d => d.IsPlayer);
+        Assert.Equal(("TEAM ALPHA", TeamCatalog.MyTeamColor), (me.TeamName, me.TeamColor));
+        Assert.Equal("Sauber", preview.Drivers.Single(d => d.Name == "Nico Hulkenberg").TeamName);
+        Assert.Equal(
+            [("TEAM ALPHA", 62), ("Red Bull Racing", 43), ("Haas", 30), ("Sauber", 25)],
+            preview.Constructors.Select(c => (c.TeamName, c.Points)));
+        Assert.Equal("TEAM ALPHA", preview.TeamName);
     }
 
     [Fact]

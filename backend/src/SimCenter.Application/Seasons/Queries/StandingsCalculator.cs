@@ -72,7 +72,10 @@ public static class StandingsCalculator
         long Points,
         int Wins,
         int Podiums,
-        int[] PositionCounts);
+        int[] PositionCounts,
+        string? TeamName = null);
+
+    private static bool HasTeam(DriverTally tally) => tally.TeamId is not null || tally.TeamName is not null;
 
     /// <summary>가져온 드라이버 기준값과 <see cref="DriverAliasing"/>이 묶은 키(기준선 순번 → 키).</summary>
     private sealed record Baseline(IReadOnlyList<ImportedDriverPoints> Entries, IReadOnlyDictionary<int, string> KeyByEntry);
@@ -109,7 +112,8 @@ public static class StandingsCalculator
                 PointTotals.ToInt(tally.Points),
                 tally.Wins,
                 tally.Podiums,
-                BuildCells(cellsByDriver[tally.DriverKey], mainRace, weekendStart)))
+                BuildCells(cellsByDriver[tally.DriverKey], mainRace, weekendStart),
+                tally.TeamName))
             .ToList();
     }
 
@@ -161,7 +165,8 @@ public static class StandingsCalculator
             rows.Where(r => !(excludeImportedPoints && r.IsImported)).Sum(r => (long)r.Points),
             mainRaceRows.Count(r => r.Position == 1),
             mainRaceRows.Count(r => r.Position <= PodiumPositions),
-            counts);
+            counts,
+            latest.TeamName);
     }
 
     /// <summary>
@@ -178,7 +183,9 @@ public static class StandingsCalculator
                 ? bound
                 : ImportedDriverKeyPrefix + DriverNameMatcher.Normalize(entry.Name);
             merged[key] = merged.TryGetValue(key, out var tally)
-                ? tally with { Points = tally.Points + entry.Points, TeamId = tally.TeamId ?? entry.TeamId }
+                ? HasTeam(tally)
+                    ? tally with { Points = tally.Points + entry.Points }
+                    : tally with { Points = tally.Points + entry.Points, TeamId = entry.TeamId, TeamName = entry.TeamName }
                 : new DriverTally(
                     key,
                     entry.Name,
@@ -188,7 +195,8 @@ public static class StandingsCalculator
                     entry.Points,
                     Wins: 0,
                     Podiums: 0,
-                    new int[positionCount]);
+                    new int[positionCount],
+                    entry.TeamName);
         }
 
         return merged.Values.ToList();
@@ -247,9 +255,10 @@ public static class StandingsCalculator
         var teams = scoringRows
             .Where(r => r.TeamId is not null)
             .GroupBy(r => r.TeamId!.Value)
-            .Select(g => new TeamTotal(
+            .Select(g => NewTeamTotal(
+                gameCode,
                 g.Key,
-                TeamCatalog.Resolve(gameCode, g.Key).Name,
+                g.Select(r => r.TeamName).FirstOrDefault(n => n is not null),
                 g.Sum(r => (long)r.Points),
                 g.Count(r => IsMainRaceRow(r, mainRace) && r.Position == 1)));
 
@@ -262,9 +271,10 @@ public static class StandingsCalculator
         var teams = drivers
             .Where(d => d.TeamId is not null)
             .GroupBy(d => d.TeamId!.Value)
-            .Select(g => new TeamTotal(
+            .Select(g => NewTeamTotal(
+                gameCode,
                 g.Key,
-                TeamCatalog.Resolve(gameCode, g.Key).Name,
+                g.Select(d => d.TeamName).FirstOrDefault(n => n is not null),
                 g.Sum(d => (long)d.Points),
                 g.Sum(d => d.Wins)));
 
@@ -281,10 +291,16 @@ public static class StandingsCalculator
         IReadOnlyList<ImportedConstructorPoints> baseline)
     {
         var points = baseline.GroupBy(t => t.TeamId).ToDictionary(g => g.Key, g => g.Sum(t => (long)t.Points));
+        var names = baseline.Where(t => t.TeamName is not null).GroupBy(t => t.TeamId).ToDictionary(g => g.Key, g => g.First().TeamName);
         var wins = new Dictionary<int, int>();
         foreach (var row in scoringRows.Where(r => r.TeamId is not null))
         {
             var teamId = row.TeamId!.Value;
+            if (row.TeamName is not null)
+            {
+                names.TryAdd(teamId, row.TeamName);
+            }
+
             if (!row.IsImported)
             {
                 points[teamId] = points.GetValueOrDefault(teamId) + row.Points;
@@ -296,11 +312,15 @@ public static class StandingsCalculator
             }
         }
 
-        return RankTeams(points.Select(p => new TeamTotal(
-            p.Key, TeamCatalog.Resolve(gameCode, p.Key).Name, p.Value, wins.GetValueOrDefault(p.Key))));
+        return RankTeams(points.Select(p => NewTeamTotal(
+            gameCode, p.Key, names.GetValueOrDefault(p.Key), p.Value, wins.GetValueOrDefault(p.Key))));
     }
 
-    private sealed record TeamTotal(int TeamId, string Name, long Points, int Wins);
+    /// <summary><see cref="TeamName"/> = 저장된 사용자 팀 이름(My Team), <see cref="Name"/> = 표시 이름(동점 정렬용).</summary>
+    private sealed record TeamTotal(int TeamId, string Name, long Points, int Wins, string? TeamName);
+
+    private static TeamTotal NewTeamTotal(string gameCode, int teamId, string? teamName, long points, int wins)
+        => new(teamId, TeamCatalog.Resolve(gameCode, teamId, teamName).Name, points, wins, teamName);
 
     private static List<ConstructorStanding> RankTeams(IEnumerable<TeamTotal> teams)
         => teams
@@ -308,6 +328,6 @@ public static class StandingsCalculator
             .ThenByDescending(t => t.Wins)
             .ThenBy(t => t.Name, StringComparer.Ordinal)
             .ThenBy(t => t.TeamId)
-            .Select((t, index) => new ConstructorStanding(index + 1, t.TeamId, PointTotals.ToInt(t.Points), t.Wins))
+            .Select((t, index) => new ConstructorStanding(index + 1, t.TeamId, PointTotals.ToInt(t.Points), t.Wins, t.TeamName))
             .ToList();
 }

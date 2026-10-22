@@ -9,6 +9,9 @@ internal sealed class ImportedResult(RosterDriver driver)
 {
     public RosterDriver Driver { get; } = driver;
 
+    /// <summary>이 세션의 팀(F1Laps 순위표 팀 칸). 모르면 명단의 기본 팀(<see cref="RosterDriver.Team"/>).</summary>
+    public ImportTeam Team { get; set; } = driver.Team;
+
     public int? Position { get; set; }
 
     public ResultStatus Status { get; set; } = ResultStatus.Finished;

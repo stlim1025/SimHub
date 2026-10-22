@@ -28,7 +28,12 @@ public static class TeamCatalog
     private const int Grid2026AudiTeamId = 229;
     private const int Grid2026CadillacTeamId = 230;
     private const int F1GenericTeamId = 41;
-    private const int MyTeamId = 104;
+
+    /// <summary>F1 25 "My Team"(사용자가 만든 팀)의 게임 팀 ID. 표시 이름은 결과에 저장된 팀 이름(<c>TeamName</c>)이 있으면 그것이다.</summary>
+    public const int MyTeamId = 104;
+
+    /// <summary>My Team·사용자 팀 이름의 강조색.</summary>
+    public const string MyTeamColor = "#6366F1";
 
     // 2025 팀 순서 = 게임 팀 ID 0~9. 2024 차량(185~194)과 2026 팀(476~484)은 같은 이름·색을 앞쪽부터 따라 쓴다.
     private static readonly TeamInfo[] BaseTeams =
@@ -66,6 +71,20 @@ public static class TeamCatalog
         return new TeamInfo($"Team {id}", FallbackColor);
     }
 
+    /// <summary>
+    /// (게임 코드, 팀 ID, 저장된 팀 이름) → 표시 이름·색. 팀 ID가 없거나 My Team(<see cref="MyTeamId"/>)이고 팀 이름이 있으면
+    /// 그 이름(가져온 My Team 이름 "TEAM ALPHA" 등)을 쓴다 — My Team이면 강조색, 팀 ID가 없으면 중립 회색. 그 밖에는 <see cref="Resolve(string, int?)"/>.
+    /// </summary>
+    public static TeamInfo Resolve(string gameCode, int? teamId, string? teamName)
+    {
+        if (!string.IsNullOrWhiteSpace(teamName) && teamId is null or MyTeamId)
+        {
+            return new TeamInfo(teamName.Trim(), teamId is null ? FallbackColor : MyTeamColor);
+        }
+
+        return Resolve(gameCode, teamId);
+    }
+
     private static Dictionary<int, TeamInfo> BuildF125Teams()
     {
         var teams = new Dictionary<int, TeamInfo>();
@@ -94,7 +113,7 @@ public static class TeamCatalog
         teams[Grid2026AudiTeamId] = audi;
         teams[Grid2026CadillacTeamId] = cadillac;
         teams[F1GenericTeamId] = new TeamInfo("F1 Generic", FallbackColor);
-        teams[MyTeamId] = new TeamInfo("My Team", "#6366F1");
+        teams[MyTeamId] = new TeamInfo("My Team", MyTeamColor);
         return teams;
     }
 }

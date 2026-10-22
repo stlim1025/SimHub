@@ -116,7 +116,8 @@ public sealed class SeasonQueryRepository : ISeasonQueryRepository
                 x.result.ResultStatus,
                 x.result.Points,
                 x.coveredByBaseline,
-                x.session.AiDifficulty))
+                x.session.AiDifficulty,
+                x.result.TeamName))
             .ToListAsync(cancellationToken);
     }
 }

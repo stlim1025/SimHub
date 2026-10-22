@@ -55,7 +55,7 @@ public static class SessionPenaltiesBuilder
     private static SessionPenaltyDto ToDto(
         string gameCode, int? playerCarIndex, SessionResult? driver, int lapNumber, int carIndex, PenaltyEvent penalty)
     {
-        var team = driver is null ? new TeamInfo(TeamCatalog.UnknownTeamName, TeamCatalog.FallbackColor) : TeamCatalog.Resolve(gameCode, driver.TeamId);
+        var team = driver is null ? new TeamInfo(TeamCatalog.UnknownTeamName, TeamCatalog.FallbackColor) : TeamCatalog.Resolve(gameCode, driver.TeamId, driver.TeamName);
 
         return new SessionPenaltyDto(
             lapNumber,

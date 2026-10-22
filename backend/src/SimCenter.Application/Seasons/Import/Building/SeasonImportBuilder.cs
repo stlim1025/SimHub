@@ -47,8 +47,9 @@ public static class SeasonImportBuilder
         ArgumentNullException.ThrowIfNull(input);
 
         var bundle = input.Bundle;
-        var playerTeamId = ImportTeams.Resolve(PlayerTeamName(bundle));
-        var roster = new DriverRoster(bundle.InGame, bundle.PlayerName, playerTeamId);
+        var teamOf = TeamResolver(bundle);
+        var playerTeam = teamOf(PlayerTeamName(bundle));
+        var roster = new DriverRoster(bundle.InGame, bundle.PlayerName, playerTeam, teamOf);
         var season = new Season
         {
             Id = input.NewId(),
@@ -65,7 +66,7 @@ public static class SeasonImportBuilder
         var attachments = AttachLinked(input, season, weekends);
         var linkedKinds = attachments.Select(a => (Round: a.Session.Track?.DisplayOrder ?? 0, a.Session.SessionKind)).ToHashSet();
 
-        var factory = new ImportSessionFactory(input.UserId, season.Id, bundle.GameCode, bundle.GameMode, input.Now, input.NewId, roster);
+        var factory = new ImportSessionFactory(input.UserId, season.Id, bundle.GameCode, bundle.GameMode, input.Now, input.NewId, roster, teamOf);
         var anchor = input.LinkedSessions.Select(s => s.ClassifiedAt).Append(input.Now).Min();
         var sessions = new List<GameSession>();
         foreach (var sources in RoundsOf(bundle, roster))
@@ -93,10 +94,23 @@ public static class SeasonImportBuilder
         }
 
         FinishTimes(season, weekends.Values, sessions, attachments);
-        var snapshot = Snapshot(bundle, roster, playerTeamId);
+        var snapshot = Snapshot(bundle, roster, playerTeam, teamOf);
         season.ImportedStandings = snapshot.ToJson();
         var roundByWeekend = weekends.ToDictionary(p => p.Value.Id, p => p.Key);
         return new SeasonImportGraph(season, weekends.Values.ToList(), sessions, attachments, snapshot, roundByWeekend);
+    }
+
+    /// <summary>
+    /// 이 묶음의 팀 칸 → 팀: 팀 ID 표는 <see cref="ImportTeams.TeamGameOf"/>, My Team 모드면 헤더의 팀 이름(시즌 요약 → 세션)이
+    /// 사용자 팀 이름이다(F1Laps 순위표의 "My Team" 칸도 그 이름).
+    /// </summary>
+    private static Func<string?, ImportTeam> TeamResolver(ImportBundle bundle)
+    {
+        var teamGame = ImportTeams.TeamGameOf(bundle);
+        var myTeamName = bundle.GameMode == GameMode.MyTeamCareer
+            ? bundle.Summary?.TeamName ?? bundle.Sessions.Select(s => s.TeamName).FirstOrDefault(t => !string.IsNullOrWhiteSpace(t))
+            : null;
+        return text => ImportTeams.Of(teamGame, text, myTeamName);
     }
 
     private static string? PlayerTeamName(ImportBundle bundle)
@@ -258,24 +272,31 @@ public static class SeasonImportBuilder
         season.LastSessionAt = times.Select(t => t.Item2).DefaultIfEmpty(season.CreatedAt).Max();
     }
 
-    private static ImportedSeasonSnapshot Snapshot(ImportBundle bundle, DriverRoster roster, int? playerTeamId)
+    private static ImportedSeasonSnapshot Snapshot(
+        ImportBundle bundle, DriverRoster roster, ImportTeam playerTeam, Func<string?, ImportTeam> teamOf)
     {
         var teamName = bundle.Summary?.TeamName ?? PlayerTeamName(bundle);
         if (bundle.InGame is { } inGame)
         {
             var drivers = inGame.Drivers
-                .Select((row, i) => new ImportedDriverPoints(row.Name, row.Total, row.IsPlayer, roster.OfInGameRow(i).TeamId))
+                .Select((row, i) =>
+                {
+                    var team = roster.OfInGameRow(i).Team;
+                    return new ImportedDriverPoints(row.Name, row.Total, row.IsPlayer, team.TeamId, team.TeamName);
+                })
                 .ToList();
             var constructors = inGame.Constructors
-                .Select(c => (TeamId: ImportTeams.Resolve(c.TeamName), c.Points))
-                .Where(c => c.TeamId is not null)
-                .Select(c => new ImportedConstructorPoints(c.TeamId!.Value, c.Points))
+                .Select(c => (Team: teamOf(c.TeamName), c.Points))
+                .Where(c => c.Team.TeamId is not null)
+                .Select(c => new ImportedConstructorPoints(c.Team.TeamId!.Value, c.Points, c.Team.TeamName))
                 .ToList();
             return new ImportedSeasonSnapshot(bundle.Title, bundle.PlayerName, teamName, InGameSource, drivers, constructors);
         }
 
         var summaryDrivers = bundle.Summary!.Drivers
-            .Select(d => new ImportedDriverPoints(d.IsPlayer ? bundle.PlayerName : d.Name, d.Points, d.IsPlayer, d.IsPlayer ? playerTeamId : null))
+            .Select(d => d.IsPlayer
+                ? new ImportedDriverPoints(bundle.PlayerName, d.Points, IsPlayer: true, playerTeam.TeamId, playerTeam.TeamName)
+                : new ImportedDriverPoints(d.Name, d.Points, IsPlayer: false))
             .ToList();
         return new ImportedSeasonSnapshot(bundle.Title, bundle.PlayerName, teamName, ImportSource, summaryDrivers);
     }

@@ -2,11 +2,14 @@ using System.Text.Json;
 
 namespace SimCenter.Application.Seasons.Import;
 
-/// <summary>가져온 스탠딩의 드라이버 한 줄(D-55). <see cref="IsPlayer"/> = 플레이어("You *"·인게임 Player). 팀은 인게임 표에서만 안다.</summary>
-public sealed record ImportedDriverPoints(string Name, int Points, bool IsPlayer, int? TeamId = null);
+/// <summary>
+/// 가져온 스탠딩의 드라이버 한 줄(D-55). <see cref="IsPlayer"/> = 플레이어("You *"·인게임 Player). 팀은 인게임 표(또는 플레이어 헤더)에서만 안다.
+/// <see cref="TeamName"/> = 표로 풀 수 없는 사용자 팀 이름(My Team, <see cref="ImportTeam"/>).
+/// </summary>
+public sealed record ImportedDriverPoints(string Name, int Points, bool IsPlayer, int? TeamId = null, string? TeamName = null);
 
-/// <summary>가져온 컨스트럭터 기준값 한 줄(인게임 Constructor Standings, D-55).</summary>
-public sealed record ImportedConstructorPoints(int TeamId, int Points);
+/// <summary>가져온 컨스트럭터 기준값 한 줄(인게임 Constructor Standings, D-55). <see cref="TeamName"/> = 사용자 팀 이름(My Team).</summary>
+public sealed record ImportedConstructorPoints(int TeamId, int Points, string? TeamName = null);
 
 /// <summary>
 /// <c>Season.ImportedStandings</c>(jsonb)에 담는 스냅샷(docs/15 §12, D-55). 시즌 이름은 같은 시즌을 두 번 가져오는지(409) 볼 때 쓴다.

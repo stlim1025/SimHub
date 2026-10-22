@@ -131,7 +131,7 @@ public sealed class SessionQueryService : ISessionQueryService
         row.MyPoints,
         row.CountryCode,
         // 행의 저장 순위(0 포함)가 있으면 = 내 결과 행이 있다 → 팀을 낸다.
-        row.MyPosition is null ? null : ToMyTeam(row.GameCode, row.MyTeamId),
+        row.MyPosition is null ? null : ToMyTeam(row.GameCode, row.MyTeamId, row.MyTeamName),
         SeasonNumbering.Of(seasonNumbers, row.SeasonId),
         row.IsSprintWeekend);
 
@@ -162,15 +162,15 @@ public sealed class SessionQueryService : ISessionQueryService
             session.IsNetworkGame,
             round,
             session.Track?.CountryCode,
-            me is null ? null : ToMyTeam(session.GameCode, me.TeamId),
+            me is null ? null : ToMyTeam(session.GameCode, me.TeamId, me.TeamName),
             seasonNumber,
             weather,
             sprintWeekend);
     }
 
-    private static MyTeamDto ToMyTeam(string gameCode, int? teamId)
+    private static MyTeamDto ToMyTeam(string gameCode, int? teamId, string? teamName)
     {
-        var team = TeamCatalog.Resolve(gameCode, teamId);
+        var team = TeamCatalog.Resolve(gameCode, teamId, teamName);
         return new MyTeamDto(team.Name, team.Color);
     }
 
@@ -200,7 +200,7 @@ public sealed class SessionQueryService : ISessionQueryService
 
     private static SessionResultDto ToResultDto(string gameCode, SessionResult result, int? fastestLapMs, ClassificationGaps gaps)
     {
-        var team = TeamCatalog.Resolve(gameCode, result.TeamId);
+        var team = TeamCatalog.Resolve(gameCode, result.TeamId, result.TeamName);
         var bestLapMs = NullIfNoTime(result.BestLapTimeMs);
 
         return new SessionResultDto(

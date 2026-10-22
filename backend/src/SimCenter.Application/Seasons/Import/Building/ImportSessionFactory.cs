@@ -20,8 +20,10 @@ internal sealed record RoundSources(
 /// 가져온 세션 만들기(docs/15 §12, D-55). 세션 = 가져온 표시(<c>IsImported</c>) + 결과(순위표의 모든 드라이버, 요약만 있으면 나 1명)
 /// + Details(내 랩·순위·셋업·벌칙 — §11 조립기가 읽는 모양). 시즌·주말 연결과 분류 시각은 <see cref="SeasonImportBuilder"/>가 정한다.
 /// </summary>
+/// <remarks><c>teamOf</c> = 순위표 팀 칸 → 팀(<see cref="ImportTeams.Of"/>). 팀 칸이 비면 명단의 기본 팀을 쓴다.</remarks>
 internal sealed class ImportSessionFactory(
-    Guid userId, Guid seasonId, string gameCode, GameMode mode, DateTime now, Func<Guid> newId, DriverRoster roster)
+    Guid userId, Guid seasonId, string gameCode, GameMode mode, DateTime now, Func<Guid> newId, DriverRoster roster,
+    Func<string?, ImportTeam> teamOf)
 {
     private const string SourceName = "F1Laps";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -33,6 +35,7 @@ internal sealed class ImportSessionFactory(
         foreach (var row in doc.Classification)
         {
             var result = Row(results, roster.Resolve(row.Name, row.IsPlayer));
+            ApplyTeam(result, row);
             result.Position = row.Position;
             result.BestLapTimeMs = row.BestLapTimeMs;
 
@@ -89,6 +92,7 @@ internal sealed class ImportSessionFactory(
         foreach (var row in raceDoc?.Classification ?? [])
         {
             var result = Row(results, roster.Resolve(row.Name, row.IsPlayer));
+            ApplyTeam(result, row);
             result.Position ??= row.Position;
             result.BestLapTimeMs = row.BestLapTimeMs;
             result.GapMs = row.GapMs ?? (row.Position == 1 ? 0 : null);
@@ -130,6 +134,18 @@ internal sealed class ImportSessionFactory(
         var me = new ImportedResult(roster.Player) { Position = summary.QualifyingPosition };
         return NewSession(SessionType.Qualifying, SessionKind.ShortQualifying, null, summary.QualifyingAiDifficulty,
             ImportHeaders.WeatherOf(summary.Conditions), [me], details: null);
+    }
+
+    /// <summary>
+    /// 순위표 팀 칸이 있으면 이 세션의 팀으로 쓴다(없으면 명단의 기본 팀 그대로). 표에 없는 이름은 기본 팀을 모를 때만 쓴다.
+    /// </summary>
+    private void ApplyTeam(ImportedResult result, F1LapsClassificationRow row)
+    {
+        var team = teamOf(row.TeamName);
+        if (team.TeamId is not null || (team.IsKnown && !result.Team.IsKnown))
+        {
+            result.Team = team;
+        }
     }
 
     private static ImportedResult Row(Dictionary<int, ImportedResult> results, RosterDriver driver)
@@ -272,7 +288,8 @@ internal sealed class ImportSessionFactory(
             BestLapTimeMs = result.BestLapTimeMs ?? 0,
             DriverKey = DriverKeys.Build(driver.IsPlayer, null, driver.Name, null, sessionRef, driver.CarIndex),
             DriverName = driver.Name,
-            TeamId = driver.TeamId,
+            TeamId = result.Team.TeamId,
+            TeamName = result.Team.TeamName,
             IsAiControlled = !driver.IsPlayer,
             IsPlayer = driver.IsPlayer,
             CreatedAt = now,

@@ -45,6 +45,12 @@ public class SessionResult : BaseEntity
     /// <summary>게임 팀 ID.</summary>
     public int? TeamId { get; set; }
 
+    /// <summary>팀 ID 표로 풀 수 없는 팀 이름(가져온 My Team 이름 "TEAM ALPHA" 등, D-55). 최대 <see cref="TeamNameMaxLength"/>자, 없으면 null.</summary>
+    public string? TeamName { get; set; }
+
+    /// <summary><see cref="TeamName"/> 최대 길이.</summary>
+    public const int TeamNameMaxLength = 64;
+
     public int? RaceNumber { get; set; }
 
     public bool IsAiControlled { get; set; }
@@ -75,6 +81,7 @@ public class SessionResult : BaseEntity
         DriverName = source.DriverName;
         GameDriverId = source.GameDriverId;
         TeamId = source.TeamId;
+        TeamName = source.TeamName;
         RaceNumber = source.RaceNumber;
         IsAiControlled = source.IsAiControlled;
         IsPlayer = source.IsPlayer;

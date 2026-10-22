@@ -34,6 +34,8 @@ public sealed class SeasonImportApiE2ETests : IClassFixture<ApiFactory>
 
     private static string All => string.Join("\n\n", Fixture("ingame_season1.md"), Summary, Fixture("f1laps_session_sample.md"));
 
+    private static string MyTeam => Fixture("f1laps_myteam_sample.md");
+
     [Fact]
     public async Task Import_summary_attaches_recorded_miami_and_shows_f1laps_standings()
     {
@@ -201,6 +203,56 @@ public sealed class SeasonImportApiE2ETests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task My_team_import_shows_custom_team_and_can_be_reimported_after_delete()
+    {
+        var client = _factory.CreateClient();
+        await TestApi.RegisterAndLoginAsync(client);
+
+        var seasonId = await ImportAsync(client, MyTeam);
+        var detail = await GetOkAsync(client, $"{SeasonsUrl}/{seasonId}");
+
+        // 내 팀(My Team) = 헤더 팀 이름, AI = F1 25 팀(Kick Sauber → Sauber).
+        Assert.Equal("TEAM ALPHA", detail.GetProperty("season").GetProperty("myTeamName").GetString());
+        var drivers = detail.GetProperty("standings").GetProperty("drivers").EnumerateArray().ToList();
+        Assert.Equal("TEAM ALPHA", drivers.Single(d => d.GetProperty("isPlayer").GetBoolean()).GetProperty("teamName").GetString());
+        Assert.Equal("TEAM ALPHA", TeamOf(drivers, "Mark Webber"));
+        Assert.Equal("Sauber", TeamOf(drivers, "Nico Hulkenberg"));
+        Assert.Equal("Haas", TeamOf(drivers, "Oliver Bearman"));
+        var constructors = detail.GetProperty("standings").GetProperty("constructors");
+        Assert.Equal(
+            [("TEAM ALPHA", 62), ("Red Bull Racing", 43), ("Haas", 30), ("Sauber", 25)],
+            constructors.EnumerateArray().Select(c => (c.GetProperty("teamName").GetString()!, c.GetProperty("points").GetInt32())));
+        Assert.Equal("TEAM ALPHA", detail.GetProperty("calendar")[0].GetProperty("myTeamName").GetString());
+
+        var australiaRace = detail.GetProperty("rounds")[0].GetProperty("sessions").EnumerateArray()
+            .Single(s => s.GetProperty("sessionType").GetString() == "Race");
+        var session = await GetOkAsync(client, $"{SessionsUrl}/{australiaRace.GetProperty("sessionId").GetGuid()}");
+        var results = session.GetProperty("results").EnumerateArray().ToList();
+        Assert.Equal("TEAM ALPHA", results.Single(r => r.GetProperty("isPlayer").GetBoolean()).GetProperty("teamName").GetString());
+        Assert.Equal("Red Bull Racing", TeamOf(results, "Max Verstappen"));
+        Assert.Equal("TEAM ALPHA", TeamOf(results, "Mark Webber"));
+        Assert.Equal("TEAM ALPHA", session.GetProperty("session").GetProperty("myTeam").GetProperty("name").GetString());
+
+        var sessionCount = (await GetOkAsync(client, $"{SessionsUrl}?pageSize=100")).GetProperty("total").GetInt32();
+
+        // 시즌을 지우고(soft delete) 같은 문서를 다시 가져오면 409가 아니고, 옛 가져온 세션은 겹쳐 남지 않는다.
+        using (var deleted = await client.DeleteAsync($"{SeasonsUrl}/{seasonId}"))
+        {
+            Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
+        }
+
+        var preview = await PostOkAsync(client, PreviewUrl, MyTeam);
+        Assert.False(preview.GetProperty("alreadyImported").GetBoolean());
+        var again = await ImportAsync(client, MyTeam);
+
+        Assert.NotEqual(seasonId, again);
+        Assert.Single((await GetOkAsync(client, SeasonsUrl)).GetProperty("items").EnumerateArray());
+        Assert.Equal(sessionCount, (await GetOkAsync(client, $"{SessionsUrl}?pageSize=100")).GetProperty("total").GetInt32());
+        var reimported = await GetOkAsync(client, $"{SeasonsUrl}/{again}");
+        Assert.Equal("TEAM ALPHA", reimported.GetProperty("season").GetProperty("myTeamName").GetString());
+    }
+
+    [Fact]
     public async Task Preview_bad_markdown_is_400_with_line_number()
     {
         var client = _factory.CreateClient();
@@ -220,6 +272,9 @@ public sealed class SeasonImportApiE2ETests : IClassFixture<ApiFactory>
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
+
+    private static string? TeamOf(IEnumerable<JsonElement> rows, string name)
+        => rows.Single(r => r.GetProperty("name").GetString() == name).GetProperty("teamName").GetString();
 
     private static int[] Rounds(JsonElement detail)
         => detail.GetProperty("rounds").EnumerateArray().Select(r => r.GetProperty("round").GetInt32()).ToArray();

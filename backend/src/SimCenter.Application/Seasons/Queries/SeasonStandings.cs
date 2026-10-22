@@ -10,7 +10,7 @@ public sealed record StandingCell(Guid WeekendId, int? Position, ResultStatus? R
 
 /// <summary>
 /// 드라이버 순위 한 줄. 이름·팀·AI 여부는 그 드라이버의 가장 최근 세션 값이고, 점수는 <c>int</c> 상한으로 자른 값이다(순서는 실제 합계 기준).
-/// <see cref="Cells"/>는 그 드라이버가 결과를 가진 주말만 담는다.
+/// <see cref="Cells"/>는 그 드라이버가 결과를 가진 주말만 담는다. <see cref="TeamName"/> = 저장된 사용자 팀 이름(가져온 My Team).
 /// </summary>
 public sealed record DriverStanding(
     int Position,
@@ -22,10 +22,11 @@ public sealed record DriverStanding(
     int Points,
     int Wins,
     int Podiums,
-    IReadOnlyList<StandingCell> Cells);
+    IReadOnlyList<StandingCell> Cells,
+    string? TeamName = null);
 
-/// <summary>팀(컨스트럭터) 순위 한 줄. 팀 ID가 다르면 이름이 같아도 다른 팀이다.</summary>
-public sealed record ConstructorStanding(int Position, int TeamId, int Points, int Wins);
+/// <summary>팀(컨스트럭터) 순위 한 줄. 팀 ID가 다르면 이름이 같아도 다른 팀이다. <see cref="TeamName"/> = 사용자 팀 이름(My Team, 없으면 null).</summary>
+public sealed record ConstructorStanding(int Position, int TeamId, int Points, int Wins, string? TeamName = null);
 
 /// <summary>시즌의 드라이버·컨스트럭터 순위.</summary>
 public sealed record SeasonStandings(

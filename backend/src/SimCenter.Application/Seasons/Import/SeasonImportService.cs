@@ -77,6 +77,7 @@ public sealed class SeasonImportService : ISeasonImportService
             }
 
             var graph = BuildGraph(userId, bundle, prepared);
+            await RetireDeletedImportsAsync(userId, bundle, prepared.SeasonLinkId, ct);
             var season = await PersistAsync(userId, bundle, graph, ct);
             await _unitOfWork.SaveChangesAsync(ct);
 
@@ -177,6 +178,28 @@ public sealed class SeasonImportService : ISeasonImportService
         var imported = await _imports.GetImportedSeasonsAsync(userId, bundle.GameCode, cancellationToken);
         return imported.Any(s => s.GameMode == bundle.GameMode
             && string.Equals(ImportedSeasonSnapshot.TryRead(s.ImportedStandings)?.Title, bundle.Title, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// 지운 가져온 시즌을 다시 가져오면(같은 링크) 옛 가져온 세션을 soft delete한다 — 시즌을 지워도 세션은 남아 세션 목록에 겹친다.
+    /// 기록 세션(<c>IsImported</c> 아님)은 건드리지 않는다.
+    /// </summary>
+    private async Task RetireDeletedImportsAsync(Guid userId, ImportBundle bundle, long seasonLinkId, CancellationToken cancellationToken)
+    {
+        var leftovers = await _imports.GetImportedSessionsOfDeletedSeasonsAsync(userId, bundle.GameCode, seasonLinkId, cancellationToken);
+        if (leftovers.Count == 0)
+        {
+            return;
+        }
+
+        var now = _clock.UtcNow;
+        foreach (var session in leftovers)
+        {
+            session.IsDeleted = true;
+            session.UpdatedAt = now;
+        }
+
+        _logger.LogInformation("지운 가져온 시즌의 세션 정리 user={User} link={Link} sessions={Sessions}", userId, seasonLinkId, leftovers.Count);
     }
 
     /// <summary>게임·모드·이름 → 음수 링크(결정적). 게임 링크(양수)와 겹치지 않는다.</summary>

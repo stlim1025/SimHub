@@ -909,6 +909,11 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("team_id");
 
+                    b.Property<string>("TeamName")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("team_name");
+
                     b.Property<int>("TotalRaceTimeMs")
                         .HasColumnType("integer")
                         .HasColumnName("total_race_time_ms");

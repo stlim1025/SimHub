@@ -38,6 +38,18 @@ public sealed class SeasonImportRepository : ISeasonImportRepository
             .Where(s => s.UserId == userId && s.GameCode == gameCode && s.ImportedFrom != null)
             .ToListAsync(cancellationToken);
 
+    /// <remarks>시즌 전역 필터가 지운 시즌을 빼므로 "활성 시즌이 없음" = 시즌이 삭제됨.</remarks>
+    public async Task<IReadOnlyList<GameSession>> GetImportedSessionsOfDeletedSeasonsAsync(
+        Guid userId, string gameCode, long seasonLinkId, CancellationToken cancellationToken = default)
+        => await _context.GameSessions
+            .Where(s => s.UserId == userId
+                && s.GameCode == gameCode
+                && s.IsImported
+                && s.SeasonLinkId == seasonLinkId
+                && s.SeasonId != null
+                && !_context.Seasons.Any(season => season.Id == s.SeasonId))
+            .ToListAsync(cancellationToken);
+
     public Task<bool> SessionKeyInUseAsync(Guid userId, string gameCode, string sessionKey, CancellationToken cancellationToken = default)
         => _context.GameSessions.AnyAsync(
             s => s.UserId == userId && s.GameCode == gameCode && s.SessionKey == sessionKey, cancellationToken);

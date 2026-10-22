@@ -6,8 +6,8 @@ namespace SimCenter.Application.Seasons.Import;
 /// <summary>F1Laps 세션의 내 랩 한 줄. 섹터는 모르면 null.</summary>
 public sealed record F1LapsLap(int LapNumber, int? Position, TyreCompound Compound, bool Pit, int? LapTimeMs, int? Sector1Ms, int? Sector2Ms, int? Sector3Ms);
 
-/// <summary>F1Laps 세션 순위표 한 줄. <see cref="IsPlayer"/> = "You".</summary>
-public sealed record F1LapsClassificationRow(int Position, string Name, bool IsPlayer, int? BestLapTimeMs, int? GapMs, int? Points);
+/// <summary>F1Laps 세션 순위표 한 줄. <see cref="IsPlayer"/> = "You". <see cref="TeamName"/> = <c>Team</c> 칸 그대로(없으면 null, My Team 차는 "My Team").</summary>
+public sealed record F1LapsClassificationRow(int Position, string Name, bool IsPlayer, int? BestLapTimeMs, int? GapMs, int? Points, string? TeamName = null);
 
 /// <summary>F1Laps 세션의 벌칙 한 줄(차는 알 수 없다).</summary>
 public sealed record F1LapsPenalty(int? Lap, string Penalty, string Infringement);
@@ -251,7 +251,8 @@ public static class F1LapsSessionParser
                 string.Equals(name, PlayerName, StringComparison.OrdinalIgnoreCase),
                 MarkdownCells.Time(row, table.Column("best lap"), "Best Lap"),
                 MarkdownCells.Time(row, table.Column("gap"), "Gap"),
-                MarkdownCells.Int(row, table.Column("points"), "Points")));
+                MarkdownCells.Int(row, table.Column("points"), "Points"),
+                MarkdownCells.Text(row, table.Column("team"))));
         }
 
         return rows;

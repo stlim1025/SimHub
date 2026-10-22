@@ -19,6 +19,13 @@ public interface ISeasonImportRepository
     /// <summary>내 가져온 시즌들(<c>ImportedFrom</c> 있음, 삭제 제외, no tracking).</summary>
     Task<IReadOnlyList<Season>> GetImportedSeasonsAsync(Guid userId, string gameCode, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// 지운 시즌에 남은 내 가져온 세션(<c>IsImported</c>, 이 시즌 링크, 시즌이 삭제됨 — tracked). 같은 시즌을 지우고 다시 가져올 때
+    /// 옛 가져온 세션이 세션 목록에 겹쳐 남지 않게 지운다.
+    /// </summary>
+    Task<IReadOnlyList<GameSession>> GetImportedSessionsOfDeletedSeasonsAsync(
+        Guid userId, string gameCode, long seasonLinkId, CancellationToken cancellationToken = default);
+
     /// <summary>이 세션 키를 쓰는 내 활성 세션이 있는가.</summary>
     Task<bool> SessionKeyInUseAsync(Guid userId, string gameCode, string sessionKey, CancellationToken cancellationToken = default);
 

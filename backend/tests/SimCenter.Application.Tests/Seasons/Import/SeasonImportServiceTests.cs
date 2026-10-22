@@ -130,6 +130,10 @@ public sealed class SeasonImportServiceTests
         public Task<IReadOnlyList<Season>> GetImportedSeasonsAsync(Guid userId, string gameCode, CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<Season>>(ImportedSeasons);
 
+        public Task<IReadOnlyList<GameSession>> GetImportedSessionsOfDeletedSeasonsAsync(
+            Guid userId, string gameCode, long seasonLinkId, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<GameSession>>([]);
+
         public Task<bool> SessionKeyInUseAsync(Guid userId, string gameCode, string sessionKey, CancellationToken cancellationToken = default)
             => Task.FromResult(false);
 

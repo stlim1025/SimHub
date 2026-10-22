@@ -75,14 +75,14 @@ public sealed class SeasonQueryService : ISeasonQueryService
 
         var (selection, standings) = Calculate(season, rows);
         var rounds = RoundNumbering.Assign(weekends);
-        var seasonTeamId = standings.Drivers.FirstOrDefault(d => d.IsPlayer)?.TeamId;
+        var seasonMe = standings.Drivers.FirstOrDefault(d => d.IsPlayer);
 
         return new SeasonDetailDto(
             ToSummary(season, weekends.Count, standings, numbers),
             BuildRounds(weekends, rounds, rows, selection),
             ToStandingsDto(standings, rounds, season.GameCode),
             // 시즌 탭(docs/15 §12): 캘린더 전부 + 내 라운드 값. 가져온 세션(D-55)은 내 결과 행만 있어도 된다.
-            SeasonCalendar.Build(season.GameCode, calendar, weekends, selection, seasonTeamId));
+            SeasonCalendar.Build(season.GameCode, calendar, weekends, selection, seasonMe?.TeamId, seasonMe?.TeamName));
     }
 
     // ---- 계산 ----
@@ -104,7 +104,9 @@ public sealed class SeasonQueryService : ISeasonQueryService
     {
         var me = standings.Drivers.FirstOrDefault(d => d.IsPlayer);
         var leader = standings.Drivers.FirstOrDefault();
-        var myTeam = me?.TeamId is { } teamId ? TeamCatalog.Resolve(season.GameCode, teamId) : null;
+        var myTeam = me is not null && (me.TeamId is not null || me.TeamName is not null)
+            ? TeamCatalog.Resolve(season.GameCode, me.TeamId, me.TeamName)
+            : null;
 
         return new SeasonSummaryDto(
             season.Id,
@@ -189,7 +191,7 @@ public sealed class SeasonQueryService : ISeasonQueryService
     {
         var drivers = standings.Drivers.Select(d =>
         {
-            var team = TeamCatalog.Resolve(gameCode, d.TeamId);
+            var team = TeamCatalog.Resolve(gameCode, d.TeamId, d.TeamName);
             return new DriverStandingDto(
                 d.Position,
                 d.DriverKey,
@@ -206,7 +208,7 @@ public sealed class SeasonQueryService : ISeasonQueryService
 
         var constructors = standings.Constructors.Select(c =>
         {
-            var team = TeamCatalog.Resolve(gameCode, c.TeamId);
+            var team = TeamCatalog.Resolve(gameCode, c.TeamId, c.TeamName);
             return new ConstructorStandingDto(c.Position, c.TeamId, team.Name, team.Color, c.Points, c.Wins);
         }).ToList();
 

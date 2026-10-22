@@ -38,12 +38,12 @@ public static class SeasonImportPreviewMapper
             Rounds(graph, trackNames),
             standings.Drivers.Select(d =>
             {
-                var team = TeamCatalog.Resolve(bundle.GameCode, d.TeamId);
+                var team = TeamCatalog.Resolve(bundle.GameCode, d.TeamId, d.TeamName);
                 return new SeasonImportDriverDto(d.Position, d.Name, team.Name, team.Color, d.Points, d.IsPlayer);
             }).ToList(),
             standings.Constructors.Select(c =>
             {
-                var team = TeamCatalog.Resolve(bundle.GameCode, c.TeamId);
+                var team = TeamCatalog.Resolve(bundle.GameCode, c.TeamId, c.TeamName);
                 return new SeasonImportConstructorDto(c.Position, team.Name, team.Color, c.Points);
             }).ToList(),
             linkId is { } id
@@ -129,7 +129,8 @@ public static class SeasonImportPreviewMapper
                 r.Position,
                 r.ResultStatus,
                 r.Points,
-                IsImported: true)))
+                IsImported: true,
+                TeamName: r.TeamName)))
             .ToList();
 
         return StandingsCalculator.Calculate(SeasonSessionSelector.Select(rows), graph.Season.GameCode, graph.Snapshot);

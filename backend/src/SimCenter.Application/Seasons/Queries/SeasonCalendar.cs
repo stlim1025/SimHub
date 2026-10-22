@@ -40,7 +40,8 @@ public static class SeasonCalendar
         IReadOnlyList<CalendarTrack> calendar,
         IReadOnlyList<WeekendRow> weekends,
         SeasonSelection selection,
-        int? seasonTeamId)
+        int? seasonTeamId,
+        string? seasonTeamName = null)
     {
         ArgumentNullException.ThrowIfNull(calendar);
         ArgumentNullException.ThrowIfNull(weekends);
@@ -51,7 +52,7 @@ public static class SeasonCalendar
         var countedByWeekend = selection.CountedRows.ToLookup(r => r.WeekendId);
 
         return slots
-            .Select((slot, index) => ToDto(index + 1, slot, gameCode, seasonTeamId, selection,
+            .Select((slot, index) => ToDto(index + 1, slot, gameCode, seasonTeamId, seasonTeamName, selection,
                 slot.Weekend is { } w ? countedByWeekend[w.WeekendId] : []))
             .ToList();
     }
@@ -95,11 +96,14 @@ public static class SeasonCalendar
 
     // ---- 한 줄 ----
 
+    private static bool HasTeam(SeasonResultRow row) => row.TeamId is not null || row.TeamName is not null;
+
     private static SeasonCalendarRoundDto ToDto(
         int round,
         Slot slot,
         string gameCode,
         int? seasonTeamId,
+        string? seasonTeamName,
         SeasonSelection selection,
         IEnumerable<SeasonResultRow> countedRows)
     {
@@ -123,10 +127,13 @@ public static class SeasonCalendar
                 .OrderByDescending(r => r.ClassifiedAt).ThenBy(r => r.CarIndex).FirstOrDefault()
             : null;
 
-        var teamId = myRace?.TeamId
-            ?? mine.OrderByDescending(r => r.ClassifiedAt).FirstOrDefault(r => r.TeamId is not null)?.TeamId
-            ?? seasonTeamId;
-        var team = teamId is { } t ? TeamCatalog.Resolve(gameCode, t) : null;
+        // 팀: 이 주말 본 레이스 → 가장 최근 내 결과 → 시즌 Standings의 내 팀. 저장된 사용자 팀 이름(My Team)도 팀으로 본다.
+        var teamRow = myRace is not null && HasTeam(myRace)
+            ? myRace
+            : mine.OrderByDescending(r => r.ClassifiedAt).FirstOrDefault(HasTeam);
+        var team = teamRow is not null
+            ? TeamCatalog.Resolve(gameCode, teamRow.TeamId, teamRow.TeamName)
+            : seasonTeamId is not null || seasonTeamName is not null ? TeamCatalog.Resolve(gameCode, seasonTeamId, seasonTeamName) : null;
 
         return new SeasonCalendarRoundDto(
             round,

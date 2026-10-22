@@ -180,14 +180,75 @@ public sealed class ImportParsersTests
     [InlineData("McLaren", "McLaren")]
     public void Teams_map_in_game_names_to_2026_grid(string name, string expected)
     {
-        var id = ImportTeams.Resolve(name);
+        var id = ImportTeams.Resolve(GameCodes.F1_26, name);
 
         Assert.InRange(id!.Value, 220, 230);
         Assert.Equal(expected, TeamCatalog.Resolve(GameCodes.F1_25, id).Name);
     }
 
+    [Theory]
+    [InlineData("Mercedes", 0, "Mercedes")]
+    [InlineData("Ferrari", 1, "Ferrari")]
+    [InlineData("Red Bull Racing", 2, "Red Bull Racing")]
+    [InlineData("Williams", 3, "Williams")]
+    [InlineData("Aston Martin", 4, "Aston Martin")]
+    [InlineData("Alpine", 5, "Alpine")]
+    [InlineData("Racing Bulls", 6, "Racing Bulls")]
+    [InlineData("Haas F1 Team", 7, "Haas")]
+    [InlineData("McLaren", 8, "McLaren")]
+    [InlineData("Kick Sauber", 9, "Sauber")]
+    public void Teams_map_f1laps_names_to_f1_25_team_ids(string name, int expectedId, string expectedName)
+    {
+        var id = ImportTeams.Resolve(GameCodes.F1_25, name);
+
+        Assert.Equal(expectedId, id);
+        Assert.Equal(expectedName, TeamCatalog.Resolve(GameCodes.F1_25, id).Name);
+    }
+
     [Fact]
-    public void Teams_unknown_or_generic_is_null() => Assert.Null(ImportTeams.Resolve("F1 Generic"));
+    public void Teams_unknown_or_generic_is_null()
+    {
+        Assert.Null(ImportTeams.Resolve(GameCodes.F1_25, "F1 Generic"));
+        Assert.Null(ImportTeams.Resolve(GameCodes.F1_25, "Cadillac Formula 1 Team"));
+        Assert.Equal(ImportTeam.None, ImportTeams.Of(GameCodes.F1_25, "F1 Generic", "TEAM ALPHA"));
+    }
+
+    [Fact]
+    public void Teams_my_team_cells_become_custom_team_name()
+    {
+        Assert.Equal(new ImportTeam(TeamCatalog.MyTeamId, "TEAM ALPHA"), ImportTeams.Of(GameCodes.F1_25, "My Team", "TEAM ALPHA"));
+        Assert.Equal(new ImportTeam(TeamCatalog.MyTeamId, "TEAM ALPHA"), ImportTeams.Of(GameCodes.F1_25, "TEAM ALPHA *", "TEAM ALPHA"));
+        Assert.Equal(new ImportTeam(TeamCatalog.MyTeamId, null), ImportTeams.Of(GameCodes.F1_25, "My Team", null));
+        Assert.Equal(new ImportTeam(9, null), ImportTeams.Of(GameCodes.F1_25, "Kick Sauber", "TEAM ALPHA"));
+        Assert.Equal(new ImportTeam(null, "Some Privateer"), ImportTeams.Of(GameCodes.F1_25, "Some Privateer", null));
+    }
+
+    [Fact]
+    public void Team_catalog_shows_stored_custom_team_name()
+    {
+        Assert.Equal(new TeamInfo("TEAM ALPHA", TeamCatalog.MyTeamColor), TeamCatalog.Resolve(GameCodes.F1_25, TeamCatalog.MyTeamId, "TEAM ALPHA"));
+        Assert.Equal(new TeamInfo("Some Privateer", TeamCatalog.FallbackColor), TeamCatalog.Resolve(GameCodes.F1_25, null, "Some Privateer"));
+        Assert.Equal("Ferrari", TeamCatalog.Resolve(GameCodes.F1_25, 1, "ignored").Name);
+        Assert.Equal("My Team", TeamCatalog.Resolve(GameCodes.F1_25, TeamCatalog.MyTeamId, null).Name);
+    }
+
+    [Fact]
+    public void Team_table_is_2026_grid_only_for_in_game_standings_with_2026_teams()
+    {
+        Assert.Equal(GameCodes.F1_26, ImportTeams.TeamGameOf(ImportDocumentReader.Read(All)));
+        Assert.Equal(GameCodes.F1_25, ImportTeams.TeamGameOf(ImportDocumentReader.Read(MyTeam)));
+    }
+
+    [Fact]
+    public void Session_classification_keeps_team_column()
+    {
+        var bundle = ImportDocumentReader.Read(MyTeam);
+
+        var australia = bundle.Sessions[0];
+        Assert.Equal(["My Team", "Red Bull Racing", "Kick Sauber", "Haas F1 Team", "My Team"], australia.Classification.Select(r => r.TeamName));
+        Assert.Equal("TEAM ALPHA", australia.TeamName);
+        Assert.Equal(GameMode.MyTeamCareer, bundle.GameMode);
+    }
 
     [Theory]
     [InlineData("Sergio Perez", "PÉREZ", true)]

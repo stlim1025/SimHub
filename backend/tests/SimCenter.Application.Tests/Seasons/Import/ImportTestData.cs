@@ -26,6 +26,9 @@ internal static class ImportTestData
 
     public static string Sessions => Fixture("f1laps_session_sample.md");
 
+    /// <summary>합성 My Team 묶음: 시즌 요약(팀 TEAM ALPHA) + 세션 2개(순위표 Team 칸: "My Team"·Kick Sauber·Haas F1 Team·Red Bull Racing).</summary>
+    public static string MyTeam => Fixture("f1laps_myteam_sample.md");
+
     /// <summary>사용자가 한 번에 붙여 넣는 모양: 인게임 순위표 + F1Laps 요약 + F1Laps 세션들.</summary>
     public static string All => string.Join("\n\n", InGame, Summary, Sessions);
 

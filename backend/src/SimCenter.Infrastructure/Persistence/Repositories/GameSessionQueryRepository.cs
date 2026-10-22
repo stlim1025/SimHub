@@ -55,7 +55,7 @@ public sealed class GameSessionQueryRepository : IGameSessionQueryRepository
                     Me = session.Results
                         .Where(r => r.IsPlayer)
                         .OrderBy(r => r.CarIndex)
-                        .Select(r => new { r.Position, r.GridPosition, r.ResultStatus, r.BestLapTimeMs, r.Points, r.TeamId })
+                        .Select(r => new { r.Position, r.GridPosition, r.ResultStatus, r.BestLapTimeMs, r.Points, r.TeamId, r.TeamName })
                         .FirstOrDefault(),
                     // 같은 주말에 Race2나 스프린트 슛아웃이 있으면 스프린트 주말(그 주말 Race = 스프린트, SessionPositions).
                     IsSprintWeekend = session.RaceWeekendId != null && _context.GameSessions.Any(o =>
@@ -83,7 +83,8 @@ public sealed class GameSessionQueryRepository : IGameSessionQueryRepository
                 row.GameCode,
                 row.CountryCode,
                 row.Me?.TeamId,
-                row.IsSprintWeekend))
+                row.IsSprintWeekend,
+                row.Me?.TeamName))
             .ToList();
 
         return (items, total);
