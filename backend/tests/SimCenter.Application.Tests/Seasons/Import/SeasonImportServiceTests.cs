@@ -152,6 +152,9 @@ public sealed class SeasonImportServiceTests
         public Task<Season?> GetMineAsync(Guid userId, Guid seasonId, CancellationToken cancellationToken = default)
             => Task.FromResult<Season?>(null);
 
+        public Task<IReadOnlyList<GameSession>> GetImportedSessionsAsync(Guid seasonId, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
         public Task<RaceWeekend?> GetWeekendAsync(Guid seasonId, long weekendLinkId, CancellationToken cancellationToken = default)
             => Task.FromResult<RaceWeekend?>(null);
 

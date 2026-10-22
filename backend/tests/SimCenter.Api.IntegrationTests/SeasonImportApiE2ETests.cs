@@ -203,6 +203,23 @@ public sealed class SeasonImportApiE2ETests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Deleting_imported_season_removes_its_imported_sessions_from_session_list()
+    {
+        var client = _factory.CreateClient();
+        await TestApi.RegisterAndLoginAsync(client);
+        var seasonId = await ImportAsync(client, MyTeam);
+        Assert.True((await GetOkAsync(client, $"{SessionsUrl}?pageSize=100")).GetProperty("total").GetInt32() > 0);
+
+        using (var deleted = await client.DeleteAsync($"{SeasonsUrl}/{seasonId}"))
+        {
+            Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
+        }
+
+        // 지운 시즌의 가져온 세션은 세션 목록에 남지 않는다(다시 가져오지 않아도).
+        Assert.Equal(0, (await GetOkAsync(client, $"{SessionsUrl}?pageSize=100")).GetProperty("total").GetInt32());
+    }
+
+    [Fact]
     public async Task My_team_import_shows_custom_team_and_can_be_reimported_after_delete()
     {
         var client = _factory.CreateClient();

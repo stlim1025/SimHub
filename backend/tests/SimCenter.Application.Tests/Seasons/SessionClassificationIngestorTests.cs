@@ -826,6 +826,9 @@ public class SessionClassificationIngestorTests
         public Task<Season?> GetMineAsync(Guid userId, Guid seasonId, CancellationToken cancellationToken = default)
             => Task.FromResult(Seasons.FirstOrDefault(s => !s.IsDeleted && s.UserId == userId && s.Id == seasonId));
 
+        public Task<IReadOnlyList<GameSession>> GetImportedSessionsAsync(Guid seasonId, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
         public Task<RaceWeekend?> GetWeekendAsync(Guid seasonId, long weekendLinkId, CancellationToken cancellationToken = default)
             => Task.FromResult(Weekends.FirstOrDefault(w =>
                 !w.IsDeleted && w.SeasonId == seasonId && w.WeekendLinkId == weekendLinkId));

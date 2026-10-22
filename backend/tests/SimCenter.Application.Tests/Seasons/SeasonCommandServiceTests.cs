@@ -192,6 +192,23 @@ public class SeasonCommandServiceTests
     }
 
     [Fact]
+    public async Task Delete_AlsoSoftDeletesImportedSessions_KeepsRecordedSessions()
+    {
+        var season = AddSeason();
+        var imported = AddSession(season.Id, imported: true);
+        var recorded = AddSession(season.Id, imported: false);
+        var otherSeasonImported = AddSession(Guid.NewGuid(), imported: true);
+
+        await _sut.DeleteAsync(_userId, season.Id);
+
+        Assert.True(imported.IsDeleted);
+        Assert.Equal(Now, imported.UpdatedAt);
+        Assert.False(recorded.IsDeleted);         // 기록 세션은 남는다(같은 시즌이 다시 들어오면 시즌이 되살아난다)
+        Assert.False(otherSeasonImported.IsDeleted);
+        Assert.Equal(1, _uow.SaveCount);           // 시즌과 함께 한 번에 저장
+    }
+
+    [Fact]
     public async Task Delete_Twice_SecondIsNotFound()
     {
         var season = AddSeason();
@@ -214,12 +231,34 @@ public class SeasonCommandServiceTests
 
     // ---- Fakes ----
 
+    private GameSession AddSession(Guid seasonId, bool imported)
+    {
+        var session = new GameSession
+        {
+            Id = Guid.NewGuid(),
+            UserId = _userId,
+            SeasonId = seasonId,
+            IsImported = imported,
+            GameCode = "F1_25",
+            SessionKey = Guid.NewGuid().ToString("N"),
+            SessionRef = "ref",
+        };
+        _seasons.Sessions.Add(session);
+        return session;
+    }
+
     private sealed class FakeSeasons : ISeasonRepository
     {
         public List<Season> Items { get; } = new();
 
+        public List<GameSession> Sessions { get; } = new();
+
         public Task<Season?> GetMineAsync(Guid userId, Guid seasonId, CancellationToken cancellationToken = default)
             => Task.FromResult(Items.FirstOrDefault(s => !s.IsDeleted && s.UserId == userId && s.Id == seasonId));
+
+        public Task<IReadOnlyList<GameSession>> GetImportedSessionsAsync(Guid seasonId, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<GameSession>>(
+                Sessions.Where(s => s.SeasonId == seasonId && s.IsImported && !s.IsDeleted).ToList());
 
         public Task<Season?> GetByLinkAsync(Guid userId, string gameCode, long seasonLinkId, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();

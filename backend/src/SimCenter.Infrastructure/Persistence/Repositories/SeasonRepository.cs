@@ -18,6 +18,11 @@ public sealed class SeasonRepository : ISeasonRepository
         => _context.Seasons.FirstOrDefaultAsync(
             s => s.UserId == userId && s.GameCode == gameCode && s.SeasonLinkId == seasonLinkId, cancellationToken);
 
+    public async Task<IReadOnlyList<GameSession>> GetImportedSessionsAsync(Guid seasonId, CancellationToken cancellationToken = default)
+        => await _context.GameSessions
+            .Where(s => s.SeasonId == seasonId && s.IsImported)
+            .ToListAsync(cancellationToken);
+
     /// <remarks>지운 행만 보므로 전역 필터를 끈다.</remarks>
     public Task<Season?> GetDeletedByLinkAsync(Guid userId, string gameCode, long seasonLinkId, CancellationToken cancellationToken = default)
         => _context.Seasons

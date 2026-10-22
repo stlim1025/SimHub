@@ -63,8 +63,17 @@ public sealed class SeasonCommandService : ISeasonCommandService
     public async Task DeleteAsync(Guid userId, Guid seasonId, CancellationToken cancellationToken = default)
     {
         var season = await GetMineAsync(userId, seasonId, cancellationToken);
+        var now = _clock.UtcNow;
 
-        season.SoftDelete(_clock.UtcNow);
+        season.SoftDelete(now);
+
+        // 가져온 세션은 그 시즌에만 의미가 있어 함께 지운다(세션 목록에 남지 않게). 기록 세션은 남긴다.
+        foreach (var session in await _seasons.GetImportedSessionsAsync(season.Id, cancellationToken))
+        {
+            session.IsDeleted = true;
+            session.UpdatedAt = now;
+        }
+
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 

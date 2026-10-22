@@ -20,6 +20,12 @@ public interface ISeasonRepository
     /// <summary>내 시즌 1건(삭제 제외, tracked — 이름·완료·삭제 수정용). 남의 것·없는 것은 null.</summary>
     Task<Season?> GetMineAsync(Guid userId, Guid seasonId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// 이 시즌에 속한 가져온 세션(<c>IsImported</c>, 삭제 제외, tracked). 시즌을 지울 때 함께 지운다 —
+    /// 기록 세션은 돌려주지 않는다(같은 링크로 다시 들어오면 시즌이 되살아나야 한다).
+    /// </summary>
+    Task<IReadOnlyList<GameSession>> GetImportedSessionsAsync(Guid seasonId, CancellationToken cancellationToken = default);
+
     /// <summary>키 (SeasonId, WeekendLinkId)로 주말 조회(삭제 제외, tracked). 없으면 null.</summary>
     Task<RaceWeekend?> GetWeekendAsync(Guid seasonId, long weekendLinkId, CancellationToken cancellationToken = default);
 
