@@ -38,11 +38,14 @@ const double _miniMapIconSize = 18;
 const String _miniMapCollapseTooltip = '작은 지도 접기';
 const String _miniMapExpandTooltip = '작은 트랙 지도 보기';
 
-/// 탭 폭이 이 이상이면 그래프 옆에 지도·통계 칸을 두고 스크롤해도 붙여 둔다(그 아래면 위아래 + 떠 있는 작은 지도).
-const double kTelemetrySideBySideMinWidth = 900;
+/// 넓은 화면 오른쪽 지도·통계 칸 폭(그래프 가로폭을 넉넉히 남기도록 좁게).
+const double kTelemetryAsideWidth = 320;
 
-/// 넓은 화면 오른쪽 지도·통계 칸 폭.
-const double kTelemetryAsideWidth = 400;
+/// 지도 칸을 옆에 둘 때 그래프에 남겨야 하는 최소 폭. 이보다 좁아지면 그래프를 꽉 채우고 떠 있는 작은 지도를 쓴다.
+const double _minChartsWidthBesideMap = 1000;
+
+/// 탭 폭이 이 이상이면 그래프 옆에 지도·통계 칸을 두고 스크롤해도 붙여 둔다(그 아래면 위아래 + 떠 있는 작은 지도).
+const double kTelemetrySideBySideMinWidth = _minChartsWidthBesideMap + _panelGap + kTelemetryAsideWidth;
 
 /// 좁은 화면에서 떠 있는 작은 트랙 지도의 한 변.
 const double kMiniTrackMapSize = 170;

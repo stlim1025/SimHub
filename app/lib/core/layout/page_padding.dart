@@ -18,13 +18,14 @@ class ContentAreaWidth extends InheritedWidget {
 }
 
 /// 셸 화면의 바깥 여백(F1Laps처럼 왼쪽 정렬). 스크롤 영역은 본문 끝까지 두어 어디서든 휠로 스크롤되고,
-/// 내용은 오른쪽 여백을 늘려 [kContentMaxWidth]까지만 쓴다. 셸 밖(테스트 등)에서는 [kPagePadding] 그대로.
-EdgeInsets pagePadding(BuildContext context) {
+/// 내용은 오른쪽 여백을 늘려 [maxWidth](기본 [kContentMaxWidth])까지만 쓴다. 셸 밖(테스트 등)에서는 [kPagePadding] 그대로.
+/// 그래프가 주인공인 화면(랩 상세)은 [kWideContentMaxWidth]를 넘겨 큰 모니터의 빈 폭을 쓴다.
+EdgeInsets pagePadding(BuildContext context, {double maxWidth = kContentMaxWidth}) {
   final width = ContentAreaWidth.of(context);
   if (width == null) {
     return kPagePadding;
   }
 
-  final extraRight = math.max(0.0, width - kContentMaxWidth - kPagePadding.horizontal);
+  final extraRight = math.max(0.0, width - maxWidth - kPagePadding.horizontal);
   return kPagePadding.copyWith(right: kPagePadding.right + extraRight);
 }

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/widgets/app_notice.dart';
+import '../../../core/layout/layout_constants.dart';
 import '../../../core/layout/page_padding.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/util/lap_time.dart';
@@ -144,7 +145,7 @@ class _LapDetailPageState extends ConsumerState<LapDetailPage> with SingleTicker
     final shown = fresh ?? (detail.isLoading ? stale : null);
 
     return ListView(
-      padding: pagePadding(context),
+      padding: pagePadding(context, maxWidth: kWideContentMaxWidth),
       children: [
         _Header(
           detail: shown,

@@ -204,7 +204,7 @@ void main() {
 
     testWidgets('넓은 화면: 지도·통계 칸이 그래프 오른쪽에 있고, 페이지를 내려도 화면 안에 붙어 있다', (t) async {
       const viewportHeight = 700.0;
-      await pump(t, _positionedTrace('l1'), size: const Size(1000, viewportHeight));
+      await pump(t, _positionedTrace('l1'), size: const Size(1500, viewportHeight));
 
       final aside = find.byKey(const ValueKey('telemetry-aside'));
       final speed = find.byKey(const ValueKey('telemetry-chart-speed'));
