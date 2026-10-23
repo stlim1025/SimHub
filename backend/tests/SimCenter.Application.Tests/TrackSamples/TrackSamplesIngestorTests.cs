@@ -166,6 +166,10 @@ public class TrackSamplesIngestorTests
             Guid trackId, string gameCode, CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<StoredTrackSampleChunk>>([]);
 
+        public Task<IReadOnlyList<StoredTrackSampleChunk>> ListForSessionAsync(
+            Guid userId, string sessionRef, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<StoredTrackSampleChunk>>([]);
+
         public List<TrackSampleChunk> Items { get; } = new();
 
         public Task<bool> ExistsAsync(Guid agentDeviceId, string sessionRef, int chunkIndex, CancellationToken ct = default)

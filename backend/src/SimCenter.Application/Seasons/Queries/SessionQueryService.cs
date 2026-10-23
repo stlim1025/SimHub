@@ -61,6 +61,7 @@ public sealed class SessionQueryService : ISessionQueryService
         var sprintWeekend = session.RaceWeekendId is { } sprintWeekendId
             && await _details.IsMySprintWeekendAsync(userId, sprintWeekendId, cancellationToken);
         var seasonNumber = await FindSeasonNumberAsync(userId, session.SeasonId, cancellationToken);
+        var hasFieldSamples = await _details.HasMyTrackSamplesAsync(userId, session.SessionRef, cancellationToken);
 
         // docs/15 §11.4: 내 랩·스냅샷은 한 쿼리로(랩마다 따로 읽지 않는다).
         var lapRows = await _details.GetMySessionLapsAsync(
@@ -73,7 +74,8 @@ public sealed class SessionQueryService : ISessionQueryService
 
         return new SessionDetailDto(
             // 가져온 세션(D-55)은 랩이 없어 세션에 저장한 날씨를 쓴다.
-            ToHeader(session, results, round, seasonNumber, extras.Weather ?? session.Weather?.ToString(), sprintWeekend),
+            ToHeader(session, results, round, seasonNumber, extras.Weather ?? session.Weather?.ToString(), sprintWeekend)
+                with { HasFieldSamples = hasFieldSamples },
             ToResultDtos(session, results),
             extras.QualifyingPositions,
             extras.MyBestLap,

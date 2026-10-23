@@ -2,8 +2,10 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SimCenter.Api.Common;
 using SimCenter.Application.Common.Exceptions;
+using SimCenter.Application.Laps;
 using SimCenter.Application.Rankings;
 using SimCenter.Application.Seasons.Queries;
+using SimCenter.Application.TrackSamples;
 using SimCenter.Domain.Enums;
 
 namespace SimCenter.Api.Controllers;
@@ -15,7 +17,7 @@ namespace SimCenter.Api.Controllers;
 [ApiController]
 [Route("api/v1/me/sessions")]
 [Authorize]
-public sealed class MySessionsController(ISessionQueryService sessionService) : ControllerBase
+public sealed class MySessionsController(ISessionQueryService sessionService, IFieldLapService fieldLapService) : ControllerBase
 {
     private const string SessionTypeField = "sessionType";
     private const string SessionTypeError = "sessionType는 Practice/Qualifying/Race 중 하나여야 합니다.";
@@ -51,6 +53,16 @@ public sealed class MySessionsController(ISessionQueryService sessionService) : 
         var result = await sessionService.GetMySessionAsync(User.GetRequiredUserId(), sessionId, cancellationToken);
         return Ok(result);
     }
+
+    /// <summary>
+    /// 내 세션의 다른 차(순위표 차 번호) 베스트 랩을 모든 차 표본으로 복원한 트레이스(내 랩 트레이스와 같은 모양, lapId는 빈 Guid).
+    /// 폴 포지션 랩과 내 랩 비교에 쓴다. 남의 세션·표본 없음·복원할 랩 없음은 404.
+    /// </summary>
+    [HttpGet("{sessionId:guid}/cars/{carIndex:int}/best-lap-trace")]
+    [ProducesResponseType(typeof(LapTraceResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<LapTraceResponse>> GetCarBestLapTrace(Guid sessionId, int carIndex, CancellationToken cancellationToken)
+        => Ok(await fieldLapService.GetBestLapTraceAsync(User.GetRequiredUserId(), sessionId, carIndex, cancellationToken));
 
     /// <summary>
     /// 명시적 이름 목록(Practice·Qualifying·Race, 대소문자 무시)만 받는다. 비어 있으면 필터 없음.

@@ -94,6 +94,11 @@ public sealed class SessionDetailQueryRepository : ISessionDetailQueryRepository
                     .FirstOrDefault()))
             .ToListAsync(cancellationToken);
 
+    public Task<bool> HasMyTrackSamplesAsync(Guid userId, string sessionRef, CancellationToken cancellationToken = default)
+        => _context.TrackSampleChunks
+            .AsNoTracking()
+            .AnyAsync(c => c.UserId == userId && c.SessionRef == sessionRef && !c.IsDeleted, cancellationToken);
+
     public Task<bool> IsMySprintWeekendAsync(Guid userId, Guid raceWeekendId, CancellationToken cancellationToken = default)
         => _context.GameSessions
             .AsNoTracking()

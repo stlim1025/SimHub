@@ -26,4 +26,8 @@ public interface ISessionDetailQueryRepository
 
     /// <summary>내 시즌 전부의 번호 매기기 재료(<see cref="SeasonNumbering"/>).</summary>
     Task<IReadOnlyList<SeasonOrderRow>> GetMySeasonOrderAsync(Guid userId, CancellationToken cancellationToken = default);
+
+    /// <summary>그 세션의 모든 차 표본(트랙 형상·다른 차 랩 복원용)이 있는지. 모르는 구현은 없다고 본다.</summary>
+    Task<bool> HasMyTrackSamplesAsync(Guid userId, string sessionRef, CancellationToken cancellationToken = default)
+        => Task.FromResult(false);
 }

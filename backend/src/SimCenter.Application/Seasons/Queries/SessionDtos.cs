@@ -70,7 +70,8 @@ public sealed record SessionDetailHeaderDto(
     MyTeamDto? MyTeam,
     int? SeasonNumber,
     string? Weather,
-    bool IsSprintWeekend);
+    bool IsSprintWeekend,
+    bool HasFieldSamples = false);
 
 /// <summary>
 /// 세션 결과 한 줄(차 1대). <see cref="BestLapTimeMs"/>·<see cref="TotalRaceTimeMs"/>는 0이면 null,
