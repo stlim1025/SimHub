@@ -67,6 +67,7 @@ class GhostReplay extends StatefulWidget {
     this.playerSectors = const [],
     this.referenceSectors = const [],
     this.realTrack,
+    this.estimatedTrackWidthM,
   });
 
   final LapTrace trace;
@@ -89,6 +90,9 @@ class GhostReplay extends StatefulWidget {
 
   /// 이 트랙의 실측 서킷(중심선·폭). 없거나 주행선에 맞지 않으면 주행 기록으로 추정한 모양을 그린다.
   final TrackWidthProfile? realTrack;
+
+  /// 실측이 없는 구간의 직선 도로 폭(m). null이면 기본값.
+  final double? estimatedTrackWidthM;
 
   @override
   State<GhostReplay> createState() => _GhostReplayState();
@@ -131,7 +135,10 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
     _player = LapReplay(widget.trace);
     final reference = widget.reference;
     _ghost = reference != null && reference.hasPositions ? LapReplay(reference) : null;
-    _circuit = ReplayCircuit.build(_player, ghost: _ghost, real: widget.realTrack);
+    final baseWidth = widget.estimatedTrackWidthM;
+    _circuit = baseWidth == null
+        ? ReplayCircuit.build(_player, ghost: _ghost, real: widget.realTrack)
+        : ReplayCircuit.build(_player, ghost: _ghost, real: widget.realTrack, baseWidthM: baseWidth);
   }
 
   @override

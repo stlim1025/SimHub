@@ -12,6 +12,10 @@ class TrackWidthProfile {
   int get length => center.length;
 }
 
+/// 실측 데이터가 없는 트랙 가운데 기본 추정 폭(13m)과 크게 다른 곳의 직선 도로 폭(m).
+/// 모나코: 공개 자료의 대략값(가장 좁은 곳 약 8m, 넓은 곳 10~11m, 평균 약 10m) — 공식 수치는 아니다.
+const Map<String, double> kEstimatedTrackWidthsM = {'Monaco': 10};
+
 /// asset JSON(`{"tracks": {"앱 트랙 이름": "데이터 이름"}, "data": {"데이터 이름": [[x, y, 오른쪽 폭, 왼쪽 폭], …]}}`)
 /// → 앱 트랙 이름별 실측 서킷. 형식이 틀린 항목은 건너뛴다.
 Map<String, TrackWidthProfile> parseTrackWidths(Map<String, dynamic> json) {

@@ -108,6 +108,7 @@ class TelemetryTab extends ConsumerWidget {
               playerTeam: lap.team,
               referenceTeam: comparison?.team,
               realTrack: ref.watch(trackWidthsProvider).valueOrNull?[lap.trackName],
+              estimatedTrackWidthM: kEstimatedTrackWidthsM[lap.trackName],
             ),
     );
   }
@@ -135,6 +136,7 @@ class TelemetryCharts extends StatefulWidget {
     this.playerTeam,
     this.referenceTeam,
     this.realTrack,
+    this.estimatedTrackWidthM,
   });
 
   final LapTrace trace;
@@ -160,6 +162,9 @@ class TelemetryCharts extends StatefulWidget {
 
   /// 고스트 재생 서킷에 쓰는 이 트랙의 실측 중심선·폭. 없으면 주행 기록으로 추정한다.
   final TrackWidthProfile? realTrack;
+
+  /// 실측이 없는 구간의 직선 도로 폭(m, 트랙별). null이면 기본값.
+  final double? estimatedTrackWidthM;
 
   @override
   State<TelemetryCharts> createState() => _TelemetryChartsState();
@@ -247,6 +252,7 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
                 playerSectors: widget.sectors,
                 referenceSectors: widget.reference == null ? const [] : widget.referenceSectors,
                 realTrack: widget.realTrack,
+                estimatedTrackWidthM: widget.estimatedTrackWidthM,
               ),
               const SizedBox(height: _panelGap),
               chartsCard,

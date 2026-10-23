@@ -30,8 +30,11 @@ const double kCircuitGravelWidthM = 12;
 /// 첫·마지막 표본이 이 거리(m)보다 가까우면 한 바퀴로 이어진 닫힌 서킷으로 본다.
 const double _closedLoopM = 40;
 
-/// 추정 모양에서 도로 중심으로부터 주행선이 벗어날 수 있는 최대 거리(m). 직선 폭의 절반보다 조금 작게 두어 차가 늘 아스팔트 위에 있다.
-const double kCircuitMaxLateralOffsetM = 4.5;
+/// 추정 모양에서 주행선이 도로 중심에서 벗어날 수 있는 거리 = 직선 반폭 − 이 값(m). 차가 늘 아스팔트 위에 있게 한다.
+const double _lateralMarginM = 2;
+
+/// 코너 안쪽 반폭의 상한 = 곡률 반지름 × 이 비율.
+const double _innerRadiusFraction = 0.8;
 
 /// 차 폭의 절반(m): 연석을 밟지 않은 표본은 차 가운데가 가장자리에서 이만큼 안쪽에 있어야 한다.
 const double _carHalfWidthM = 1;
@@ -115,11 +118,17 @@ class ReplayCircuit {
   final double startRightM;
 
   /// [player](와 [ghost]) 주행 기록으로 서킷 모양을 만든다. [real]이 있고 주행선에 맞으면 실측 중심선·폭을 쓴다.
-  factory ReplayCircuit.build(LapReplay player, {LapReplay? ghost, TrackWidthProfile? real}) {
+  /// [baseWidthM]은 실측이 없는 구간의 직선 도로 폭(트랙마다 다를 수 있다, 기본 [kCircuitBaseWidthM]).
+  factory ReplayCircuit.build(
+    LapReplay player, {
+    LapReplay? ghost,
+    TrackWidthProfile? real,
+    double baseWidthM = kCircuitBaseWidthM,
+  }) {
     final lines = [player.trace, if (ghost != null) ghost.trace];
     final playerLine = _positions(player.trace);
     final aligned = real == null ? null : alignTrackProfile(real, playerLine);
-    final estimated = _estimated(player, ghost);
+    final estimated = _estimated(player, ghost, baseWidthM);
     final geometry = aligned == null ? estimated : _keepLinesInside(_withMeasured(estimated, aligned), lines);
     final center = geometry.center;
     final n = center.length;
@@ -138,8 +147,22 @@ class ReplayCircuit {
     ];
     // 곡률은 앞뒤 몇 칸 평균으로 튀는 값을 없앤다(연석·그래블이 조각조각 생기지 않게).
     final curvatures = _movingAverage(rawCurvatures, _curvatureSmoothSamples, at);
-    final leftWidths = geometry.left;
-    final rightWidths = geometry.right;
+    // 급한 코너 안쪽 반폭은 곡률 반지름보다 작아야 한다(아니면 안쪽 가장자리가 뒤집혀 접힌다 — 모나코 헤어핀).
+    // 평균한 곡률은 꼭짓점에서 작아지므로 앞뒤 몇 칸 가운데 가장 급한 값으로 잰다.
+    double innerLimit(int i) {
+      var sharpest = 0.0;
+      for (var k = i - _curvatureSmoothSamples; k <= i + _curvatureSmoothSamples; k++) {
+        sharpest = math.max(sharpest, rawCurvatures[at(k)].abs());
+      }
+      return sharpest == 0 ? double.infinity : _innerRadiusFraction / sharpest;
+    }
+
+    final leftWidths = [
+      for (var i = 0; i < n; i++) curvatures[i] > 0 ? math.min(geometry.left[i], innerLimit(i)) : geometry.left[i],
+    ];
+    final rightWidths = [
+      for (var i = 0; i < n; i++) curvatures[i] < 0 ? math.min(geometry.right[i], innerLimit(i)) : geometry.right[i],
+    ];
 
     // 왼쪽 법선(진행 방향에서 +90°).
     final normals = [for (final h in headings) Offset(-math.sin(h), math.cos(h))];
@@ -338,7 +361,7 @@ class ReplayCircuit {
   }
 
   /// 실측 서킷이 없을 때: 주행선(과 비교 랩 주행선의 평균)을 평활해 중심선을 만들고 곡률로 폭을 정한다.
-  static _Geometry _estimated(LapReplay player, LapReplay? ghost) {
+  static _Geometry _estimated(LapReplay player, LapReplay? ghost, double baseWidthM) {
     final trace = player.trace;
     final n = trace.length;
     final raw = _positions(trace);
@@ -351,6 +374,7 @@ class ReplayCircuit {
     }
     final closed = n > 2 && (raw.first - raw.last).distance < _closedLoopM;
     int at(int i) => closed ? (i % n + n) % n : i.clamp(0, n - 1);
+    final maxLateral = math.max(0.0, baseWidthM / 2 - _lateralMarginM);
 
     List<Offset> movingAverage(List<Offset> points, int half) => [
           for (var i = 0; i < n; i++)
@@ -364,7 +388,7 @@ class ReplayCircuit {
         ];
 
     // 주행선 − 크게 평활한 선 = 도로 안에서의 좌우 위치(추정). 급한 코너에서는 평활선이 안쪽으로 크게 당겨지므로
-    // 그 차이를 [kCircuitMaxLateralOffsetM]으로 자른 만큼만 빼서, 차는 늘 도로 안에서 좌우로 움직이게 한다.
+    // 그 차이를 (반폭 − [_lateralMarginM])으로 자른 만큼만 빼서, 차는 늘 도로 안에서 좌우로 움직이게 한다.
     final window = math.max(1, (kCircuitCenterSmoothM / trace.resolutionM).round());
     final smooth = movingAverage(raw, window);
     final shifted = <Offset>[
@@ -372,7 +396,7 @@ class ReplayCircuit {
         () {
           final d = raw[i] - smooth[i];
           final length = d.distance;
-          final clamped = length > kCircuitMaxLateralOffsetM ? d * (kCircuitMaxLateralOffsetM / length) : d;
+          final clamped = length > maxLateral ? d * (maxLateral / length) : d;
           return raw[i] - clamped;
         }(),
     ];
@@ -389,7 +413,7 @@ class ReplayCircuit {
     ], _curvatureSmoothSamples, at);
     // 폭은 넓게 평균해 가장자리가 들쭉날쭉하지 않고 서서히 넓어졌다 좁아지게 한다.
     final halves = _movingAverage([
-      for (final k in curvatures) (kCircuitBaseWidthM + math.min(kCircuitCornerExtraWidthM, k.abs() * _cornerWidthGain)) / 2,
+      for (final k in curvatures) (baseWidthM + math.min(kCircuitCornerExtraWidthM, k.abs() * _cornerWidthGain)) / 2,
     ], _widthSmoothSamples, at);
     return (center: center, left: halves, right: halves, closed: closed);
   }
