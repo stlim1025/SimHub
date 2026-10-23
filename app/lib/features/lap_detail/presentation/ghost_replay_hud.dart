@@ -60,6 +60,10 @@ const double _tyreRingWidth = 2.5;
 const double _sectorBarHeight = 3;
 const double _barHeight = 4;
 const double _flowBarWidth = 70;
+
+/// ERS 줄의 글자 칸 폭(값 자릿수가 바뀌어도 막대 길이·자리가 흔들리지 않게 고정).
+const double _batteryTextWidth = 36;
+const double _flowTextWidth = 58;
 const double _percentMax = 100;
 const List<FontFeature> _tabular = [FontFeature.tabularFigures()];
 
@@ -300,22 +304,29 @@ class GhostReplayHud extends StatelessWidget {
             Row(
               children: [
                 const Icon(Icons.bolt, size: 13, color: AppColors.replayBattery),
-                Text(
-                  '${battery.round()}%',
-                  key: ValueKey('$keyName-battery-text'),
-                  style: const TextStyle(
-                    color: AppColors.replayBattery,
-                    fontSize: _sectorFontSize,
-                    fontWeight: FontWeight.w700,
-                    fontFeatures: _tabular,
+                SizedBox(
+                  width: _batteryTextWidth,
+                  child: Text(
+                    '${battery.round()}%',
+                    key: ValueKey('$keyName-battery-text'),
+                    style: const TextStyle(
+                      color: AppColors.replayBattery,
+                      fontSize: _sectorFontSize,
+                      fontWeight: FontWeight.w700,
+                      fontFeatures: _tabular,
+                    ),
                   ),
                 ),
-                const SizedBox(width: 8),
                 Expanded(child: _Bar(key: ValueKey('$keyName-battery'), fraction: battery / _percentMax)),
                 const SizedBox(width: 10),
                 _ErsFlowBar(key: ValueKey('$keyName-ers-flow'), fraction: flow / kErsMaxFlowKw),
-                const SizedBox(width: 8),
-                _ErsFlowText(textKey: ValueKey('$keyName-ers-flow-text'), flowKw: flow),
+                SizedBox(
+                  width: _flowTextWidth,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: _ErsFlowText(textKey: ValueKey('$keyName-ers-flow-text'), flowKw: flow),
+                  ),
+                ),
               ],
             ),
           ],

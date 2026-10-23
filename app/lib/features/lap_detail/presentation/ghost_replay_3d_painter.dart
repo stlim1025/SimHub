@@ -14,7 +14,7 @@ enum ReplayCamera {
   /// 차 바로 뒤 위(게임 추격 카메라).
   chase,
 
-  /// 길 옆 멀리서 망원으로 따라가는 중계 카메라.
+  /// 코너마다 길 밖 높은 곳에 선 중계 카메라: 차가 다가오면 제자리에서 고개를 돌리며 줌으로 잡고, 지나가면 다음 카메라로 바꾼다.
   broadcast,
 
   /// 뒤쪽 높은 곳에서 내려다보는 헬기 카메라.
@@ -74,6 +74,22 @@ const _V3 _worldUp = _V3(0, 1, 0);
 /// 카메라 방향은 차 방향보다 넓게 보고 정한다(작은 흔들림에 화면이 떨지 않게).
 const double _cameraHeadingLookM = 20;
 
+/// 중계 카메라: 대략 이 간격(m)마다 하나, 그 둘레에서 가장 급한 코너 바깥에 세운다.
+/// 방호벽 밖으로 [_stationBackoffM]·노면 위 [_stationHeightM]. 차가 카메라를 [_stationPassM] 지나면 다음 카메라로 바꾼다.
+const double _stationSpacingM = 180;
+const double _stationBackoffM = 8;
+const double _stationHeightM = 7;
+const double _stationPassM = 35;
+
+/// 중계 카메라 줌: 차 둘레 이 높이(m)가 화면 세로에 들도록 화각을 정하고, 화각은 [_minBroadcastFovDegrees]~[_maxBroadcastFovDegrees]로 자른다.
+const double _broadcastFrameM = 16;
+const double _minBroadcastFovDegrees = 6;
+const double _maxBroadcastFovDegrees = 55;
+const double _broadcastLookUpM = 0.5;
+
+/// 중계 카메라 바로 앞(이 거리 m 안)의 방호벽은 그리지 않는다(카메라가 벽 너머에 서 있어 화면을 가리지 않게).
+const double _broadcastWallClearM = 25;
+
 /// 경사(차 앞뒤 기울기)를 잴 때 앞뒤로 보는 점 수.
 const int _slopeSamples = 2;
 
@@ -82,7 +98,8 @@ typedef _CameraRig = ({double back, double side, double up, double lookAhead, do
 
 const Map<ReplayCamera, _CameraRig> _rigs = {
   ReplayCamera.chase: (back: 8.5, side: 0, up: 3, lookAhead: 10, lookUp: 1, fovDegrees: 55, radiusM: 420),
-  ReplayCamera.broadcast: (back: 18, side: 38, up: 12, lookAhead: 0, lookUp: 0.5, fovDegrees: 28, radiusM: 320),
+  // 중계는 눈 위치·화각을 카메라 자리에서 정한다(여기서는 그리는 반경만 쓴다).
+  ReplayCamera.broadcast: (back: 0, side: 0, up: 0, lookAhead: 0, lookUp: 0, fovDegrees: 0, radiusM: 360),
   ReplayCamera.helicopter: (back: 40, side: 0, up: 55, lookAhead: 25, lookUp: 0, fovDegrees: 42, radiusM: 520),
 };
 
@@ -300,6 +317,8 @@ class ReplayTrack3d {
     required this.hasWallRight,
     required this.gravelSide,
     required this.startIndex,
+    required this.spacingM,
+    required this.stations,
   });
 
   factory ReplayTrack3d.build(ReplayCircuit circuit) {
@@ -391,6 +410,37 @@ class ReplayTrack3d {
     final left = wall(circuit.leftPoints, outwardLeft, circuit.kerbLeft, 1);
     final right = wall(circuit.rightPoints, outwardRight, circuit.kerbRight, -1);
 
+    // 중계 카메라 자리: 간격마다 그 둘레(앞뒤 1/3)에서 곡률이 가장 큰 점의 코너 바깥, 방호벽 밖 높은 곳.
+    final spacing = n < 2 ? 1.0 : length / (n - 1);
+    final step = math.max(1, (_stationSpacingM / spacing).round());
+    final picked = <int>{};
+    for (var p = 0; p < (circuit.closed ? n : n - 1); p += step) {
+      var best = p;
+      for (var k = p - step ~/ 3; k <= p + step ~/ 3; k++) {
+        final i = at(k);
+        if (circuit.curvatures[i].abs() > circuit.curvatures[best].abs()) {
+          best = i;
+        }
+      }
+      picked.add(best);
+    }
+    final stations = [
+      for (final i in picked.toList()..sort())
+        () {
+          // 곡률 > 0이면 코너 중심이 왼쪽 → 바깥은 오른쪽.
+          final outerIsRight = circuit.curvatures[i] > 0;
+          final position = outerIsRight
+              ? circuit.rightPoints[i] + outwardRight[i] * (right.offsets[i] + _stationBackoffM)
+              : circuit.leftPoints[i] + outwardLeft[i] * (left.offsets[i] + _stationBackoffM);
+          // 높이는 이 카메라가 맡는 앞뒤 구간에서 가장 높은 노면 기준(오르막에서 언덕 아래로 묻히지 않게).
+          var top = circuit.elevations[i];
+          for (var k = i - step; k <= i + step; k++) {
+            top = math.max(top, circuit.elevations[at(k)]);
+          }
+          return (index: i, position: position, height: top + _stationHeightM);
+        }(),
+    ];
+
     var start = 0;
     var startDistance = double.infinity;
     for (var i = 0; i < n; i++) {
@@ -410,6 +460,8 @@ class ReplayTrack3d {
       hasWallRight: right.standing,
       gravelSide: gravelSide,
       startIndex: start,
+      spacingM: spacing,
+      stations: stations,
     );
   }
 
@@ -431,12 +483,34 @@ class ReplayTrack3d {
   /// 출발·결승선 점 번호.
   final int startIndex;
 
+  /// 중심선 점 사이 평균 거리(m).
+  final double spacingM;
+
+  /// 중계 카메라 자리(점 번호 순): 맡는 중심선 점, 수평 위치, 높이(m).
+  final List<({int index, Offset position, double height})> stations;
+
+  /// 중심선 점 [index]에 있는 차를 찍을 중계 카메라: 차가 아직 [_stationPassM]만큼 지나치지 않은 첫 카메라.
+  ({int index, Offset position, double height}) broadcastStation(int index) {
+    final pass = (_stationPassM / spacingM).round();
+    var chosen = stations.first;
+    var nearest = double.infinity;
+    for (final station in stations) {
+      final ahead = station.index - index + pass;
+      final distance = circuit.closed ? ((ahead % length) + length) % length : ahead;
+      if (distance >= 0 && distance < nearest) {
+        nearest = distance.toDouble();
+        chosen = station;
+      }
+    }
+    return chosen;
+  }
+
   int get length => circuit.center.length;
 
   int wrap(int i) => circuit.closed ? (i % length + length) % length : i.clamp(0, length - 1);
 
-  /// 수평 위치 [p]의 노면 높이(m)와 진행 방향 경사(높이 변화 ÷ 거리): 가장 가까운 중심선 구간에 투영해 보간한다.
-  ({double elevation, double slope}) locate(Offset p) {
+  /// 수평 위치 [p]의 노면 높이(m)와 진행 방향 경사(높이 변화 ÷ 거리), 가장 가까운 중심선 점: 가장 가까운 구간에 투영해 보간한다.
+  ({double elevation, double slope, int index}) locate(Offset p) {
     final center = circuit.center;
     final elevations = circuit.elevations;
     var nearest = 0;
@@ -465,7 +539,11 @@ class ReplayTrack3d {
     final ahead = wrap(nearest + _slopeSamples);
     final behind = wrap(nearest - _slopeSamples);
     final run = (center[ahead] - center[behind]).distance;
-    return (elevation: elevation, slope: run == 0 ? 0 : (elevations[ahead] - elevations[behind]) / run);
+    return (
+      elevation: elevation,
+      slope: run == 0 ? 0 : (elevations[ahead] - elevations[behind]) / run,
+      index: nearest,
+    );
   }
 }
 
@@ -507,16 +585,31 @@ class GhostReplay3dPainter extends CustomPainter {
     final target = _V3(frame.x, spot.elevation, frame.z);
     final heading = player.headingAtDistance(frame.distanceM, lookM: _cameraHeadingLookM);
     final rig = _rigs[camera]!;
-    final forward = _V3(math.cos(heading), 0, math.sin(heading));
-    final side = _V3(-math.sin(heading), 0, math.cos(heading));
-    final view = _View(
-      eye: target - forward * rig.back + side * rig.side + _worldUp * rig.up,
-      target: target + forward * rig.lookAhead + _worldUp * rig.lookUp,
-      fovRadians: rig.fovDegrees * math.pi / 180,
-      size: size,
-    );
+    final _View view;
+    if (camera == ReplayCamera.broadcast) {
+      // 코너 카메라: 제자리에서 차를 바라보고, 멀수록 줌을 당긴다.
+      final station = track.broadcastStation(spot.index);
+      final eye = _V3(station.position.dx, station.height, station.position.dy);
+      final look = target + _worldUp * _broadcastLookUpM;
+      final fov = 2 * math.atan(_broadcastFrameM / 2 / math.max((look - eye).length, 1));
+      view = _View(
+        eye: eye,
+        target: look,
+        fovRadians: fov.clamp(_minBroadcastFovDegrees * math.pi / 180, _maxBroadcastFovDegrees * math.pi / 180),
+        size: size,
+      );
+    } else {
+      final forward = _V3(math.cos(heading), 0, math.sin(heading));
+      final side = _V3(-math.sin(heading), 0, math.cos(heading));
+      view = _View(
+        eye: target - forward * rig.back + side * rig.side + _worldUp * rig.up,
+        target: target + forward * rig.lookAhead + _worldUp * rig.lookUp,
+        fovRadians: rig.fovDegrees * math.pi / 180,
+        size: size,
+      );
+    }
 
-    _paintSky(canvas, size, view, forward);
+    _paintSky(canvas, size, view);
 
     // 바닥 구간·방호벽·차를 한데 모아 먼 것부터 칠한다(언덕 너머 낮은 구간의 벽이 앞 도로 위로 비치지 않게).
     final items = <_Item>[];
@@ -545,9 +638,9 @@ class GhostReplay3dPainter extends CustomPainter {
   }
 
   /// 잔디로 채운 뒤 지평선 위를 하늘 그라데이션으로 칠한다(카메라는 기울지 않아 지평선은 수평).
-  void _paintSky(Canvas canvas, Size size, _View view, _V3 forward) {
+  void _paintSky(Canvas canvas, Size size, _View view) {
     canvas.drawRect(Offset.zero & size, Paint()..color = AppColors.replayGrass3d);
-    final direction = view.direction(forward);
+    final direction = view.direction(view.horizontalForward);
     if (direction.z >= 0) {
       return;
     }
@@ -691,6 +784,9 @@ class GhostReplay3dPainter extends CustomPainter {
         continue;
       }
       final wallDepth = ((polygon[0] + polygon[2]) * 0.5 - view.eye).length;
+      if (camera == ReplayCamera.broadcast && wallDepth < _broadcastWallClearM) {
+        continue;
+      }
       final normal = (polygon[1] - polygon[0]).cross(polygon[3] - polygon[0]).normalized;
       items.add((
         depth: wallDepth,
@@ -830,6 +926,9 @@ class _View {
   late final _V3 _back;
   late final _V3 _right;
   late final _V3 _up;
+
+  /// 카메라가 보는 방향의 수평 성분(지평선 높이를 잴 때).
+  _V3 get horizontalForward => _V3(-_back.x, 0, -_back.z).normalized;
 
   /// 월드 방향 → 카메라 좌표 방향.
   _V3 direction(_V3 d) => _V3(d.dot(_right), d.dot(_up), d.dot(_back));
