@@ -21,7 +21,7 @@
     },
     "type": {
       "type": "string",
-      "enum": ["SessionStarted", "LapStarted", "SectorCompleted", "LapFinished", "SessionEnded", "SessionClassified"],
+      "enum": ["SessionStarted", "LapStarted", "SectorCompleted", "LapFinished", "SessionEnded", "SessionClassified", "TrackSamplesChunk"],
       "description": "이벤트 타입"
     },
     "payload": {

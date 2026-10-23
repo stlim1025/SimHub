@@ -1141,6 +1141,103 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                     b.ToTable("tracks", (string)null);
                 });
 
+            modelBuilder.Entity("SimCenter.Domain.Entities.TrackSampleChunk", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AgentDeviceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("agent_device_id");
+
+                    b.Property<int>("ChunkIndex")
+                        .HasColumnType("integer")
+                        .HasColumnName("chunk_index");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<int>("Format")
+                        .HasColumnType("integer")
+                        .HasColumnName("format");
+
+                    b.Property<int>("FrameCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("frame_count");
+
+                    b.Property<string>("GameCode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("game_code");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<bool>("IsLast")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_last");
+
+                    b.Property<byte[]>("Payload")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("payload");
+
+                    b.Property<int>("SampleCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("sample_count");
+
+                    b.Property<int>("SampleRateHz")
+                        .HasColumnType("integer")
+                        .HasColumnName("sample_rate_hz");
+
+                    b.Property<string>("SessionRef")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("session_ref");
+
+                    b.Property<string>("SessionType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("session_type");
+
+                    b.Property<Guid>("TrackId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("track_id");
+
+                    b.Property<int?>("TrackLengthM")
+                        .HasColumnType("integer")
+                        .HasColumnName("track_length_m");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_track_sample_chunks");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_track_sample_chunks_user_id");
+
+                    b.HasIndex("TrackId", "GameCode")
+                        .HasDatabaseName("ix_track_sample_chunks_track_id_game_code");
+
+                    b.HasIndex("AgentDeviceId", "SessionRef", "ChunkIndex")
+                        .IsUnique()
+                        .HasDatabaseName("ix_track_sample_chunks_agent_device_id_session_ref_chunk_index");
+
+                    b.ToTable("track_sample_chunks", (string)null);
+                });
+
             modelBuilder.Entity("SimCenter.Domain.Entities.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1414,6 +1511,30 @@ namespace SimCenter.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_session_result_tyre_stints_session_results_session_result_id");
+                });
+
+            modelBuilder.Entity("SimCenter.Domain.Entities.TrackSampleChunk", b =>
+                {
+                    b.HasOne("SimCenter.Domain.Entities.AgentDevice", null)
+                        .WithMany()
+                        .HasForeignKey("AgentDeviceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_track_sample_chunks_agent_devices_agent_device_id");
+
+                    b.HasOne("SimCenter.Domain.Entities.Track", null)
+                        .WithMany()
+                        .HasForeignKey("TrackId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_track_sample_chunks_tracks_track_id");
+
+                    b.HasOne("SimCenter.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_track_sample_chunks_users_user_id");
                 });
 
             modelBuilder.Entity("SimCenter.Domain.Entities.GameSession", b =>

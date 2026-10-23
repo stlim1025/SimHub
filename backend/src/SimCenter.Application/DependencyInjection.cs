@@ -13,6 +13,7 @@ using SimCenter.Application.Setups;
 using SimCenter.Application.Setups.Refresh;
 using SimCenter.Application.Telemetry;
 using SimCenter.Application.TrackOverviews;
+using SimCenter.Application.TrackSamples;
 
 namespace SimCenter.Application;
 
@@ -26,6 +27,7 @@ public static class DependencyInjection
         services.AddScoped<ITelemetryIngestService, TelemetryIngestService>();
         services.AddScoped<LapDetailExtractor>();
         services.AddScoped<ISessionClassificationIngestor, SessionClassificationIngestor>();
+        services.AddScoped<ITrackSamplesIngestor, TrackSamplesIngestor>();
         services.AddScoped<ISeasonQueryService, SeasonQueryService>();
         services.AddScoped<ISeasonImportService, SeasonImportService>();
         services.AddScoped<ISeasonCommandService, SeasonCommandService>();

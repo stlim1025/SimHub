@@ -32,6 +32,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, ITransactionRunner
     public DbSet<SessionResult> SessionResults => Set<SessionResult>();
     public DbSet<SessionResultTyreStint> SessionResultTyreStints => Set<SessionResultTyreStint>();
     public DbSet<CommunitySetup> CommunitySetups => Set<CommunitySetup>();
+    public DbSet<TrackSampleChunk> TrackSampleChunks => Set<TrackSampleChunk>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

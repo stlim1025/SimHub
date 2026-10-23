@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TrackSamplesChunk",
+  "description": "트랙 형상 계산용으로 오프라인 세션의 모든 차 위치·랩 거리·노면만 추린 표본 조각(헌장 Agent Rules 예외). 세션 하나가 여러 조각으로 나뉘며 조각마다 eventId가 따로다. 설계: docs/Track-Envelope-From-All-Cars-2026-10-23.html",
+  "type": "object",
+  "required": ["sessionRef", "trackId", "sessionType", "format", "sampleRateHz", "chunkIndex", "isLast", "frameCount", "sampleCount", "data"],
+  "properties": {
+    "sessionRef": { "type": "string", "maxLength": 32, "description": "게임 세션 식별자(SessionUID)" },
+    "trackId": { "type": "integer", "description": "게임 트랙 ID" },
+    "sessionType": { "type": "string", "enum": ["Practice", "Qualifying", "Race"], "description": "세션 종류(타임 트라이얼은 보내지 않는다)" },
+    "trackLengthM": { "type": "integer", "minimum": 0, "description": "트랙 길이(m)" },
+    "format": { "type": "integer", "const": 1, "description": "data 배치 버전" },
+    "sampleRateHz": { "type": "integer", "minimum": 1, "maximum": 60, "description": "고정 표본 빈도(노면이 바뀌면 그 사이에 표본을 더 넣는다)" },
+    "chunkIndex": { "type": "integer", "minimum": 0, "description": "세션 안 조각 순번(0부터)" },
+    "isLast": { "type": "boolean", "description": "세션의 마지막 조각" },
+    "frameCount": { "type": "integer", "minimum": 0 },
+    "sampleCount": { "type": "integer", "minimum": 0 },
+    "data": {
+      "type": "string",
+      "contentEncoding": "base64",
+      "description": "format 1: gzip(little-endian 열 배치). int32 frameCount, uint32 sessionTimeMs[frameCount], uint8 carCount[frameCount], 이어서 표본 S=sum(carCount)개의 열: uint8 carIndex[S], uint16 lapDistance[S](0.25m), int32 x[S](0.1m), int32 z[S](0.1m), uint16 surface[S](4비트×4: FL·FR·RL·RR 순, 하위 비트부터), uint8 status[S](bit0~2 driverStatus, bit3~4 pitStatus, bit7 노면 변화로 더한 표본)."
+    }
+  }
+}

@@ -8,6 +8,7 @@ using SimCenter.Application.Rankings;
 using SimCenter.Application.Rankings.Notifications;
 using SimCenter.Application.Seasons.Ingest;
 using SimCenter.Application.Telemetry;
+using SimCenter.Application.TrackSamples;
 using SimCenter.Application.Tests.Laps;
 using SimCenter.Domain.Entities;
 using SimCenter.Domain.Enums;
@@ -29,6 +30,7 @@ public class TelemetryIngestServiceTests
     private readonly FakeTrackRepository _tracks = new();
     private readonly FakeLapRepository _laps = new();
     private readonly FakeClassificationIngestor _classification = new();
+    private readonly FakeTrackSamplesIngestor _trackSamples = new();
     private readonly FakeUnitOfWork _uow = new();
     private readonly FakeRankingService _ranking = new();
     private readonly FakeRankingNotifier _notifier = new();
@@ -51,7 +53,7 @@ public class TelemetryIngestServiceTests
 
         var ids = new SequentialIdGenerator();
         _sut = new TelemetryIngestService(
-            _processed, _devices, _tracks, _laps, _classification, _uow,
+            _processed, _devices, _tracks, _laps, _classification, _trackSamples, _uow,
             ids, new FakeClock(Now), _ranking, _notifier, _lapQueries,
             new LapDetailExtractor(ids, NullLogger<LapDetailExtractor>.Instance),
             NullLogger<TelemetryIngestService>.Instance);
@@ -525,6 +527,43 @@ public class TelemetryIngestServiceTests
         Assert.Equal(2, _classification.CallCount);
     }
 
+    // ── TrackSamplesChunk 배선 ──
+
+    private static TelemetryEnvelopeDto TrackSamplesEvent() => new(
+        Guid.NewGuid(), GameCode, Now, "TrackSamplesChunk",
+        JsonSerializer.SerializeToElement(new { sessionRef = "s", chunkIndex = 0 }, WireOptions));
+
+    [Fact]
+    public async Task TrackSamplesChunk_Accepted_RecordsProcessedEventAndSavesOnce()
+    {
+        var envelope = TrackSamplesEvent();
+
+        var result = await _sut.IngestAsync(envelope, _deviceId);
+
+        Assert.True(result.Acknowledged);
+        var processed = Assert.Single(_processed.Items);
+        Assert.Equal(envelope.EventId, processed.EventId);
+        Assert.Equal("TrackSamplesChunk", processed.EventType);
+        Assert.Equal(1, _uow.SaveCount); // 조각(추적 변경) + 멱등 기록 + LastSeenAt이 한 커밋.
+        Assert.Equal(1, _trackSamples.CallCount);
+        Assert.Same(_device, _trackSamples.LastDevice);
+        Assert.Empty(_laps.Items);
+    }
+
+    [Fact]
+    public async Task TrackSamplesChunk_Rejected_NoProcessedEvent()
+    {
+        _trackSamples.RejectReason = "bad";
+        _device.LastSeenAt = Now.AddSeconds(-10);
+
+        var result = await _sut.IngestAsync(TrackSamplesEvent(), _deviceId);
+
+        Assert.False(result.Acknowledged);
+        Assert.Equal("bad", result.RejectReason);
+        Assert.Empty(_processed.Items);
+        Assert.Equal(0, _uow.SaveCount);
+    }
+
     [Fact]
     public async Task SessionClassified_FromRevokedDevice_RejectsBeforeIngestor()
     {
@@ -773,6 +812,20 @@ public class TelemetryIngestServiceTests
             LastDevice = device;
             LastNow = now;
             return Task.FromResult(Outcome);
+        }
+    }
+
+    private sealed class FakeTrackSamplesIngestor : ITrackSamplesIngestor
+    {
+        public string? RejectReason { get; set; }
+        public int CallCount { get; private set; }
+        public AgentDevice? LastDevice { get; private set; }
+
+        public Task<string?> ApplyAsync(TelemetryEnvelopeDto envelope, AgentDevice device, DateTime now, CancellationToken ct = default)
+        {
+            CallCount++;
+            LastDevice = device;
+            return Task.FromResult(RejectReason);
         }
     }
 

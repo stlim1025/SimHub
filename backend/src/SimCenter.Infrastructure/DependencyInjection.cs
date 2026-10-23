@@ -47,6 +47,7 @@ public static class DependencyInjection
         services.AddScoped<ISessionDetailQueryRepository, SessionDetailQueryRepository>();
         services.AddScoped<ICommunitySetupRepository, CommunitySetupRepository>();
         services.AddScoped<ITrackOverviewQueryRepository, TrackOverviewQueryRepository>();
+        services.AddScoped<ITrackSampleChunkRepository, TrackSampleChunkRepository>();
         services.AddScoped<DbSeeder>();
 
         // ── 어댑터 ──

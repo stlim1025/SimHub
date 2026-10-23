@@ -8,6 +8,7 @@ using SimCenter.Application.Laps.Ingest;
 using SimCenter.Application.Rankings;
 using SimCenter.Application.Rankings.Notifications;
 using SimCenter.Application.Seasons.Ingest;
+using SimCenter.Application.TrackSamples;
 using SimCenter.Domain.Entities;
 using SimCenter.Domain.Enums;
 using SimCenter.Domain.Seasons;
@@ -15,7 +16,7 @@ using SimCenter.Domain.Seasons;
 namespace SimCenter.Application.Telemetry;
 
 /// <summary>
-/// 텔레메트리 인입 유스케이스(11 §5, 12 §6.1). <c>LapFinished</c>(랩)와 <c>SessionClassified</c>(세션 최종 순위표)만 영속화하고
+/// 텔레메트리 인입 유스케이스(11 §5, 12 §6.1). <c>LapFinished</c>(랩)·<c>SessionClassified</c>(세션 최종 순위표)·<c>TrackSamplesChunk</c>(트랙 형상 표본)만 영속화하고
 /// 나머지 이벤트는 Ack만 한다(YAGNI).
 /// 공통 단계: 멱등 → 장치 확인 → LastSeenAt. 이어서 유형별로 갈린다:
 /// <list type="bullet">
@@ -33,6 +34,9 @@ public sealed class TelemetryIngestService : ITelemetryIngestService
 
     /// <summary>세션 최종 순위표 이벤트 유형(12 §5.5).</summary>
     public const string SessionClassifiedType = "SessionClassified";
+
+    /// <summary>트랙 형상 표본 조각 이벤트 유형(헌장 Agent Rules 예외).</summary>
+    public const string TrackSamplesChunkType = "TrackSamplesChunk";
 
     /// <summary>
     /// <see cref="AgentDevice.LastSeenAt"/> 쓰기 최소 간격. 이벤트마다 장치 행을 갱신하지 않도록,
@@ -55,6 +59,7 @@ public sealed class TelemetryIngestService : ITelemetryIngestService
     private readonly ITrackRepository _tracks;
     private readonly ILapRepository _laps;
     private readonly ISessionClassificationIngestor _classification;
+    private readonly ITrackSamplesIngestor _trackSamples;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IIdGenerator _idGenerator;
     private readonly IClock _clock;
@@ -70,6 +75,7 @@ public sealed class TelemetryIngestService : ITelemetryIngestService
         ITrackRepository tracks,
         ILapRepository laps,
         ISessionClassificationIngestor classification,
+        ITrackSamplesIngestor trackSamples,
         IUnitOfWork unitOfWork,
         IIdGenerator idGenerator,
         IClock clock,
@@ -84,6 +90,7 @@ public sealed class TelemetryIngestService : ITelemetryIngestService
         _tracks = tracks;
         _laps = laps;
         _classification = classification;
+        _trackSamples = trackSamples;
         _unitOfWork = unitOfWork;
         _idGenerator = idGenerator;
         _clock = clock;
@@ -114,13 +121,15 @@ public sealed class TelemetryIngestService : ITelemetryIngestService
         var now = _clock.UtcNow;
         var lastSeenChanged = TouchLastSeen(device, now);
 
-        // 4. 유형별 처리. LapFinished·SessionClassified만 저장하고, 그 외 유효 이벤트는 무시하되 Ack.
+        // 4. 유형별 처리. LapFinished·SessionClassified·TrackSamplesChunk만 저장하고, 그 외 유효 이벤트는 무시하되 Ack.
         switch (envelope.Type)
         {
             case LapFinishedType:
                 return await IngestLapFinishedAsync(envelope, device, now, lastSeenChanged, cancellationToken);
             case SessionClassifiedType:
                 return await IngestSessionClassifiedAsync(envelope, device, now, lastSeenChanged, cancellationToken);
+            case TrackSamplesChunkType:
+                return await IngestTrackSamplesAsync(envelope, device, now, lastSeenChanged, cancellationToken);
             default:
                 _logger.LogDebug("비저장 이벤트 {Type} device={Device} eventId={EventId}", envelope.Type, device.Id, envelope.EventId);
                 return await FinishWithoutLapAsync(IngestResult.Ack(), lastSeenChanged, cancellationToken);
@@ -182,6 +191,24 @@ public sealed class TelemetryIngestService : ITelemetryIngestService
         await AddProcessedEventAsync(envelope, now, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+        return IngestResult.Ack();
+    }
+
+    /// <summary>
+    /// <c>TrackSamplesChunk</c>: 처리기가 새 조각을 추적하면(이미 받은 조각이면 추적 없음) 멱등 기록을 더해 한 번에 커밋하고 Ack.
+    /// 거부는 영구 무효 — 처리기는 아무것도 추적하지 않았으므로 LastSeenAt만 저장하고 Reject.
+    /// </summary>
+    private async Task<IngestResult> IngestTrackSamplesAsync(
+        TelemetryEnvelopeDto envelope, AgentDevice device, DateTime now, bool lastSeenChanged, CancellationToken cancellationToken)
+    {
+        var rejectReason = await _trackSamples.ApplyAsync(envelope, device, now, cancellationToken);
+        if (rejectReason is not null)
+        {
+            return await FinishWithoutLapAsync(IngestResult.Reject(rejectReason), lastSeenChanged, cancellationToken);
+        }
+
+        await AddProcessedEventAsync(envelope, now, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
         return IngestResult.Ack();
     }
 
