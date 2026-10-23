@@ -293,6 +293,58 @@ public class LapQueryServiceTests
     }
 
     [Fact]
+    public async Task PublicDetail_WithoutCompareLapId_HasNoComparison()
+    {
+        var lap = AddLap(Other, 98_448);
+        AddLap(Other, 97_000);
+
+        Assert.Null((await _sut.GetPublicLapAsync(lap.LapId)).Comparison);
+    }
+
+    [Fact]
+    public async Task PublicDetail_CompareLapIdOfSameOwner_IsMineComparisonWithoutName()
+    {
+        var lap = AddLap(Other, 98_448);
+        var reference = AddLap(Other, 97_000, teamId: 8, hasTrace: true);
+        _laps.Drivers[Other] = new LapDriverRow("공개 드라이버", ShowOnLeaderboard: true);
+
+        var comparison = Assert.IsType<LapComparisonDto>((await _sut.GetPublicLapAsync(lap.LapId, reference.LapId)).Comparison);
+
+        Assert.Equal(LapComparisonKinds.Lap, comparison.Kind);
+        Assert.Equal(reference.LapId, comparison.LapId);
+        Assert.Equal(97_000, comparison.LapTimeMs);
+        Assert.True(comparison.HasTrace);
+        Assert.True(comparison.IsMine);
+        Assert.Null(comparison.DisplayName);
+        Assert.Equal(new TeamRefDto("McLaren", "#FF8000"), comparison.Team);
+    }
+
+    [Fact]
+    public async Task PublicDetail_CompareLapIdOfOtherOwner_UsesPublicNameRule()
+    {
+        var lap = AddLap(Me, 98_448);
+        var hiddenOwners = AddLap(Other, 97_000);
+        _laps.Drivers[Me] = new LapDriverRow("나", ShowOnLeaderboard: true);
+        _laps.Drivers[Other] = new LapDriverRow("숨긴 드라이버", ShowOnLeaderboard: false);
+
+        var comparison = Assert.IsType<LapComparisonDto>((await _sut.GetPublicLapAsync(lap.LapId, hiddenOwners.LapId)).Comparison);
+
+        Assert.False(comparison.IsMine);
+        Assert.Equal(RankingPrivacy.AnonymousDisplayName, comparison.DisplayName);
+    }
+
+    [Fact]
+    public async Task PublicDetail_CompareLapIdOtherTrackMissingOrItself_IsIgnored()
+    {
+        var lap = AddLap(Other, 98_448);
+        var monza = AddLap(Other, 80_000, trackId: Monza);
+
+        Assert.Null((await _sut.GetPublicLapAsync(lap.LapId, monza.LapId)).Comparison);
+        Assert.Null((await _sut.GetPublicLapAsync(lap.LapId, Guid.NewGuid())).Comparison);
+        Assert.Null((await _sut.GetPublicLapAsync(lap.LapId, lap.LapId)).Comparison);
+    }
+
+    [Fact]
     public async Task PublicDetailAndTrace_MissingLapOrTrace_IsNotFound()
     {
         var withoutTrace = AddLap(Other, 97_003);

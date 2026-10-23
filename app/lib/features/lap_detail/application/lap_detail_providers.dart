@@ -26,9 +26,9 @@ final comparisonTraceProvider = FutureProvider.autoDispose.family<LapTrace?, Str
   (ref, lapId) => ref.watch(lapDetailRepositoryProvider).getComparisonTrace(lapId),
 );
 
-/// 공유 링크로 보는 랩(로그인 없음).
-final sharedLapProvider = FutureProvider.autoDispose.family<SharedLap, String>(
-  (ref, lapId) => ref.watch(publicLapRepositoryProvider).getLap(lapId),
+/// 공유 링크로 보는 랩(로그인 없음) + 주소의 비교 랩(있으면).
+final sharedLapProvider = FutureProvider.autoDispose.family<SharedLap, SharedLapKey>(
+  (ref, key) => ref.watch(publicLapRepositoryProvider).getLap(key.lapId, compareLapId: key.compareLapId),
 );
 
 /// 공유 링크로 보는 랩의 트레이스. 저장되지 않았으면(404) null.

@@ -27,6 +27,9 @@ import 'track_map.dart';
 const String _noTraceText = '이 랩은 텔레메트리가 저장되지 않았어요(새 Agent로 달린 랩부터 저장돼요)';
 const String _thisLapLabel = '이 랩';
 const String _bestLapLabel = '내 최고 랩';
+
+/// [TelemetryCharts.referenceLabel]의 기본값(비교 랩 이름을 모를 때).
+const String kDefaultReferenceLabel = _bestLapLabel;
 const double _chartGap = 20;
 const double _legendSpacing = 16;
 const double _legendDotGap = 6;

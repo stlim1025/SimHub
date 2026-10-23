@@ -121,9 +121,10 @@ class _LapDetailPageState extends ConsumerState<LapDetailPage> with SingleTicker
   }
 
   /// 로그인 없이 볼 수 있는 공유 주소(`/share/laps/{id}`, Telemetry 탭이면 그 탭)를 클립보드에 복사한다.
+  /// 다른 랩과 비교 중이면 지금 비교 중인 랩 ID(`compareLapId`)를 함께 실어 같은 비교를 보게 한다.
   Future<void> _share() async {
     final messenger = AppToaster.of(context);
-    final location = sharedLapLocation(widget.lapId, tab: _tab);
+    final location = sharedLapLocation(widget.lapId, tab: _tab, compareLapId: _comparedLapId());
     final url = shareUrlFor(ref.read(shareBaseUriProvider), location);
     try {
       await Clipboard.setData(ClipboardData(text: url));
@@ -131,6 +132,16 @@ class _LapDetailPageState extends ConsumerState<LapDetailPage> with SingleTicker
     } on PlatformException {
       messenger.show(_shareFailedText, tone: NoticeTone.error);
     }
+  }
+
+  /// 지금 비교 중인 다른 랩의 ID. 비교 안 함·비교 대상 없음·이 랩 자신과의 비교면 null.
+  String? _comparedLapId() {
+    if (widget.compare.kind == LapCompareKind.none) {
+      return null;
+    }
+    final detail = ref.read(lapDetailProvider(LapDetailKey(widget.lapId, widget.compare))).valueOrNull;
+    final comparison = detail?.comparison;
+    return comparison == null || comparison.lapId == widget.lapId ? null : comparison.lapId;
   }
 
   @override

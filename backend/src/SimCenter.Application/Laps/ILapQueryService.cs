@@ -15,9 +15,13 @@ public interface ILapQueryService
     /// <exception cref="Common.Exceptions.NotFoundException">트레이스가 없거나 남의 랩일 때.</exception>
     Task<LapTraceResponse> GetMyLapTraceAsync(Guid userId, Guid lapId, CancellationToken cancellationToken = default);
 
-    /// <summary>공유 링크로 보는 랩 상세(로그인 없음, 주인 무관). 주인 이름은 랭킹과 같은 공개 규칙(D-39).</summary>
+    /// <summary>
+    /// 공유 링크로 보는 랩 상세(로그인 없음, 주인 무관). 주인 이름은 랭킹과 같은 공개 규칙(D-39).
+    /// <paramref name="compareLapId"/>가 같은 트랙·게임의 지우지 않은 다른 랩이면 비교 대상으로 싣고, 아니면 비교 없이 돌려준다.
+    /// </summary>
     /// <exception cref="Common.Exceptions.NotFoundException">지운 랩이거나 없을 때.</exception>
-    Task<PublicLapDetailResponse> GetPublicLapAsync(Guid lapId, CancellationToken cancellationToken = default);
+    Task<PublicLapDetailResponse> GetPublicLapAsync(
+        Guid lapId, Guid? compareLapId = null, CancellationToken cancellationToken = default);
 
     /// <summary>공유 링크로 보는 랩의 트레이스(로그인 없음).</summary>
     /// <exception cref="Common.Exceptions.NotFoundException">트레이스가 없거나 지운·없는 랩일 때.</exception>

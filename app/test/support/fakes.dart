@@ -324,19 +324,24 @@ class FakeLapDetailRepository implements LapDetailRepository {
   }
 }
 
-/// 공유 링크 랩 저장소(로그인 없음). 없는 랩은 404.
+/// 공유 링크 랩 저장소(로그인 없음). 없는 랩은 404. `compareLapId`를 주면 [compared]에 그 비교 랩 ID로 둔 응답이 있을 때 그것을 돌려준다.
 class FakePublicLapRepository implements PublicLapRepository {
-  FakePublicLapRepository({this.laps = const {}, this.traces = const {}});
+  FakePublicLapRepository({this.laps = const {}, this.traces = const {}, this.compared = const {}});
 
   final Map<String, SharedLap> laps;
   final Map<String, LapTrace> traces;
+
+  /// 비교 랩 ID → 그 비교를 실은 응답.
+  final Map<String, SharedLap> compared;
   final lapRequests = <String>[];
+  final compareRequests = <String?>[];
   final traceRequests = <String>[];
 
   @override
-  Future<SharedLap> getLap(String lapId) async {
+  Future<SharedLap> getLap(String lapId, {String? compareLapId}) async {
     lapRequests.add(lapId);
-    final lap = laps[lapId];
+    compareRequests.add(compareLapId);
+    final lap = compared[compareLapId] ?? laps[lapId];
     if (lap == null) {
       throw ApiException('대상을 찾을 수 없어요.', statusCode: 404);
     }

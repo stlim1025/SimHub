@@ -23,7 +23,9 @@ public sealed record LapDetailResponse(
 
 /// <summary>
 /// 공유 링크로 보는 랩 상세(<c>GET /public/laps/{lapId}</c>, 로그인 없음). <see cref="LapDetailResponse"/>와 같은 이름의 필드를 쓰는 읽기 전용 부분집합이다
-/// — 세션 연결·비교 대상은 로그인한 주인의 것이라 뺀다. <see cref="DisplayName"/> = 랩 주인 이름, 랭킹과 같은 규칙(이름 비공개·지운 사용자 = 익명 드라이버, D-39).
+/// — 세션 연결은 로그인한 주인의 것이라 뺀다. <see cref="DisplayName"/> = 랩 주인 이름, 랭킹과 같은 규칙(이름 비공개·지운 사용자 = 익명 드라이버, D-39).
+/// <see cref="Comparison"/> = 공유 링크의 <c>compareLapId</c>로 고른 비교 랩(종류 <c>lap</c>). 같은 트랙·게임의 지우지 않은 다른 랩일 때만 있고, 아니면 null.
+/// 비교 랩 주인이 이 랩 주인과 같으면 <c>isMine</c> = true(이름 없음), 다르면 같은 이름 규칙의 이름을 싣는다.
 /// 이메일·사용자 ID·장치 정보는 담지 않는다.
 /// </summary>
 public sealed record PublicLapDetailResponse(
@@ -33,7 +35,8 @@ public sealed record PublicLapDetailResponse(
     string DisplayName,
     LapCarSnapshotDto? Car,
     LapConditionsDto? Conditions,
-    LapAssistsDto? Assists);
+    LapAssistsDto? Assists,
+    LapComparisonDto? Comparison = null);
 
 /// <summary>
 /// 랩 끝의 차량 스냅샷(D-44). 바퀴 묶음은 4개 값이 모두 있을 때만 보인다. 퍼센트 0~100, 연료 kg, ERS J.

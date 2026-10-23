@@ -194,7 +194,7 @@ void main() {
   });
 
   group('머리줄 · Share', () {
-    testWidgets('머리줄은 "{트랙} Lap {랩타임}"이고 Share는 로그인 없이 보는 공유 주소(Telemetry 탭만, 비교 없음)를 복사한다', (t) async {
+    testWidgets('머리줄은 "{트랙} Lap {랩타임}"이고 Share는 로그인 없이 보는 공유 주소(Telemetry 탭 + 비교 중인 랩 ID)를 복사한다', (t) async {
       String? clipboardText;
       t.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
         if (call.method == 'Clipboard.setData') {
@@ -213,11 +213,11 @@ void main() {
       expect(find.text('Jeddah Lap 1:38.448'), findsOneWidget);
       await _tapText(t, 'Share');
 
-      expect(clipboardText, 'https://simcenter.test/#/share/laps/l1?tab=telemetry');
+      expect(clipboardText, 'https://simcenter.test/#/share/laps/l1?tab=telemetry&compareLapId=r1');
       expect(find.text('주소를 복사했어요'), findsOneWidget);
     });
 
-    testWidgets('Your Best Laps 탭에서 누른 Share도 탭 없는 공유 주소를 복사한다', (t) async {
+    testWidgets('Your Best Laps 탭에서 누른 Share는 탭 없이 비교 중인 랩만 싣는다', (t) async {
       String? clipboardText;
       t.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
         if (call.method == 'Clipboard.setData') {
@@ -235,7 +235,34 @@ void main() {
 
       await _tapText(t, 'Share');
 
-      expect(clipboardText, 'https://stlim1025.github.io/SimHub/#/share/laps/l1');
+      expect(clipboardText, 'https://stlim1025.github.io/SimHub/#/share/laps/l1?compareLapId=best');
+    });
+
+    Future<String?> shareFrom(WidgetTester t, String location, {FakeLapDetailRepository? repo}) async {
+      String? clipboardText;
+      t.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') {
+          clipboardText = (call.arguments as Map)['text'] as String?;
+        }
+        return null;
+      });
+      addTearDown(() => t.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+      await pumpLapDetail(t, detailRepo: repo ?? _repo(), location: location, shareBase: Uri.parse('https://simcenter.test/'));
+      await _tapText(t, 'Share');
+      return clipboardText;
+    }
+
+    testWidgets('비교 안 함이면 Share 주소에 비교 랩이 없다', (t) async {
+      expect(await shareFrom(t, '/laps/l1?tab=telemetry&compare=none'), 'https://simcenter.test/share/laps/l1?tab=telemetry');
+    });
+
+    testWidgets('맞는 비교 대상이 없으면 Share 주소에 비교 랩이 없다', (t) async {
+      expect(await shareFrom(t, '/laps/l1?sameTeam=true'), 'https://simcenter.test/share/laps/l1');
+    });
+
+    testWidgets('비교 대상이 이 랩 자신이면 Share 주소에 비교 랩이 없다', (t) async {
+      final repo = FakeLapDetailRepository(details: {'l1': sampleDetail(comparison: comparisonOf('l1', 98448))});
+      expect(await shareFrom(t, '/laps/l1', repo: repo), 'https://simcenter.test/share/laps/l1');
     });
   });
 

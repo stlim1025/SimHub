@@ -19,6 +19,7 @@ import '../../laps/presentation/empty_laps_card.dart';
 import '../application/lap_detail_providers.dart';
 import '../domain/lap_compare.dart';
 import '../domain/lap_detail_display.dart';
+import '../domain/lap_detail_models.dart';
 import '../domain/shared_lap.dart';
 import 'lap_details_tab.dart';
 import 'telemetry_tab.dart';
@@ -30,7 +31,7 @@ const String _notFoundMessage = '찾을 수 없는 랩입니다.';
 const String _fallbackTitle = 'Lap';
 const String _noTraceText = '이 랩은 텔레메트리가 저장되지 않았어요';
 
-/// 공유 화면은 비교 대상이 없다(비교는 로그인한 주인의 것) — Comparison 카드·비교 선을 숨긴다.
+/// 주소에 비교 랩이 없거나 서버가 받아들이지 않았을 때 — Comparison 카드·비교 선을 숨긴다.
 const LapCompareSelection _noCompare = LapCompareSelection(kind: LapCompareKind.none);
 
 const int _httpNotFound = 404;
@@ -52,15 +53,19 @@ const Map<String, String> _tabLabels = {
 };
 
 /// 공유 링크로 여는 랩(`/share/laps/:lapId`, 로그인 없음). 셸 밖 화면이다: 머리줄(SimHub 로고 · [로그인] 또는 [내 기록으로])
-/// + 국기 · `{트랙} Lap {랩타임}` · 드라이버 이름 + 탭 2개(Lap Details · Telemetry). 비교·내 최고 랩·세션 이동처럼
-/// 로그인이 필요한 것은 없다. 탭은 `?tab=details|telemetry`(모르는 값은 details). 없는 랩이면 404 상태.
+/// + 국기 · `{트랙} Lap {랩타임}` · 드라이버 이름 + 탭 2개(Lap Details · Telemetry). 비교 선택·내 최고 랩·세션 이동처럼
+/// 로그인이 필요한 것은 없다. 탭은 `?tab=details|telemetry`(모르는 값은 details). 주소에 `?compareLapId=`가 있으면
+/// 공유한 사람이 보던 비교(Comparison 카드·Delta·비교 선·고스트 차)를 그대로 보인다. 없는 랩이면 404 상태.
 class SharedLapPage extends ConsumerStatefulWidget {
-  const SharedLapPage({super.key, required this.lapId, this.tab});
+  const SharedLapPage({super.key, required this.lapId, this.tab, this.compareLapId});
 
   final String lapId;
 
   /// 주소의 `tab` 쿼리. null이거나 모르는 값이면 `details`.
   final String? tab;
+
+  /// 주소의 `compareLapId` 쿼리(비교 중이던 랩). null이면 비교 없음.
+  final String? compareLapId;
 
   @override
   ConsumerState<SharedLapPage> createState() => _SharedLapPageState();
@@ -100,13 +105,17 @@ class _SharedLapPageState extends ConsumerState<SharedLapPage> with SingleTicker
   void _selectTab(int index) {
     final tab = kSharedLapTabs[index];
     if (tab != _tab) {
-      Router.neglect(context, () => context.go(sharedLapLocation(widget.lapId, tab: tab)));
+      Router.neglect(
+        context,
+        () => context.go(sharedLapLocation(widget.lapId, tab: tab, compareLapId: widget.compareLapId)),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final shared = ref.watch(sharedLapProvider(widget.lapId));
+    final key = SharedLapKey(widget.lapId, widget.compareLapId);
+    final shared = ref.watch(sharedLapProvider(key));
     final loaded = shared.valueOrNull;
 
     return Scaffold(
@@ -142,7 +151,7 @@ class _SharedLapPageState extends ConsumerState<SharedLapPage> with SingleTicker
                                   : ErrorRetry(
                                       error: e,
                                       fallbackMessage: '랩을 불러오지 못했어요.',
-                                      onRetry: () => ref.invalidate(sharedLapProvider(widget.lapId)),
+                                      onRetry: () => ref.invalidate(sharedLapProvider(key)),
                                     ),
                               data: (_) => const SizedBox.shrink(),
                             ),
@@ -219,10 +228,18 @@ class _SharedBody extends StatelessWidget {
         const SizedBox(height: _sectionGap),
         tab == kLapTabTelemetry
             ? _SharedTelemetry(shared: shared)
-            : LapDetailsTab(detail: shared.detail, compare: _noCompare),
+            : LapDetailsTab(detail: shared.detail, compare: _compareOf(shared.detail)),
       ],
     );
   }
+}
+
+/// 서버가 비교 랩을 실어 보냈으면 그 랩 하나와의 비교, 아니면 비교 없음.
+LapCompareSelection _compareOf(LapDetail detail) {
+  final comparison = detail.comparison;
+  return comparison == null || comparison.lapId == detail.lap.lapId
+      ? _noCompare
+      : LapCompareSelection(kind: LapCompareKind.lap, compareLapId: comparison.lapId);
 }
 
 /// 국기 + `Jeddah Lap 1:38.448` + 드라이버 이름.
@@ -268,7 +285,8 @@ class _Header extends StatelessWidget {
   }
 }
 
-/// 공유 랩의 Telemetry(비교 선 없음). 속도 단위는 로그인했으면 사용자 설정, 아니면 미터법.
+/// 공유 랩의 Telemetry. 비교 랩이 있고 트레이스가 있으면 공개 트레이스로 비교 선·Delta·고스트 차를 그린다.
+/// 속도 단위는 로그인했으면 사용자 설정, 아니면 미터법.
 class _SharedTelemetry extends ConsumerWidget {
   const _SharedTelemetry({required this.shared});
 
@@ -280,10 +298,17 @@ class _SharedTelemetry extends ConsumerWidget {
     if (!lap.hasTrace) {
       return const EmptyLapsCard(message: _noTraceText);
     }
+    final comparison = _compareOf(shared.detail).kind == LapCompareKind.none ? null : shared.detail.comparison;
+    final comparisonId = comparison != null && comparison.hasTrace ? comparison.lapId : null;
     final trace = ref.watch(sharedLapTraceProvider(lap.lapId));
+    final reference = comparisonId == null ? null : ref.watch(sharedLapTraceProvider(comparisonId));
     final units = ref.watch(authControllerProvider).valueOrNull?.preferences.units ?? UnitSystem.metric;
+    // 비교 랩 트레이스가 아직 오는 중이면 기다린다. 실패하면 이 랩만 그린다.
+    if (trace.isLoading || (reference?.isLoading ?? false)) {
+      return const PageLoadingBar();
+    }
     return trace.when(
-      loading: () => const PageLoadingBar(),
+      loading: () => const SizedBox.shrink(),
       error: (e, _) => ErrorRetry(
         error: e,
         fallbackMessage: '텔레메트리를 불러오지 못했어요.',
@@ -293,12 +318,15 @@ class _SharedTelemetry extends ConsumerWidget {
           ? const EmptyLapsCard(message: _noTraceText)
           : TelemetryCharts(
               trace: data,
-              reference: null,
+              reference: reference?.valueOrNull,
               lapTimeMs: lap.lapTimeMs,
-              referenceLapTimeMs: null,
+              referenceLapTimeMs: comparison?.lapTimeMs,
+              referenceLabel: comparison == null ? kDefaultReferenceLabel : referenceLegendLabel(comparison),
               units: units,
               sectors: lap.sectors,
+              referenceSectors: comparison?.sectors ?? const [],
               playerTeam: lap.team,
+              referenceTeam: comparison?.team,
             ),
     );
   }

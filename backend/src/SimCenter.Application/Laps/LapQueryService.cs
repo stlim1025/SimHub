@@ -71,13 +71,15 @@ public sealed class LapQueryService : ILapQueryService
         return ToTraceResponse(lapId, trace);
     }
 
-    public async Task<PublicLapDetailResponse> GetPublicLapAsync(Guid lapId, CancellationToken cancellationToken = default)
+    public async Task<PublicLapDetailResponse> GetPublicLapAsync(
+        Guid lapId, Guid? compareLapId = null, CancellationToken cancellationToken = default)
     {
         var lap = await _laps.GetSharedAsync(lapId, cancellationToken)
             ?? throw new NotFoundException(LapNotFoundMessage);
 
         var snapshot = await _laps.GetSnapshotAsync(lap.LapId, cancellationToken);
         var displayName = await PublicDisplayNameAsync(lap.UserId, cancellationToken);
+        var comparison = compareLapId is { } id ? await SharedComparisonAsync(lap, id, cancellationToken) : null;
 
         return new PublicLapDetailResponse(
             LapDtoMapper.ToLapDto(lap),
@@ -86,7 +88,28 @@ public sealed class LapQueryService : ILapQueryService
             displayName,
             LapDtoMapper.ToCar(snapshot),
             LapDtoMapper.ToConditions(snapshot),
-            LapAssistNames.ToDto(LapAssistValues.From(snapshot)));
+            LapAssistNames.ToDto(LapAssistValues.From(snapshot)),
+            comparison);
+    }
+
+    /// <summary>
+    /// 공유 링크의 비교 랩(종류 <c>lap</c>). 이 랩 자신·없는(지운) 랩·다른 트랙이나 게임의 랩이면 null(비교 없이 보인다).
+    /// 공유 랩과 같은 규칙(지우지 않은 랩)으로 읽고, 주인이 다르면 이름은 랭킹과 같은 규칙(D-39)이다.
+    /// </summary>
+    private async Task<LapComparisonDto?> SharedComparisonAsync(LapRow lap, Guid compareLapId, CancellationToken cancellationToken)
+    {
+        if (compareLapId == lap.LapId)
+        {
+            return null;
+        }
+
+        var picked = await _laps.GetSharedAsync(compareLapId, cancellationToken);
+        if (picked is null || picked.TrackId != lap.TrackId || picked.GameCode != lap.GameCode)
+        {
+            return null;
+        }
+
+        return await ToComparisonAsync(lap.UserId, picked, LapComparisonKinds.Lap, [], cancellationToken);
     }
 
     public async Task<LapTraceResponse> GetPublicLapTraceAsync(Guid lapId, CancellationToken cancellationToken = default)

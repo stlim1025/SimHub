@@ -49,10 +49,15 @@ const List<String> kSharedLapTabs = [kLapTabDetails, kLapTabTelemetry];
 String normalizeSharedLapTab(String? value) => kSharedLapTabs.contains(value) ? value! : kLapTabDetails;
 
 /// 로그인 없이 여는 공유 랩 주소(Share 버튼이 복사한다). Telemetry 탭이면 `?tab=telemetry`를 붙이고,
-/// 그 밖의 탭(기본·Your Best Laps)과 비교 선택은 싣지 않는다 — 비교는 로그인한 주인의 것이다.
-String sharedLapLocation(String lapId, {String? tab}) {
+/// 그 밖의 탭(기본·Your Best Laps)은 싣지 않는다. [compareLapId]를 주면 비교 중인 랩을 `compareLapId`로 싣는다 —
+/// 비교 종류(내 최고 랩 등)는 시간이 지나면 다른 랩이 되므로, 지금 비교 중인 랩 ID 하나로 고정한다.
+String sharedLapLocation(String lapId, {String? tab, String? compareLapId}) {
   final path = '/share/laps/$lapId';
-  return tab == kLapTabTelemetry ? Uri(path: path, queryParameters: {'tab': tab}).toString() : path;
+  final query = {
+    if (tab == kLapTabTelemetry) 'tab': tab!,
+    kCompareLapIdQuery: ?compareLapId,
+  };
+  return query.isEmpty ? path : Uri(path: path, queryParameters: query).toString();
 }
 
 // -- 비교 Delta -------------------------------------------------------------------

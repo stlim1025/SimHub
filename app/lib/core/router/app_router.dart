@@ -70,12 +70,14 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       _screen('/splash', (_) => const SplashPage()),
       _screen('/login', (_) => const LoginPage()),
-      // 공유 링크 랩(로그인 없음): 셸 밖 화면이고 리다이렉트하지 않는다([isSharePath]). 탭은 `?tab=details|telemetry`.
+      // 공유 링크 랩(로그인 없음): 셸 밖 화면이고 리다이렉트하지 않는다([isSharePath]). 탭은 `?tab=details|telemetry`,
+      // 비교 중이던 랩은 `?compareLapId=`(랩 ID가 아니면 비교 없음).
       _screen(
         '/share/laps/:lapId',
         (state) => SharedLapPage(
           lapId: state.pathParameters['lapId']!,
           tab: state.uri.queryParameters['tab'],
+          compareLapId: normalizeLapIdInput(state.uri.queryParameters[kCompareLapIdQuery] ?? ''),
         ),
       ),
       // 예전 랭킹 경로(P5)는 셸 안의 Leaderboard로 보낸다(11 §7.4).

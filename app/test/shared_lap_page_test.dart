@@ -4,10 +4,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:simcenter_app/features/auth/domain/auth_models.dart';
 import 'package:simcenter_app/features/lap_detail/data/public_lap_repository.dart';
+import 'package:simcenter_app/features/lap_detail/domain/lap_compare.dart';
 import 'package:simcenter_app/features/lap_detail/domain/lap_detail_display.dart';
+import 'package:simcenter_app/features/lap_detail/domain/lap_detail_models.dart';
 import 'package:simcenter_app/features/lap_detail/domain/shared_lap.dart';
+import 'package:simcenter_app/features/lap_detail/presentation/ghost_replay.dart';
 import 'package:simcenter_app/features/lap_detail/presentation/shared_lap_page.dart';
 import 'package:simcenter_app/features/lap_detail/presentation/telemetry_tab.dart';
+import 'package:simcenter_app/features/laps/domain/lap_models.dart';
 
 import 'support/fakes.dart';
 import 'support/lap_detail_harness.dart';
@@ -28,6 +32,7 @@ Future<GoRouter> _pumpShared(
       builder: (_, state) => SharedLapPage(
         lapId: state.pathParameters['lapId']!,
         tab: state.uri.queryParameters['tab'],
+        compareLapId: state.uri.queryParameters['compareLapId'],
       ),
     ),
   ]);
@@ -47,6 +52,53 @@ FakePublicLapRepository _repo({bool withTrace = true}) => FakePublicLapRepositor
       traces: {if (withTrace) 'l1': traceOf('l1')},
     );
 
+/// 위치가 있는 트레이스(고스트 재생이 그려지도록).
+LapTrace _positionedTrace(String lapId, {int msPerSample = 100}) {
+  const count = 41;
+  return LapTrace(
+    lapId: lapId,
+    resolutionM: 5,
+    timeMs: [for (var i = 0; i < count; i++) i * msPerSample],
+    speedKph: [for (var i = 0; i < count; i++) 200 + i],
+    throttle: [for (var i = 0; i < count; i++) 100],
+    brake: [for (var i = 0; i < count; i++) 0],
+    steer: [for (var i = 0; i < count; i++) 0],
+    gear: [for (var i = 0; i < count; i++) i ~/ 10 + 1],
+    rpm: [for (var i = 0; i < count; i++) 11000],
+    worldPosX: [for (var i = 0; i < count; i++) i * 5.0],
+    worldPosZ: [for (var i = 0; i < count; i++) 0.0],
+  );
+}
+
+const String _compareId = '0192f0aa-1111-7000-8000-000000000001';
+
+/// 비교 없는 응답 + `compareLapId=_compareId`면 남의 랩(익명 드라이버, 트레이스 있음)과의 비교를 실은 응답.
+FakePublicLapRepository _comparedRepo() => FakePublicLapRepository(
+      laps: {'l1': SharedLap(detail: sampleDetail(withComparison: false, sessionId: null), displayName: '공유 드라이버')},
+      compared: {
+        _compareId: SharedLap(
+          detail: sampleDetail(
+            sessionId: null,
+            comparison: comparisonOf(
+              _compareId,
+              98000,
+              sectors: const [
+                LapSector(sectorNumber: 1, sectorTimeMs: 30500),
+                LapSector(sectorNumber: 2, sectorTimeMs: 33300),
+                LapSector(sectorNumber: 3, sectorTimeMs: 34200),
+              ],
+              hasTrace: true,
+              kind: LapCompareKind.lap,
+              isMine: false,
+              displayName: '익명 드라이버',
+            ),
+          ),
+          displayName: '공유 드라이버',
+        ),
+      },
+      traces: {'l1': _positionedTrace('l1'), _compareId: _positionedTrace(_compareId, msPerSample: 95)},
+    );
+
 void main() {
   group('sharedLapLocation', () {
     test('Telemetry 탭만 쿼리로 싣고 그 밖은 경로만', () {
@@ -54,6 +106,15 @@ void main() {
       expect(sharedLapLocation('l1', tab: kLapTabDetails), '/share/laps/l1');
       expect(sharedLapLocation('l1', tab: kLapTabBest), '/share/laps/l1');
       expect(sharedLapLocation('l1', tab: kLapTabTelemetry), '/share/laps/l1?tab=telemetry');
+    });
+
+    test('비교 랩 ID를 주면 compareLapId로 싣는다', () {
+      expect(sharedLapLocation('l1', compareLapId: 'c1'), '/share/laps/l1?compareLapId=c1');
+      expect(sharedLapLocation('l1', tab: kLapTabBest, compareLapId: 'c1'), '/share/laps/l1?compareLapId=c1');
+      expect(
+        sharedLapLocation('l1', tab: kLapTabTelemetry, compareLapId: 'c1'),
+        '/share/laps/l1?tab=telemetry&compareLapId=c1',
+      );
     });
 
     test('공유 화면의 탭은 details·telemetry만(best는 details)', () {
@@ -122,5 +183,45 @@ void main() {
     await _pumpShared(t, repo: FakePublicLapRepository(), location: '/share/laps/nope');
 
     expect(find.text('찾을 수 없는 랩입니다.'), findsOneWidget);
+  });
+
+  group('compareLapId(비교 중 공유)', () {
+    testWidgets('Lap Details에 비교 랩과의 Comparison 카드를 보인다', (t) async {
+      final repo = _comparedRepo();
+      await _pumpShared(t, repo: repo, location: '/share/laps/l1?compareLapId=$_compareId');
+
+      expect(repo.compareRequests, [_compareId]);
+      expect(find.text('Comparison'), findsOneWidget);
+      expect(find.text('비교 랩'), findsOneWidget);
+      expect(find.byKey(const ValueKey('comparison-driver')), findsOneWidget);
+      expect(find.textContaining('Compare with'), findsNothing);
+    });
+
+    testWidgets('Telemetry는 비교 랩 공개 트레이스로 Delta·비교 선·고스트 재생을 그리고, 탭을 바꿔도 비교를 유지한다', (t) async {
+      final repo = _comparedRepo();
+      final router = await _pumpShared(t, repo: repo, location: '/share/laps/l1?compareLapId=$_compareId');
+
+      await t.tap(find.text('Telemetry'));
+      await t.pumpAndSettle();
+
+      expect(locationOf(router), '/share/laps/l1?tab=telemetry&compareLapId=$_compareId');
+      expect(repo.traceRequests, containsAll(['l1', _compareId]));
+      final charts = t.widget<TelemetryCharts>(find.byType(TelemetryCharts));
+      expect(charts.reference?.lapId, _compareId);
+      expect(charts.referenceLapTimeMs, 98000);
+      expect(charts.referenceLabel, '비교 랩 · 익명 드라이버');
+      expect(charts.referenceSectors, hasLength(3));
+      expect(find.byKey(const ValueKey('telemetry-chart-delta')), findsOneWidget);
+      final ghost = t.widget<GhostReplay>(find.byType(GhostReplay));
+      expect(ghost.reference?.lapId, _compareId);
+    });
+
+    testWidgets('compareLapId가 없으면 비교 없이 요청한다', (t) async {
+      final repo = _comparedRepo();
+      await _pumpShared(t, repo: repo);
+
+      expect(repo.compareRequests, [null]);
+      expect(find.text('Comparison'), findsNothing);
+    });
   });
 }

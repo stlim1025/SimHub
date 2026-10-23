@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_provider.dart';
+import '../domain/lap_compare.dart';
 import '../domain/lap_detail_models.dart';
 import '../domain/shared_lap.dart';
 
@@ -14,10 +15,14 @@ class PublicLapRepository {
 
   final Dio _dio;
 
-  /// 공유 랩 상세. 없거나 지운 랩이면 404 [ApiException].
-  Future<SharedLap> getLap(String lapId) async {
+  /// 공유 랩 상세. [compareLapId]를 주면 그 랩을 비교 대상(`comparison`)으로 함께 받는다(같은 트랙·게임이 아니면 서버가 뺀다).
+  /// 없거나 지운 랩이면 404 [ApiException].
+  Future<SharedLap> getLap(String lapId, {String? compareLapId}) async {
     try {
-      final res = await _dio.get<Map<String, dynamic>>(_lapPath(lapId));
+      final res = await _dio.get<Map<String, dynamic>>(
+        _lapPath(lapId),
+        queryParameters: {kCompareLapIdQuery: ?compareLapId},
+      );
       return SharedLap.fromJson(res.data!);
     } on DioException catch (e) {
       throw ApiException.fromDio(e);

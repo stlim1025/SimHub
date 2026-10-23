@@ -323,6 +323,20 @@ void main() {
           'l1': SharedLap(detail: lapDetailOf(lapOf('l1', 'Jeddah', 98448)), displayName: '공유 드라이버'),
         });
 
+    testWidgets('compareLapId 쿼리를 비교 랩으로 넘기고, 랩 ID가 아니면 버린다', (t) async {
+      final repo = publicRepo();
+      final router = await _pumpApp(t, user: null, publicLapRepo: repo);
+
+      router.go('/share/laps/l1?compareLapId=0192f0aa-1111-7000-8000-000000000001');
+      await t.pumpAndSettle();
+      expect(t.widget<SharedLapPage>(find.byType(SharedLapPage)).compareLapId, '0192f0aa-1111-7000-8000-000000000001');
+      expect(repo.compareRequests.last, '0192f0aa-1111-7000-8000-000000000001');
+
+      router.go('/share/laps/l1?compareLapId=nope');
+      await t.pumpAndSettle();
+      expect(t.widget<SharedLapPage>(find.byType(SharedLapPage)).compareLapId, isNull);
+    });
+
     testWidgets('로그아웃 상태여도 로그인으로 보내지 않고 셸 밖 공유 화면을 연다', (t) async {
       final repo = publicRepo();
       final router = await _pumpApp(t, user: null, publicLapRepo: repo);
