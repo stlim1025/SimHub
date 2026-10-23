@@ -162,6 +162,10 @@ public class TrackSamplesIngestorTests
 
     private sealed class FakeChunkRepository : ITrackSampleChunkRepository
     {
+        public Task<IReadOnlyList<StoredTrackSampleChunk>> ListForTrackAsync(
+            Guid trackId, string gameCode, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<StoredTrackSampleChunk>>([]);
+
         public List<TrackSampleChunk> Items { get; } = new();
 
         public Task<bool> ExistsAsync(Guid agentDeviceId, string sessionRef, int chunkIndex, CancellationToken ct = default)

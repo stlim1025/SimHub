@@ -2,6 +2,9 @@ using SimCenter.Domain.Entities;
 
 namespace SimCenter.Application.Common.Interfaces;
 
+/// <summary>저장된 표본 조각의 본문(gzip)과 풀 때 필요한 값.</summary>
+public sealed record StoredTrackSampleChunk(string SessionRef, int ChunkIndex, int Format, byte[] Payload);
+
 /// <summary>트랙 형상 표본 조각 저장소 포트.</summary>
 public interface ITrackSampleChunkRepository
 {
@@ -10,4 +13,7 @@ public interface ITrackSampleChunkRepository
 
     /// <summary>조각을 추적에 더한다(저장은 호출자의 커밋과 함께).</summary>
     Task AddAsync(TrackSampleChunk chunk, CancellationToken cancellationToken = default);
+
+    /// <summary>트랙·게임의 모든 조각(지운 것 제외, 받은 순서).</summary>
+    Task<IReadOnlyList<StoredTrackSampleChunk>> ListForTrackAsync(Guid trackId, string gameCode, CancellationToken cancellationToken = default);
 }

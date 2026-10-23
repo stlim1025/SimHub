@@ -18,4 +18,14 @@ public sealed class TrackSampleChunkRepository : ITrackSampleChunkRepository
 
     public async Task AddAsync(TrackSampleChunk chunk, CancellationToken cancellationToken = default)
         => await _context.TrackSampleChunks.AddAsync(chunk, cancellationToken);
+
+    public async Task<IReadOnlyList<StoredTrackSampleChunk>> ListForTrackAsync(
+        Guid trackId, string gameCode, CancellationToken cancellationToken = default)
+        => await _context.TrackSampleChunks
+            .AsNoTracking()
+            .Where(x => x.TrackId == trackId && x.GameCode == gameCode && !x.IsDeleted)
+            .OrderBy(x => x.CreatedAt)
+            .ThenBy(x => x.ChunkIndex)
+            .Select(x => new StoredTrackSampleChunk(x.SessionRef, x.ChunkIndex, x.Format, x.Payload))
+            .ToListAsync(cancellationToken);
 }

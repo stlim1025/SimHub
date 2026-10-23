@@ -48,6 +48,26 @@ public sealed class TrackSamplesIngestE2ETests : IClassFixture<ApiFactory>
         Assert.True(chunk.IsLast);
     }
 
+    [Fact]
+    public async Task Geometry_IsPublic_AndUndecodableChunksAreSkipped()
+    {
+        var client = _factory.CreateClient();
+        var userId = await TestApi.RegisterAndLoginAsync(client);
+        var (_, deviceKey) = await TestApi.PairDeviceAsync(client, "E2E-GEOMETRY-PC");
+        await using var connection = TestApi.BuildTelemetryConnection(_factory, deviceKey);
+        await connection.StartAsync();
+        Assert.True((await SendAsync(connection, Gzip(RandomBytes(BodyBytes)))).Acknowledged);
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var trackId = (await db.TrackSampleChunks.FirstAsync(c => c.UserId == userId)).TrackId;
+
+        var anonymous = _factory.CreateClient();
+        var response = await anonymous.GetAsync($"/api/v1/tracks/{trackId}/geometry?gameCode=F1_25");
+
+        // 로그인 없이도 401이 아니고, 풀 수 없는 조각(임의 바이트)만 있으면 형상이 없어 404.
+        Assert.Equal(System.Net.HttpStatusCode.NotFound, response.StatusCode);
+    }
+
     private static Task<SubmitAck> SendAsync(HubConnection connection, byte[] gzip)
         => connection.InvokeAsync<SubmitAck>("SubmitEvent", new
         {
