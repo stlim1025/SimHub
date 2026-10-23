@@ -24,6 +24,11 @@ public static class FieldLapBuilder
     /// <summary>랩 하나에 이보다 표본이 적으면 복원하지 않는다.</summary>
     private const int MinLapSamples = 20;
 
+    /// <summary>끝 표본이 없는 랩의 남은 시간 어림: km/h → m/s, 너무 느린 마지막 속도의 하한(m/s), ms.</summary>
+    private const double KphPerMetresPerSecond = 3.6;
+    private const double MinSpeedMetresPerSecond = 1;
+    private const double MillisecondsPerSecond = 1000;
+
     /// <summary>ERS kJ → 트레이스 채널(J).</summary>
     private const double JoulesPerKilojoule = 1000;
 
@@ -140,10 +145,18 @@ public static class FieldLapBuilder
             }
             else
             {
-                // 끝 표본이 없는 랩: 베스트 랩 타임을 알고, 거의 다 달렸고, 그 시간 안이면 베스트 랩으로 본다.
+                // 끝 표본이 없는 랩: 베스트 랩 타임을 알고, 거의 다 달렸고, 마지막 속도로 남은 거리를 달리면
+                // 그 시간 언저리에 끝나야 베스트 랩으로 본다(인랩·느린 랩에 베스트 랩 타임을 덧붙이지 않게).
                 if (bestLapTimeMs is not { } target
                     || points[^1].DistanceM < trackLength * MinOpenLapCoverage
                     || points[^1].TimeMs >= target)
+                {
+                    continue;
+                }
+
+                var lastSpeedMs = Math.Max(points[^1].Speed / KphPerMetresPerSecond, MinSpeedMetresPerSecond);
+                var predictedMs = points[^1].TimeMs + (trackLength - points[^1].DistanceM) / lastSpeedMs * MillisecondsPerSecond;
+                if (Math.Abs(predictedMs - target) > MaxLapTimeDifferenceMs)
                 {
                     continue;
                 }
