@@ -127,7 +127,21 @@ class AppColors {
   static const Color replayGravel = Color(0xFF8C7B5A);
   static const Color replayKerbRed = Color(0xFFD62828);
 
-  /// 고스트 재생 HUD의 ERS 배터리 잔량 막대(노랑)·사용 출력 막대(파랑, 충전은 `success` 초록).
+  /// 고스트 재생 HUD의 ERS 배터리 잔량 막대(노랑)·사용 출력 막대(파랑, 충전은 [replayThrottle] 초록).
   static const Color replayBattery = Color(0xFFFACC15);
   static const Color replayDeploy = Color(0xFF60A5FA);
+
+  /// 고스트 재생 중계 화면식 HUD: 패널(짙은 남색 반투명)·머리줄·줄무늬·빈 막대, 머리줄 빨간 띠, 색 위 글자.
+  static const Color replayHudPanel = Color(0xE6111118);
+  static const Color replayHudHeader = Color(0xF21B1B26);
+  static const Color replayHudStripe = Color(0x0FFFFFFF);
+  static const Color replayHudTrack = Color(0x33FFFFFF);
+  static const Color replayHudAccent = Color(0xFFE10600);
+  static const Color replayHudOnColor = Color(0xFF0B0D12);
+
+  /// 구간 비교 색(중계 화면처럼 앞서면 초록, 뒤지면 노랑)·스로틀(초록)·브레이크(빨강).
+  static const Color replayFaster = Color(0xFF2BD66B);
+  static const Color replaySlower = Color(0xFFFFD12E);
+  static const Color replayThrottle = Color(0xFF2BD66B);
+  static const Color replayBrake = Color(0xFFFF3B3B);
 }
