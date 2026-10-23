@@ -130,8 +130,6 @@ class AppColors {
   static const Color replayBattery = Color(0xFFFACC15);
   static const Color replayDeploy = Color(0xFF60A5FA);
 
-  /// 고스트 재생 계기판의 비교 랩 VS 원(빨강).
-  static const Color replayHudAccent = Color(0xFFE10600);
 
   /// 구간 비교 색(중계 화면처럼 앞서면 초록, 뒤지면 노랑)·스로틀(초록)·브레이크(빨강).
   static const Color replayFaster = Color(0xFF2BD66B);
@@ -150,10 +148,10 @@ class AppColors {
   static const Color replayCarRim = Color(0xFF3B3F47);
   static const Color replayCarHelmet = Color(0xFFE9EBEF);
 
-  /// 고스트 재생 계기판: 판, 빈 고리·막대, 경과 시간(초록), 속도 고리(초록), 스로틀 고리(파랑). 브레이크는 [replayBrake].
+  /// 고스트 재생 계기판: 판, 빈 고리·막대, 경과 시간(초록), 속도 고리(파랑), 스로틀 고리(초록). 브레이크는 [replayBrake].
   static const Color replayDashPanel = Color(0xFF1F232B);
   static const Color replayDashTrack = Color(0xFF363B47);
   static const Color replayDashTime = Color(0xFF3DDC5A);
-  static const Color replayDashSpeed = Color(0xFF2DBE4E);
-  static const Color replayDashThrottle = Color(0xFF2563EB);
+  static const Color replayDashSpeed = Color(0xFF2563EB);
+  static const Color replayDashThrottle = Color(0xFF2DBE4E);
 }

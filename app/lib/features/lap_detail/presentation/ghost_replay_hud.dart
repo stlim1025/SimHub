@@ -10,10 +10,11 @@ import '../domain/ghost_replay.dart';
 import '../domain/telemetry_channels.dart';
 import '../domain/telemetry_math.dart';
 
-/// 계기판 배치: 오른쪽 아래, 넓은 화면은 원래 크기·좁은 화면은 화면 폭 비율에 맞춰 줄인다.
+/// 계기판 배치: 이 랩은 오른쪽, 비교 랩은 왼쪽. 넓은 화면은 아래 귀퉁이에 원래 크기로,
+/// 좁은 화면은 차를 가리지 않게 위 귀퉁이(하늘·앞길 자리)에 화면 폭 비율로 줄여 둔다.
 const double _inset = 10;
-const double _wideMaxWidthFraction = 0.36;
-const double _narrowMaxWidthFraction = 0.44;
+const double _wideMaxWidthFraction = 0.32;
+const double _narrowMaxWidthFraction = 0.4;
 const double _narrowWidth = 520;
 
 /// 계기판 판(디자인 크기, 화면에 맞춰 줄어든다).
@@ -22,14 +23,15 @@ const double _panelRadius = 8;
 const EdgeInsets _panelPadding = EdgeInsets.fromLTRB(12, 10, 12, 10);
 const double _dialHeight = 210;
 
-/// 다이얼: 바깥 고리(왼쪽 스로틀·오른쪽 브레이크), 안쪽 고리(속도). 각도는 왼쪽 아래(135°)에서 시계 방향 270°.
+/// 다이얼: 바깥 고리(속도, 눈금), 안쪽 고리(스로틀 → 브레이크). 각도는 왼쪽 아래(135°)에서 시계 방향 270°.
+/// 안쪽 고리는 스로틀이 더 넓다(왼쪽 아래부터 [_throttleShare]), 나머지 오른쪽이 브레이크.
 const double _dialStart = math.pi * 3 / 4;
 const double _dialSweep = math.pi * 3 / 2;
+const double _throttleShare = 0.66;
 const double _pedalGap = 0.03;
-const double _outerStroke = 15;
-const double _speedStroke = 13;
+const double _speedStroke = 15;
+const double _pedalStroke = 17;
 const double _ringGap = 4;
-const double _tickInset = 15;
 const double _tickFontSize = 8.5;
 const double _arcLabelFontSize = 8.5;
 const double _arcLabelSpacing = 0.085;
@@ -49,10 +51,12 @@ const double _rpmFontSize = 19;
 const double _unitFontSize = 9;
 const double _gearFontSize = 20;
 const double _labelFontSize = 10;
+const double _nameFontSize = 11;
+const double _nameStripWidth = 3;
+const double _nameStripHeight = 14;
 const double _sectorFontSize = 11;
 const double _tyreBadgeSize = 22;
 const double _tyreRingWidth = 2.5;
-const double _vsBadgeSize = 24;
 const double _sectorBarHeight = 3;
 const double _barHeight = 4;
 const double _flowBarWidth = 70;
@@ -63,13 +67,11 @@ const String _throttleLabel = 'THROTTLE';
 const String _brakeLabel = 'BRAKE';
 const String _rpmLabel = 'RPM';
 const String _gearLabel = 'GEAR';
-const String _vsLabel = 'VS';
 
-/// 고스트 재생 계기판(게임 텔레메트리 화면처럼 한 판에 모은다):
-/// - 위: 경과 시간(초록)·비교 랩과의 시간 차, 오른쪽에 타이어 컴파운드.
-/// - 가운데 다이얼: 바깥 고리 왼쪽 스로틀(파랑)·오른쪽 브레이크(빨강), 안쪽 고리 속도(초록, 눈금), 가운데 속도·RPM.
-/// - 기어, ERS 배터리·충전/사용, 섹터 S1·S2·S3(지난 섹터는 시간·차이, 지금 섹터는 흰 밑줄).
-/// - 비교 랩이 있으면 맨 아래 VS 줄(팀 색·이름·속도·기어).
+/// 고스트 재생 계기판(게임 텔레메트리 화면처럼). 이 랩은 오른쪽, 비교 랩이 있으면 같은 계기판을 왼쪽에 둔다.
+/// - 위: 팀 색 띠·이름(이 랩은 타이어 컴파운드), 이 랩은 그 아래 경과 시간(초록)·비교 랩과의 시간 차.
+/// - 가운데 다이얼: 바깥 고리 속도(파랑, 눈금), 안쪽 고리 스로틀(초록, 넓게)·브레이크(빨강), 가운데 속도·RPM, 아래 기어.
+/// - ERS 배터리·충전/사용, 이 랩은 섹터 S1·S2·S3(지난 섹터는 시간·차이, 지금 섹터는 흰 밑줄).
 class GhostReplayHud extends StatelessWidget {
   const GhostReplayHud({
     super.key,
@@ -103,36 +105,75 @@ class GhostReplayHud extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
         builder: (context, box) {
-          final fraction = box.maxWidth < _narrowWidth ? _narrowMaxWidthFraction : _wideMaxWidthFraction;
-          return Stack(
-            children: [
-              Positioned(
-                right: _inset,
-                bottom: _inset,
+          final narrow = box.maxWidth < _narrowWidth;
+          final fraction = narrow ? _narrowMaxWidthFraction : _wideMaxWidthFraction;
+          final baseStyle = DefaultTextStyle.of(context).style;
+          final ghostFrame = ghost;
+          Widget place(Widget child, {required bool right}) => Positioned(
+                left: right ? null : _inset,
+                right: right ? _inset : null,
+                top: narrow ? _inset : null,
+                bottom: narrow ? null : _inset,
                 child: ConstrainedBox(
                   constraints: BoxConstraints(maxWidth: box.maxWidth * fraction, maxHeight: box.maxHeight - _inset * 2),
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
-                    alignment: Alignment.bottomRight,
-                    child: _dashboard(DefaultTextStyle.of(context).style),
+                    alignment: switch ((narrow, right)) {
+                      (true, true) => Alignment.topRight,
+                      (true, false) => Alignment.topLeft,
+                      (false, true) => Alignment.bottomRight,
+                      (false, false) => Alignment.bottomLeft,
+                    },
+                    child: child,
                   ),
                 ),
+              );
+          return Stack(
+            children: [
+              if (ghostFrame != null)
+                place(
+                  _dashboard(
+                    baseStyle: baseStyle,
+                    keyName: 'ghost-replay-ghost-hud',
+                    frame: ghostFrame,
+                    color: ghostColor,
+                    label: referenceLabel,
+                    isPlayer: false,
+                  ),
+                  right: false,
+                ),
+              place(
+                _dashboard(
+                  baseStyle: baseStyle,
+                  keyName: 'ghost-replay-player-hud',
+                  frame: player,
+                  color: playerColor,
+                  label: thisLapLabel,
+                  isPlayer: true,
+                ),
+                right: true,
               ),
             ],
           );
         },
       );
 
+  /// 계기판 하나. [isPlayer]면 경과 시간·시간 차·타이어·섹터도 넣는다.
   /// [baseStyle]은 다이얼 글자(눈금·THROTTLE·BRAKE)가 앱 글꼴을 따르게 넘긴다.
-  Widget _dashboard(TextStyle baseStyle) {
-    const keyName = 'ghost-replay-player-hud';
-    final ghostFrame = ghost;
+  Widget _dashboard({
+    required TextStyle baseStyle,
+    required String keyName,
+    required ReplayFrame frame,
+    required Color color,
+    required String label,
+    required bool isPlayer,
+  }) {
     final gap = gapMs;
-    final compound = tyreCompound;
-    final battery = player.batteryPercent;
-    final flow = player.ersFlowKw;
+    final compound = isPlayer ? tyreCompound : null;
+    final battery = frame.batteryPercent;
+    final flow = frame.ersFlowKw;
     return Container(
-      key: const ValueKey(keyName),
+      key: ValueKey(keyName),
       width: _panelWidth,
       padding: _panelPadding,
       decoration: BoxDecoration(color: AppColors.replayDashPanel, borderRadius: BorderRadius.circular(_panelRadius)),
@@ -141,45 +182,60 @@ class GhostReplayHud extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Text(
-                formatLapTime(elapsedMs.round()),
-                key: const ValueKey('ghost-replay-elapsed'),
-                style: const TextStyle(
-                  color: AppColors.replayDashTime,
-                  fontSize: _timeFontSize,
-                  fontWeight: FontWeight.w700,
-                  fontFeatures: _tabular,
+              Container(width: _nameStripWidth, height: _nameStripHeight, color: color),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: AppColors.replayHudText, fontSize: _nameFontSize, fontWeight: FontWeight.w700),
                 ),
               ),
-              const SizedBox(width: 8),
-              if (gap != null)
+              if (compound != null) _TyreBadge(compound: compound),
+            ],
+          ),
+          if (isPlayer) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
                 Text(
-                  formatReplayGap(gap),
-                  key: const ValueKey('ghost-replay-gap'),
-                  style: TextStyle(
-                    color: _deltaColor(gap),
-                    fontSize: _gapFontSize,
+                  formatLapTime(elapsedMs.round()),
+                  key: const ValueKey('ghost-replay-elapsed'),
+                  style: const TextStyle(
+                    color: AppColors.replayDashTime,
+                    fontSize: _timeFontSize,
                     fontWeight: FontWeight.w700,
                     fontFeatures: _tabular,
                   ),
                 ),
-              const Spacer(),
-              if (compound != null) _TyreBadge(compound: compound),
-            ],
-          ),
+                const SizedBox(width: 8),
+                if (gap != null)
+                  Text(
+                    formatReplayGap(gap),
+                    key: const ValueKey('ghost-replay-gap'),
+                    style: TextStyle(
+                      color: _deltaColor(gap),
+                      fontSize: _gapFontSize,
+                      fontWeight: FontWeight.w700,
+                      fontFeatures: _tabular,
+                    ),
+                  ),
+              ],
+            ),
+          ],
           SizedBox(
             height: _dialHeight,
             child: Stack(
               children: [
                 Positioned.fill(
                   child: CustomPaint(
-                    key: const ValueKey('$keyName-dial'),
+                    key: ValueKey('$keyName-dial'),
                     painter: _DialPainter(
-                      throttle: player.throttle / _percentMax,
-                      brake: player.brake / _percentMax,
-                      speed: _speedIn(player.speedKph, units),
+                      throttle: frame.throttle / _percentMax,
+                      brake: frame.brake / _percentMax,
+                      speed: _speedIn(frame.speedKph, units),
                       imperial: units == UnitSystem.imperial,
                       baseStyle: baseStyle,
                     ),
@@ -191,7 +247,8 @@ class GhostReplayHud extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        '${_speedIn(player.speedKph, units).round()}',
+                        '${_speedIn(frame.speedKph, units).round()}',
+                        key: ValueKey('$keyName-speed'),
                         style: const TextStyle(
                           color: AppColors.replayHudText,
                           fontSize: _speedFontSize,
@@ -203,8 +260,8 @@ class GhostReplayHud extends StatelessWidget {
                       _unit(units == UnitSystem.imperial ? 'MPH' : 'KMH'),
                       const SizedBox(height: 6),
                       Text(
-                        '${player.rpm}',
-                        key: const ValueKey('$keyName-rpm'),
+                        '${frame.rpm}',
+                        key: ValueKey('$keyName-rpm'),
                         style: const TextStyle(
                           color: AppColors.replayHudText,
                           fontSize: _rpmFontSize,
@@ -228,8 +285,8 @@ class GhostReplayHud extends StatelessWidget {
                       _unit(_gearLabel),
                       const SizedBox(width: 6),
                       Text(
-                        gearLabel(player.gear),
-                        key: const ValueKey('$keyName-gear'),
+                        gearLabel(frame.gear),
+                        key: ValueKey('$keyName-gear'),
                         style: const TextStyle(color: AppColors.replayHudText, fontSize: _gearFontSize, fontWeight: FontWeight.w700),
                       ),
                     ],
@@ -245,7 +302,7 @@ class GhostReplayHud extends StatelessWidget {
                 const Icon(Icons.bolt, size: 13, color: AppColors.replayBattery),
                 Text(
                   '${battery.round()}%',
-                  key: const ValueKey('$keyName-battery-text'),
+                  key: ValueKey('$keyName-battery-text'),
                   style: const TextStyle(
                     color: AppColors.replayBattery,
                     fontSize: _sectorFontSize,
@@ -254,21 +311,17 @@ class GhostReplayHud extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                Expanded(child: _Bar(key: const ValueKey('$keyName-battery'), fraction: battery / _percentMax)),
+                Expanded(child: _Bar(key: ValueKey('$keyName-battery'), fraction: battery / _percentMax)),
                 const SizedBox(width: 10),
-                _ErsFlowBar(key: const ValueKey('$keyName-ers-flow'), fraction: flow / kErsMaxFlowKw),
+                _ErsFlowBar(key: ValueKey('$keyName-ers-flow'), fraction: flow / kErsMaxFlowKw),
                 const SizedBox(width: 8),
-                _ErsFlowText(textKey: const ValueKey('$keyName-ers-flow-text'), flowKw: flow),
+                _ErsFlowText(textKey: ValueKey('$keyName-ers-flow-text'), flowKw: flow),
               ],
             ),
           ],
-          if (sectors.isNotEmpty) ...[
+          if (isPlayer && sectors.isNotEmpty) ...[
             const SizedBox(height: 10),
             _Sectors(key: const ValueKey('ghost-replay-sectors'), rows: sectors),
-          ],
-          if (ghostFrame != null) ...[
-            const SizedBox(height: 10),
-            _VersusRow(frame: ghostFrame, color: ghostColor, label: referenceLabel, units: units),
           ],
         ],
       ),
@@ -371,60 +424,6 @@ class _Sectors extends StatelessWidget {
   }
 }
 
-/// 비교 랩 줄: 빨간 VS 원 · 팀 색 점 · 이름 · 속도 · 기어.
-class _VersusRow extends StatelessWidget {
-  const _VersusRow({required this.frame, required this.color, required this.label, required this.units});
-
-  final ReplayFrame frame;
-  final Color color;
-  final String label;
-  final UnitSystem units;
-
-  @override
-  Widget build(BuildContext context) => Row(
-        key: const ValueKey('ghost-replay-ghost-hud'),
-        children: [
-          Container(
-            width: _vsBadgeSize,
-            height: _vsBadgeSize,
-            alignment: Alignment.center,
-            decoration: const BoxDecoration(color: AppColors.replayHudAccent, shape: BoxShape.circle),
-            child: const Text(
-              _vsLabel,
-              style: TextStyle(color: AppColors.replayHudText, fontSize: _unitFontSize, fontWeight: FontWeight.w800),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Container(width: 3, height: 14, color: color),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: AppColors.replayHudMuted, fontSize: _labelFontSize, fontWeight: FontWeight.w600),
-            ),
-          ),
-          Text(
-            '${_speedIn(frame.speedKph, units).round()}',
-            style: const TextStyle(
-              color: AppColors.replayHudText,
-              fontSize: _sectorFontSize + 1,
-              fontWeight: FontWeight.w700,
-              fontFeatures: _tabular,
-            ),
-          ),
-          const SizedBox(width: 3),
-          GhostReplayHud._unit(units == UnitSystem.imperial ? 'MPH' : 'KMH'),
-          const SizedBox(width: 8),
-          Text(
-            gearLabel(frame.gear),
-            style: const TextStyle(color: AppColors.replayHudText, fontSize: _sectorFontSize + 1, fontWeight: FontWeight.w700),
-          ),
-        ],
-      );
-}
-
 /// 충전/사용 출력 글자: `+150 kW`(초록) · `−200 kW`(파랑) · `0 kW`.
 class _ErsFlowText extends StatelessWidget {
   const _ErsFlowText({this.textKey, required this.flowKw});
@@ -511,8 +510,8 @@ class _ErsFlowBar extends StatelessWidget {
   }
 }
 
-/// 다이얼: 바깥 고리 왼쪽 절반 스로틀(아래에서 위로 파랑), 오른쪽 절반 브레이크(아래에서 위로 빨강), 고리 위 글자.
-/// 안쪽 고리 속도(초록, 왼쪽 아래 0에서 시계 방향), 그 안쪽 눈금 숫자.
+/// 다이얼: 바깥 고리 속도(파랑, 왼쪽 아래 0에서 시계 방향, 고리 위 눈금 숫자),
+/// 안쪽 고리 스로틀(왼쪽 아래에서 시계 방향으로 초록, 넓은 쪽)·브레이크(오른쪽 아래에서 위로 빨강), 고리 위 글자.
 class _DialPainter extends CustomPainter {
   const _DialPainter({
     required this.throttle,
@@ -531,8 +530,8 @@ class _DialPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height * _dialCenterYFraction);
-    final outer = math.min(size.width, size.height) * _dialRadiusFraction - _outerStroke / 2;
-    final inner = outer - _outerStroke / 2 - _ringGap - _speedStroke / 2;
+    final outer = math.min(size.width, size.height) * _dialRadiusFraction - _speedStroke / 2;
+    final inner = outer - _speedStroke / 2 - _ringGap - _pedalStroke / 2;
     Paint ring(Color color, double stroke) => Paint()
       ..color = color
       ..style = PaintingStyle.stroke
@@ -540,38 +539,38 @@ class _DialPainter extends CustomPainter {
     void arc(double radius, double start, double sweep, Paint paint) =>
         canvas.drawArc(Rect.fromCircle(center: center, radius: radius), start, sweep, false, paint);
 
-    // 바깥 고리: 스로틀(왼쪽 아래 → 꼭대기), 브레이크(오른쪽 아래 → 꼭대기).
-    const half = _dialSweep / 2 - _pedalGap;
+    // 바깥 고리: 속도와 눈금 숫자(고리 위).
+    final maxSpeed = imperial ? _imperialMaxSpeed : _metricMaxSpeed;
+    arc(outer, _dialStart, _dialSweep, ring(AppColors.replayDashTrack, _speedStroke));
+    final s = (speed / maxSpeed).clamp(0.0, 1.0);
+    if (s > 0) {
+      arc(outer, _dialStart, _dialSweep * s, ring(AppColors.replayDashSpeed, _speedStroke));
+    }
+    final step = imperial ? _imperialTickStep : _metricTickStep;
+    for (var v = step; v < maxSpeed; v += step) {
+      final angle = _dialStart + _dialSweep * v / maxSpeed;
+      final at = center + Offset(math.cos(angle), math.sin(angle)) * outer;
+      final painter = _text('${v.round()}', AppColors.replayHudText, _tickFontSize);
+      painter.paint(canvas, at - Offset(painter.width / 2, painter.height / 2));
+    }
+
+    // 안쪽 고리: 스로틀(왼쪽 아래 → 시계 방향, 넓게), 브레이크(오른쪽 아래 → 위로).
+    const throttleSweep = _dialSweep * _throttleShare - _pedalGap;
+    const brakeSweep = _dialSweep * (1 - _throttleShare) - _pedalGap;
     const brakeStart = _dialStart + _dialSweep;
-    final track = ring(AppColors.replayDashTrack, _outerStroke);
-    arc(outer, _dialStart, half, track);
-    arc(outer, brakeStart, -half, track);
+    final track = ring(AppColors.replayDashTrack, _pedalStroke);
+    arc(inner, _dialStart, throttleSweep, track);
+    arc(inner, brakeStart, -brakeSweep, track);
     final t = throttle.clamp(0.0, 1.0);
     final b = brake.clamp(0.0, 1.0);
     if (t > 0) {
-      arc(outer, _dialStart, half * t, ring(AppColors.replayDashThrottle, _outerStroke));
+      arc(inner, _dialStart, throttleSweep * t, ring(AppColors.replayDashThrottle, _pedalStroke));
     }
     if (b > 0) {
-      arc(outer, brakeStart, -half * b, ring(AppColors.replayBrake, _outerStroke));
+      arc(inner, brakeStart, -brakeSweep * b, ring(AppColors.replayBrake, _pedalStroke));
     }
-    _arcText(canvas, center, outer, _throttleLabel, _dialStart + half * 0.5);
-    _arcText(canvas, center, outer, _brakeLabel, brakeStart - half * 0.5);
-
-
-    // 안쪽 고리: 속도.
-    final maxSpeed = imperial ? _imperialMaxSpeed : _metricMaxSpeed;
-    arc(inner, _dialStart, _dialSweep, ring(AppColors.replayDashTrack, _speedStroke));
-    final s = (speed / maxSpeed).clamp(0.0, 1.0);
-    if (s > 0) {
-      arc(inner, _dialStart, _dialSweep * s, ring(AppColors.replayDashSpeed, _speedStroke));
-    }
-    final step = imperial ? _imperialTickStep : _metricTickStep;
-    for (var v = step; v <= maxSpeed; v += step) {
-      final angle = _dialStart + _dialSweep * v / maxSpeed;
-      final at = center + Offset(math.cos(angle), math.sin(angle)) * (inner - _tickInset);
-      final painter = _text('${v.round()}', AppColors.replayHudMuted, _tickFontSize);
-      painter.paint(canvas, at - Offset(painter.width / 2, painter.height / 2));
-    }
+    _arcText(canvas, center, inner, _throttleLabel, _dialStart + throttleSweep * 0.32);
+    _arcText(canvas, center, inner, _brakeLabel, brakeStart - brakeSweep * 0.5);
   }
 
   /// 고리를 따라 글자를 하나씩 세운다(시계 방향으로 읽힘 — 왼쪽은 아래에서 위로, 오른쪽은 위에서 아래로). [middle]은 가운데 각도.

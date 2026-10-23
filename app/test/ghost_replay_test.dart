@@ -325,6 +325,10 @@ void main() {
       await _pumpCharts(t, trace: _player, reference: _reference, sectors: mine, referenceSectors: theirs);
 
       expect(find.byKey(const ValueKey('ghost-replay-player-hud-dial')), findsOneWidget);
+      // 비교 랩도 같은 계기판(다이얼·속도·기어)을 따로 보인다.
+      expect(find.byKey(const ValueKey('ghost-replay-ghost-hud-dial')), findsOneWidget);
+      expect(_textOf(t, 'ghost-replay-ghost-hud-speed'), '200');
+      expect(_textOf(t, 'ghost-replay-ghost-hud-gear'), '1');
       expect(_textOf(t, 'ghost-replay-player-hud-rpm'), '11000');
       expect(_textOf(t, 'ghost-replay-player-hud-gear'), '1');
       final table = find.byKey(const ValueKey('ghost-replay-sectors'));
