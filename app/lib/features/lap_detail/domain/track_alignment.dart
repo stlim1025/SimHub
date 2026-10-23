@@ -13,14 +13,15 @@ const int _refineIterations = 20;
 const double _minScale = 0.9;
 const double _maxScale = 1.1;
 
-/// 정렬 뒤 주행 표본의 95%가 실측 중심선에서 이 거리(m) 안에 있어야 쓴다(레이아웃이 바뀐 서킷 걸러내기).
-const double kTrackAlignMaxP95M = 12;
+/// 실측 중심선에서 이 거리(m) 안에 있는 주행 표본을 "맞는 구간"으로 본다.
+const double kTrackAlignInlierM = 12;
 
-/// 실측 중심선 점이 주행선에서 이보다 멀면(m) 그 구간은 게임 레이아웃과 다르다고 본다.
-const double _maxProfileGapM = 30;
+/// 주행 표본 가운데 이 비율 이상이 맞아야 쓴다. 레이아웃이 일부 바뀐 서킷(멜버른 등)은 맞는 구간만 실측을 쓰므로 전부 맞을 필요는 없다.
+const double _minInlierFraction = 0.7;
 
-/// 실측 중심선 점 가운데 이 비율 이상이 주행선 가까이에 있어야 쓴다.
-const double _minProfileCoverage = 0.97;
+/// 다듬기 몇 번째부터 실측선에서 이보다 먼(m) 주행 표본을 빼고 맞춘다(바뀐 구간이 정렬을 끌어당기지 않게).
+const double _outlierM = 15;
+const int _outlierFromIteration = 3;
 
 /// 게임 월드 좌표에 맞춘 실측 서킷. [leftM]·[rightM]은 [center] 순서로 진행할 때 왼쪽(반시계 방향 법선)·오른쪽 폭(m).
 class AlignedTrack {
@@ -36,7 +37,8 @@ typedef _Similarity = ({double scale, double angle, double tx, double ty, bool r
 
 /// 실측 서킷 [profile]을 주행선 [driving](게임 월드 X/Z, 한 바퀴)에 맞춘다. 맞지 않으면 null(추정 모양을 쓴다).
 /// 1) 두 선을 호 길이로 같은 개수로 나눠 뒤집기·방향·시작점을 모두 시도해 가장 잘 맞는 닮음 변환을 찾고
-/// 2) 가장 가까운 점끼리 다시 맞추기를 되풀이해 다듬는다.
+/// 2) 가장 가까운 점끼리 다시 맞추기를 되풀이해 다듬는다(멀리 떨어진 표본은 빼고).
+/// 어느 구간이 맞는지는 쓰는 쪽(서킷 모양)이 점마다 다시 판단한다.
 AlignedTrack? alignTrackProfile(TrackWidthProfile profile, List<Offset> driving) {
   if (driving.length < _coarseSamples ~/ 10 || profile.length < 3) {
     return null;
@@ -90,8 +92,14 @@ AlignedTrack? alignTrackProfile(TrackWidthProfile profile, List<Offset> driving)
           bestSource = Offset.lerp(reflected[k], reflected[(k + 1) % m], t)!;
         }
       }
+      if (iteration >= _outlierFromIteration && bestDistance > _outlierM * _outlierM) {
+        continue;
+      }
       targets.add(p);
       sources.add(bestSource);
+    }
+    if (targets.length < 3) {
+      return null;
     }
     final fit = _fitSimilarity(targets, sources);
     transform = (scale: fit.scale, angle: fit.angle, tx: fit.tx, ty: fit.ty, reflect: transform.reflect);
@@ -101,12 +109,8 @@ AlignedTrack? alignTrackProfile(TrackWidthProfile profile, List<Offset> driving)
   }
 
   final center = [for (final p in reflected) _apply(transform, p)];
-  final distances = [for (final p in driving) (center[_nearestIndex(center, p)] - p).distance]..sort();
-  if (distances[(distances.length * 0.95).floor().clamp(0, distances.length - 1)] > kTrackAlignMaxP95M) {
-    return null;
-  }
-  final covered = center.where((c) => (driving[_nearestIndex(driving, c)] - c).distance <= _maxProfileGapM).length;
-  if (covered < center.length * _minProfileCoverage) {
+  final inliers = driving.where((p) => (center[_nearestIndex(center, p)] - p).distance <= kTrackAlignInlierM).length;
+  if (inliers < driving.length * _minInlierFraction) {
     return null;
   }
   // 뒤집으면 진행 방향의 왼쪽·오른쪽이 바뀐다.

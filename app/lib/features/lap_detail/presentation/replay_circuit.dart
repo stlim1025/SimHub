@@ -42,6 +42,12 @@ const double _kerbCarAllowanceM = 0.5;
 /// 실측 중심선을 좌우로 옮기는 보정이 앞뒤로 퍼지는 거리(m) — 갑자기 꺾이지 않게.
 const double _shiftSpreadM = 20;
 
+/// 추정 중심선 점이 실측 중심선에서 이 거리(m) 안이면 같은 길로 보고 실측 중심·폭을 쓴다(멀면 레이아웃이 바뀐 구간).
+const double _measuredMatchM = 15;
+
+/// 실측 구간과 추정 구간 경계를 섞는 거리(m, 앞뒤로).
+const double _measuredBlendM = 30;
+
 /// 밟은 연석 한 점이 앞뒤로 이어지는 거리(m)·이보다 짧게 끊긴 연석 틈(m)은 이어 그린다.
 const double _kerbSpreadM = 6;
 const double _kerbGapFillM = 12;
@@ -113,7 +119,8 @@ class ReplayCircuit {
     final lines = [player.trace, if (ghost != null) ghost.trace];
     final playerLine = _positions(player.trace);
     final aligned = real == null ? null : alignTrackProfile(real, playerLine);
-    final geometry = aligned != null ? _measured(aligned, lines) : _estimated(player, ghost);
+    final estimated = _estimated(player, ghost);
+    final geometry = aligned == null ? estimated : _keepLinesInside(_withMeasured(estimated, aligned), lines);
     final center = geometry.center;
     final n = center.length;
     final closed = geometry.closed;
@@ -202,12 +209,81 @@ class ReplayCircuit {
     );
   }
 
-  /// 실측 서킷: 정렬한 중심선을, 주행선이 (연석을 밟은 곳을 빼고) 도로 안에 들도록 좌우로 조금씩 옮긴다.
-  /// 실측 중심선은 지도 GPS를 평활한 것이라 몇 m 어긋날 수 있어서다. 폭은 실측 그대로.
-  static _Geometry _measured(AlignedTrack aligned, List<LapTrace> lines) {
-    final center = aligned.center;
+  /// 추정 모양 [base]의 점마다 실측 중심선([real])에 투영해, 가까우면(같은 길) 그 자리의 실측 중심·폭을 쓰고
+  /// 멀면(게임 레이아웃이 바뀐 구간) 추정 모양을 그대로 둔다. 두 구간의 경계는 앞뒤로 섞어 끊김 없이 잇는다.
+  static _Geometry _withMeasured(_Geometry base, AlignedTrack real) {
+    final n = base.center.length;
+    int at(int i) => base.closed ? (i % n + n) % n : i.clamp(0, n - 1);
+    final m = real.center.length;
+    final matcher = _SequentialMatcher(real.center, closed: true);
+    final targets = <Offset>[];
+    final lefts = <double>[];
+    final rights = <double>[];
+    final matched = <double>[];
+    for (var i = 0; i < n; i++) {
+      final p = base.center[i];
+      final j = matcher.match(p);
+      // 이웃 두 선분 가운데 가까운 쪽에 투영(점 간격만큼 계단지지 않게).
+      var best = (point: real.center[j], k: j, t: 0.0);
+      var bestDistance = double.infinity;
+      for (final k in [(j - 1 + m) % m, j]) {
+        final a = real.center[k];
+        final b = real.center[(k + 1) % m];
+        final ab = b - a;
+        final lengthSquared = ab.distanceSquared;
+        final t = lengthSquared == 0
+            ? 0.0
+            : (((p.dx - a.dx) * ab.dx + (p.dy - a.dy) * ab.dy) / lengthSquared).clamp(0.0, 1.0);
+        final q = Offset.lerp(a, b, t)!;
+        final d = (q - p).distanceSquared;
+        if (d < bestDistance) {
+          bestDistance = d;
+          best = (point: q, k: k, t: t);
+        }
+      }
+      final k1 = (best.k + 1) % m;
+      final realTangent = real.center[k1] - real.center[best.k];
+      final baseTangent = base.center[at(i + 1)] - base.center[at(i - 1)];
+      // 진행 방향이 실측 점 순서와 반대면 왼쪽·오른쪽이 바뀐다.
+      final sameDirection = realTangent.dx * baseTangent.dx + realTangent.dy * baseTangent.dy >= 0;
+      final realLeft = _lerp(real.leftM[best.k], real.leftM[k1], best.t);
+      final realRight = _lerp(real.rightM[best.k], real.rightM[k1], best.t);
+      final isMatch = bestDistance <= _measuredMatchM * _measuredMatchM;
+      targets.add(isMatch ? best.point : p);
+      lefts.add(isMatch ? (sameDirection ? realLeft : realRight) : base.left[i]);
+      rights.add(isMatch ? (sameDirection ? realRight : realLeft) : base.right[i]);
+      matched.add(isMatch ? 1 : 0);
+    }
+    final half = math.max(1, (_measuredBlendM / _spacing(base.center, closed: base.closed)).round());
+    final blend = _movingAverage(_movingAverage(matched, half, at), half, at);
+    final center = [for (var i = 0; i < n; i++) Offset.lerp(base.center[i], targets[i], blend[i])!];
+    // 투영점이 실측 점 사이를 건너뛰며 생기는 작은 꺾임을 고른다.
+    return (
+      center: [
+        for (var i = 0; i < n; i++)
+          () {
+            var sum = Offset.zero;
+            for (var k = i - _centerTidySamples; k <= i + _centerTidySamples; k++) {
+              sum += center[at(k)];
+            }
+            return sum / (_centerTidySamples * 2 + 1).toDouble();
+          }(),
+      ],
+      left: _movingAverage([for (var i = 0; i < n; i++) _lerp(base.left[i], lefts[i], blend[i])], _centerTidySamples, at),
+      right: _movingAverage([for (var i = 0; i < n; i++) _lerp(base.right[i], rights[i], blend[i])], _centerTidySamples, at),
+      closed: base.closed,
+    );
+  }
+
+  static double _lerp(double a, double b, double t) => a + (b - a) * t;
+
+  /// 주행선이 (연석을 밟은 곳을 빼고) 도로 안에 들도록 중심선을 좌우로 조금씩 옮긴다.
+  /// 실측 중심선은 지도 GPS를 평활한 것이라 몇 m 어긋날 수 있어서다. 폭은 그대로.
+  static _Geometry _keepLinesInside(_Geometry geometry, List<LapTrace> lines) {
+    final center = geometry.center;
     final n = center.length;
-    int at(int i) => (i % n + n) % n;
+    final closed = geometry.closed;
+    int at(int i) => closed ? (i % n + n) % n : i.clamp(0, n - 1);
     final normals = [
       for (var i = 0; i < n; i++)
         () {
@@ -219,15 +295,15 @@ class ReplayCircuit {
     final push = List<double>.filled(n, 0);
     final pull = List<double>.filled(n, 0);
     for (final line in lines.where((l) => l.hasPositions)) {
-      final matcher = _SequentialMatcher(center, closed: true);
+      final matcher = _SequentialMatcher(center, closed: closed);
       for (var i = 0; i < line.length; i++) {
         final p = Offset(line.worldPosX[i], line.worldPosZ[i]);
         final j = matcher.match(p);
         final lateral = (p.dx - center[j].dx) * normals[j].dx + (p.dy - center[j].dy) * normals[j].dy;
         final onKerb = line.hasKerbContact && line.kerbContact[i];
         final margin = onKerb ? _kerbCarAllowanceM : -_carHalfWidthM;
-        final leftLimit = aligned.leftM[j] + margin;
-        final rightLimit = aligned.rightM[j] + margin;
+        final leftLimit = geometry.left[j] + margin;
+        final rightLimit = geometry.right[j] + margin;
         if (lateral > leftLimit) {
           push[j] = math.max(push[j], lateral - leftLimit);
         } else if (-lateral > rightLimit) {
@@ -235,7 +311,7 @@ class ReplayCircuit {
         }
       }
     }
-    final spread = math.max(1, (_shiftSpreadM / _spacing(center, closed: true)).round());
+    final spread = math.max(1, (_shiftSpreadM / _spacing(center, closed: closed)).round());
     // 가장 크게 벗어난 값을 앞뒤로 넓힌 뒤(팽창) 평균해 부드럽게 옮긴다.
     final raw = [for (var j = 0; j < n; j++) push[j] + pull[j]];
     final dilated = [
@@ -251,12 +327,13 @@ class ReplayCircuit {
           return best;
         }(),
     ];
-    final shift = _movingAverage(dilated, spread, at);
+    // 두 번 평균해 램프 양 끝이 꺾이지 않고 둥글게 이어지게 한다.
+    final shift = _movingAverage(_movingAverage(dilated, spread, at), spread, at);
     return (
       center: [for (var j = 0; j < n; j++) center[j] + normals[j] * shift[j]],
-      left: aligned.leftM,
-      right: aligned.rightM,
-      closed: true,
+      left: geometry.left,
+      right: geometry.right,
+      closed: closed,
     );
   }
 

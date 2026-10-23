@@ -142,6 +142,27 @@ void main() {
       expect(estimated.leftWidths.first, greaterThan(kCircuitBaseWidthM / 2 - 0.01));
     });
 
+    test('레이아웃이 일부 바뀐 서킷은 맞는 구간만 실측 폭을, 바뀐 구간은 추정 폭을 쓴다', () {
+      // 대칭이 없는 서킷(원이면 어느 각도로 돌려도 맞아 바뀐 구간을 가려낼 수 없다).
+      final points = _shape(400);
+      // 옛 레이아웃: 100~140번 점 구간이 바깥으로 최대 60m 돌아 나간다(지금 게임은 곧장 간다).
+      final old = [
+        for (var i = 0; i < points.length; i++)
+          () {
+            final detour = i >= 100 && i <= 140 ? 60 * math.sin(math.pi * (i - 100) / 40) : 0.0;
+            return points[i] * ((points[i].distance + detour) / points[i].distance);
+          }(),
+      ];
+      final circuit = ReplayCircuit.build(LapReplay(_trace(points)), real: _profile(old, left: 5, right: 5));
+
+      expect(circuit.isMeasured, isTrue);
+      // 맞는 구간: 실측 폭(좌우 5m). 바뀐 구간: 추정 폭(반폭 6.5m 이상).
+      expect(circuit.leftWidths[20], closeTo(5, 0.01));
+      expect(circuit.rightWidths[300], closeTo(5, 0.01));
+      expect(circuit.leftWidths[120], greaterThan(6.4));
+      expect(circuit.rightWidths[120], greaterThan(6.4));
+    });
+
     test('실측 중심선이 어긋나 주행선이 도로 밖이면 중심선을 옮겨 도로 안에 들인다', () {
       final points = [for (var i = 0; i < count; i++) onCircle(i, radius)];
       // 실측 중심선이 바깥으로 6m 어긋남(폭 좌우 5m → 주행선이 가장자리 밖).
