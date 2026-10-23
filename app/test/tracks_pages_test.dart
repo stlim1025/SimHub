@@ -7,7 +7,9 @@ import 'package:simcenter_app/features/lap_detail/data/lap_detail_repository.dar
 import 'package:simcenter_app/features/lap_detail/domain/lap_detail_models.dart';
 import 'package:simcenter_app/features/profile/application/selected_game_provider.dart';
 import 'package:simcenter_app/features/setups/data/setups_repository.dart';
+import 'package:simcenter_app/features/tracks/application/track_outlines_provider.dart';
 import 'package:simcenter_app/features/tracks/data/tracks_repository.dart';
+import 'package:simcenter_app/features/tracks/domain/track_outline.dart';
 import 'package:simcenter_app/features/tracks/domain/track_overview_models.dart';
 import 'package:simcenter_app/features/tracks/presentation/track_overview_page.dart';
 import 'package:simcenter_app/features/tracks/presentation/tracks_page.dart';
@@ -22,6 +24,7 @@ Future<GoRouter> _pump(
   FakeSetupsRepository? setupsRepo,
   FakeTracksRepository? tracksRepo,
   FakeLapDetailRepository? lapRepo,
+  Map<String, TrackOutline> outlines = const {},
   Size size = const Size(1400, 2400),
 }) async {
   setViewSize(tester, size);
@@ -41,6 +44,7 @@ Future<GoRouter> _pump(
       tracksRepositoryProvider.overrideWithValue(tracksRepo ?? FakeTracksRepository()),
       lapDetailRepositoryProvider.overrideWithValue(lapRepo ?? FakeLapDetailRepository()),
       selectedGameProvider.overrideWithValue('F1_26'),
+      trackOutlinesProvider.overrideWith((ref) async => outlines),
     ],
     child: MaterialApp.router(routerConfig: router),
   ));
@@ -158,6 +162,33 @@ void main() {
 
       expect(find.byKey(const ValueKey('track-overview-map')), findsNothing);
       expect(lapRepo.comparisonTraceRequests, isEmpty);
+    });
+
+    testWidgets('달린 기록이 없으면 서킷 윤곽 그림을 대신 그린다', (t) async {
+      const outline = TrackOutline(width: 1, height: 0.5, points: [Offset(0, 0), Offset(1, 0), Offset(1, 0.5)]);
+      await _pump(
+        t,
+        '/tracks/au',
+        tracksRepo: FakeTracksRepository(overviews: {'au': trackOverviewOf()}),
+        outlines: {'Australia': outline},
+      );
+
+      expect(find.byKey(const ValueKey('track-outline-map')), findsOneWidget);
+      expect(find.byKey(const ValueKey('track-overview-map')), findsNothing);
+    });
+
+    testWidgets('기록 지도가 있으면 윤곽 대신 기록 지도를 그린다', (t) async {
+      const outline = TrackOutline(width: 1, height: 0.5, points: [Offset(0, 0), Offset(1, 0), Offset(1, 0.5)]);
+      await _pump(
+        t,
+        '/tracks/au',
+        tracksRepo: FakeTracksRepository(overviews: {'au': trackOverviewOf(mapLapId: 'l1')}),
+        lapRepo: FakeLapDetailRepository(traces: {'l1': _positionedTrace}),
+        outlines: {'Australia': outline},
+      );
+
+      expect(find.byKey(const ValueKey('track-overview-map')), findsOneWidget);
+      expect(find.byKey(const ValueKey('track-outline-map')), findsNothing);
     });
 
     testWidgets('mapLapId가 있으면 그 랩 트레이스로 트랙 지도를 그린다', (t) async {

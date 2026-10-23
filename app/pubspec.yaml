@@ -65,6 +65,11 @@ flutter:
 
   # 팀 로고(D-48)는 앱에 넣지 않고 서버(`/team-logos/{코드}.png`)에서 읽는다 — assets/team_logos/README.md 참고.
 
+  # 서킷 윤곽(달리지 않은 트랙의 트랙 그림): bacinger/f1-circuits GeoJSON(MIT)에서 만든 데이터와 그 라이선스.
+  assets:
+    - assets/track_outlines/track_outlines.json
+    - assets/track_outlines/LICENSE-f1-circuits.md
+
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
 

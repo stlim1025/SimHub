@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/config/app_config.dart';
@@ -6,7 +8,14 @@ import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'features/profile/application/theme_mode_provider.dart';
 
+/// 서킷 윤곽 데이터(bacinger/f1-circuits)의 MIT 라이선스 고지 파일.
+const String _trackOutlinesLicenseAsset = 'assets/track_outlines/LICENSE-f1-circuits.md';
+
 void main() {
+  // MIT 조건: 앱에 넣은 서킷 윤곽 데이터의 저작권 고지를 라이선스 목록에 함께 싣는다.
+  LicenseRegistry.addLicense(() async* {
+    yield LicenseEntryWithLineBreaks(['f1-circuits'], await rootBundle.loadString(_trackOutlinesLicenseAsset));
+  });
   runApp(const ProviderScope(child: SimCenterApp()));
 }
 

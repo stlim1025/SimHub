@@ -24,8 +24,10 @@ import '../../profile/application/selected_game_provider.dart';
 import '../../sessions/presentation/session_widgets.dart';
 import '../../setups/domain/setups_display.dart';
 import '../../setups/presentation/page_heading.dart';
+import '../application/track_outlines_provider.dart';
 import '../application/tracks_providers.dart';
 import '../domain/track_overview_models.dart';
+import 'track_outline_view.dart';
 
 const String _tracksLabel = 'Tracks';
 const String _errorMessage = '트랙 정보를 불러오지 못했다.';
@@ -401,7 +403,7 @@ class _TrackDetailsCard extends StatelessWidget {
               DetailItem(_detailLapRecord, text: track.f1LapRecord ?? kLapNoValueText),
             ],
           ),
-          if (lapId != null) _TrackOverviewMap(lapId: lapId),
+          _TrackOverviewMap(lapId: lapId, trackName: track.name),
         ],
       ),
     );
@@ -411,9 +413,11 @@ class _TrackDetailsCard extends StatelessWidget {
 /// [lapId] 랩의 트레이스로 그린 트랙 지도(커서 없음, 랩 상세의 섹터 시간으로 섹터 색·범례). 위치가 없거나 불러오지 못하면 아무것도 그리지 않는다.
 /// 남의 Time Trial 랩도 볼 수 있게 비교 랩 트레이스([comparisonTraceProvider])를 쓴다.
 class _TrackOverviewMap extends ConsumerStatefulWidget {
-  const _TrackOverviewMap({required this.lapId});
+  const _TrackOverviewMap({required this.lapId, required this.trackName});
 
-  final String lapId;
+  /// 내 기록 지도 랩. null이면(그 트랙을 기록으로 달린 적이 없음) 서킷 윤곽을 그린다.
+  final String? lapId;
+  final String trackName;
 
   @override
   ConsumerState<_TrackOverviewMap> createState() => _TrackOverviewMapState();
@@ -431,12 +435,21 @@ class _TrackOverviewMapState extends ConsumerState<_TrackOverviewMap> {
 
   @override
   Widget build(BuildContext context) {
-    final trace = ref.watch(comparisonTraceProvider(widget.lapId)).valueOrNull;
+    final lapId = widget.lapId;
+    final traceState = lapId == null ? null : ref.watch(comparisonTraceProvider(lapId));
+    final trace = traceState?.valueOrNull;
     if (trace == null || !trace.hasPositions) {
-      return const SizedBox.shrink();
+      // 기록 지도를 읽는 중이면 기다리고, 없거나 위치가 없으면 서킷 윤곽(bacinger/f1-circuits)으로 대신한다.
+      if (traceState?.isLoading ?? false) {
+        return const SizedBox.shrink();
+      }
+      final outline = ref.watch(trackOutlinesProvider).valueOrNull?[widget.trackName];
+      return outline == null
+          ? const SizedBox.shrink()
+          : Padding(padding: const EdgeInsets.only(top: _blockGap), child: TrackOutlineView(outline: outline));
     }
     // 지도 랩은 내 랩이라 랩 상세의 섹터 시간으로 랩 상세 지도처럼 섹터별 색을 칠한다(못 불러오면 한 색).
-    final sectors = ref.watch(lapDetailProvider(LapDetailKey(widget.lapId))).valueOrNull?.lap.sectors ?? const <LapSector>[];
+    final sectors = ref.watch(lapDetailProvider(LapDetailKey(lapId!))).valueOrNull?.lap.sectors ?? const <LapSector>[];
     return Padding(
       padding: const EdgeInsets.only(top: _blockGap),
       child: TrackMap(
