@@ -118,8 +118,7 @@ class AppColors {
   /// 고스트 재생 차 그림의 바퀴·조종석·서스펜션(팀 색 몸체 위에서 또렷하게).
   static const Color replayCarDark = Color(0xFF0B0D12);
 
-  /// 고스트 재생 화면 위 HUD 바탕(어두운 반투명)과 글자.
-  static const Color replayHudBackground = Color(0xB30B0D12);
+  /// 고스트 재생 계기판 글자.
   static const Color replayHudText = Color(0xFFF3F4F6);
   static const Color replayHudMuted = Color(0xFFB4BAC6);
 
@@ -131,13 +130,8 @@ class AppColors {
   static const Color replayBattery = Color(0xFFFACC15);
   static const Color replayDeploy = Color(0xFF60A5FA);
 
-  /// 고스트 재생 중계 화면식 HUD: 패널(짙은 남색 반투명)·머리줄·줄무늬·빈 막대, 머리줄 빨간 띠, 색 위 글자.
-  static const Color replayHudPanel = Color(0xE6111118);
-  static const Color replayHudHeader = Color(0xF21B1B26);
-  static const Color replayHudStripe = Color(0x0FFFFFFF);
-  static const Color replayHudTrack = Color(0x33FFFFFF);
+  /// 고스트 재생 계기판의 비교 랩 VS 원(빨강).
   static const Color replayHudAccent = Color(0xFFE10600);
-  static const Color replayHudOnColor = Color(0xFF0B0D12);
 
   /// 구간 비교 색(중계 화면처럼 앞서면 초록, 뒤지면 노랑)·스로틀(초록)·브레이크(빨강).
   static const Color replayFaster = Color(0xFF2BD66B);
@@ -150,4 +144,16 @@ class AppColors {
   static const Color replaySkyHorizon = Color(0xFFB9CCDD);
   static const Color replayGrass3d = Color(0xFF3F7A3A);
   static const Color replayWall = Color(0xFFC9CDD4);
+
+  /// 고스트 재생 3D 차: 타이어 고무·휠·헬멧(타이어 옆 띠는 컴파운드 색).
+  static const Color replayCarTyre = Color(0xFF17181B);
+  static const Color replayCarRim = Color(0xFF3B3F47);
+  static const Color replayCarHelmet = Color(0xFFE9EBEF);
+
+  /// 고스트 재생 계기판: 판, 빈 고리·막대, 경과 시간(초록), 속도 고리(초록), 스로틀 고리(파랑). 브레이크는 [replayBrake].
+  static const Color replayDashPanel = Color(0xFF1F232B);
+  static const Color replayDashTrack = Color(0xFF363B47);
+  static const Color replayDashTime = Color(0xFF3DDC5A);
+  static const Color replayDashSpeed = Color(0xFF2DBE4E);
+  static const Color replayDashThrottle = Color(0xFF2563EB);
 }

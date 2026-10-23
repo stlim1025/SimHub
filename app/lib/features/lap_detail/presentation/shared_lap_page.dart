@@ -329,6 +329,7 @@ class _SharedTelemetry extends ConsumerWidget {
               referenceSectors: comparison?.sectors ?? const [],
               playerTeam: lap.team,
               referenceTeam: comparison?.team,
+              playerTyreCompound: visualCompoundName(shared.detail.car?.visualTyreCompound),
               realTrack: ref.watch(trackWidthsProvider).valueOrNull?[lap.trackName],
               estimatedTrackWidthM: kEstimatedTrackWidthsM[lap.trackName],
             ),

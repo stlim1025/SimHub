@@ -319,15 +319,14 @@ void main() {
       expect(_textOf(t, 'ghost-replay-gap'), '0.000');
     });
 
-    testWidgets('HUD에 두 차의 스로틀·브레이크 막대와 섹터 비교 표(지난 섹터만 채움)가 있다', (t) async {
+    testWidgets('계기판에 다이얼·RPM·기어와 S1·S2·S3 섹터(지난 섹터만 이 랩 시간·차이)가 있다', (t) async {
       const mine = [LapSector(sectorNumber: 1, sectorTimeMs: 800), LapSector(sectorNumber: 2, sectorTimeMs: 900)];
       const theirs = [LapSector(sectorNumber: 1, sectorTimeMs: 700), LapSector(sectorNumber: 2, sectorTimeMs: 1000)];
       await _pumpCharts(t, trace: _player, reference: _reference, sectors: mine, referenceSectors: theirs);
 
-      for (final key in ['player', 'ghost']) {
-        expect(find.byKey(ValueKey('ghost-replay-$key-hud-throttle')), findsOneWidget);
-        expect(find.byKey(ValueKey('ghost-replay-$key-hud-brake')), findsOneWidget);
-      }
+      expect(find.byKey(const ValueKey('ghost-replay-player-hud-dial')), findsOneWidget);
+      expect(_textOf(t, 'ghost-replay-player-hud-rpm'), '11000');
+      expect(_textOf(t, 'ghost-replay-player-hud-gear'), '1');
       final table = find.byKey(const ValueKey('ghost-replay-sectors'));
       expect(find.descendant(of: table, matching: find.text('S1')), findsOneWidget);
       expect(find.descendant(of: table, matching: find.text('0:00.800')), findsNothing); // 아직 S1 전
@@ -337,7 +336,6 @@ void main() {
       await t.pump(const Duration(seconds: 1)); // 1초: 두 랩 모두 S1 지남, S2는 아직
 
       expect(find.descendant(of: table, matching: find.text('0:00.800')), findsOneWidget);
-      expect(find.descendant(of: table, matching: find.text('0:00.700')), findsOneWidget);
       expect(find.descendant(of: table, matching: find.text('+0.100')), findsOneWidget);
       expect(find.descendant(of: table, matching: find.text('0:00.900')), findsNothing);
     });

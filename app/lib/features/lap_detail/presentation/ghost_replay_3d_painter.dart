@@ -64,6 +64,10 @@ const double _fogMax = 0.85;
 /// 면 밝기 = 주변광 + 확산광 × max(0, 법선·빛).
 const double _ambient = 0.6;
 const double _diffuse = 0.4;
+
+/// 차는 면이 작고 많아 명암을 더 세게 준다(곡면이 드러나게).
+const double _carAmbient = 0.42;
+const double _carDiffuse = 0.7;
 const _V3 _light = _V3(0.35, 0.85, 0.4);
 const _V3 _worldUp = _V3(0, 1, 0);
 
@@ -82,27 +86,199 @@ const Map<ReplayCamera, _CameraRig> _rigs = {
   ReplayCamera.helicopter: (back: 40, side: 0, up: 55, lookAhead: 25, lookUp: 0, fovDegrees: 42, radiusM: 520),
 };
 
-/// 로우폴리 F1 차 상자들(차 기준 m: 앞뒤 [f0, f1]·옆 [s0, s1]·위 [u0, u1], 앞 = +, 길이 약 5.6m·폭 2m). body = 팀 색, 아니면 어두운 색.
-const List<({double f0, double f1, double s0, double s1, double u0, double u1, bool body})> _carBoxes = [
-  (f0: -2.2, f1: 2.0, s0: -0.75, s1: 0.75, u0: 0.05, u1: 0.15, body: false), // 플로어
-  (f0: -0.6, f1: 1.0, s0: -0.42, s1: 0.42, u0: 0.15, u1: 0.62, body: true), // 모노코크
-  (f0: 1.0, f1: 2.5, s0: -0.18, s1: 0.18, u0: 0.2, u1: 0.45, body: true), // 노즈
-  (f0: -1.2, f1: 0.3, s0: 0.42, s1: 0.75, u0: 0.15, u1: 0.52, body: true), // 사이드포드
-  (f0: -1.2, f1: 0.3, s0: -0.75, s1: -0.42, u0: 0.15, u1: 0.52, body: true),
-  (f0: -2.0, f1: -0.6, s0: -0.3, s1: 0.3, u0: 0.15, u1: 0.78, body: true), // 엔진 커버
-  (f0: -0.7, f1: -0.3, s0: -0.15, s1: 0.15, u0: 0.62, u1: 0.95, body: true), // 에어박스
-  (f0: -0.1, f1: 0.35, s0: -0.14, s1: 0.14, u0: 0.62, u1: 0.84, body: false), // 헬멧·헤일로
-  (f0: 2.3, f1: 2.8, s0: -0.95, s1: 0.95, u0: 0.05, u1: 0.15, body: true), // 앞날개
-  (f0: -2.8, f1: -2.4, s0: -0.75, s1: 0.75, u0: 0.72, u1: 0.95, body: true), // 뒷날개
-  (f0: -2.8, f1: -2.3, s0: 0.7, s1: 0.78, u0: 0.25, u1: 0.95, body: false), // 뒷날개 끝판
-  (f0: -2.8, f1: -2.3, s0: -0.78, s1: -0.7, u0: 0.25, u1: 0.95, body: false),
-  (f0: 1.3, f1: 2.0, s0: 0.62, s1: 0.98, u0: 0, u1: 0.7, body: false), // 앞바퀴
-  (f0: 1.3, f1: 2.0, s0: -0.98, s1: -0.62, u0: 0, u1: 0.7, body: false),
-  (f0: -2.3, f1: -1.55, s0: 0.58, s1: 1.0, u0: 0, u1: 0.72, body: false), // 뒷바퀴
-  (f0: -2.3, f1: -1.55, s0: -1.0, s1: -0.58, u0: 0, u1: 0.72, body: false),
+/// 차 면을 칠하는 색 종류: 팀 색 몸체, 카본(날개 일부·플로어·헤일로·서스펜션), 타이어, 휠, 타이어 옆 띠(컴파운드 색), 헬멧.
+enum _CarPaint { body, carbon, tyre, rim, stripe, helmet }
+
+/// 차 면 하나(차 기준 좌표: x = 앞, y = 옆, z = 위, m). [inside]는 이 면이 둘러싼 부품 안쪽 점(법선을 바깥으로 맞춘다).
+typedef _CarFace = ({List<_V3> points, _V3 inside, _CarPaint paint});
+
+/// 차 모양을 만드는 치수(m, 현행 F1 — 길이 약 5.6m·폭 2m·휠베이스 3.6m).
+const double _frontAxle = 1.65;
+const double _rearAxle = -1.95;
+const double _frontTyreRadius = 0.36;
+const double _rearTyreRadius = 0.37;
+const double _rimRadius = 0.24;
+const double _tyreStripeInner = 0.27;
+const double _tyreStripeOuter = 0.3;
+const double _wheelDecalOffset = 0.006;
+const int _wheelSides = 16;
+const double _haloThickness = 0.035;
+const double _armThickness = 0.022;
+
+/// 몸체 단면(앞 → 뒤): 앞뒤 위치와 오른쪽 절반 윤곽(아래 바깥 → 옆 아래 → 옆 위 → 위, 옆·위). 왼쪽은 거울로 잇는다.
+/// 노즈는 가늘고 높게, 사이드포드는 아래를 파고(언더컷) 엔진 커버는 에어박스까지 솟았다가 뒤로 좁아진다.
+const List<(double, List<(double, double)>)> _bodySections = [
+  (2.62, [(0.05, 0.17), (0.08, 0.2), (0.08, 0.25), (0.04, 0.28)]),
+  (2.1, [(0.09, 0.16), (0.13, 0.2), (0.13, 0.33), (0.07, 0.38)]),
+  (1.5, [(0.13, 0.15), (0.19, 0.21), (0.19, 0.44), (0.11, 0.52)]),
+  (0.9, [(0.19, 0.11), (0.29, 0.17), (0.29, 0.53), (0.17, 0.6)]),
+  (0.45, [(0.28, 0.07), (0.42, 0.13), (0.42, 0.56), (0.2, 0.64)]),
+  (0.15, [(0.5, 0.07), (0.78, 0.22), (0.76, 0.5), (0.28, 0.63)]),
+  (-0.5, [(0.46, 0.07), (0.72, 0.18), (0.66, 0.46), (0.15, 0.8)]),
+  (-1.2, [(0.32, 0.07), (0.47, 0.14), (0.41, 0.38), (0.1, 0.72)]),
+  (-1.9, [(0.18, 0.09), (0.25, 0.14), (0.23, 0.32), (0.07, 0.55)]),
+  (-2.45, [(0.09, 0.13), (0.12, 0.17), (0.11, 0.3), (0.04, 0.4)]),
 ];
 
-/// 상자 면 6개(모서리 번호: bit0 = 앞, bit1 = 옆 +, bit2 = 위). 법선 방향은 그릴 때 바깥으로 맞춘다.
+/// 헬멧 단면.
+const List<(double, List<(double, double)>)> _helmetSections = [
+  (0.62, [(0.06, 0.6), (0.1, 0.66), (0.1, 0.75), (0.05, 0.79)]),
+  (0.38, [(0.09, 0.6), (0.12, 0.66), (0.12, 0.78), (0.07, 0.83)]),
+  (0.16, [(0.06, 0.62), (0.09, 0.66), (0.09, 0.74), (0.04, 0.77)]),
+];
+
+/// 차 한 대의 면들(한 번 만들어 모든 차가 함께 쓴다).
+final List<_CarFace> _carMesh = _buildCarMesh();
+
+List<_CarFace> _buildCarMesh() {
+  final faces = <_CarFace>[];
+
+  // 단면을 이어 붙인 몸통(앞뒤 끝은 막는다).
+  void loft(List<(double, List<(double, double)>)> sections, _CarPaint paint) {
+    final rings = [
+      for (final (x, half) in sections)
+        [
+          for (final (y, z) in half) _V3(x, y, z),
+          for (final (y, z) in half.reversed) _V3(x, -y, z),
+        ],
+    ];
+    _V3 middle(List<_V3> ring) => ring.reduce((a, b) => a + b) * (1 / ring.length);
+    for (var k = 0; k < rings.length - 1; k++) {
+      final a = rings[k];
+      final b = rings[k + 1];
+      final inside = (middle(a) + middle(b)) * 0.5;
+      for (var e = 0; e < a.length; e++) {
+        final e1 = (e + 1) % a.length;
+        faces.add((points: [a[e], a[e1], b[e1], b[e]], inside: inside, paint: paint));
+      }
+    }
+    final inside = (middle(rings.first) + middle(rings.last)) * 0.5;
+    faces
+      ..add((points: rings.first, inside: inside, paint: paint))
+      ..add((points: rings.last, inside: inside, paint: paint));
+  }
+
+  void corners(List<_V3> c, _CarPaint paint) {
+    final inside = (c[0] + c[7]) * 0.5;
+    for (final indices in _boxFaces) {
+      faces.add((points: [for (final k in indices) c[k]], inside: inside, paint: paint));
+    }
+  }
+
+  // 축에 맞춘 상자(옆 [y0, y1]이 한쪽이면 [mirror]로 반대쪽도).
+  void box(double x0, double x1, double y0, double y1, double z0, double z1, _CarPaint paint, {bool mirror = false}) {
+    for (final sign in mirror ? const [1.0, -1.0] : const [1.0]) {
+      corners([
+        for (var c = 0; c < 8; c++)
+          _V3(c & 1 == 0 ? x0 : x1, sign * (c & 2 == 0 ? y0 : y1), c & 4 == 0 ? z0 : z1),
+      ], paint);
+    }
+  }
+
+  // 두 점을 잇는 가는 막대(헤일로·서스펜션·날개 기둥). [mirror]면 옆을 뒤집은 것도.
+  void beam(_V3 from, _V3 to, double thickness, {bool mirror = false}) {
+    for (final sign in mirror ? const [1.0, -1.0] : const [1.0]) {
+      final p0 = _V3(from.x, from.y * sign, from.z);
+      final p1 = _V3(to.x, to.y * sign, to.z);
+      final d = (p1 - p0).normalized;
+      var a = d.cross(const _V3(0, 0, 1));
+      if (a.length < 1e-3) {
+        a = d.cross(const _V3(1, 0, 0));
+      }
+      a = a.normalized * thickness;
+      final b = d.cross(a).normalized * thickness;
+      corners([
+        for (var c = 0; c < 8; c++) (c & 1 == 0 ? p0 : p1) + (c & 2 == 0 ? a * -1 : a) + (c & 4 == 0 ? b * -1 : b),
+      ], _CarPaint.carbon);
+    }
+  }
+
+  // 바퀴: 옆으로 누운 원기둥(타이어) + 바깥·안쪽 면의 휠과 컴파운드 색 띠.
+  void wheel(double x, double radius, double y0, double y1) {
+    for (final sign in const [1.0, -1.0]) {
+      final (inner, outer) = (y0 * sign, y1 * sign);
+      final center = _V3(x, (inner + outer) / 2, radius);
+      _V3 at(double y, double r, int k) {
+        final angle = 2 * math.pi * k / _wheelSides;
+        return _V3(x + r * math.cos(angle), y, radius + r * math.sin(angle));
+      }
+
+      for (var k = 0; k < _wheelSides; k++) {
+        faces.add((
+          points: [at(inner, radius, k), at(inner, radius, k + 1), at(outer, radius, k + 1), at(outer, radius, k)],
+          inside: center,
+          paint: _CarPaint.tyre,
+        ));
+      }
+      for (final (y, out) in [(outer, sign), (inner, -sign)]) {
+        final decal = y + out * _wheelDecalOffset;
+        faces
+          ..add((points: [for (var k = 0; k < _wheelSides; k++) at(y, radius, k)], inside: center, paint: _CarPaint.tyre))
+          ..add((points: [for (var k = 0; k < _wheelSides; k++) at(decal, _rimRadius, k)], inside: center, paint: _CarPaint.rim));
+        for (var k = 0; k < _wheelSides; k++) {
+          faces.add((
+            points: [
+              at(decal, _tyreStripeInner, k),
+              at(decal, _tyreStripeOuter, k),
+              at(decal, _tyreStripeOuter, k + 1),
+              at(decal, _tyreStripeInner, k + 1),
+            ],
+            inside: center,
+            paint: _CarPaint.stripe,
+          ));
+        }
+      }
+    }
+  }
+
+  // 플로어·몸통·조종석·헬멧.
+  box(-2.3, 1.4, -0.82, 0.82, 0.03, 0.07, _CarPaint.carbon);
+  loft(_bodySections, _CarPaint.body);
+  faces.add((
+    points: const [_V3(0.88, 0.16, 0.602), _V3(0.88, -0.16, 0.602), _V3(0.3, -0.19, 0.645), _V3(0.3, 0.19, 0.645)],
+    inside: const _V3(0.6, 0, 0.4),
+    paint: _CarPaint.carbon,
+  ));
+  loft(_helmetSections, _CarPaint.helmet);
+
+  // 롤 후프·에어박스, 샤크핀, 미러.
+  box(-0.45, -0.1, -0.11, 0.11, 0.6, 0.93, _CarPaint.body);
+  box(-0.32, -0.12, -0.07, 0.07, 0.8, 0.9, _CarPaint.carbon);
+  box(-2.3, -0.6, -0.012, 0.012, 0.55, 0.82, _CarPaint.body);
+  box(0.52, 0.6, 0.44, 0.6, 0.63, 0.7, _CarPaint.body, mirror: true);
+  beam(const _V3(0.56, 0.3, 0.55), const _V3(0.56, 0.46, 0.65), _armThickness, mirror: true);
+
+  // 헤일로.
+  beam(const _V3(0.95, 0, 0.57), const _V3(0.72, 0, 0.86), _haloThickness);
+  beam(const _V3(0.72, 0, 0.86), const _V3(0.45, 0.2, 0.85), _haloThickness, mirror: true);
+  beam(const _V3(0.45, 0.2, 0.85), const _V3(0.05, 0.24, 0.76), _haloThickness, mirror: true);
+  beam(const _V3(0.05, 0.24, 0.76), const _V3(-0.15, 0.24, 0.6), _haloThickness, mirror: true);
+
+  // 앞날개: 주 날개(카본) + 플랩 두 장 + 끝판, 노즈 기둥.
+  box(2.3, 2.88, -0.98, 0.98, 0.04, 0.08, _CarPaint.carbon);
+  box(2.2, 2.55, 0.22, 0.95, 0.09, 0.14, _CarPaint.body, mirror: true);
+  box(2.12, 2.38, 0.3, 0.95, 0.15, 0.21, _CarPaint.body, mirror: true);
+  box(2.1, 2.88, 0.95, 0.99, 0.04, 0.3, _CarPaint.body, mirror: true);
+  beam(const _V3(2.42, 0.07, 0.17), const _V3(2.5, 0.07, 0.08), _armThickness, mirror: true);
+
+  // 뒷날개: 주 날개(카본) + DRS 플랩 + 끝판 + 빔 윙, 가운데 기둥.
+  box(-2.98, -2.52, -0.72, 0.72, 0.8, 0.86, _CarPaint.carbon);
+  box(-2.88, -2.56, -0.72, 0.72, 0.9, 0.97, _CarPaint.body);
+  box(-3.0, -2.42, 0.72, 0.76, 0.4, 1.0, _CarPaint.body, mirror: true);
+  box(-2.86, -2.56, -0.5, 0.5, 0.42, 0.46, _CarPaint.carbon);
+  beam(const _V3(-2.35, 0, 0.32), const _V3(-2.72, 0, 0.8), _armThickness);
+
+  // 서스펜션 암(위·아래)과 바퀴.
+  for (final (x, inner, outer) in [(_frontAxle, 0.18, 0.68), (_rearAxle, 0.24, 0.6)]) {
+    beam(_V3(x - 0.1, inner, 0.46), _V3(x, outer, 0.5), _armThickness, mirror: true);
+    beam(_V3(x - 0.15, inner, 0.2), _V3(x, outer, 0.2), _armThickness, mirror: true);
+  }
+  wheel(_frontAxle, _frontTyreRadius, 0.67, 0.97);
+  wheel(_rearAxle, _rearTyreRadius, 0.57, 0.97);
+  return faces;
+}
+
+/// 상자 면 6개(모서리 번호: bit0 = 앞(끝점), bit1 = 옆 +, bit2 = 위). 법선 방향은 그릴 때 바깥으로 맞춘다.
 const List<List<int>> _boxFaces = [
   [1, 3, 7, 5], // 앞
   [0, 4, 6, 2], // 뒤
@@ -304,6 +480,7 @@ class GhostReplay3dPainter extends CustomPainter {
     required this.time,
     required this.playerColor,
     required this.ghostColor,
+    this.playerTyre,
   }) : super(repaint: time);
 
   final LapReplay player;
@@ -313,6 +490,9 @@ class GhostReplay3dPainter extends CustomPainter {
   final ValueListenable<double> time;
   final Color playerColor;
   final Color ghostColor;
+
+  /// 내 차 타이어 옆 띠 색(컴파운드). null이면 띠 없이 고무색.
+  final Color? playerTyre;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -345,7 +525,7 @@ class GhostReplay3dPainter extends CustomPainter {
     if (ghostReplay != null) {
       items.add(_car(view, ghostReplay.frameAt(elapsed), ghostColor, opacity: kGhostCarOpacity));
     }
-    items.add(_car(view, frame, playerColor));
+    items.add(_car(view, frame, playerColor, tyreMark: playerTyre));
 
     final batch = _Batch();
     items.sort((a, b) => b.depth.compareTo(a.depth));
@@ -520,9 +700,9 @@ class GhostReplay3dPainter extends CustomPainter {
     }
   }
 
-  /// 로우폴리 차 한 대: 상자들을 차 방향·노면 경사대로 세우고, 카메라 쪽 면만 먼 것부터 모은다.
-  /// 깊이는 차에서 카메라와 가장 가까운 모서리(차 밑 바닥보다 늦게 칠한다).
-  _Item _car(_View view, ReplayFrame frame, Color body, {double opacity = 1}) {
+  /// 로우폴리 차 한 대: [_carMesh]를 차 방향·노면 경사대로 세우고, 카메라 쪽 면만 먼 것부터 모은다.
+  /// 깊이는 차에서 카메라와 가장 가까운 점(차 밑 바닥보다 늦게 칠한다). [tyreMark]는 타이어 옆 띠 색(컴파운드).
+  _Item _car(_View view, ReplayFrame frame, Color body, {Color? tyreMark, double opacity = 1}) {
     final spot = track.locate(Offset(frame.x, frame.z));
     final pitch = math.atan(spot.slope);
     final (sh, ch) = (math.sin(frame.heading), math.cos(frame.heading));
@@ -531,41 +711,41 @@ class GhostReplay3dPainter extends CustomPainter {
     final side = _V3(-sh, 0, ch);
     final up = _V3(-ch * sp, cp, -sh * sp);
     final origin = _V3(frame.x, spot.elevation, frame.z);
-    final shade = (origin - view.eye).length;
+    _V3 place(_V3 local) => origin + forward * local.x + side * local.y + up * local.z;
+    final distance = (origin - view.eye).length;
+    final colors = {
+      _CarPaint.body: body,
+      _CarPaint.carbon: AppColors.replayCarDark,
+      _CarPaint.tyre: AppColors.replayCarTyre,
+      _CarPaint.rim: AppColors.replayCarRim,
+      _CarPaint.stripe: tyreMark ?? AppColors.replayCarTyre,
+      _CarPaint.helmet: AppColors.replayCarHelmet,
+    };
     var depth = double.infinity;
     final faces = <({double depth, _Face face})>[];
-    for (final box in _carBoxes) {
-      final corners = [
-        for (var c = 0; c < 8; c++)
-          origin +
-              forward * (c & 1 == 0 ? box.f0 : box.f1) +
-              side * (c & 2 == 0 ? box.s0 : box.s1) +
-              up * (c & 4 == 0 ? box.u0 : box.u1),
-      ];
-      for (final corner in corners) {
-        depth = math.min(depth, (corner - view.eye).length);
+    for (final face in _carMesh) {
+      final polygon = [for (final p in face.points) place(p)];
+      final center = polygon.reduce((a, b) => a + b) * (1 / polygon.length);
+      var normal = (polygon[1] - polygon[0]).cross(polygon[polygon.length - 1] - polygon[0]).normalized;
+      if (normal.dot(center - place(face.inside)) < 0) {
+        normal = normal * -1;
       }
-      final color = box.body ? body : AppColors.replayCarDark;
-      final boxCenter = (corners[0] + corners[7]) * 0.5;
-      for (final indices in _boxFaces) {
-        final polygon = [for (final k in indices) corners[k]];
-        final faceCenter = (polygon[0] + polygon[2]) * 0.5;
-        // 법선은 상자 가운데에서 바깥을 향하게 맞춘다.
-        var normal = (polygon[1] - polygon[0]).cross(polygon[3] - polygon[0]).normalized;
-        if (normal.dot(faceCenter - boxCenter) < 0) {
-          normal = normal * -1;
-        }
-        if (normal.dot(faceCenter - view.eye) >= 0) {
-          continue;
-        }
-        final projected = view.projectPolygon(polygon);
-        if (projected != null) {
-          faces.add((
-            depth: (faceCenter - view.eye).length,
-            face: (points: projected, color: _shade(color, normal, shade)),
-          ));
-        }
+      final toFace = center - view.eye;
+      if (normal.dot(toFace) >= 0) {
+        continue;
       }
+      final projected = view.projectPolygon(polygon);
+      if (projected == null) {
+        continue;
+      }
+      depth = math.min(depth, toFace.length);
+      faces.add((
+        depth: toFace.length,
+        face: (
+          points: projected,
+          color: _shade(colors[face.paint]!, normal, distance, ambient: _carAmbient, diffuse: _carDiffuse),
+        ),
+      ));
     }
     faces.sort((a, b) => b.depth.compareTo(a.depth));
     return (depth: depth, faces: [for (final f in faces) f.face], opacity: opacity);
@@ -578,9 +758,16 @@ class GhostReplay3dPainter extends CustomPainter {
   }
 
   /// 빛 방향으로 밝기를 매기고 거리만큼 지평선 색 안개를 섞는다. [twoSided]면 뒷면도 앞면처럼 밝힌다.
-  static Color _shade(Color base, _V3 normal, double distance, {bool twoSided = false}) {
+  static Color _shade(
+    Color base,
+    _V3 normal,
+    double distance, {
+    bool twoSided = false,
+    double ambient = _ambient,
+    double diffuse = _diffuse,
+  }) {
     final lit = normal.dot(_light.normalized);
-    final factor = _ambient + _diffuse * math.max(0, twoSided ? lit.abs() : lit);
+    final factor = ambient + diffuse * math.max(0, twoSided ? lit.abs() : lit);
     final shaded = Color.from(
       alpha: base.a,
       red: (base.r * factor).clamp(0, 1),
@@ -599,7 +786,8 @@ class GhostReplay3dPainter extends CustomPainter {
       oldDelegate.camera != camera ||
       oldDelegate.time != time ||
       oldDelegate.playerColor != playerColor ||
-      oldDelegate.ghostColor != ghostColor;
+      oldDelegate.ghostColor != ghostColor ||
+      oldDelegate.playerTyre != playerTyre;
 }
 
 /// 3차원 벡터(월드: X·Z 수평, Y 위).

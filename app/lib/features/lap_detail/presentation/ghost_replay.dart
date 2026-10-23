@@ -9,6 +9,7 @@ import '../../laps/domain/lap_models.dart';
 import '../../tracks/domain/track_width_profile.dart';
 import '../domain/ghost_replay.dart';
 import '../domain/lap_detail_models.dart';
+import '../../sessions/presentation/tyre_stints_view.dart';
 import 'ghost_replay_3d_painter.dart';
 import 'ghost_replay_hud.dart';
 import 'ghost_replay_painter.dart';
@@ -62,6 +63,7 @@ class GhostReplay extends StatefulWidget {
     this.referenceTeam,
     this.playerSectors = const [],
     this.referenceSectors = const [],
+    this.playerTyreCompound,
     this.realTrack,
     this.estimatedTrackWidthM,
   });
@@ -83,6 +85,9 @@ class GhostReplay extends StatefulWidget {
   /// 섹터 비교(HUD 왼쪽 위)에 쓰는 두 랩의 섹터 시간. 재생하며 지난 섹터만 채운다.
   final List<LapSector> playerSectors;
   final List<LapSector> referenceSectors;
+
+  /// 이 랩 타이어(보이는 컴파운드 이름 `Soft`·`Medium`…). 차 타이어에 컴파운드 색을 칠한다. 모르면(비교 랩도) 띠 없음.
+  final String? playerTyreCompound;
 
   /// 이 트랙의 실측 서킷(중심선·폭). 없거나 주행선에 맞지 않으면 주행 기록으로 추정한 모양을 그린다.
   final TrackWidthProfile? realTrack;
@@ -220,6 +225,7 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
                         ghostColor: ghostColor,
                         thisLapLabel: widget.thisLapLabel,
                         referenceLabel: widget.referenceLabel,
+                        tyreCompound: widget.playerTyreCompound,
                       ),
                     ),
                   ],
@@ -245,6 +251,7 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
         time: _time,
         playerColor: playerColor,
         ghostColor: ghostColor,
+        playerTyre: _playerTyre,
       );
     }
     return GhostReplay3dPainter(
@@ -255,7 +262,14 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
       time: _time,
       playerColor: playerColor,
       ghostColor: ghostColor,
+      playerTyre: _playerTyre,
     );
+  }
+
+  /// 이 랩 타이어 컴파운드 색. 모르면 null.
+  Color? get _playerTyre {
+    final compound = widget.playerTyreCompound;
+    return compound == null ? null : tyreColorOf(compound);
   }
 
   /// 이 랩의 현재 거리에서 비교 랩과의 시간 차(ms). 고스트가 없으면 null.

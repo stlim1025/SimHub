@@ -30,6 +30,9 @@ const double _ghostOutlineWidthM = 0.12;
 /// 내 차 테두리(어두운 선) 굵기(m).
 const double _playerOutlineWidthM = 0.08;
 
+/// 타이어 컴파운드 색 테두리 굵기(m).
+const double _tyreMarkWidthM = 0.09;
+
 /// 서스펜션 선 굵기(m).
 const double _suspensionWidthM = 0.07;
 
@@ -84,6 +87,7 @@ void paintReplayCar(
   double opacity = 1,
   Color? outline,
   double outlineWidth = _playerOutlineWidthM,
+  Color? tyre,
 }) {
   final dark = Paint()..color = AppColors.replayCarDark.withValues(alpha: opacity);
   final bodyPaint = Paint()..color = body.withValues(alpha: body.a * opacity);
@@ -101,14 +105,23 @@ void paintReplayCar(
       ..drawLine(Offset(rearWheelX, side * _rearWheelInner), Offset(rearWheelX, side * _rearSuspensionInner), arms);
   }
 
-  // 바퀴 넷.
+  // 바퀴 넷(컴파운드를 알면 그 색 테두리).
+  final tyreMark = tyre == null
+      ? null
+      : (Paint()
+          ..color = tyre.withValues(alpha: opacity)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = _tyreMarkWidthM);
   for (final side in const [1.0, -1.0]) {
-    canvas
-      ..drawRect(Rect.fromLTRB(_rearWheelBack, side * _rearWheelInner, _rearWheelFront, side * _carHalfWidth), dark)
-      ..drawRect(
-        Rect.fromLTRB(_frontWheelBack, side * _frontWheelInner, _frontWheelFront, side * _frontWheelOuter),
-        dark,
-      );
+    for (final wheel in [
+      Rect.fromLTRB(_rearWheelBack, side * _rearWheelInner, _rearWheelFront, side * _carHalfWidth),
+      Rect.fromLTRB(_frontWheelBack, side * _frontWheelInner, _frontWheelFront, side * _frontWheelOuter),
+    ]) {
+      canvas.drawRect(wheel, dark);
+      if (tyreMark != null) {
+        canvas.drawRect(wheel.deflate(_tyreMarkWidthM / 2), tyreMark);
+      }
+    }
   }
 
   // 몸체 + 앞뒤 날개(팀 색).
@@ -164,6 +177,7 @@ class GhostReplayPainter extends CustomPainter {
     required this.time,
     required this.playerColor,
     required this.ghostColor,
+    this.playerTyre,
   }) : super(repaint: time);
 
   final LapReplay player;
@@ -176,6 +190,9 @@ class GhostReplayPainter extends CustomPainter {
   final ValueListenable<double> time;
   final Color playerColor;
   final Color ghostColor;
+
+  /// 내 차 타이어 컴파운드 색. null이면 테두리 없음.
+  final Color? playerTyre;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -209,7 +226,7 @@ class GhostReplayPainter extends CustomPainter {
         outlineWidth: _ghostOutlineWidthM,
       );
     }
-    _paintCar(canvas, frame, body: playerColor, outline: AppColors.replayCarDark);
+    _paintCar(canvas, frame, body: playerColor, outline: AppColors.replayCarDark, tyre: playerTyre);
     canvas.restore();
   }
 
@@ -251,12 +268,13 @@ class GhostReplayPainter extends CustomPainter {
     double opacity = 1,
     Color? outline,
     double outlineWidth = _playerOutlineWidthM,
+    Color? tyre,
   }) {
     canvas
       ..save()
       ..translate(frame.x, frame.z)
       ..rotate(frame.heading);
-    paintReplayCar(canvas, body: body, opacity: opacity, outline: outline, outlineWidth: outlineWidth);
+    paintReplayCar(canvas, body: body, opacity: opacity, outline: outline, outlineWidth: outlineWidth, tyre: tyre);
     canvas.restore();
   }
 
@@ -267,5 +285,6 @@ class GhostReplayPainter extends CustomPainter {
       !identical(oldDelegate.circuit, circuit) ||
       oldDelegate.time != time ||
       oldDelegate.playerColor != playerColor ||
-      oldDelegate.ghostColor != ghostColor;
+      oldDelegate.ghostColor != ghostColor ||
+      oldDelegate.playerTyre != playerTyre;
 }

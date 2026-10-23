@@ -18,6 +18,7 @@ import '../../tracks/application/track_widths_provider.dart';
 import '../../tracks/domain/track_width_profile.dart';
 import '../application/lap_detail_providers.dart';
 import '../domain/lap_compare.dart';
+import '../domain/lap_detail_display.dart';
 import '../domain/lap_detail_models.dart';
 import '../domain/telemetry_channels.dart';
 import '../domain/telemetry_math.dart';
@@ -107,6 +108,7 @@ class TelemetryTab extends ConsumerWidget {
               referenceSectors: comparison?.sectors ?? const [],
               playerTeam: lap.team,
               referenceTeam: comparison?.team,
+              playerTyreCompound: visualCompoundName(detail.car?.visualTyreCompound),
               realTrack: ref.watch(trackWidthsProvider).valueOrNull?[lap.trackName],
               estimatedTrackWidthM: kEstimatedTrackWidthsM[lap.trackName],
             ),
@@ -135,6 +137,7 @@ class TelemetryCharts extends StatefulWidget {
     this.referenceSectors = const [],
     this.playerTeam,
     this.referenceTeam,
+    this.playerTyreCompound,
     this.realTrack,
     this.estimatedTrackWidthM,
   });
@@ -161,6 +164,9 @@ class TelemetryCharts extends StatefulWidget {
   final LapTeam? referenceTeam;
 
   /// 고스트 재생 서킷에 쓰는 이 트랙의 실측 중심선·폭. 없으면 주행 기록으로 추정한다.
+  /// 이 랩 타이어(보이는 컴파운드 이름, 고스트 재생 차 타이어 색). 모르면 null.
+  final String? playerTyreCompound;
+
   final TrackWidthProfile? realTrack;
 
   /// 실측이 없는 구간의 직선 도로 폭(m, 트랙별). null이면 기본값.
@@ -251,6 +257,7 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
                 referenceTeam: widget.referenceTeam,
                 playerSectors: widget.sectors,
                 referenceSectors: widget.reference == null ? const [] : widget.referenceSectors,
+                playerTyreCompound: widget.playerTyreCompound,
                 realTrack: widget.realTrack,
                 estimatedTrackWidthM: widget.estimatedTrackWidthM,
               ),
