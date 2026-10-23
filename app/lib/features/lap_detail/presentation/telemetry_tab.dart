@@ -15,6 +15,8 @@ import '../../auth/domain/user_preferences.dart';
 import '../../laps/domain/lap_models.dart';
 import '../../laps/presentation/empty_laps_card.dart';
 import '../../tracks/application/track_widths_provider.dart';
+import '../../tracks/application/tracks_providers.dart';
+import '../../tracks/domain/track_sample_geometry.dart';
 import '../../tracks/domain/track_width_profile.dart';
 import '../application/lap_detail_providers.dart';
 import '../domain/lap_compare.dart';
@@ -110,6 +112,7 @@ class TelemetryTab extends ConsumerWidget {
               referenceTeam: comparison?.team,
               playerTyreCompound: visualCompoundName(detail.car?.visualTyreCompound),
               realTrack: ref.watch(trackWidthsProvider).valueOrNull?[lap.trackName],
+              trackSamples: ref.watch(trackGeometryProvider((trackId: detail.trackId, gameCode: lap.gameCode))).valueOrNull,
               estimatedTrackWidthM: kEstimatedTrackWidthsM[lap.trackName],
             ),
     );
@@ -139,6 +142,7 @@ class TelemetryCharts extends StatefulWidget {
     this.referenceTeam,
     this.playerTyreCompound,
     this.realTrack,
+    this.trackSamples,
     this.estimatedTrackWidthM,
   });
 
@@ -168,6 +172,9 @@ class TelemetryCharts extends StatefulWidget {
   final String? playerTyreCompound;
 
   final TrackWidthProfile? realTrack;
+
+  /// 모든 차 표본으로 만든 이 트랙 형상(다시보기 도로·높이·연석). 없으면 null.
+  final TrackSampleGeometry? trackSamples;
 
   /// 실측이 없는 구간의 직선 도로 폭(m, 트랙별). null이면 기본값.
   final double? estimatedTrackWidthM;
@@ -277,6 +284,7 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
                 referenceSectors: widget.reference == null ? const [] : widget.referenceSectors,
                 playerTyreCompound: widget.playerTyreCompound,
                 realTrack: widget.realTrack,
+                trackSamples: widget.trackSamples,
                 estimatedTrackWidthM: widget.estimatedTrackWidthM,
               ),
               const SizedBox(height: _panelGap),

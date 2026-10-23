@@ -4,6 +4,7 @@ import 'package:simcenter_app/features/setups/data/setups_repository.dart';
 import 'package:simcenter_app/features/setups/domain/setup_models.dart';
 import 'package:simcenter_app/features/tracks/data/tracks_repository.dart';
 import 'package:simcenter_app/features/tracks/domain/track_overview_models.dart';
+import 'package:simcenter_app/features/tracks/domain/track_sample_geometry.dart';
 
 /// 셋업 모음 저장소(메모리). 요청을 기록한다. [lists]에 없는 트랙은 빈 목록, [details]에 없는 셋업은 404.
 class FakeSetupsRepository implements SetupsRepository {
@@ -64,6 +65,9 @@ class FakeTracksRepository implements TracksRepository {
     }
     return overview;
   }
+
+  @override
+  Future<TrackSampleGeometry?> getGeometry(String trackId, String gameCode) async => null;
 }
 
 SetupTrackSummary setupTrackOf(

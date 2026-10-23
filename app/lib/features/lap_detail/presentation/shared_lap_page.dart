@@ -17,6 +17,7 @@ import '../../auth/application/auth_controller.dart';
 import '../../auth/domain/user_preferences.dart';
 import '../../laps/presentation/empty_laps_card.dart';
 import '../../tracks/application/track_widths_provider.dart';
+import '../../tracks/application/tracks_providers.dart';
 import '../../tracks/domain/track_width_profile.dart';
 import '../application/lap_detail_providers.dart';
 import '../domain/lap_compare.dart';
@@ -331,6 +332,9 @@ class _SharedTelemetry extends ConsumerWidget {
               referenceTeam: comparison?.team,
               playerTyreCompound: visualCompoundName(shared.detail.car?.visualTyreCompound),
               realTrack: ref.watch(trackWidthsProvider).valueOrNull?[lap.trackName],
+              trackSamples: ref
+                  .watch(trackGeometryProvider((trackId: shared.detail.trackId, gameCode: lap.gameCode)))
+                  .valueOrNull,
               estimatedTrackWidthM: kEstimatedTrackWidthsM[lap.trackName],
             ),
     );

@@ -6,6 +6,7 @@ import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/button_group.dart';
 import '../../auth/domain/user_preferences.dart';
 import '../../laps/domain/lap_models.dart';
+import '../../tracks/domain/track_sample_geometry.dart';
 import '../../tracks/domain/track_width_profile.dart';
 import '../domain/ghost_replay.dart';
 import '../domain/lap_detail_models.dart';
@@ -65,6 +66,7 @@ class GhostReplay extends StatefulWidget {
     this.referenceSectors = const [],
     this.playerTyreCompound,
     this.realTrack,
+    this.trackSamples,
     this.estimatedTrackWidthM,
   });
 
@@ -91,6 +93,9 @@ class GhostReplay extends StatefulWidget {
 
   /// 이 트랙의 실측 서킷(중심선·폭). 없거나 주행선에 맞지 않으면 주행 기록으로 추정한 모양을 그린다.
   final TrackWidthProfile? realTrack;
+
+  /// 모든 차 표본으로 만든 이 트랙 형상. 있으면 실측이 없는 트랙의 도로·높이·연석에 쓴다.
+  final TrackSampleGeometry? trackSamples;
 
   /// 실측이 없는 구간의 직선 도로 폭(m). null이면 기본값.
   final double? estimatedTrackWidthM;
@@ -129,7 +134,8 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.trace, widget.trace) ||
         !identical(oldWidget.reference, widget.reference) ||
-        !identical(oldWidget.realTrack, widget.realTrack)) {
+        !identical(oldWidget.realTrack, widget.realTrack) ||
+        !identical(oldWidget.trackSamples, widget.trackSamples)) {
       _ticker.stop();
       _setUp();
       _time.value = 0;
@@ -142,8 +148,14 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
     _ghost = reference != null && reference.hasPositions ? LapReplay(reference) : null;
     final baseWidth = widget.estimatedTrackWidthM;
     _circuit = baseWidth == null
-        ? ReplayCircuit.build(_player, ghost: _ghost, real: widget.realTrack)
-        : ReplayCircuit.build(_player, ghost: _ghost, real: widget.realTrack, baseWidthM: baseWidth);
+        ? ReplayCircuit.build(_player, ghost: _ghost, real: widget.realTrack, samples: widget.trackSamples)
+        : ReplayCircuit.build(
+            _player,
+            ghost: _ghost,
+            real: widget.realTrack,
+            samples: widget.trackSamples,
+            baseWidthM: baseWidth,
+          );
     _track3d = null;
   }
 

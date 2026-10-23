@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
+import '../../tracks/domain/track_sample_geometry.dart';
 import '../../tracks/domain/track_width_profile.dart';
 import '../domain/ghost_replay.dart';
 import '../domain/lap_detail_models.dart';
@@ -142,16 +143,20 @@ class ReplayCircuit {
   final double startRightM;
 
   /// [player](와 [ghost]) 주행 기록으로 서킷 모양을 만든다. [real]이 있고 주행선에 맞으면 실측 중심선·폭을 쓴다.
+  /// 실측이 없고 [samples](모든 차 표본으로 만든 트랙 형상)가 있으면 그것으로 만든 도로를 실측처럼 쓴다.
+  /// 높이·연석은 [samples]가 있으면 그것을 먼저 쓴다(내 랩 하나보다 여러 차·여러 랩이 고르다).
   /// [baseWidthM]은 실측이 없는 구간의 직선 도로 폭(트랙마다 다를 수 있다, 기본 [kCircuitBaseWidthM]).
   factory ReplayCircuit.build(
     LapReplay player, {
     LapReplay? ghost,
     TrackWidthProfile? real,
+    TrackSampleGeometry? samples,
     double baseWidthM = kCircuitBaseWidthM,
   }) {
     final lines = [player.trace, if (ghost != null) ghost.trace];
     final playerLine = _positions(player.trace);
-    final aligned = real == null ? null : alignTrackProfile(real, playerLine);
+    final profile = real ?? (samples == null ? null : trackProfileFromSamples(samples, widthM: baseWidthM));
+    final aligned = profile == null ? null : alignTrackProfile(profile, playerLine);
     final estimated = _estimated(player, ghost, baseWidthM);
     final geometry = aligned == null ? estimated : _keepLinesInside(_withMeasured(estimated, aligned), lines);
     final center = geometry.center;
@@ -193,7 +198,14 @@ class ReplayCircuit {
     final left = [for (var i = 0; i < n; i++) center[i] + normals[i] * leftWidths[i]];
     final right = [for (var i = 0; i < n; i++) center[i] - normals[i] * rightWidths[i]];
 
-    final kerbs = _kerbSides(lines, center, normals, curvatures, spacing: spacing, closed: closed);
+    final traceKerbs = _kerbSides(lines, center, normals, curvatures, spacing: spacing, closed: closed);
+    final sampleKerbs = samples == null ? null : _sampleKerbs(samples, center);
+    final kerbs = sampleKerbs == null
+        ? traceKerbs
+        : (
+            left: [for (var i = 0; i < n; i++) traceKerbs.left[i] || sampleKerbs.left[i]],
+            right: [for (var i = 0; i < n; i++) traceKerbs.right[i] || sampleKerbs.right[i]],
+          );
     final gravelAt = _dropShortRuns([for (final k in curvatures) k.abs() >= kCircuitGravelCurvature], closed: closed);
 
     final asphalt = Path();
@@ -249,7 +261,7 @@ class ReplayCircuit {
       kerbLeft: kerbs.left,
       kerbRight: kerbs.right,
       gravelAt: gravelAt,
-      elevations: _elevations(player.trace, playerLine, center, at),
+      elevations: _elevations(player.trace, playerLine, center, at, samples),
       asphalt: asphalt,
       leftEdge: _polyline(left, closed: closed),
       rightEdge: _polyline(right, closed: closed),
@@ -331,8 +343,30 @@ class ReplayCircuit {
 
   static double _lerp(double a, double b, double t) => a + (b - a) * t;
 
-  /// 중심선 점마다 가장 가까운 내 랩 표본의 높이를 앞뒤 몇 칸 평균한 값. 높이 채널이 없으면 모두 0.
-  static List<double> _elevations(LapTrace trace, List<Offset> line, List<Offset> center, int Function(int) at) {
+  /// 중심선 점마다 가장 가까운 표본 형상 칸의 연석(그 칸에서 차들이 그 쪽 연석을 밟은 적이 있으면).
+  static ({List<bool> left, List<bool> right}) _sampleKerbs(TrackSampleGeometry samples, List<Offset> center) {
+    final matcher = _SequentialMatcher(samples.line, closed: true);
+    final nearest = [for (final p in center) matcher.match(p)];
+    return (
+      left: [for (final j in nearest) samples.kerbLeft[j]],
+      right: [for (final j in nearest) samples.kerbRight[j]],
+    );
+  }
+
+  /// 중심선 점마다 노면 높이를 앞뒤 몇 칸 평균한 값: 표본 형상에 높이가 있으면 가장 가까운 형상 칸, 없으면 가장 가까운 내 랩 표본.
+  /// 둘 다 없으면 모두 0.
+  static List<double> _elevations(
+    LapTrace trace,
+    List<Offset> line,
+    List<Offset> center,
+    int Function(int) at,
+    TrackSampleGeometry? samples,
+  ) {
+    final heights = samples?.y;
+    if (samples != null && heights != null) {
+      final matcher = _SequentialMatcher(samples.line, closed: true);
+      return _movingAverage([for (final p in center) heights[matcher.match(p)]], _elevationSmoothSamples, at);
+    }
     if (!trace.hasElevation) {
       return List.filled(center.length, 0);
     }
