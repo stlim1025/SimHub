@@ -62,6 +62,8 @@ class GhostReplay extends StatefulWidget {
     required this.referenceLabel,
     this.playerTeam,
     this.referenceTeam,
+    this.playerSectors = const [],
+    this.referenceSectors = const [],
   });
 
   final LapTrace trace;
@@ -77,6 +79,10 @@ class GhostReplay extends StatefulWidget {
   /// 차 색을 정하는 팀. 없으면 이 랩은 강조색, 비교 랩은 청록.
   final LapTeam? playerTeam;
   final LapTeam? referenceTeam;
+
+  /// 섹터 비교(HUD 왼쪽 위)에 쓰는 두 랩의 섹터 시간. 재생하며 지난 섹터만 채운다.
+  final List<LapSector> playerSectors;
+  final List<LapSector> referenceSectors;
 
   @override
   State<GhostReplay> createState() => _GhostReplayState();
@@ -199,6 +205,7 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
                         player: _player.frameAt(elapsed),
                         ghost: _ghost?.frameAt(elapsed),
                         gapMs: _gapAt(elapsed),
+                        sectors: replaySectorRows(widget.playerSectors, widget.referenceSectors, elapsed),
                         units: widget.units,
                         playerColor: playerColor,
                         ghostColor: ghostColor,
@@ -288,6 +295,7 @@ class _Hud extends StatelessWidget {
     required this.player,
     required this.ghost,
     required this.gapMs,
+    required this.sectors,
     required this.units,
     required this.playerColor,
     required this.ghostColor,
@@ -299,6 +307,7 @@ class _Hud extends StatelessWidget {
   final ReplayFrame player;
   final ReplayFrame? ghost;
   final double? gapMs;
+  final List<ReplaySectorRow> sectors;
   final UnitSystem units;
   final Color playerColor;
   final Color ghostColor;
@@ -337,6 +346,10 @@ class _Hud extends StatelessWidget {
                 fontFeatures: _tabular,
               ),
             ),
+          if (sectors.isNotEmpty) ...[
+            const SizedBox(height: _hudRowGap),
+            _sectorTable(),
+          ],
         ],
       ),
     );
@@ -386,6 +399,7 @@ class _Hud extends StatelessWidget {
   );
 
   Widget _carRow(Key key, Color color, String label, ReplayFrame frame) {
+    final keyName = (key as ValueKey<String>).value;
     final speed = units == UnitSystem.imperial ? kphToMph(frame.speedKph) : frame.speedKph;
     return Row(
       key: key,
@@ -406,7 +420,88 @@ class _Hud extends StatelessWidget {
           '${TelemetryChannel.speed.format(speed, units)} · ${gearLabel(frame.gear)}',
           style: const TextStyle(color: AppColors.replayHudText, fontWeight: FontWeight.w600, fontFeatures: _tabular),
         ),
+        const SizedBox(width: _hudDotGap),
+        _PedalBar(key: ValueKey('$keyName-throttle'), percent: frame.throttle, color: AppColors.success),
+        const SizedBox(width: _pedalGap),
+        _PedalBar(key: ValueKey('$keyName-brake'), percent: frame.brake, color: AppColors.danger),
       ],
+    );
+  }
+
+  /// 섹터 비교 표: `S1  이 랩  비교 랩  차이`. 아직 지나지 않은 칸은 `–`, 차이는 빠르면 초록 `-`, 느리면 빨강 `+`.
+  Widget _sectorTable() {
+    const muted = TextStyle(color: AppColors.replayHudMuted, fontFeatures: _tabular);
+    const value = TextStyle(color: AppColors.replayHudText, fontWeight: FontWeight.w600, fontFeatures: _tabular);
+    String time(int? ms) => ms == null ? _notYet : formatLapTime(ms);
+    return Table(
+      key: const ValueKey('ghost-replay-sectors'),
+      defaultColumnWidth: const IntrinsicColumnWidth(),
+      children: [
+        for (final row in sectors)
+          TableRow(
+            children: [
+              Padding(padding: _sectorCellPadding, child: Text('S${row.sector}', style: muted)),
+              Padding(padding: _sectorCellPadding, child: Text(time(row.playerMs), style: value, textAlign: TextAlign.end)),
+              if (ghost != null)
+                Padding(padding: _sectorCellPadding, child: Text(time(row.referenceMs), style: muted, textAlign: TextAlign.end)),
+              if (ghost != null) _sectorDelta(row),
+            ],
+          ),
+      ],
+    );
+  }
+
+  Widget _sectorDelta(ReplaySectorRow row) {
+    final playerMs = row.playerMs;
+    final referenceMs = row.referenceMs;
+    if (playerMs == null || referenceMs == null) {
+      return const SizedBox.shrink();
+    }
+    final delta = (playerMs - referenceMs).toDouble();
+    return Padding(
+      padding: _sectorCellPadding,
+      child: Text(
+        formatReplayGap(delta),
+        textAlign: TextAlign.end,
+        style: TextStyle(
+          color: delta < 0 ? AppColors.success : (delta > 0 ? AppColors.danger : AppColors.replayHudMuted),
+          fontWeight: FontWeight.w700,
+          fontFeatures: _tabular,
+        ),
+      ),
+    );
+  }
+}
+
+const double _pedalBarWidth = 36;
+const double _pedalBarHeight = 6;
+const double _pedalGap = 4;
+const double _pedalMaxPercent = 100;
+const String _notYet = '–';
+const EdgeInsets _sectorCellPadding = EdgeInsets.only(right: 10, top: 1, bottom: 1);
+
+/// 페달을 밟은 정도(0~100%) 막대: 어두운 바탕 위 색 채움.
+class _PedalBar extends StatelessWidget {
+  const _PedalBar({super.key, required this.percent, required this.color});
+
+  final int percent;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(_pedalBarHeight / 2),
+      child: Container(
+        width: _pedalBarWidth,
+        height: _pedalBarHeight,
+        color: AppColors.replayHudMuted.withValues(alpha: 0.3),
+        alignment: Alignment.centerLeft,
+        child: FractionallySizedBox(
+          widthFactor: (percent / _pedalMaxPercent).clamp(0.0, 1.0),
+          heightFactor: 1,
+          child: ColoredBox(color: color),
+        ),
+      ),
     );
   }
 }

@@ -99,6 +99,7 @@ class TelemetryTab extends ConsumerWidget {
               referenceLabel: comparison == null ? _bestLapLabel : referenceLegendLabel(comparison),
               units: units,
               sectors: lap.sectors,
+              referenceSectors: comparison?.sectors ?? const [],
               playerTeam: lap.team,
               referenceTeam: comparison?.team,
             ),
@@ -124,6 +125,7 @@ class TelemetryCharts extends StatefulWidget {
     required this.units,
     this.referenceLabel = _bestLapLabel,
     this.sectors = const [],
+    this.referenceSectors = const [],
     this.playerTeam,
     this.referenceTeam,
   });
@@ -141,6 +143,9 @@ class TelemetryCharts extends StatefulWidget {
 
   /// 이 랩의 섹터 시간 — 트랙 지도의 섹터 색 경계를 정한다. 비어 있으면 한 색.
   final List<LapSector> sectors;
+
+  /// 비교 랩의 섹터 시간 — 고스트 재생의 섹터 비교에 쓴다.
+  final List<LapSector> referenceSectors;
 
   /// 고스트 재생 차 색을 정하는 이 랩·비교 랩의 팀. 없으면 강조색·청록.
   final LapTeam? playerTeam;
@@ -229,6 +234,8 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
                 referenceLabel: widget.referenceLabel,
                 playerTeam: widget.playerTeam,
                 referenceTeam: widget.referenceTeam,
+                playerSectors: widget.sectors,
+                referenceSectors: widget.reference == null ? const [] : widget.referenceSectors,
               ),
               const SizedBox(height: _panelGap),
               chartsCard,

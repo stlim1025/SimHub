@@ -54,6 +54,8 @@ Future<void> _pumpCharts(
   WidgetTester tester, {
   required LapTrace trace,
   LapTrace? reference,
+  List<LapSector> sectors = const [],
+  List<LapSector> referenceSectors = const [],
   Size size = const Size(1000, 2400),
 }) async {
   tester.view
@@ -70,6 +72,8 @@ Future<void> _pumpCharts(
             lapTimeMs: trace.timeMs.last,
             referenceLapTimeMs: reference?.timeMs.last,
             units: UnitSystem.metric,
+            sectors: sectors,
+            referenceSectors: referenceSectors,
           ),
         ),
       ),
@@ -156,6 +160,30 @@ void main() {
     });
   });
 
+  group('섹터 비교', () {
+    const mine = [LapSector(sectorNumber: 2, sectorTimeMs: 30000), LapSector(sectorNumber: 1, sectorTimeMs: 20000)];
+    const theirs = [LapSector(sectorNumber: 1, sectorTimeMs: 21000), LapSector(sectorNumber: 2, sectorTimeMs: 29000)];
+
+    test('누적 시간까지 지난 섹터만 채운다(순서와 무관)', () {
+      expect(replaySectorRows(mine, theirs, 19999), [
+        (sector: 1, playerMs: null, referenceMs: null),
+        (sector: 2, playerMs: null, referenceMs: null),
+      ]);
+      expect(replaySectorRows(mine, theirs, 20500), [
+        (sector: 1, playerMs: 20000, referenceMs: null),
+        (sector: 2, playerMs: null, referenceMs: null),
+      ]);
+      expect(replaySectorRows(mine, theirs, 50000), [
+        (sector: 1, playerMs: 20000, referenceMs: 21000),
+        (sector: 2, playerMs: 30000, referenceMs: 29000),
+      ]);
+    });
+
+    test('비교 랩 섹터가 없으면 이 랩만', () {
+      expect(replaySectorRows(mine, const [], 50000).map((r) => r.referenceMs), [null, null]);
+    });
+  });
+
   group('차 색', () {
     test('팀 색 글자가 맞으면 그 색, 아니면 팀 이름의 색, 둘 다 없으면 대체색', () {
       expect(
@@ -214,6 +242,29 @@ void main() {
       await _pumpCharts(t, trace: _player, reference: _reference);
       expect(find.byKey(const ValueKey('ghost-replay-ghost-hud')), findsOneWidget);
       expect(_textOf(t, 'ghost-replay-gap'), '0.000');
+    });
+
+    testWidgets('HUD에 두 차의 스로틀·브레이크 막대와 섹터 비교 표(지난 섹터만 채움)가 있다', (t) async {
+      const mine = [LapSector(sectorNumber: 1, sectorTimeMs: 800), LapSector(sectorNumber: 2, sectorTimeMs: 900)];
+      const theirs = [LapSector(sectorNumber: 1, sectorTimeMs: 700), LapSector(sectorNumber: 2, sectorTimeMs: 1000)];
+      await _pumpCharts(t, trace: _player, reference: _reference, sectors: mine, referenceSectors: theirs);
+
+      for (final key in ['player', 'ghost']) {
+        expect(find.byKey(ValueKey('ghost-replay-$key-hud-throttle')), findsOneWidget);
+        expect(find.byKey(ValueKey('ghost-replay-$key-hud-brake')), findsOneWidget);
+      }
+      final table = find.byKey(const ValueKey('ghost-replay-sectors'));
+      expect(find.descendant(of: table, matching: find.text('S1')), findsOneWidget);
+      expect(find.descendant(of: table, matching: find.text('0:00.800')), findsNothing); // 아직 S1 전
+
+      await t.tap(find.byKey(const ValueKey('ghost-replay-play')));
+      await t.pump();
+      await t.pump(const Duration(seconds: 1)); // 1초: 두 랩 모두 S1 지남, S2는 아직
+
+      expect(find.descendant(of: table, matching: find.text('0:00.800')), findsOneWidget);
+      expect(find.descendant(of: table, matching: find.text('0:00.700')), findsOneWidget);
+      expect(find.descendant(of: table, matching: find.text('+0.100')), findsOneWidget);
+      expect(find.descendant(of: table, matching: find.text('0:00.900')), findsNothing);
     });
 
     testWidgets('재생하면 시간이 흐르고 그래프 십자선이 따라오며, 일시정지하면 멈춘다', (t) async {

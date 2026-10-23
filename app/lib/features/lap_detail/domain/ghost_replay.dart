@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import '../../laps/domain/lap_models.dart';
 import 'lap_detail_models.dart';
 import 'telemetry_math.dart';
 
@@ -119,6 +120,33 @@ double? replayGapMs(LapTrace player, LapTrace reference, double distanceM) {
     return null;
   }
   return playerMs - referenceMs;
+}
+
+/// 섹터 비교 한 줄: 섹터 번호, 그 섹터를 지났으면 이 랩·비교 랩의 섹터 시간(ms, 아직이면 null).
+typedef ReplaySectorRow = ({int sector, int? playerMs, int? referenceMs});
+
+/// 경과 시간 [elapsedMs]까지 지난 섹터만 시간을 채운 섹터 비교 줄(순수 함수). 섹터를 지났는지는 그 랩의 섹터 누적 시간으로 본다.
+/// 두 랩에 있는 섹터 번호를 모두 1부터 차례로 보인다(한쪽에만 있으면 다른 쪽은 늘 null).
+List<ReplaySectorRow> replaySectorRows(List<LapSector> player, List<LapSector> reference, double elapsedMs) {
+  Map<int, int> passed(List<LapSector> sectors) {
+    final ordered = [...sectors]..sort((a, b) => a.sectorNumber.compareTo(b.sectorNumber));
+    final result = <int, int>{};
+    var cumulative = 0;
+    for (final sector in ordered) {
+      cumulative += sector.sectorTimeMs;
+      if (cumulative <= elapsedMs) {
+        result[sector.sectorNumber] = sector.sectorTimeMs;
+      }
+    }
+    return result;
+  }
+
+  final numbers = {for (final s in player) s.sectorNumber, for (final s in reference) s.sectorNumber}.toList()..sort();
+  final playerPassed = passed(player);
+  final referencePassed = passed(reference);
+  return [
+    for (final n in numbers) (sector: n, playerMs: playerPassed[n], referenceMs: referencePassed[n]),
+  ];
 }
 
 /// ms → s.
