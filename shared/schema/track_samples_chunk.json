@@ -9,7 +9,7 @@
     "trackId": { "type": "integer", "description": "게임 트랙 ID" },
     "sessionType": { "type": "string", "enum": ["Practice", "Qualifying", "Race"], "description": "세션 종류(타임 트라이얼은 보내지 않는다)" },
     "trackLengthM": { "type": "integer", "minimum": 0, "description": "트랙 길이(m)" },
-    "format": { "type": "integer", "const": 1, "description": "data 배치 버전" },
+    "format": { "type": "integer", "enum": [1, 2], "description": "data 배치 버전(2부터 G-force·속도·손상 열과 충격 표시)" },
     "sampleRateHz": { "type": "integer", "minimum": 1, "maximum": 60, "description": "고정 표본 빈도(노면이 바뀌면 그 사이에 표본을 더 넣는다)" },
     "chunkIndex": { "type": "integer", "minimum": 0, "description": "세션 안 조각 순번(0부터)" },
     "isLast": { "type": "boolean", "description": "세션의 마지막 조각" },
@@ -18,7 +18,7 @@
     "data": {
       "type": "string",
       "contentEncoding": "base64",
-      "description": "format 1: gzip(little-endian 열 배치). int32 frameCount, uint32 sessionTimeMs[frameCount], uint8 carCount[frameCount], 이어서 표본 S=sum(carCount)개의 열: uint8 carIndex[S], uint16 lapDistance[S](0.25m), int32 x[S](0.1m), int32 z[S](0.1m), uint16 surface[S](4비트×4: FL·FR·RL·RR 순, 하위 비트부터), uint8 status[S](bit0~2 driverStatus, bit3~4 pitStatus, bit7 노면 변화로 더한 표본)."
+      "description": "format 1: gzip(little-endian 열 배치). int32 frameCount, uint32 sessionTimeMs[frameCount], uint8 carCount[frameCount], 이어서 표본 S=sum(carCount)개의 열: uint8 carIndex[S], uint16 lapDistance[S](0.25m), int32 x[S](0.1m), int32 z[S](0.1m), uint16 surface[S](4비트×4: FL·FR·RL·RR 순, 하위 비트부터), uint8 status[S](bit0~2 driverStatus, bit3~4 pitStatus, bit5 차 대 차 충돌(직전 표본 이후), bit6 충격 순간(수평 G 7.5g 이상 또는 손상 증가), bit7 노면이 바뀐 순간 — 표시 비트가 붙은 차는 고정 간격 사이라도 표본을 하나 더 넣는다). format 2는 이어서 int8 gLat[S](0.25g), int8 gLong[S](0.25g), uint16 speedKph[S], uint8 damage[S](날개·플로어·디퓨저·사이드포드 손상률 최댓값 %)."
     }
   }
 }

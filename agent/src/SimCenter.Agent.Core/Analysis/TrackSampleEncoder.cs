@@ -5,30 +5,53 @@ namespace SimCenter.Agent.Core.Analysis;
 
 /// <summary>트랙 형상 표본 한 칸(차 한 대의 한 순간).</summary>
 /// <param name="Surface">바퀴 4개 노면(4비트 × 4, FL·FR·RL·RR 순, 하위 비트부터).</param>
-/// <param name="Status">게임 원시 상태 묶음. 최상위 비트(<see cref="TrackSampleEncoder.SurfaceChangeFlag"/>)는 노면 변화로 더한 표본 표시.</param>
-public readonly record struct TrackSample(byte CarIndex, float LapDistanceM, float X, float Z, ushort Surface, byte Status);
+/// <param name="Status">게임 원시 상태 묶음(하위 5비트) + 표시 비트(<see cref="TrackSampleEncoder.CollisionFlag"/>·<see cref="TrackSampleEncoder.ImpactFlag"/>·<see cref="TrackSampleEncoder.SurfaceChangeFlag"/>).</param>
+/// <param name="GLateral">횡 G-force(g).</param>
+/// <param name="GLongitudinal">종 G-force(g).</param>
+/// <param name="Damage">날개·플로어·디퓨저·사이드포드 손상률(%) 최댓값.</param>
+public readonly record struct TrackSample(
+    byte CarIndex,
+    float LapDistanceM,
+    float X,
+    float Z,
+    ushort Surface,
+    byte Status,
+    float GLateral = 0,
+    float GLongitudinal = 0,
+    ushort SpeedKph = 0,
+    byte Damage = 0);
 
 /// <summary>한 순간(게임 프레임)의 표본 묶음.</summary>
 public sealed record TrackSampleFrame(int SessionTimeMs, IReadOnlyList<TrackSample> Samples);
 
 /// <summary>
-/// 트랙 형상 표본 <c>format 1</c> 인코더(<c>shared/schema/track_samples_chunk.json</c>): 프레임·표본을 열 단위로 모은 little-endian 바이트를 gzip한다.
-/// 같은 종류의 값끼리 모아 압축이 잘 되게 한다.
+/// 트랙 형상 표본 <c>format 2</c> 인코더(<c>shared/schema/track_samples_chunk.json</c>): 프레임·표본을 열 단위로 모은 little-endian 바이트를 gzip한다.
+/// 같은 종류의 값끼리 모아 압축이 잘 되게 한다. format 1 열 뒤에 G-force·속도·손상 열이 붙는다.
 /// </summary>
 public static class TrackSampleEncoder
 {
-    public const int Format = 1;
+    public const int Format = 2;
 
-    /// <summary>노면 변화로 더한 표본 표시(상태 바이트 최상위 비트).</summary>
+    /// <summary>차 대 차 충돌이 있었던 차의 표본(상태 bit5).</summary>
+    public const byte CollisionFlag = 0x20;
+
+    /// <summary>충격 순간(G 급변·손상 증가) 표본(상태 bit6).</summary>
+    public const byte ImpactFlag = 0x40;
+
+    /// <summary>노면이 바뀐 순간 표본(상태 bit7).</summary>
     public const byte SurfaceChangeFlag = 0x80;
 
-    /// <summary>랩 거리 단위(m)·좌표 단위(m).</summary>
+    /// <summary>랩 거리 단위(m)·좌표 단위(m)·G-force 단위(g).</summary>
     public const float LapDistanceUnitM = 0.25f;
     public const float PositionUnitM = 0.1f;
+    public const float GForceUnit = 0.25f;
 
-    /// <summary>프레임 1개의 바이트(세션 시간 4 + 차 수 1)·표본 1개의 바이트(차 1 + 랩 거리 2 + X 4 + Z 4 + 노면 2 + 상태 1).</summary>
+    /// <summary>
+    /// 프레임 1개의 바이트(세션 시간 4 + 차 수 1)·표본 1개의 바이트
+    /// (차 1 + 랩 거리 2 + X 4 + Z 4 + 노면 2 + 상태 1 + 횡 G 1 + 종 G 1 + 속도 2 + 손상 1).
+    /// </summary>
     public const int FrameBytes = 5;
-    public const int SampleBytes = 14;
+    public const int SampleBytes = 19;
 
     private const int HeaderBytes = 4;
 
@@ -90,6 +113,27 @@ public static class TrackSampleEncoder
             span[offset++] = s.Status;
         }
 
+        foreach (var s in samples)
+        {
+            span[offset++] = (byte)ToSByte(s.GLateral / GForceUnit);
+        }
+
+        foreach (var s in samples)
+        {
+            span[offset++] = (byte)ToSByte(s.GLongitudinal / GForceUnit);
+        }
+
+        foreach (var s in samples)
+        {
+            BinaryPrimitives.WriteUInt16LittleEndian(span[offset..], s.SpeedKph);
+            offset += sizeof(ushort);
+        }
+
+        foreach (var s in samples)
+        {
+            span[offset++] = s.Damage;
+        }
+
         using var output = new MemoryStream();
         using (var gzip = new GZipStream(output, CompressionLevel.Optimal))
         {
@@ -104,4 +148,7 @@ public static class TrackSampleEncoder
 
     private static int ToInt32(float value)
         => float.IsFinite(value) ? (int)Math.Clamp(Math.Round((double)value), int.MinValue, int.MaxValue) : 0;
+
+    private static sbyte ToSByte(float value)
+        => float.IsFinite(value) ? (sbyte)Math.Clamp(MathF.Round(value), sbyte.MinValue, sbyte.MaxValue) : (sbyte)0;
 }

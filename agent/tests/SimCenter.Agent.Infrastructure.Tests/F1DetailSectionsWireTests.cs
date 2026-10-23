@@ -284,7 +284,11 @@ public class F1DetailSectionsWireTests
         WriteBytes(collision, 33, 2, 7);
 
         var flashbackDetails = Assert.IsType<GameEventFrame>(Assert.Single(Mapper.Map(flashback))).Details;
-        var collisionDetails = Assert.IsType<GameEventFrame>(Assert.Single(Mapper.Map(collision))).Details;
+        var collisionFrames = Mapper.Map(collision);
+        Assert.Equal(2, collisionFrames.Count);
+        var collisionDetails = Assert.IsType<GameEventFrame>(collisionFrames[0]).Details;
+        var field = Assert.IsType<FieldCollisionFrame>(collisionFrames[1]);   // 트랙 형상 표본의 충돌 표시용
+        Assert.Equal((2, 7), (field.Car1, field.Car2));
 
         Assert.Equal(12_345u, flashbackDetails["flashbackFrameIdentifier"]);
         Assert.Equal(61_500, flashbackDetails["flashbackSessionTimeMs"]);

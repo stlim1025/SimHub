@@ -138,9 +138,17 @@ public sealed partial class F1PacketMapper
             return [marker];
         }
 
-        return F1GameEvents.Map(packet) is { } gameEvent
-            ? [new GameEventFrame(packet.Header.SessionUID.ToString(), gameEvent.Code, gameEvent.Details)]
-            : Empty;
+        if (F1GameEvents.Map(packet) is not { } gameEvent)
+        {
+            return Empty;
+        }
+
+        var sessionRef = packet.Header.SessionUID.ToString();
+        var frame = new GameEventFrame(sessionRef, gameEvent.Code, gameEvent.Details);
+        // 차 대 차 충돌은 트랙 형상 표본에도 표시한다(벽 충돌은 게임이 이벤트로 보내지 않아 G-force·손상으로 가려낸다).
+        return packet.EventDetails.TryGetCollisionEvent(out var collision)
+            ? [frame, new FieldCollisionFrame(sessionRef, collision.Vehicle1Index, collision.Vehicle2Index)]
+            : [frame];
     }
 
     private static ExtraChannelsFrame ExtraFrame(PacketHeader header, IReadOnlyDictionary<string, double> channels) =>

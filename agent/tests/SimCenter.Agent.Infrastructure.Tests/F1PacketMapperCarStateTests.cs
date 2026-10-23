@@ -257,7 +257,7 @@ public class F1PacketMapperCarStateTests
 
         Assert.IsType<FieldSurfacesFrame>(Assert.Single(_sut.Map(telemetry)));   // 모든 차 노면은 관전 중에도 낸다
         Assert.Empty(_sut.Map(status));
-        Assert.Empty(_sut.Map(damage));
+        Assert.IsType<FieldDamageFrame>(Assert.Single(_sut.Map(damage)));     // 모든 차 손상도 관전 중에 낸다
     }
 
     [Fact]

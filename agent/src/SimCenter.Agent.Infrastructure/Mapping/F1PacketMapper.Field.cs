@@ -6,7 +6,8 @@ using F1Enums = F1Game.UDP.Enums;
 namespace SimCenter.Agent.Infrastructure.Mapping;
 
 /// <summary>
-/// 모든 차 프레임(트랙 형상 표본의 원천, 헌장 Agent Rules 예외): Motion·Lap Data·Car Telemetry의 22칸을 그대로 옮긴다.
+/// 모든 차 프레임(트랙 형상 표본의 원천, 헌장 Agent Rules 예외): Motion·Lap Data·Car Telemetry·Car Damage의 22칸과
+/// 차 대 차 충돌 이벤트를 옮긴다.
 /// 플레이어 칸이 없어도(관전 중) 낸다. 서버로 가는 것은 수집기가 추린 표본뿐이다.
 /// </summary>
 public sealed partial class F1PacketMapper
@@ -28,7 +29,8 @@ public sealed partial class F1PacketMapper
         var positions = new FieldPosition[cars.Length];
         for (var i = 0; i < cars.Length; i++)
         {
-            positions[i] = new FieldPosition(cars[i].WorldPositionX, cars[i].WorldPositionZ);
+            var car = cars[i];
+            positions[i] = new FieldPosition(car.WorldPositionX, car.WorldPositionZ, car.GForceLateral, car.GForceLongitudinal);
         }
 
         return new FieldPositionsFrame(
@@ -59,12 +61,30 @@ public sealed partial class F1PacketMapper
     {
         var cars = packet.CarTelemetryData.AsReadOnlySpan();
         var surfaces = new ushort[cars.Length];
+        var speeds = new ushort[cars.Length];
         for (var i = 0; i < cars.Length; i++)
         {
             surfaces[i] = PackSurfaces(cars[i].SurfaceType);
+            speeds[i] = cars[i].Speed;
         }
 
-        return new FieldSurfacesFrame(packet.Header.SessionUID.ToString(), packet.Header.FrameIdentifier, surfaces);
+        return new FieldSurfacesFrame(packet.Header.SessionUID.ToString(), packet.Header.FrameIdentifier, surfaces, speeds);
+    }
+
+    /// <summary>차체 손상: 날개(좌·우·뒤)·플로어·디퓨저·사이드포드 손상률(%) 가운데 가장 큰 값. 타이어·엔진 마모는 넣지 않는다(충격과 무관하게 늘어난다).</summary>
+    private static FieldDamageFrame MapFieldDamage(CarDamageDataPacket packet)
+    {
+        var cars = packet.CarDamageData.AsReadOnlySpan();
+        var damage = new byte[cars.Length];
+        for (var i = 0; i < cars.Length; i++)
+        {
+            var car = cars[i];
+            damage[i] = Math.Max(
+                Math.Max(Math.Max(car.FrontLeftWingDamage, car.FrontRightWingDamage), Math.Max(car.RearWingDamage, car.FloorDamage)),
+                Math.Max(car.DiffuserDamage, car.SidepodDamage));
+        }
+
+        return new FieldDamageFrame(packet.Header.SessionUID.ToString(), damage);
     }
 
     /// <summary>바퀴 4개 노면을 4비트씩 묶는다(FL·FR·RL·RR 순, 하위 비트부터).</summary>

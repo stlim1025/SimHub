@@ -121,10 +121,13 @@ public class TrackSamplesIngestorTests
     [Fact]
     public async Task UnsupportedFormatOrRate_IsRejected()
     {
-        Assert.Contains("format", await _sut.ApplyAsync(Envelope(format: 2), _device, Now));
+        Assert.Contains("format", await _sut.ApplyAsync(Envelope(format: 3), _device, Now));
         Assert.Contains("sampleRateHz", await _sut.ApplyAsync(Envelope(sampleRateHz: 0), _device, Now));
         Assert.Contains("chunkIndex", await _sut.ApplyAsync(Envelope(chunkIndex: -1), _device, Now));
         Assert.Empty(_chunks.Items);
+
+        Assert.Null(await _sut.ApplyAsync(Envelope(format: 2), _device, Now)); // G-force·속도·손상 열이 붙은 format 2
+        Assert.Equal(2, Assert.Single(_chunks.Items).Format);
     }
 
     [Fact]

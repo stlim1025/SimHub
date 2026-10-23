@@ -229,7 +229,7 @@ public class F1WireLayoutTests
 
         Assert.IsType<FieldSurfacesFrame>(Assert.Single(sut.Map(telemetry)));
         Assert.Empty(sut.Map(status));
-        Assert.Empty(sut.Map(damage));
+        Assert.IsType<FieldDamageFrame>(Assert.Single(sut.Map(damage)));
         Assert.IsType<FieldLapStatesFrame>(Assert.Single(sut.Map(lap)));
 
         Assert.Single(Warnings(logger));   // 관전 중이면 모든 차 패킷이 같은 이유로 버려진다 — 한 번만 알린다

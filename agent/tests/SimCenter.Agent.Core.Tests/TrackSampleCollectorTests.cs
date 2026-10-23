@@ -24,13 +24,16 @@ public class TrackSampleCollectorTests
 
     /// <summary>같은 게임 프레임의 위치·랩 상태·노면 3종을 순서대로 먹인다. 반환은 노면 프레임(마지막)이 낸 이벤트.</summary>
     private IReadOnlyList<TelemetryEvent> Tick(
-        uint frameId, int timeMs, ushort[]? surfaces = null, bool[]? onTrack = null, float lapDistance = 100)
+        uint frameId, int timeMs, ushort[]? surfaces = null, bool[]? onTrack = null, float lapDistance = 100, float gLateral0 = 1)
     {
-        var positions = Enumerable.Range(0, Cars).Select(i => new FieldPosition(i * 10.5f, -i * 3.25f)).ToList();
+        var positions = Enumerable.Range(0, Cars)
+            .Select(i => new FieldPosition(i * 10.5f, -i * 3.25f, i == 0 ? gLateral0 : 1, -0.5f))
+            .ToList();
         var states = Enumerable.Range(0, Cars).Select(i => new FieldLapState(lapDistance + i, onTrack?[i] ?? true, Status: 4)).ToList();
         _sut.Process(new FieldPositionsFrame(SessionRef, frameId, timeMs, positions));
         _sut.Process(new FieldLapStatesFrame(SessionRef, frameId, states));
-        return _sut.Process(new FieldSurfacesFrame(SessionRef, frameId, surfaces ?? new ushort[Cars]));
+        var speeds = Enumerable.Range(0, Cars).Select(i => (ushort)(250 + i)).ToList();
+        return _sut.Process(new FieldSurfacesFrame(SessionRef, frameId, surfaces ?? new ushort[Cars], speeds));
     }
 
     private static TrackSamplesChunk End(TrackSampleCollector sut)
@@ -76,6 +79,47 @@ public class TrackSampleCollectorTests
         Assert.Equal(FrontLeftRumble, extra.Surface);
         Assert.Equal(4 | TrackSampleEncoder.SurfaceChangeFlag, extra.Status);
         Assert.Equal(50u, decoded.TimesMs[1]);
+    }
+
+    [Fact]
+    public void WallImpact_GForceSpikeOrDamageRise_AddsFlaggedSample_WithSpeedAndDamage()
+    {
+        _sut.Process(Session());
+        _sut.Process(new FieldDamageFrame(SessionRef, [0, 0, 0]));
+        Tick(0, 0);
+        Tick(1, 30, gLateral0: 9.6f);                              // 0번 차가 벽에 부딪혀 횡 G가 튄다
+        _sut.Process(new FieldDamageFrame(SessionRef, [0, 12, 0])); // 1번 차는 손상이 오른다(벽을 긁었다)
+        Tick(2, 60);
+
+        var decoded = Decode(End(_sut).Data);
+
+        Assert.Equal(Cars + 2, decoded.Samples.Count);
+        var hit = decoded.Samples[Cars];
+        Assert.Equal(0, hit.CarIndex);
+        Assert.Equal(4 | TrackSampleEncoder.ImpactFlag, hit.Status);
+        Assert.Equal(38, hit.GLatQuarterG);                        // 9.6g / 0.25 반올림
+        Assert.Equal(-2, hit.GLongQuarterG);
+        Assert.Equal(250, hit.SpeedKph);
+        var scrape = decoded.Samples[Cars + 1];
+        Assert.Equal(1, scrape.CarIndex);
+        Assert.Equal(4 | TrackSampleEncoder.ImpactFlag, scrape.Status);
+        Assert.Equal(12, scrape.Damage);
+    }
+
+    [Fact]
+    public void CarToCarCollision_FlagsBothCarsOnce()
+    {
+        _sut.Process(Session());
+        Tick(0, 0);
+        _sut.Process(new FieldCollisionFrame(SessionRef, 1, 2));
+        Tick(1, 40);
+        Tick(2, 80);
+
+        var decoded = Decode(End(_sut).Data);
+
+        var flagged = decoded.Samples.Where(x => (x.Status & TrackSampleEncoder.CollisionFlag) != 0).ToList();
+        Assert.Equal([1, 2], flagged.Select(x => (int)x.CarIndex));
+        Assert.Equal(Cars + 2, decoded.Samples.Count);             // 충돌한 두 차만 고정 간격 사이에 하나씩 더
     }
 
     [Fact]
@@ -160,7 +204,7 @@ public class TrackSampleCollectorTests
     {
         var frames = new[]
         {
-            new TrackSampleFrame(1234, [new TrackSample(5, 100.3f, -12.34f, 56.78f, 0x1234, 9)]),
+            new TrackSampleFrame(1234, [new TrackSample(5, 100.3f, -12.34f, 56.78f, 0x1234, 9, -40f, 3.1f, 312, 77)]),
         };
 
         var decoded = Decode(Convert.ToBase64String(TrackSampleEncoder.Encode(frames)));
@@ -173,13 +217,19 @@ public class TrackSampleCollectorTests
         Assert.Equal(568, sample.ZDecimeters);
         Assert.Equal(0x1234, sample.Surface);
         Assert.Equal(9, sample.Status);
+        Assert.Equal(sbyte.MinValue, sample.GLatQuarterG);          // −40g는 열 범위(±31.75g)에서 잘린다
+        Assert.Equal(12, sample.GLongQuarterG);
+        Assert.Equal(312, sample.SpeedKph);
+        Assert.Equal(77, sample.Damage);
     }
 
-    private sealed record DecodedSample(byte CarIndex, ushort LapDistanceQuarterM, int XDecimeters, int ZDecimeters, ushort Surface, byte Status);
+    private sealed record DecodedSample(
+        byte CarIndex, ushort LapDistanceQuarterM, int XDecimeters, int ZDecimeters, ushort Surface, byte Status,
+        sbyte GLatQuarterG, sbyte GLongQuarterG, ushort SpeedKph, byte Damage);
 
     private sealed record Decoded(uint[] TimesMs, List<DecodedSample> Samples);
 
-    /// <summary>format 1 디코더(계약 문서 그대로 — 서버가 같은 순서로 읽는다).</summary>
+    /// <summary>format 2 디코더(계약 문서 그대로 — 서버가 같은 순서로 읽는다).</summary>
     private static Decoded Decode(string base64)
     {
         using var input = new GZipStream(new MemoryStream(Convert.FromBase64String(base64)), CompressionMode.Decompress);
@@ -228,10 +278,22 @@ public class TrackSampleCollectorTests
         }
 
         var status = raw.AsSpan(offset, total).ToArray();
+        offset += total;
+        var gLat = raw.AsSpan(offset, total).ToArray().Select(b => (sbyte)b).ToArray();
+        offset += total;
+        var gLong = raw.AsSpan(offset, total).ToArray().Select(b => (sbyte)b).ToArray();
+        offset += total;
+        var speed = new ushort[total];
+        for (var i = 0; i < total; i++, offset += sizeof(ushort))
+        {
+            speed[i] = BinaryPrimitives.ReadUInt16LittleEndian(raw.AsSpan(offset));
+        }
+
+        var damage = raw.AsSpan(offset, total).ToArray();
         Assert.Equal(raw.Length, offset + total);
 
         return new Decoded(times, Enumerable.Range(0, total)
-            .Select(i => new DecodedSample(cars[i], dist[i], x[i], z[i], surface[i], status[i]))
+            .Select(i => new DecodedSample(cars[i], dist[i], x[i], z[i], surface[i], status[i], gLat[i], gLong[i], speed[i], damage[i]))
             .ToList());
     }
 }

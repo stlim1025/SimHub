@@ -11,8 +11,8 @@ public sealed record FieldPositionsFrame(
     int SessionTimeMs,
     IReadOnlyList<FieldPosition> Cars) : ITelemetryFrame;
 
-/// <summary>차 한 대의 월드 위치(m). 수평면은 X·Z다.</summary>
-public readonly record struct FieldPosition(float X, float Z);
+/// <summary>차 한 대의 월드 위치(m, 수평면은 X·Z)와 횡·종 G-force(g). G가 급변하면 충격(벽·차)으로 본다.</summary>
+public readonly record struct FieldPosition(float X, float Z, float GLateral = 0, float GLongitudinal = 0);
 
 /// <summary>모든 차의 랩 상태(F1 Lap Data). 칸 번호 = 차 번호.</summary>
 public sealed record FieldLapStatesFrame(
@@ -27,8 +27,21 @@ public sealed record FieldLapStatesFrame(
 /// <param name="LapDistanceM">현재 랩에서 달린 거리(m). 출발선을 지나기 전에는 음수일 수 있다.</param>
 public readonly record struct FieldLapState(float LapDistanceM, bool IsOnTrack, byte Status);
 
-/// <summary>모든 차의 바퀴 노면(F1 Car Telemetry). 칸 번호 = 차 번호, 값은 바퀴 4개를 4비트씩 묶은 값(FL·FR·RL·RR 순, 하위 비트부터).</summary>
+/// <summary>
+/// 모든 차의 바퀴 노면과 속도(F1 Car Telemetry). 칸 번호 = 차 번호. 노면은 바퀴 4개를 4비트씩 묶은 값(FL·FR·RL·RR 순, 하위 비트부터).
+/// <paramref name="SpeedsKph"/>가 비었으면 속도를 모른다(0으로 싣는다).
+/// </summary>
 public sealed record FieldSurfacesFrame(
     string SessionRef,
     uint FrameId,
-    IReadOnlyList<ushort> Surfaces) : ITelemetryFrame;
+    IReadOnlyList<ushort> Surfaces,
+    IReadOnlyList<ushort>? SpeedsKph = null) : ITelemetryFrame;
+
+/// <summary>
+/// 모든 차의 차체 손상(F1 Car Damage). 칸 번호 = 차 번호, 값은 날개·플로어·디퓨저·사이드포드 손상률(%) 가운데 가장 큰 값.
+/// 다른 패킷과 빈도가 달라 게임 프레임으로 짝짓지 않고 최신 값을 쓴다. 값이 오르면 충격으로 본다.
+/// </summary>
+public sealed record FieldDamageFrame(string SessionRef, IReadOnlyList<byte> Damage) : ITelemetryFrame;
+
+/// <summary>차 대 차 충돌(F1 Event COLL). 두 차 번호.</summary>
+public sealed record FieldCollisionFrame(string SessionRef, int Car1, int Car2) : ITelemetryFrame;
