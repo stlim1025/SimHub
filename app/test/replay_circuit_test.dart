@@ -141,9 +141,10 @@ void main() {
       expect(estimated.isMeasured, isFalse);
       expect(estimated.leftWidths.first, greaterThan(kCircuitBaseWidthM / 2 - 0.01));
 
-      // 트랙별 기본 폭(모나코 10m)을 주면 그 폭으로 추정한다.
+      // 트랙별 기본 폭(모나코)을 주면 그 폭으로 추정한다.
       final narrow = ReplayCircuit.build(LapReplay(_trace(points)), baseWidthM: kEstimatedTrackWidthsM['Monaco']!);
-      expect(narrow.rightWidths.first, inInclusiveRange(5, 5 + kCircuitCornerExtraWidthM / 2));
+      final monacoHalf = kEstimatedTrackWidthsM['Monaco']! / 2;
+      expect(narrow.rightWidths.first, inInclusiveRange(monacoHalf, monacoHalf + kCircuitCornerExtraWidthM / 2));
     });
 
     test('레이아웃이 일부 바뀐 서킷은 맞는 구간만 실측 폭을, 바뀐 구간은 추정 폭을 쓴다', () {
