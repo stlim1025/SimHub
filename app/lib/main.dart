@@ -11,10 +11,14 @@ import 'features/profile/application/theme_mode_provider.dart';
 /// 서킷 윤곽 데이터(bacinger/f1-circuits)의 MIT 라이선스 고지 파일.
 const String _trackOutlinesLicenseAsset = 'assets/track_outlines/LICENSE-f1-circuits.md';
 
+/// 실측 트랙 폭 데이터(TUMFTM/racetrack-database)의 LGPL-3.0 라이선스 파일.
+const String _trackWidthsLicenseAsset = 'assets/track_widths/LICENSE-racetrack-database.txt';
+
 void main() {
   // MIT 조건: 앱에 넣은 서킷 윤곽 데이터의 저작권 고지를 라이선스 목록에 함께 싣는다.
   LicenseRegistry.addLicense(() async* {
     yield LicenseEntryWithLineBreaks(['f1-circuits'], await rootBundle.loadString(_trackOutlinesLicenseAsset));
+    yield LicenseEntryWithLineBreaks(['racetrack-database'], await rootBundle.loadString(_trackWidthsLicenseAsset));
   });
   runApp(const ProviderScope(child: SimCenterApp()));
 }

@@ -341,6 +341,10 @@ const String kWorldPosZChannel = 'worldPosZ';
 const String kErsStoreChannel = 'ersStoreEnergy';
 const String kErsDeployedChannel = 'ersDeployedThisLap';
 
+/// extra 채널: 바퀴별 노면 종류(FL·FR·RL·RR). 값 1 = 연석(Rumble) — `shared/telemetry/f1_25_udp_spec.md`.
+const List<String> kSurfaceTypeChannels = ['surfaceTypeFL', 'surfaceTypeFR', 'surfaceTypeRL', 'surfaceTypeRR'];
+const int kSurfaceRumble = 1;
+
 /// 1랩 텔레메트리 트레이스(docs/15 §3.3·§4.2, D-45). 표본 i의 랩 거리 = i × [resolutionM].
 /// 채널 길이가 다르면 가장 짧은 길이로 자르고, 빠진 채널이 있으면 빈 트레이스로 본다.
 /// 월드 위치([worldPosX]·[worldPosZ])는 extra 채널에서 읽고, 없거나 길이가 7채널과 다르면 둘 다 빈 목록이다(트랙 모양을 그리지 않는다).
@@ -359,6 +363,7 @@ class LapTrace {
     this.worldPosZ = const [],
     this.ersStoreJ = const [],
     this.ersDeployedJ = const [],
+    this.kerbContact = const [],
   });
 
   final String lapId;
@@ -399,6 +404,11 @@ class LapTrace {
   /// ERS 두 채널이 모두 있는지(고스트 재생 HUD의 배터리 표시).
   bool get hasErs => length > 0 && ersStoreJ.length == length && ersDeployedJ.length == length;
 
+  /// 표본마다 바퀴 하나라도 연석 위에 있었는지(노면 채널). 채널이 없거나 길이가 다르면 빈 목록.
+  final List<bool> kerbContact;
+
+  bool get hasKerbContact => length > 0 && kerbContact.length == length;
+
   bool get isEmpty => length == 0;
 
   /// 표본 [index]의 랩 거리(m).
@@ -436,7 +446,19 @@ class LapTrace {
       worldPosZ: hasBoth ? posZ : const [],
       ersStoreJ: _positionChannel(extra?[kErsStoreChannel], length),
       ersDeployedJ: _positionChannel(extra?[kErsDeployedChannel], length),
+      kerbContact: _kerbContact(extra, length),
     );
+  }
+
+  /// 네 바퀴 노면 채널 → 표본마다 연석을 밟았는지. 채널 하나라도 없거나 길이가 다르면 빈 목록.
+  static List<bool> _kerbContact(Map<String, dynamic>? extra, int length) {
+    final wheels = [for (final name in kSurfaceTypeChannels) _positionChannel(extra?[name], length)];
+    if (length == 0 || wheels.any((w) => w.isEmpty)) {
+      return const [];
+    }
+    return List.unmodifiable([
+      for (var i = 0; i < length; i++) wheels.any((w) => w[i].round() == kSurfaceRumble),
+    ]);
   }
 
   /// extra 위치 채널 → 실수 목록. 숫자가 아닌 표본이 있거나 길이가 [length]와 다르면 빈 목록.

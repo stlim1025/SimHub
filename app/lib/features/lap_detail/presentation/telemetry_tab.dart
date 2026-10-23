@@ -14,6 +14,8 @@ import '../../auth/application/auth_controller.dart';
 import '../../auth/domain/user_preferences.dart';
 import '../../laps/domain/lap_models.dart';
 import '../../laps/presentation/empty_laps_card.dart';
+import '../../tracks/application/track_widths_provider.dart';
+import '../../tracks/domain/track_width_profile.dart';
 import '../application/lap_detail_providers.dart';
 import '../domain/lap_compare.dart';
 import '../domain/lap_detail_models.dart';
@@ -105,6 +107,7 @@ class TelemetryTab extends ConsumerWidget {
               referenceSectors: comparison?.sectors ?? const [],
               playerTeam: lap.team,
               referenceTeam: comparison?.team,
+              realTrack: ref.watch(trackWidthsProvider).valueOrNull?[lap.trackName],
             ),
     );
   }
@@ -131,6 +134,7 @@ class TelemetryCharts extends StatefulWidget {
     this.referenceSectors = const [],
     this.playerTeam,
     this.referenceTeam,
+    this.realTrack,
   });
 
   final LapTrace trace;
@@ -153,6 +157,9 @@ class TelemetryCharts extends StatefulWidget {
   /// 고스트 재생 차 색을 정하는 이 랩·비교 랩의 팀. 없으면 강조색·청록.
   final LapTeam? playerTeam;
   final LapTeam? referenceTeam;
+
+  /// 고스트 재생 서킷에 쓰는 이 트랙의 실측 중심선·폭. 없으면 주행 기록으로 추정한다.
+  final TrackWidthProfile? realTrack;
 
   @override
   State<TelemetryCharts> createState() => _TelemetryChartsState();
@@ -239,6 +246,7 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
                 referenceTeam: widget.referenceTeam,
                 playerSectors: widget.sectors,
                 referenceSectors: widget.reference == null ? const [] : widget.referenceSectors,
+                realTrack: widget.realTrack,
               ),
               const SizedBox(height: _panelGap),
               chartsCard,

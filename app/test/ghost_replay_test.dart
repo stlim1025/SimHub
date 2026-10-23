@@ -287,7 +287,7 @@ void main() {
       final painter = GhostReplayPainter(
         player: player,
         ghost: ghost,
-        circuit: ReplayCircuit.build(player, ghost),
+        circuit: ReplayCircuit.build(player, ghost: ghost),
         time: time,
         playerColor: AppColors.teamFerrari,
         ghostColor: AppColors.comparisonLap,

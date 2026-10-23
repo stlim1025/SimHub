@@ -69,6 +69,9 @@ flutter:
   assets:
     - assets/track_outlines/track_outlines.json
     - assets/track_outlines/LICENSE-f1-circuits.md
+    # 고스트 재생 실측 트랙 폭: TUMFTM/racetrack-database(LGPL-3.0) 중심선·좌우 폭과 그 라이선스.
+    - assets/track_widths/track_widths.json
+    - assets/track_widths/LICENSE-racetrack-database.txt
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

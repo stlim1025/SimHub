@@ -1,20 +1,23 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
+import '../../tracks/domain/track_width_profile.dart';
 import '../domain/ghost_replay.dart';
+import '../domain/lap_detail_models.dart';
+import '../domain/track_alignment.dart';
 
 /// 서킷 중심선을 구할 때 앞뒤로 평균하는 거리(m). 레이싱 라인은 코너마다 바깥 → 에이펙스 → 바깥으로 오가므로
-/// 이 거리만큼 평균하면 도로 가운데쯤이 되고, 차는 그 도로 안에서 좌우로 움직여 보인다.
+/// 이 거리만큼 평균하면 도로 가운데쯤이 되고, 차는 그 도로 안에서 좌우로 움직여 보인다(실측 서킷이 없을 때).
 const double kCircuitCenterSmoothM = 30;
 
-/// 직선 도로 폭(m). 코너에서는 곡률에 따라 [kCircuitCornerExtraWidthM]까지 넓어진다.
+/// 실측 서킷이 없을 때의 직선 도로 폭(m). 코너에서는 곡률에 따라 [kCircuitCornerExtraWidthM]까지 넓어진다.
 const double kCircuitBaseWidthM = 13;
 const double kCircuitCornerExtraWidthM = 3;
 
 /// 곡률(1/m) × 이 값 = 코너에서 넓어지는 폭(m, [kCircuitCornerExtraWidthM]까지).
 const double _cornerWidthGain = 150;
 
-/// 이 곡률(1/m, 반지름 약 125m)보다 급한 구간 양쪽 가장자리에 연석을 그린다.
+/// 노면 기록이 없을 때 이 곡률(1/m, 반지름 약 125m)보다 급한 구간 양쪽 가장자리에 연석을 그린다.
 const double kCircuitKerbCurvature = 0.008;
 
 /// 이 곡률(1/m, 반지름 약 80m)보다 급한 코너 바깥쪽에 그래블(자갈) 구역을 그린다.
@@ -27,41 +30,69 @@ const double kCircuitGravelWidthM = 12;
 /// 첫·마지막 표본이 이 거리(m)보다 가까우면 한 바퀴로 이어진 닫힌 서킷으로 본다.
 const double _closedLoopM = 40;
 
-/// 도로 중심에서 주행선이 벗어날 수 있는 최대 거리(m). 직선 폭의 절반보다 조금 작게 두어 차가 늘 아스팔트 위에 있다.
+/// 추정 모양에서 도로 중심으로부터 주행선이 벗어날 수 있는 최대 거리(m). 직선 폭의 절반보다 조금 작게 두어 차가 늘 아스팔트 위에 있다.
 const double kCircuitMaxLateralOffsetM = 4.5;
+
+/// 차 폭의 절반(m): 연석을 밟지 않은 표본은 차 가운데가 가장자리에서 이만큼 안쪽에 있어야 한다.
+const double _carHalfWidthM = 1;
+
+/// 연석을 밟은 표본은 차 가운데가 가장자리 밖으로 이만큼(m)까지 나가도 된다(바깥 바퀴가 연석 위).
+const double _kerbCarAllowanceM = 0.5;
+
+/// 실측 중심선을 좌우로 옮기는 보정이 앞뒤로 퍼지는 거리(m) — 갑자기 꺾이지 않게.
+const double _shiftSpreadM = 20;
+
+/// 밟은 연석 한 점이 앞뒤로 이어지는 거리(m)·이보다 짧게 끊긴 연석 틈(m)은 이어 그린다.
+const double _kerbSpreadM = 6;
+const double _kerbGapFillM = 12;
 
 /// 중심선을 다듬는 이동 평균 반폭(표본 수)·곡률을 고르는 이동 평균 반폭(표본 수).
 const int _centerTidySamples = 2;
 const int _curvatureSmoothSamples = 3;
 
-/// 도로 폭을 고르는 이동 평균 반폭(표본 수)·연석·그래블로 그릴 최소 연속 표본 수.
+/// 추정 도로 폭을 고르는 이동 평균 반폭(표본 수)·곡률 연석·그래블로 그릴 최소 연속 표본 수.
 const int _widthSmoothSamples = 6;
 const int _minFeatureRunSamples = 4;
+
+/// 주행 표본을 중심선 점에 짝지을 때 앞 표본의 짝 둘레로 찾는 범위(점 수)·그 안에서 이보다 멀면(m) 전체에서 다시 찾는다.
+const int _matchWindow = 40;
+const double _rematchM = 30;
 
 /// 연석 줄무늬 한 칸을 표본 간격의 몇 등분으로 나눌지(빨강·흰색이 번갈아).
 const int _kerbStripesPerSegment = 2;
 
-/// 고스트 재생 화면의 서킷 모양(월드 좌표 m). 내 랩(+ 있으면 비교 랩) 주행선을 평균·평활해 중심선을 만들고,
-/// 곡률로 도로 폭·연석·그래블을 정한다. 실제 노면 데이터가 없어 주행 기록에서 추정한 모양이다.
+/// 고스트 재생 화면의 서킷 모양(월드 좌표 m). 실측 서킷([TrackWidthProfile])을 주행선에 맞출 수 있으면 그 중심선·좌우 폭을 쓰고,
+/// 없거나 맞지 않으면 내 랩(+ 비교 랩) 주행선을 평활해 중심선과 폭을 추정한다.
+/// 연석은 바퀴 노면 기록에서 실제로 밟은 자리에 그리고(기록이 없으면 곡률로 추정), 그래블은 곡률로 정한 코너 바깥에 그린다.
 class ReplayCircuit {
   ReplayCircuit._({
     required this.center,
-    required this.widths,
+    required this.leftWidths,
+    required this.rightWidths,
     required this.curvatures,
+    required this.isMeasured,
     required this.asphalt,
     required this.leftEdge,
     required this.rightEdge,
     required this.kerbRed,
     required this.kerbWhite,
     required this.gravel,
+    required this.startPoint,
+    required this.startHeading,
+    required this.startLeftM,
+    required this.startRightM,
   });
 
-  /// 중심선 점(표본 간격).
+  /// 중심선 점.
   final List<Offset> center;
 
-  /// 표본별 도로 폭(m)·곡률(1/m, 부호 = 도는 방향).
-  final List<double> widths;
+  /// 점마다 중심선에서 왼쪽(진행 방향 반시계)·오른쪽 가장자리까지 거리(m)·곡률(1/m, 부호 = 도는 방향).
+  final List<double> leftWidths;
+  final List<double> rightWidths;
   final List<double> curvatures;
+
+  /// 실측 서킷 폭을 썼는지(아니면 주행 기록으로 추정).
+  final bool isMeasured;
 
   /// 칠할 모양들(채움: 아스팔트·연석·그래블, 선: 가장자리).
   final Path asphalt;
@@ -71,11 +102,169 @@ class ReplayCircuit {
   final Path kerbWhite;
   final Path gravel;
 
-  /// [player] 주행선(과 [ghost] 주행선의 평균)으로 서킷 모양을 만든다.
-  factory ReplayCircuit.build(LapReplay player, [LapReplay? ghost]) {
+  /// 출발·결승선: 내 랩 첫 위치에 가장 가까운 중심선 점, 진행 방향(라디안), 왼쪽·오른쪽 폭(m).
+  final Offset startPoint;
+  final double startHeading;
+  final double startLeftM;
+  final double startRightM;
+
+  /// [player](와 [ghost]) 주행 기록으로 서킷 모양을 만든다. [real]이 있고 주행선에 맞으면 실측 중심선·폭을 쓴다.
+  factory ReplayCircuit.build(LapReplay player, {LapReplay? ghost, TrackWidthProfile? real}) {
+    final lines = [player.trace, if (ghost != null) ghost.trace];
+    final playerLine = _positions(player.trace);
+    final aligned = real == null ? null : alignTrackProfile(real, playerLine);
+    final geometry = aligned != null ? _measured(aligned, lines) : _estimated(player, ghost);
+    final center = geometry.center;
+    final n = center.length;
+    final closed = geometry.closed;
+    int at(int i) => closed ? (i % n + n) % n : i.clamp(0, n - 1);
+
+    double headingAt(int i) {
+      final d = center[at(i + 1)] - center[at(i - 1)];
+      return math.atan2(d.dy, d.dx);
+    }
+
+    final headings = [for (var i = 0; i < n; i++) headingAt(i)];
+    final spacing = _spacing(center, closed: closed);
+    final rawCurvatures = [
+      for (var i = 0; i < n; i++) _angleDiff(headings[at(i + 1)], headings[at(i - 1)]) / (2 * spacing),
+    ];
+    // 곡률은 앞뒤 몇 칸 평균으로 튀는 값을 없앤다(연석·그래블이 조각조각 생기지 않게).
+    final curvatures = _movingAverage(rawCurvatures, _curvatureSmoothSamples, at);
+    final leftWidths = geometry.left;
+    final rightWidths = geometry.right;
+
+    // 왼쪽 법선(진행 방향에서 +90°).
+    final normals = [for (final h in headings) Offset(-math.sin(h), math.cos(h))];
+    final left = [for (var i = 0; i < n; i++) center[i] + normals[i] * leftWidths[i]];
+    final right = [for (var i = 0; i < n; i++) center[i] - normals[i] * rightWidths[i]];
+
+    final kerbs = _kerbSides(lines, center, normals, curvatures, spacing: spacing, closed: closed);
+    final gravelAt = _dropShortRuns([for (final k in curvatures) k.abs() >= kCircuitGravelCurvature], closed: closed);
+
+    final asphalt = Path();
+    final kerbRed = Path();
+    final kerbWhite = Path();
+    final gravel = Path();
+    final segments = closed ? n : n - 1;
+    for (var i = 0; i < segments; i++) {
+      final j = at(i + 1);
+      _quad(asphalt, left[i], left[j], right[j], right[i]);
+
+      for (final (edge, side, flags) in [(left, 1.0, kerbs.left), (right, -1.0, kerbs.right)]) {
+        if (!flags[i]) {
+          continue;
+        }
+        final outI = normals[i] * (side * kCircuitKerbWidthM);
+        final outJ = normals[j] * (side * kCircuitKerbWidthM);
+        for (var s = 0; s < _kerbStripesPerSegment; s++) {
+          final t0 = s / _kerbStripesPerSegment;
+          final t1 = (s + 1) / _kerbStripesPerSegment;
+          final a = Offset.lerp(edge[i], edge[j], t0)!;
+          final b = Offset.lerp(edge[i], edge[j], t1)!;
+          final oa = Offset.lerp(outI, outJ, t0)!;
+          final ob = Offset.lerp(outI, outJ, t1)!;
+          _quad((i * _kerbStripesPerSegment + s).isEven ? kerbRed : kerbWhite, a, b, b + ob, a + oa);
+        }
+      }
+      if (gravelAt[i]) {
+        // 곡률 중심이 왼쪽(k > 0)이면 바깥은 오른쪽. 그 쪽에 연석이 있으면 연석 바깥부터.
+        final outerIsRight = curvatures[i] > 0;
+        final side = outerIsRight ? -1.0 : 1.0;
+        final edge = outerIsRight ? right : left;
+        final kerbed = (outerIsRight ? kerbs.right : kerbs.left)[i];
+        final inset = kerbed ? kCircuitKerbWidthM : 0.0;
+        final innerI = edge[i] + normals[i] * (side * inset);
+        final innerJ = edge[j] + normals[j] * (side * inset);
+        final outerI = innerI + normals[i] * (side * kCircuitGravelWidthM);
+        final outerJ = innerJ + normals[j] * (side * kCircuitGravelWidthM);
+        _quad(gravel, innerI, innerJ, outerJ, outerI);
+      }
+    }
+
+    final start = _nearestIndex(center, playerLine.first);
+    return ReplayCircuit._(
+      center: center,
+      leftWidths: leftWidths,
+      rightWidths: rightWidths,
+      curvatures: curvatures,
+      isMeasured: aligned != null,
+      asphalt: asphalt,
+      leftEdge: _polyline(left, closed: closed),
+      rightEdge: _polyline(right, closed: closed),
+      kerbRed: kerbRed,
+      kerbWhite: kerbWhite,
+      gravel: gravel,
+      startPoint: center[start],
+      startHeading: headings[start],
+      startLeftM: leftWidths[start],
+      startRightM: rightWidths[start],
+    );
+  }
+
+  /// 실측 서킷: 정렬한 중심선을, 주행선이 (연석을 밟은 곳을 빼고) 도로 안에 들도록 좌우로 조금씩 옮긴다.
+  /// 실측 중심선은 지도 GPS를 평활한 것이라 몇 m 어긋날 수 있어서다. 폭은 실측 그대로.
+  static _Geometry _measured(AlignedTrack aligned, List<LapTrace> lines) {
+    final center = aligned.center;
+    final n = center.length;
+    int at(int i) => (i % n + n) % n;
+    final normals = [
+      for (var i = 0; i < n; i++)
+        () {
+          final d = center[at(i + 1)] - center[at(i - 1)];
+          final h = math.atan2(d.dy, d.dx);
+          return Offset(-math.sin(h), math.cos(h));
+        }(),
+    ];
+    final push = List<double>.filled(n, 0);
+    final pull = List<double>.filled(n, 0);
+    for (final line in lines.where((l) => l.hasPositions)) {
+      final matcher = _SequentialMatcher(center, closed: true);
+      for (var i = 0; i < line.length; i++) {
+        final p = Offset(line.worldPosX[i], line.worldPosZ[i]);
+        final j = matcher.match(p);
+        final lateral = (p.dx - center[j].dx) * normals[j].dx + (p.dy - center[j].dy) * normals[j].dy;
+        final onKerb = line.hasKerbContact && line.kerbContact[i];
+        final margin = onKerb ? _kerbCarAllowanceM : -_carHalfWidthM;
+        final leftLimit = aligned.leftM[j] + margin;
+        final rightLimit = aligned.rightM[j] + margin;
+        if (lateral > leftLimit) {
+          push[j] = math.max(push[j], lateral - leftLimit);
+        } else if (-lateral > rightLimit) {
+          pull[j] = math.min(pull[j], lateral + rightLimit);
+        }
+      }
+    }
+    final spread = math.max(1, (_shiftSpreadM / _spacing(center, closed: true)).round());
+    // 가장 크게 벗어난 값을 앞뒤로 넓힌 뒤(팽창) 평균해 부드럽게 옮긴다.
+    final raw = [for (var j = 0; j < n; j++) push[j] + pull[j]];
+    final dilated = [
+      for (var j = 0; j < n; j++)
+        () {
+          var best = 0.0;
+          for (var k = j - spread; k <= j + spread; k++) {
+            final v = raw[at(k)];
+            if (v.abs() > best.abs()) {
+              best = v;
+            }
+          }
+          return best;
+        }(),
+    ];
+    final shift = _movingAverage(dilated, spread, at);
+    return (
+      center: [for (var j = 0; j < n; j++) center[j] + normals[j] * shift[j]],
+      left: aligned.leftM,
+      right: aligned.rightM,
+      closed: true,
+    );
+  }
+
+  /// 실측 서킷이 없을 때: 주행선(과 비교 랩 주행선의 평균)을 평활해 중심선을 만들고 곡률로 폭을 정한다.
+  static _Geometry _estimated(LapReplay player, LapReplay? ghost) {
     final trace = player.trace;
     final n = trace.length;
-    final raw = [for (var i = 0; i < n; i++) Offset(trace.worldPosX[i], trace.worldPosZ[i])];
+    final raw = _positions(trace);
     final other = ghost?.trace;
     if (other != null && other.resolutionM == trace.resolutionM) {
       final m = math.min(n, other.length);
@@ -111,124 +300,138 @@ class ReplayCircuit {
         }(),
     ];
     final center = movingAverage(shifted, _centerTidySamples);
+    final headings = [
+      for (var i = 0; i < n; i++)
+        () {
+          final d = center[at(i + 1)] - center[at(i - 1)];
+          return math.atan2(d.dy, d.dx);
+        }(),
+    ];
+    final curvatures = _movingAverage([
+      for (var i = 0; i < n; i++) _angleDiff(headings[at(i + 1)], headings[at(i - 1)]) / (2 * trace.resolutionM),
+    ], _curvatureSmoothSamples, at);
+    // 폭은 넓게 평균해 가장자리가 들쭉날쭉하지 않고 서서히 넓어졌다 좁아지게 한다.
+    final halves = _movingAverage([
+      for (final k in curvatures) (kCircuitBaseWidthM + math.min(kCircuitCornerExtraWidthM, k.abs() * _cornerWidthGain)) / 2,
+    ], _widthSmoothSamples, at);
+    return (center: center, left: halves, right: halves, closed: closed);
+  }
 
-    double headingAt(int i) {
-      final d = center[at(i + 1)] - center[at(i - 1)];
-      return math.atan2(d.dy, d.dx);
+  /// 연석이 있는 중심선 구간(왼쪽·오른쪽). 바퀴 노면 기록이 있으면 연석을 밟은 표본의 위치(중심선 왼쪽/오른쪽)에 그리고,
+  /// 기록이 하나도 없으면 곡률이 급한 구간 양쪽에 그린다.
+  static ({List<bool> left, List<bool> right}) _kerbSides(
+    List<LapTrace> lines,
+    List<Offset> center,
+    List<Offset> normals,
+    List<double> curvatures, {
+    required double spacing,
+    required bool closed,
+  }) {
+    final n = center.length;
+    final recorded = lines.where((l) => l.hasPositions && l.hasKerbContact).toList();
+    if (recorded.isEmpty) {
+      final flags = _dropShortRuns([for (final k in curvatures) k.abs() >= kCircuitKerbCurvature], closed: closed);
+      return (left: flags, right: List.of(flags));
     }
-
-    final headings = [for (var i = 0; i < n; i++) headingAt(i)];
-    final rawCurvatures = [
-      for (var i = 0; i < n; i++)
-        _angleDiff(headings[at(i + 1)], headings[at(i - 1)]) / (2 * trace.resolutionM),
-    ];
-    // 곡률은 앞뒤 몇 칸 평균으로 튀는 값을 없앤다(연석·그래블이 조각조각 생기지 않게).
-    final curvatures = [
-      for (var i = 0; i < n; i++)
-        () {
-          var sum = 0.0;
-          for (var j = i - _curvatureSmoothSamples; j <= i + _curvatureSmoothSamples; j++) {
-            sum += rawCurvatures[at(j)];
-          }
-          return sum / (_curvatureSmoothSamples * 2 + 1);
-        }(),
-    ];
-    final rawWidths = [
-      for (final k in curvatures)
-        kCircuitBaseWidthM + math.min(kCircuitCornerExtraWidthM, k.abs() * _cornerWidthGain),
-    ];
-    // 폭은 더 넓게 평균해 가장자리가 들쭉날쭉하지 않고 서서히 넓어졌다 좁아지게 한다.
-    final widths = [
-      for (var i = 0; i < n; i++)
-        () {
-          var sum = 0.0;
-          for (var j = i - _widthSmoothSamples; j <= i + _widthSmoothSamples; j++) {
-            sum += rawWidths[at(j)];
-          }
-          return sum / (_widthSmoothSamples * 2 + 1);
-        }(),
-    ];
-    final kerbAt = _dropShortRuns([for (final k in curvatures) k.abs() >= kCircuitKerbCurvature], closed: closed);
-    final gravelAt = _dropShortRuns([for (final k in curvatures) k.abs() >= kCircuitGravelCurvature], closed: closed);
-
-    // 왼쪽 법선(진행 방향에서 +90°).
-    Offset normal(int i) => Offset(-math.sin(headings[i]), math.cos(headings[i]));
-    final left = [for (var i = 0; i < n; i++) center[i] + normal(i) * (widths[i] / 2)];
-    final right = [for (var i = 0; i < n; i++) center[i] - normal(i) * (widths[i] / 2)];
-
-    final asphalt = Path();
-    final kerbRed = Path();
-    final kerbWhite = Path();
-    final gravel = Path();
-    final segments = closed ? n : n - 1;
-    for (var i = 0; i < segments; i++) {
-      final j = at(i + 1);
-      _quad(asphalt, left[i], left[j], right[j], right[i]);
-
-      final k = curvatures[i];
-      if (kerbAt[i]) {
-        for (final (edge, side) in [(left, 1.0), (right, -1.0)]) {
-          final outI = normal(i) * (side * kCircuitKerbWidthM);
-          final outJ = normal(j) * (side * kCircuitKerbWidthM);
-          for (var s = 0; s < _kerbStripesPerSegment; s++) {
-            final t0 = s / _kerbStripesPerSegment;
-            final t1 = (s + 1) / _kerbStripesPerSegment;
-            final a = Offset.lerp(edge[i], edge[j], t0)!;
-            final b = Offset.lerp(edge[i], edge[j], t1)!;
-            final oa = Offset.lerp(outI, outJ, t0)!;
-            final ob = Offset.lerp(outI, outJ, t1)!;
-            _quad((i * _kerbStripesPerSegment + s).isEven ? kerbRed : kerbWhite, a, b, b + ob, a + oa);
-          }
+    final left = List<bool>.filled(n, false);
+    final right = List<bool>.filled(n, false);
+    final spread = math.max(1, (_kerbSpreadM / spacing).round());
+    void mark(List<bool> flags, int j) {
+      for (var k = j - spread; k < j + spread; k++) {
+        if (closed || (k >= 0 && k < n)) {
+          flags[(k % n + n) % n] = true;
         }
       }
-      if (gravelAt[i]) {
-        // 곡률 중심이 왼쪽(k > 0)이면 바깥은 오른쪽.
-        final side = k > 0 ? -1.0 : 1.0;
-        final edge = k > 0 ? right : left;
-        final innerI = edge[i] + normal(i) * (side * kCircuitKerbWidthM);
-        final innerJ = edge[j] + normal(j) * (side * kCircuitKerbWidthM);
-        final outerI = innerI + normal(i) * (side * kCircuitGravelWidthM);
-        final outerJ = innerJ + normal(j) * (side * kCircuitGravelWidthM);
-        _quad(gravel, innerI, innerJ, outerJ, outerI);
-      }
     }
 
-    return ReplayCircuit._(
-      center: center,
-      widths: widths,
-      curvatures: curvatures,
-      asphalt: asphalt,
-      leftEdge: _polyline(left, closed: closed),
-      rightEdge: _polyline(right, closed: closed),
-      kerbRed: kerbRed,
-      kerbWhite: kerbWhite,
-      gravel: gravel,
-    );
+    for (final line in recorded) {
+      final matcher = _SequentialMatcher(center, closed: closed);
+      for (var i = 0; i < line.length; i++) {
+        final p = Offset(line.worldPosX[i], line.worldPosZ[i]);
+        final j = matcher.match(p);
+        if (!line.kerbContact[i]) {
+          continue;
+        }
+        final lateral = (p.dx - center[j].dx) * normals[j].dx + (p.dy - center[j].dy) * normals[j].dy;
+        mark(lateral >= 0 ? left : right, j);
+      }
+    }
+    final gap = math.max(1, (_kerbGapFillM / spacing).round());
+    return (left: _fillShortGaps(left, gap, closed: closed), right: _fillShortGaps(right, gap, closed: closed));
+  }
+
+  static List<Offset> _positions(LapTrace trace) => [
+        for (var i = 0; i < trace.length; i++) Offset(trace.worldPosX[i], trace.worldPosZ[i]),
+      ];
+
+  /// 중심선 점 사이 평균 간격(m).
+  static double _spacing(List<Offset> points, {required bool closed}) {
+    var total = 0.0;
+    for (var i = 1; i < points.length; i++) {
+      total += (points[i] - points[i - 1]).distance;
+    }
+    if (closed) {
+      total += (points.first - points.last).distance;
+    }
+    final segments = closed ? points.length : points.length - 1;
+    return segments <= 0 || total <= 0 ? 1 : total / segments;
+  }
+
+  static List<double> _movingAverage(List<double> values, int half, int Function(int) at) => [
+        for (var i = 0; i < values.length; i++)
+          () {
+            var sum = 0.0;
+            for (var j = i - half; j <= i + half; j++) {
+              sum += values[at(j)];
+            }
+            return sum / (half * 2 + 1);
+          }(),
+      ];
+
+  static int _nearestIndex(List<Offset> points, Offset query) {
+    var best = 0;
+    var bestDistance = double.infinity;
+    for (var i = 0; i < points.length; i++) {
+      final d = (points[i] - query).distanceSquared;
+      if (d < bestDistance) {
+        bestDistance = d;
+        best = i;
+      }
+    }
+    return best;
   }
 
   /// [_minFeatureRunSamples]칸보다 짧게 이어진 true 구간을 false로 바꾼다(조각난 연석·그래블 없애기).
-  static List<bool> _dropShortRuns(List<bool> flags, {required bool closed}) {
+  static List<bool> _dropShortRuns(List<bool> flags, {required bool closed}) =>
+      _replaceShortRuns(flags, value: true, maxLength: _minFeatureRunSamples - 1, closed: closed);
+
+  /// [maxGap]칸 이하로 끊긴 false 틈을 true로 메운다(한 연석이 조각나 보이지 않게).
+  static List<bool> _fillShortGaps(List<bool> flags, int maxGap, {required bool closed}) =>
+      _replaceShortRuns(flags, value: false, maxLength: maxGap, closed: closed);
+
+  /// [value]가 [maxLength]칸 이하로 이어진 구간을 반대 값으로 바꾼다. 닫힌 서킷이면 시작·끝에 걸친 구간을 한 구간으로 본다.
+  static List<bool> _replaceShortRuns(List<bool> flags, {required bool value, required int maxLength, required bool closed}) {
     final n = flags.length;
     final result = List<bool>.of(flags);
-    if (n == 0 || flags.every((f) => f)) {
+    if (n == 0 || flags.every((f) => f == value)) {
       return result;
     }
-    // 닫힌 서킷이면 false 칸에서 시작해 한 바퀴 돈다(시작·끝에 걸친 구간을 한 구간으로).
-    final start = closed ? flags.indexOf(false) : 0;
+    final start = closed ? flags.indexOf(!value) : 0;
     var i = 0;
     while (i < n) {
-      final at = (start + i) % n;
-      if (!flags[at]) {
+      if (flags[(start + i) % n] != value) {
         i++;
         continue;
       }
       var length = 0;
-      while (i + length < n && flags[(start + i + length) % n]) {
+      while (i + length < n && flags[(start + i + length) % n] == value) {
         length++;
       }
-      if (length < _minFeatureRunSamples) {
+      // 열린 선의 처음·끝에 붙은 틈은 메우지 않는다(양쪽에 연석이 있을 때만 틈이다).
+      final touchesEnd = !closed && !value && (start + i == 0 || start + i + length == n);
+      if (length <= maxLength && !touchesEnd) {
         for (var j = 0; j < length; j++) {
-          result[(start + i + j) % n] = false;
+          result[(start + i + j) % n] = !value;
         }
       }
       i += length;
@@ -266,5 +469,41 @@ class ReplayCircuit {
       d += 2 * math.pi;
     }
     return d;
+  }
+}
+
+/// 중심선·좌우 폭(m)·닫힌 서킷인지.
+typedef _Geometry = ({List<Offset> center, List<double> left, List<double> right, bool closed});
+
+/// 주행 표본을 차례로 중심선 점에 짝짓는다. 앞 표본의 짝 둘레만 찾아서 빠르고, 입체 교차(스즈카)에서 다른 길로 튀지 않는다.
+class _SequentialMatcher {
+  _SequentialMatcher(this.points, {required this.closed});
+
+  final List<Offset> points;
+  final bool closed;
+  int? _last;
+
+  int match(Offset p) {
+    final last = _last;
+    final n = points.length;
+    var best = -1;
+    var bestDistance = double.infinity;
+    if (last != null) {
+      for (var k = last - _matchWindow; k <= last + _matchWindow; k++) {
+        if (!closed && (k < 0 || k >= n)) {
+          continue;
+        }
+        final j = (k % n + n) % n;
+        final d = (points[j] - p).distanceSquared;
+        if (d < bestDistance) {
+          bestDistance = d;
+          best = j;
+        }
+      }
+    }
+    if (best < 0 || bestDistance > _rematchM * _rematchM) {
+      best = ReplayCircuit._nearestIndex(points, p);
+    }
+    return _last = best;
   }
 }

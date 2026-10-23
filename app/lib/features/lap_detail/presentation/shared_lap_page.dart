@@ -16,6 +16,7 @@ import '../../../core/widgets/track_flag.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../auth/domain/user_preferences.dart';
 import '../../laps/presentation/empty_laps_card.dart';
+import '../../tracks/application/track_widths_provider.dart';
 import '../application/lap_detail_providers.dart';
 import '../domain/lap_compare.dart';
 import '../domain/lap_detail_display.dart';
@@ -327,6 +328,7 @@ class _SharedTelemetry extends ConsumerWidget {
               referenceSectors: comparison?.sectors ?? const [],
               playerTeam: lap.team,
               referenceTeam: comparison?.team,
+              realTrack: ref.watch(trackWidthsProvider).valueOrNull?[lap.trackName],
             ),
     );
   }

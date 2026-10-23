@@ -231,16 +231,14 @@ class GhostReplayPainter extends CustomPainter {
       ..drawPath(circuit.leftEdge, edge)
       ..drawPath(circuit.rightEdge, edge);
 
-    // 출발·결승선: 서킷 중심선 첫 점에서 길을 가로지르는 흰 띠.
-    final start = circuit.center.first;
-    final next = circuit.center[1];
-    final width = circuit.widths.first;
+    // 출발·결승선: 내 랩이 시작한 자리에서 길을 가로지르는 흰 띠(+y = 진행 방향 왼쪽).
+    final start = circuit.startPoint;
     canvas
       ..save()
       ..translate(start.dx, start.dy)
-      ..rotate(math.atan2(next.dy - start.dy, next.dx - start.dx))
+      ..rotate(circuit.startHeading)
       ..drawRect(
-        Rect.fromLTRB(-_startLineDepthM / 2, -width / 2, _startLineDepthM / 2, width / 2),
+        Rect.fromLTRB(-_startLineDepthM / 2, -circuit.startRightM, _startLineDepthM / 2, circuit.startLeftM),
         Paint()..color = AppColors.replayRoadEdge,
       )
       ..restore();

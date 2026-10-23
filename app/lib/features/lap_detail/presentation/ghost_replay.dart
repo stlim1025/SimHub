@@ -7,6 +7,7 @@ import '../../../core/util/lap_time.dart';
 import '../../../core/widgets/button_group.dart';
 import '../../auth/domain/user_preferences.dart';
 import '../../laps/domain/lap_models.dart';
+import '../../tracks/domain/track_width_profile.dart';
 import '../domain/ghost_replay.dart';
 import '../domain/lap_detail_models.dart';
 import '../domain/telemetry_channels.dart';
@@ -65,6 +66,7 @@ class GhostReplay extends StatefulWidget {
     this.referenceTeam,
     this.playerSectors = const [],
     this.referenceSectors = const [],
+    this.realTrack,
   });
 
   final LapTrace trace;
@@ -84,6 +86,9 @@ class GhostReplay extends StatefulWidget {
   /// 섹터 비교(HUD 왼쪽 위)에 쓰는 두 랩의 섹터 시간. 재생하며 지난 섹터만 채운다.
   final List<LapSector> playerSectors;
   final List<LapSector> referenceSectors;
+
+  /// 이 트랙의 실측 서킷(중심선·폭). 없거나 주행선에 맞지 않으면 주행 기록으로 추정한 모양을 그린다.
+  final TrackWidthProfile? realTrack;
 
   @override
   State<GhostReplay> createState() => _GhostReplayState();
@@ -113,7 +118,9 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
   @override
   void didUpdateWidget(GhostReplay oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!identical(oldWidget.trace, widget.trace) || !identical(oldWidget.reference, widget.reference)) {
+    if (!identical(oldWidget.trace, widget.trace) ||
+        !identical(oldWidget.reference, widget.reference) ||
+        !identical(oldWidget.realTrack, widget.realTrack)) {
       _ticker.stop();
       _setUp();
       _time.value = 0;
@@ -124,7 +131,7 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
     _player = LapReplay(widget.trace);
     final reference = widget.reference;
     _ghost = reference != null && reference.hasPositions ? LapReplay(reference) : null;
-    _circuit = ReplayCircuit.build(_player, _ghost);
+    _circuit = ReplayCircuit.build(_player, ghost: _ghost, real: widget.realTrack);
   }
 
   @override
