@@ -114,6 +114,7 @@ public class F1ExtraChannelsWireTests
         var field = Assert.IsType<FieldPositionsFrame>(frames[1]);   // 모든 차 위치(트랙 형상 표본용)는 뒤에
         Assert.Equal(-523.456f, field.Cars[PlayerIndex].X);
         Assert.Equal(800.96f, field.Cars[PlayerIndex].Z);
+        Assert.Equal(12.04f, field.Cars[PlayerIndex].Y);
         Assert.Equal(-523.5, extra["worldPosX"]);   // 위치는 소수 첫째 자리(10cm)
         Assert.Equal(12, extra["worldPosY"]);
         Assert.Equal(801, extra["worldPosZ"]);

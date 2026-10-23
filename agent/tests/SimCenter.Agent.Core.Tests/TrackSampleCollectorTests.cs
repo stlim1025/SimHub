@@ -27,7 +27,7 @@ public class TrackSampleCollectorTests
         uint frameId, int timeMs, ushort[]? surfaces = null, bool[]? onTrack = null, float lapDistance = 100, float gLateral0 = 1)
     {
         var positions = Enumerable.Range(0, Cars)
-            .Select(i => new FieldPosition(i * 10.5f, -i * 3.25f, i == 0 ? gLateral0 : 1, -0.5f))
+            .Select(i => new FieldPosition(i * 10.5f, -i * 3.25f, i == 0 ? gLateral0 : 1, -0.5f, Y: 12.3f + i))
             .ToList();
         var states = Enumerable.Range(0, Cars).Select(i => new FieldLapState(lapDistance + i, onTrack?[i] ?? true, Status: 4)).ToList();
         _sut.Process(new FieldPositionsFrame(SessionRef, frameId, timeMs, positions));
@@ -140,6 +140,7 @@ public class TrackSampleCollectorTests
         Assert.Equal([0, 1, 2], samples.Select(x => (int)x.Brake));
         Assert.Equal([16, 17, 18], samples.Select(x => (int)x.TyreCompound));
         Assert.Equal([3, 12, 0], samples.Select(x => (int)x.TyreAgeLaps));
+        Assert.Equal([123, 133, 143], samples.Select(x => x.YDecimeters));   // 높이 12.3m + 차 번호
         Assert.Equal([TrackSampleEncoder.DrsFlag, 0, 0], samples.Select(x => (int)x.Flags2));
     }
 
@@ -248,7 +249,7 @@ public class TrackSampleCollectorTests
     {
         var frames = new[]
         {
-            new TrackSampleFrame(1234, [new TrackSample(5, 100.3f, -12.34f, 56.78f, 0x1234, 9, -40f, 3.1f, 312, 77, -1, 64, 32, 17, 9, 5)]),
+            new TrackSampleFrame(1234, [new TrackSample(5, 100.3f, -12.34f, 56.78f, 0x1234, 9, -40f, 3.1f, 312, 77, -1, 64, 32, 17, 9, 5, -7.86f)]),
         };
 
         var decoded = Decode(Convert.ToBase64String(TrackSampleEncoder.Encode(frames)));
@@ -271,16 +272,17 @@ public class TrackSampleCollectorTests
         Assert.Equal(17, sample.TyreCompound);
         Assert.Equal(9, sample.TyreAgeLaps);
         Assert.Equal(5, sample.Flags2);
+        Assert.Equal(-79, sample.YDecimeters);
     }
 
     private sealed record DecodedSample(
         byte CarIndex, ushort LapDistanceQuarterM, int XDecimeters, int ZDecimeters, ushort Surface, byte Status,
         sbyte GLatQuarterG, sbyte GLongQuarterG, ushort SpeedKph, byte Damage,
-        sbyte Gear, byte Throttle, byte Brake, byte TyreCompound, byte TyreAgeLaps, byte Flags2);
+        sbyte Gear, byte Throttle, byte Brake, byte TyreCompound, byte TyreAgeLaps, byte Flags2, int YDecimeters);
 
     private sealed record Decoded(uint[] TimesMs, List<DecodedSample> Samples);
 
-    /// <summary>format 3 디코더(계약 문서 그대로 — 서버가 같은 순서로 읽는다).</summary>
+    /// <summary>format 4 디코더(계약 문서 그대로 — 서버가 같은 순서로 읽는다).</summary>
     private static Decoded Decode(string base64)
     {
         using var input = new GZipStream(new MemoryStream(Convert.FromBase64String(base64)), CompressionMode.Decompress);
@@ -354,12 +356,18 @@ public class TrackSampleCollectorTests
         var compound = Column();
         var age = Column();
         var flags2 = Column();
+        var y = new int[total];
+        for (var i = 0; i < total; i++, offset += sizeof(int))
+        {
+            y[i] = BinaryPrimitives.ReadInt32LittleEndian(raw.AsSpan(offset));
+        }
+
         Assert.Equal(raw.Length, offset);
 
         return new Decoded(times, Enumerable.Range(0, total)
             .Select(i => new DecodedSample(
                 cars[i], dist[i], x[i], z[i], surface[i], status[i], gLat[i], gLong[i], speed[i], damage[i],
-                gear[i], throttle[i], brake[i], compound[i], age[i], flags2[i]))
+                gear[i], throttle[i], brake[i], compound[i], age[i], flags2[i], y[i]))
             .ToList());
     }
 }

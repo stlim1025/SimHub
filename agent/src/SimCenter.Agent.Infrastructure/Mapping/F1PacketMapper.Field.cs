@@ -33,7 +33,7 @@ public sealed partial class F1PacketMapper
         for (var i = 0; i < cars.Length; i++)
         {
             var car = cars[i];
-            positions[i] = new FieldPosition(car.WorldPositionX, car.WorldPositionZ, car.GForceLateral, car.GForceLongitudinal);
+            positions[i] = new FieldPosition(car.WorldPositionX, car.WorldPositionZ, car.GForceLateral, car.GForceLongitudinal, car.WorldPositionY);
         }
 
         return new FieldPositionsFrame(

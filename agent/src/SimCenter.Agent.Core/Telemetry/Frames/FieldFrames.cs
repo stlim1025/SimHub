@@ -11,8 +11,10 @@ public sealed record FieldPositionsFrame(
     int SessionTimeMs,
     IReadOnlyList<FieldPosition> Cars) : ITelemetryFrame;
 
-/// <summary>차 한 대의 월드 위치(m, 수평면은 X·Z)와 횡·종 G-force(g). G가 급변하면 충격(벽·차)으로 본다.</summary>
-public readonly record struct FieldPosition(float X, float Z, float GLateral = 0, float GLongitudinal = 0);
+/// <summary>
+/// 차 한 대의 월드 위치(m, 수평면은 X·Z, <paramref name="Y"/>는 높이)와 횡·종 G-force(g). G가 급변하면 충격(벽·차)으로 본다.
+/// </summary>
+public readonly record struct FieldPosition(float X, float Z, float GLateral = 0, float GLongitudinal = 0, float Y = 0);
 
 /// <summary>모든 차의 랩 상태(F1 Lap Data). 칸 번호 = 차 번호.</summary>
 public sealed record FieldLapStatesFrame(
