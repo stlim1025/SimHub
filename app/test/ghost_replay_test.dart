@@ -1,0 +1,272 @@
+import 'dart:math' as math;
+import 'dart:ui' as ui;
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:simcenter_app/core/theme/app_colors.dart';
+import 'package:simcenter_app/features/auth/domain/user_preferences.dart';
+import 'package:simcenter_app/features/lap_detail/domain/ghost_replay.dart';
+import 'package:simcenter_app/features/lap_detail/domain/lap_detail_models.dart';
+import 'package:simcenter_app/features/lap_detail/presentation/ghost_replay_painter.dart';
+import 'package:simcenter_app/features/lap_detail/presentation/telemetry_tab.dart';
+import 'package:simcenter_app/features/laps/domain/lap_models.dart';
+
+/// 위치가 있는 트레이스: 표본 [count]개(5m 간격), 시간 i×[msPerSample], 속도 200+i, 기어 i÷10+1, 위치는 [positionAt].
+LapTrace _positionedTrace(
+  String lapId, {
+  int count = 41,
+  int msPerSample = 100,
+  (double, double) Function(int i)? positionAt,
+}) {
+  final positions = [for (var i = 0; i < count; i++) positionAt?.call(i) ?? (i * 5.0, 0.0)];
+  return LapTrace(
+    lapId: lapId,
+    resolutionM: 5,
+    timeMs: [for (var i = 0; i < count; i++) i * msPerSample],
+    speedKph: [for (var i = 0; i < count; i++) 200 + i],
+    throttle: [for (var i = 0; i < count; i++) 100],
+    brake: [for (var i = 0; i < count; i++) 0],
+    steer: [for (var i = 0; i < count; i++) 0],
+    gear: [for (var i = 0; i < count; i++) i ~/ 10 + 1],
+    rpm: [for (var i = 0; i < count; i++) 11000],
+    worldPosX: [for (final p in positions) p.$1],
+    worldPosZ: [for (final p in positions) p.$2],
+  );
+}
+
+LapTrace _withoutPositions(LapTrace t) => LapTrace(
+  lapId: t.lapId,
+  resolutionM: t.resolutionM,
+  timeMs: t.timeMs,
+  speedKph: t.speedKph,
+  throttle: t.throttle,
+  brake: t.brake,
+  steer: t.steer,
+  gear: t.gear,
+  rpm: t.rpm,
+);
+
+/// 이 랩: 4.0초·200m. 비교 랩: 표본당 90ms(3.6초) — 이 랩이 뒤처진다.
+final _player = _positionedTrace('l1');
+final _reference = _positionedTrace('best', msPerSample: 90);
+
+Future<void> _pumpCharts(
+  WidgetTester tester, {
+  required LapTrace trace,
+  LapTrace? reference,
+  Size size = const Size(1000, 2400),
+}) async {
+  tester.view
+    ..physicalSize = size
+    ..devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: TelemetryCharts(
+            trace: trace,
+            reference: reference,
+            lapTimeMs: trace.timeMs.last,
+            referenceLapTimeMs: reference?.timeMs.last,
+            units: UnitSystem.metric,
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+String _textOf(WidgetTester tester, String key) => tester.widget<Text>(find.byKey(ValueKey(key))).data!;
+
+void main() {
+  group('재생 계산', () {
+    test('경과 시간 사이를 앞뒤 표본으로 보간한다(위치·거리·속도)', () {
+      final frame = LapReplay(_player).frameAt(150);
+
+      expect(frame.distanceM, closeTo(7.5, 1e-9));
+      expect(frame.x, closeTo(7.5, 1e-9));
+      expect(frame.z, 0);
+      expect(frame.speedKph, closeTo(201.5, 1e-9));
+      expect(frame.gear, 1);
+      expect(frame.finished, isFalse);
+    });
+
+    test('같은 시간이 이어지는 표본도 0으로 나누지 않는다', () {
+      final trace = _positionedTrace('l1', count: 4);
+      final stalled = LapTrace(
+        lapId: 'l1',
+        resolutionM: 5,
+        timeMs: const [0, 100, 100, 300],
+        speedKph: trace.speedKph,
+        throttle: trace.throttle,
+        brake: trace.brake,
+        steer: trace.steer,
+        gear: trace.gear,
+        rpm: trace.rpm,
+        worldPosX: trace.worldPosX,
+        worldPosZ: trace.worldPosZ,
+      );
+      final replay = LapReplay(stalled);
+
+      expect(replay.samplePositionAt(100), 2);
+      expect(replay.samplePositionAt(200), closeTo(2.5, 1e-9));
+    });
+
+    test('랩을 끝낸 뒤에는 결승점에 멈춰 있고, 시작 전은 출발점', () {
+      final replay = LapReplay(_player);
+
+      final end = replay.frameAt(99999);
+      expect(end.distanceM, 200);
+      expect(end.x, 200);
+      expect(end.finished, isTrue);
+      expect(replay.frameAt(-50).distanceM, 0);
+    });
+
+    test('진행 방향: +X로 달리면 0, +Z로 달리면 90°', () {
+      expect(LapReplay(_player).frameAt(1000).heading, closeTo(0, 1e-9));
+      final south = LapReplay(_positionedTrace('l1', positionAt: (i) => (0, i * 5.0)));
+      expect(south.frameAt(1000).heading, closeTo(math.pi / 2, 1e-9));
+    });
+
+    test('진행 방향은 앞뒤 몇 m를 보아 표본마다의 흔들림을 누른다', () {
+      // 표본마다 옆으로 ±0.4m 흔들리며 +X로 달린다 — 이웃 표본만 보면 ±4.6°, 앞뒤 8m를 보면 거의 0.
+      final zigzag = LapReplay(_positionedTrace('l1', positionAt: (i) => (i * 5.0, i.isEven ? 0.4 : -0.4)));
+
+      for (final t in [1000.0, 1050.0, 1500.0, 2230.0]) {
+        expect(zigzag.frameAt(t).heading.abs(), lessThan(0.06));
+      }
+    });
+
+    test('재생 시계 끝 = 두 랩 중 늦게 끝나는 쪽', () {
+      expect(replayDurationMs(LapReplay(_player), LapReplay(_reference)), 4000);
+      expect(replayDurationMs(LapReplay(_reference), null), 3600);
+    });
+
+    test('시간 차 = 이 랩 시간 − 같은 거리의 비교 랩 시간: 음수면 앞선다, 거리가 없으면 null', () {
+      expect(replayGapMs(_player, _reference, 50), closeTo(100, 1e-9));
+      expect(replayGapMs(_reference, _player, 50), closeTo(-100, 1e-9));
+      expect(replayGapMs(_player, _positionedTrace('short', count: 3), 50), isNull);
+    });
+
+    test('시간 차 글자', () {
+      expect(formatReplayGap(-214), '-0.214');
+      expect(formatReplayGap(381.4), '+0.381');
+      expect(formatReplayGap(0.2), '0.000');
+    });
+  });
+
+  group('차 색', () {
+    test('팀 색 글자가 맞으면 그 색, 아니면 팀 이름의 색, 둘 다 없으면 대체색', () {
+      expect(
+        replayCarColor(
+          const LapTeam(name: 'Ferrari', color: '#E8002D'),
+          fallback: AppColors.accent,
+        ),
+        const Color(0xFFE8002D),
+      );
+      expect(replayCarColor(const LapTeam(name: 'McLaren'), fallback: AppColors.accent), AppColors.teamMcLaren);
+      expect(
+        replayCarColor(
+          const LapTeam(name: 'Mystery', color: 'red'),
+          fallback: AppColors.comparisonLap,
+        ),
+        AppColors.comparisonLap,
+      );
+      expect(replayCarColor(null, fallback: AppColors.accent), AppColors.accent);
+    });
+  });
+
+  test('추격 카메라 그림은 예외 없이 그려진다(고스트 있음·없음, 빈 크기)', () {
+    final player = LapReplay(_player);
+    final time = ValueNotifier<double>(1234);
+    addTearDown(time.dispose);
+    for (final ghost in [LapReplay(_reference), null]) {
+      final painter = GhostReplayPainter(
+        player: player,
+        ghost: ghost,
+        road: replayRoadPath(player),
+        time: time,
+        playerColor: AppColors.teamFerrari,
+        ghostColor: AppColors.comparisonLap,
+      );
+      for (final size in const [Size(600, 360), Size.zero]) {
+        final recorder = ui.PictureRecorder();
+        painter.paint(Canvas(recorder), size);
+        recorder.endRecording().dispose();
+      }
+    }
+  });
+
+  group('고스트 재생 카드', () {
+    testWidgets('이 랩에 위치가 없으면 카드가 없다', (t) async {
+      await _pumpCharts(t, trace: _withoutPositions(_player), reference: _reference);
+
+      expect(find.byKey(const ValueKey('ghost-replay')), findsNothing);
+    });
+
+    testWidgets('고스트(비교 랩 HUD·시간 차)는 비교 랩에 위치가 있을 때만', (t) async {
+      await _pumpCharts(t, trace: _player, reference: _withoutPositions(_reference));
+      expect(find.byKey(const ValueKey('ghost-replay')), findsOneWidget);
+      expect(find.byKey(const ValueKey('ghost-replay-ghost-hud')), findsNothing);
+      expect(find.byKey(const ValueKey('ghost-replay-gap')), findsNothing);
+
+      await _pumpCharts(t, trace: _player, reference: _reference);
+      expect(find.byKey(const ValueKey('ghost-replay-ghost-hud')), findsOneWidget);
+      expect(_textOf(t, 'ghost-replay-gap'), '0.000');
+    });
+
+    testWidgets('재생하면 시간이 흐르고 그래프 십자선이 따라오며, 일시정지하면 멈춘다', (t) async {
+      await _pumpCharts(t, trace: _player, reference: _reference);
+
+      await t.tap(find.byKey(const ValueKey('ghost-replay-play')));
+      await t.pump();
+      await t.pump(const Duration(seconds: 1));
+
+      expect(_textOf(t, 'ghost-replay-elapsed'), '0:01.000');
+      expect(_textOf(t, 'telemetry-cursor-distance'), '50 m');
+      expect(_textOf(t, 'ghost-replay-gap'), '+0.100');
+
+      await t.tap(find.byKey(const ValueKey('ghost-replay-play')));
+      await t.pump();
+      final paused = _textOf(t, 'ghost-replay-elapsed');
+      await t.pump(const Duration(seconds: 1));
+      expect(_textOf(t, 'ghost-replay-elapsed'), paused);
+    });
+
+    testWidgets('배속 2×면 1초에 2초가 흐르고, 끝나면 랩 끝에서 멈춘다', (t) async {
+      await _pumpCharts(t, trace: _player, reference: _reference);
+
+      await t.tap(find.byKey(const ValueKey('ghost-replay-speed-2.0')));
+      await t.tap(find.byKey(const ValueKey('ghost-replay-play')));
+      await t.pump();
+      await t.pump(const Duration(milliseconds: 500));
+      expect(_textOf(t, 'ghost-replay-elapsed'), '0:01.000');
+
+      await t.pump(const Duration(seconds: 5));
+      expect(_textOf(t, 'ghost-replay-elapsed'), '0:04.000');
+      expect(_textOf(t, 'telemetry-cursor-distance'), '200 m');
+      expect(find.byIcon(Icons.play_arrow), findsOneWidget);
+    });
+
+    testWidgets('시간 막대를 옮기면 그 시간으로 가고, 처음부터를 누르면 0', (t) async {
+      await _pumpCharts(t, trace: _player, reference: _reference);
+
+      t.widget<Slider>(find.byKey(const ValueKey('ghost-replay-scrub'))).onChanged!(2500);
+      await t.pump();
+      expect(_textOf(t, 'ghost-replay-elapsed'), '0:02.500');
+      expect(_textOf(t, 'telemetry-cursor-distance'), '125 m');
+
+      await t.tap(find.byKey(const ValueKey('ghost-replay-restart')));
+      await t.pump();
+      expect(_textOf(t, 'ghost-replay-elapsed'), '0:00.000');
+    });
+
+    testWidgets('375px 폭에서도 HUD·조작 줄이 넘치지 않는다', (t) async {
+      await _pumpCharts(t, trace: _player, reference: _reference, size: const Size(375, 2400));
+
+      expect(find.byKey(const ValueKey('ghost-replay-ghost-hud')), findsOneWidget);
+      expect(t.takeException(), isNull);
+    });
+  });
+}

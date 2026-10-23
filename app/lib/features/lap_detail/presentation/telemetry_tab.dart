@@ -19,6 +19,7 @@ import '../domain/lap_compare.dart';
 import '../domain/lap_detail_models.dart';
 import '../domain/telemetry_channels.dart';
 import '../domain/telemetry_math.dart';
+import 'ghost_replay.dart';
 import 'lap_time_cards.dart';
 import 'telemetry_chart.dart';
 import 'track_map.dart';
@@ -98,6 +99,8 @@ class TelemetryTab extends ConsumerWidget {
               referenceLabel: comparison == null ? _bestLapLabel : referenceLegendLabel(comparison),
               units: units,
               sectors: lap.sectors,
+              playerTeam: lap.team,
+              referenceTeam: comparison?.team,
             ),
     );
   }
@@ -121,6 +124,8 @@ class TelemetryCharts extends StatefulWidget {
     required this.units,
     this.referenceLabel = _bestLapLabel,
     this.sectors = const [],
+    this.playerTeam,
+    this.referenceTeam,
   });
 
   final LapTrace trace;
@@ -136,6 +141,10 @@ class TelemetryCharts extends StatefulWidget {
 
   /// 이 랩의 섹터 시간 — 트랙 지도의 섹터 색 경계를 정한다. 비어 있으면 한 색.
   final List<LapSector> sectors;
+
+  /// 고스트 재생 차 색을 정하는 이 랩·비교 랩의 팀. 없으면 강조색·청록.
+  final LapTeam? playerTeam;
+  final LapTeam? referenceTeam;
 
   @override
   State<TelemetryCharts> createState() => _TelemetryChartsState();
@@ -204,6 +213,27 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
         ),
       ),
     );
+    // 고스트 재생(이 랩에 위치가 있을 때만) → 그래프 카드.
+    Widget mainColumn(double replayHeight) => !trace.hasPositions
+        ? chartsCard
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              GhostReplay(
+                trace: trace,
+                reference: reference,
+                cursor: _cursor,
+                units: widget.units,
+                height: replayHeight,
+                thisLapLabel: _thisLapLabel,
+                referenceLabel: widget.referenceLabel,
+                playerTeam: widget.playerTeam,
+                referenceTeam: widget.referenceTeam,
+              ),
+              const SizedBox(height: _panelGap),
+              chartsCard,
+            ],
+          );
     // 트랙 지도(같은 십자선 거리에 점) + Lap Telemetry 통계.
     final panel = LapTelemetryPanel(trace: trace, sectors: widget.sectors, cursor: _cursor, units: widget.units);
     return LayoutBuilder(
@@ -213,13 +243,13 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
               key: const ValueKey('telemetry-wide-layout'),
               asideWidth: kTelemetryAsideWidth,
               gap: _panelGap,
-              main: chartsCard,
+              main: mainColumn(kGhostReplayWideHeight),
               pinned: KeyedSubtree(key: const ValueKey('telemetry-aside'), child: panel),
             )
           // 좁은 화면: 위에서부터 지도·통계 → 그래프. 지도가 화면 위로 지나가면 오른쪽 아래에 작은 지도.
           : _NarrowTelemetryLayout(
               panel: panel,
-              charts: chartsCard,
+              charts: mainColumn(kGhostReplayNarrowHeight),
               trace: trace,
               sectors: widget.sectors,
               cursor: _cursor,

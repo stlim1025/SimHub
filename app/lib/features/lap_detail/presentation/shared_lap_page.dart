@@ -298,6 +298,7 @@ class _SharedTelemetry extends ConsumerWidget {
               referenceLapTimeMs: null,
               units: units,
               sectors: lap.sectors,
+              playerTeam: lap.team,
             ),
     );
   }

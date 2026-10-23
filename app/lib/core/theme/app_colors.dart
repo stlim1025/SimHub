@@ -109,4 +109,17 @@ class AppColors {
   /// 트랙 지도 위치 점: 검은 고리 + 흰 가운데(두 테마 공통).
   static const Color trackDotRing = Color(0xFF000000);
   static const Color trackDotCenter = Color(0xFFFFFFFF);
+
+  /// 고스트 재생 화면(두 테마 공통, 늘 어두운 서킷): 바깥 잔디·런오프, 아스팔트, 흰 가장자리 선.
+  static const Color replayGrass = Color(0xFF16231B);
+  static const Color replayAsphalt = Color(0xFF3A3D45);
+  static const Color replayRoadEdge = Color(0xFFF3F4F6);
+
+  /// 고스트 재생 차 그림의 바퀴·조종석·서스펜션(팀 색 몸체 위에서 또렷하게).
+  static const Color replayCarDark = Color(0xFF0B0D12);
+
+  /// 고스트 재생 화면 위 HUD 바탕(어두운 반투명)과 글자.
+  static const Color replayHudBackground = Color(0xB30B0D12);
+  static const Color replayHudText = Color(0xFFF3F4F6);
+  static const Color replayHudMuted = Color(0xFFB4BAC6);
 }
