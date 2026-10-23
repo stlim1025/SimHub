@@ -22,7 +22,20 @@ typedef ReplayFrame = ({
   int throttle,
   int brake,
   bool finished,
+  double? batteryPercent,
+  double? deployKw,
 });
+
+/// ERS 배터리 최대 저장량(J, 4 MJ).
+const double kErsStoreMaxJ = 4000000;
+
+/// MGU-K 최대 배포 출력(kW). 배포 막대의 100%.
+const double kErsMaxDeployKw = 120;
+
+/// 배포 출력을 구할 때 앞뒤로 보는 표본 수(표본 하나의 흔들림을 줄인다).
+const int _deployWindowSamples = 2;
+
+const double _percent = 100;
 
 /// 위치가 있는 랩 트레이스를 시간으로 따라가는 재생기(순수 계산). [trace]는 `hasPositions`여야 한다.
 /// 표본은 거리 간격이고 표본마다 랩 시간이 있으므로(거리에 따라 단조 증가) 시간 → 거리를 이분 탐색으로 찾고 앞뒤 표본을 선형 보간한다.
@@ -95,7 +108,22 @@ class LapReplay {
       throttle: _lerpAt(trace.throttle, position).round(),
       brake: _lerpAt(trace.brake, position).round(),
       finished: elapsedMs >= durationMs,
+      batteryPercent: trace.hasErs ? (_lerpAt(trace.ersStoreJ, position) / kErsStoreMaxJ * _percent).clamp(0.0, _percent) : null,
+      deployKw: trace.hasErs ? _deployKwAt(lower) : null,
     );
+  }
+
+  /// 표본 [index] 앞뒤 [_deployWindowSamples]칸의 누적 배포량 변화 ÷ 시간 = 배포 출력(J/ms = kW). 0 ~ [kErsMaxDeployKw]로 자른다.
+  double _deployKwAt(int index) {
+    final last = trace.length - 1;
+    final from = math.max(0, index - _deployWindowSamples);
+    final to = math.min(last, index + _deployWindowSamples);
+    final dt = trace.timeMs[to] - trace.timeMs[from];
+    if (dt <= 0) {
+      return 0;
+    }
+    final dE = trace.ersDeployedJ[to] - trace.ersDeployedJ[from];
+    return (dE / dt).clamp(0.0, kErsMaxDeployKw);
   }
 
   static double _lerpAt(List<num> values, double position) {

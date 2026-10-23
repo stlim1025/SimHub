@@ -122,4 +122,8 @@ class AppColors {
   static const Color replayHudBackground = Color(0xB30B0D12);
   static const Color replayHudText = Color(0xFFF3F4F6);
   static const Color replayHudMuted = Color(0xFFB4BAC6);
+
+  /// 고스트 재생 HUD의 ERS 배터리 잔량 막대(노랑)·배포 출력 막대(파랑).
+  static const Color replayBattery = Color(0xFFFACC15);
+  static const Color replayDeploy = Color(0xFF60A5FA);
 }

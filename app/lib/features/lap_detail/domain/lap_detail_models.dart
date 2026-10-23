@@ -337,6 +337,10 @@ class LapDetail {
 const String kWorldPosXChannel = 'worldPosX';
 const String kWorldPosZChannel = 'worldPosZ';
 
+/// extra 채널: ERS 배터리 잔량(J)·이번 랩 누적 배포량(J).
+const String kErsStoreChannel = 'ersStoreEnergy';
+const String kErsDeployedChannel = 'ersDeployedThisLap';
+
 /// 1랩 텔레메트리 트레이스(docs/15 §3.3·§4.2, D-45). 표본 i의 랩 거리 = i × [resolutionM].
 /// 채널 길이가 다르면 가장 짧은 길이로 자르고, 빠진 채널이 있으면 빈 트레이스로 본다.
 /// 월드 위치([worldPosX]·[worldPosZ])는 extra 채널에서 읽고, 없거나 길이가 7채널과 다르면 둘 다 빈 목록이다(트랙 모양을 그리지 않는다).
@@ -353,6 +357,8 @@ class LapTrace {
     required this.rpm,
     this.worldPosX = const [],
     this.worldPosZ = const [],
+    this.ersStoreJ = const [],
+    this.ersDeployedJ = const [],
   });
 
   final String lapId;
@@ -385,6 +391,13 @@ class LapTrace {
 
   /// 표본마다 월드 위치가 있는지(트랙 모양을 그릴 수 있는지).
   bool get hasPositions => length > 0 && worldPosX.length == length && worldPosZ.length == length;
+
+  /// ERS 배터리 잔량(J)·이번 랩 누적 배포량(J) — extra 채널, 없거나 길이가 다르면 빈 목록.
+  final List<double> ersStoreJ;
+  final List<double> ersDeployedJ;
+
+  /// ERS 두 채널이 모두 있는지(고스트 재생 HUD의 배터리 표시).
+  bool get hasErs => length > 0 && ersStoreJ.length == length && ersDeployedJ.length == length;
 
   bool get isEmpty => length == 0;
 
@@ -421,6 +434,8 @@ class LapTrace {
       rpm: channel(6),
       worldPosX: hasBoth ? posX : const [],
       worldPosZ: hasBoth ? posZ : const [],
+      ersStoreJ: _positionChannel(extra?[kErsStoreChannel], length),
+      ersDeployedJ: _positionChannel(extra?[kErsDeployedChannel], length),
     );
   }
 

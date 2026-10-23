@@ -160,6 +160,65 @@ void main() {
     });
   });
 
+  group('ERS 배터리', () {
+    // 표본 100ms마다 배터리 4MJ → 표본당 −20kJ, 누적 배포 표본당 +10kJ(= 100 kW).
+    LapTrace withErs() {
+      final base = _player;
+      return LapTrace(
+        lapId: base.lapId,
+        resolutionM: base.resolutionM,
+        timeMs: base.timeMs,
+        speedKph: base.speedKph,
+        throttle: base.throttle,
+        brake: base.brake,
+        steer: base.steer,
+        gear: base.gear,
+        rpm: base.rpm,
+        worldPosX: base.worldPosX,
+        worldPosZ: base.worldPosZ,
+        ersStoreJ: [for (var i = 0; i < base.length; i++) 4000000.0 - i * 20000],
+        ersDeployedJ: [for (var i = 0; i < base.length; i++) i * 10000.0],
+      );
+    }
+
+    test('배터리 잔량(%)과 배포 출력(kW)을 계산한다', () {
+      final frame = LapReplay(withErs()).frameAt(1000); // 표본 10
+      expect(frame.batteryPercent, closeTo(95, 0.01)); // 3.8 MJ / 4 MJ
+      expect(frame.deployKw, closeTo(100, 0.01));
+    });
+
+    test('ERS 채널이 없으면 null', () {
+      final frame = LapReplay(_player).frameAt(1000);
+      expect(frame.batteryPercent, isNull);
+      expect(frame.deployKw, isNull);
+    });
+
+    test('트레이스 JSON의 extra ERS 채널을 읽는다(길이가 다르면 버린다)', () {
+      Map<String, dynamic> json(List<num> store) => {
+        'lapId': 'x',
+        'resolutionM': 5,
+        'timeMs': [0, 100],
+        'speedKph': [1, 2],
+        'throttle': [0, 0],
+        'brake': [0, 0],
+        'steer': [0, 0],
+        'gear': [1, 1],
+        'rpm': [1, 1],
+        'extra': {'ersStoreEnergy': store, 'ersDeployedThisLap': [0, 10]},
+      };
+      expect(LapTrace.fromJson(json([4000000, 3990000])).hasErs, isTrue);
+      expect(LapTrace.fromJson(json([4000000])).hasErs, isFalse);
+    });
+
+    testWidgets('ERS가 있으면 HUD에 배터리 %와 배포 막대가 보인다', (t) async {
+      await _pumpCharts(t, trace: withErs());
+
+      expect(find.byKey(const ValueKey('ghost-replay-player-hud-battery')), findsOneWidget);
+      expect(find.byKey(const ValueKey('ghost-replay-player-hud-deploy')), findsOneWidget);
+      expect(_textOf(t, 'ghost-replay-player-hud-battery-text'), '100%');
+    });
+  });
+
   group('섹터 비교', () {
     const mine = [LapSector(sectorNumber: 2, sectorTimeMs: 30000), LapSector(sectorNumber: 1, sectorTimeMs: 20000)];
     const theirs = [LapSector(sectorNumber: 1, sectorTimeMs: 21000), LapSector(sectorNumber: 2, sectorTimeMs: 29000)];

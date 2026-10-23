@@ -424,8 +424,39 @@ class _Hud extends StatelessWidget {
         _PedalBar(key: ValueKey('$keyName-throttle'), percent: frame.throttle, color: AppColors.success),
         const SizedBox(width: _pedalGap),
         _PedalBar(key: ValueKey('$keyName-brake'), percent: frame.brake, color: AppColors.danger),
+        ..._ersReadout(keyName, frame),
       ],
     );
+  }
+
+  /// ERS: 배터리 잔량(노랑 막대 + %)·지금 배포 출력(파랑 막대, 최대 120 kW = 가득). 트레이스에 ERS가 없으면 비운다.
+  List<Widget> _ersReadout(String keyName, ReplayFrame frame) {
+    final battery = frame.batteryPercent;
+    final deploy = frame.deployKw;
+    if (battery == null || deploy == null) {
+      return const [];
+    }
+    return [
+      const SizedBox(width: _hudDotGap),
+      const Icon(Icons.battery_charging_full, size: _ersIconSize, color: AppColors.replayBattery),
+      _PedalBar(key: ValueKey('$keyName-battery'), percent: battery.round(), color: AppColors.replayBattery),
+      const SizedBox(width: _pedalGap),
+      SizedBox(
+        width: _ersPercentWidth,
+        child: Text(
+          '${battery.round()}%',
+          key: ValueKey('$keyName-battery-text'),
+          textAlign: TextAlign.end,
+          style: const TextStyle(color: AppColors.replayHudText, fontFeatures: _tabular),
+        ),
+      ),
+      const SizedBox(width: _pedalGap),
+      _PedalBar(
+        key: ValueKey('$keyName-deploy'),
+        percent: (deploy / kErsMaxDeployKw * _pedalMaxPercent).round(),
+        color: AppColors.replayDeploy,
+      ),
+    ];
   }
 
   /// 섹터 비교 표: `S1  이 랩  비교 랩  차이`. 아직 지나지 않은 칸은 `–`, 차이는 빠르면 초록 `-`, 느리면 빨강 `+`.
@@ -477,6 +508,8 @@ const double _pedalBarWidth = 36;
 const double _pedalBarHeight = 6;
 const double _pedalGap = 4;
 const double _pedalMaxPercent = 100;
+const double _ersIconSize = 14;
+const double _ersPercentWidth = 34;
 const String _notYet = '–';
 const EdgeInsets _sectorCellPadding = EdgeInsets.only(right: 10, top: 1, bottom: 1);
 
