@@ -12,6 +12,9 @@ namespace SimCenter.Agent.Core.Analysis;
 /// <param name="Gear">−1 = R, 0 = N, 1~8.</param>
 /// <param name="TyreCompound">보이는 타이어 컴파운드(게임 원시 값, 0 = 모름).</param>
 /// <param name="Y">월드 높이(m).</param>
+/// <param name="Steer">조향(−100~100, 왼쪽 −).</param>
+/// <param name="Rpm">엔진 RPM.</param>
+/// <param name="ErsStoreKj">ERS 배터리 잔량(kJ).</param>
 /// <param name="Flags2">표시 비트 2(<see cref="TrackSampleEncoder.DrsFlag"/>·<see cref="TrackSampleEncoder.OvertookFlag"/>·<see cref="TrackSampleEncoder.OvertakenFlag"/>).</param>
 public readonly record struct TrackSample(
     byte CarIndex,
@@ -30,18 +33,21 @@ public readonly record struct TrackSample(
     byte TyreCompound = 0,
     byte TyreAgeLaps = 0,
     byte Flags2 = 0,
-    float Y = 0);
+    float Y = 0,
+    sbyte Steer = 0,
+    ushort Rpm = 0,
+    ushort ErsStoreKj = 0);
 
 /// <summary>한 순간(게임 프레임)의 표본 묶음.</summary>
 public sealed record TrackSampleFrame(int SessionTimeMs, IReadOnlyList<TrackSample> Samples);
 
 /// <summary>
-/// 트랙 형상·레이스 리플레이 표본 <c>format 4</c> 인코더(<c>shared/schema/track_samples_chunk.json</c>): 프레임·표본을 열 단위로 모은 little-endian 바이트를 gzip한다.
-/// 같은 종류의 값끼리 모아 압축이 잘 되게 한다. format 1 열 뒤에 G-force·속도·손상(format 2), 기어·페달·타이어·표시2(format 3), 높이(format 4) 열이 붙는다.
+/// 트랙 형상·레이스 리플레이 표본 <c>format 5</c> 인코더(<c>shared/schema/track_samples_chunk.json</c>): 프레임·표본을 열 단위로 모은 little-endian 바이트를 gzip한다.
+/// 같은 종류의 값끼리 모아 압축이 잘 되게 한다. format 1 열 뒤에 G-force·속도·손상(format 2), 기어·페달·타이어·표시2(format 3), 높이(format 4), 조향·RPM·ERS 잔량(format 5) 열이 붙는다.
 /// </summary>
 public static class TrackSampleEncoder
 {
-    public const int Format = 4;
+    public const int Format = 5;
 
     /// <summary>차 대 차 충돌이 있었던 차의 표본(상태 bit5).</summary>
     public const byte CollisionFlag = 0x20;
@@ -64,10 +70,10 @@ public static class TrackSampleEncoder
 
     /// <summary>
     /// 프레임 1개의 바이트(세션 시간 4 + 차 수 1)·표본 1개의 바이트
-    /// (차 1 + 랩 거리 2 + X 4 + Z 4 + 노면 2 + 상태 1 + 횡 G 1 + 종 G 1 + 속도 2 + 손상 1 + 기어 1 + 스로틀 1 + 브레이크 1 + 타이어 1 + 타이어 랩 1 + 표시2 1 + 높이 4).
+    /// (차 1 + 랩 거리 2 + X 4 + Z 4 + 노면 2 + 상태 1 + 횡 G 1 + 종 G 1 + 속도 2 + 손상 1 + 기어 1 + 스로틀 1 + 브레이크 1 + 타이어 1 + 타이어 랩 1 + 표시2 1 + 높이 4 + 조향 1 + RPM 2 + ERS 2).
     /// </summary>
     public const int FrameBytes = 5;
-    public const int SampleBytes = 29;
+    public const int SampleBytes = 34;
 
     private const int HeaderBytes = 4;
 
@@ -184,6 +190,23 @@ public static class TrackSampleEncoder
         {
             BinaryPrimitives.WriteInt32LittleEndian(span[offset..], ToInt32(s.Y / PositionUnitM));
             offset += sizeof(int);
+        }
+
+        foreach (var s in samples)
+        {
+            span[offset++] = (byte)s.Steer;
+        }
+
+        foreach (var s in samples)
+        {
+            BinaryPrimitives.WriteUInt16LittleEndian(span[offset..], s.Rpm);
+            offset += sizeof(ushort);
+        }
+
+        foreach (var s in samples)
+        {
+            BinaryPrimitives.WriteUInt16LittleEndian(span[offset..], s.ErsStoreKj);
+            offset += sizeof(ushort);
         }
 
         using var output = new MemoryStream();

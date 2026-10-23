@@ -36,6 +36,8 @@ public readonly record struct FieldLapState(float LapDistanceM, bool IsOnTrack, 
 /// <param name="Gears">−1 = R, 0 = N, 1~8.</param>
 /// <param name="Throttles">스로틀(%).</param>
 /// <param name="Brakes">브레이크(%).</param>
+/// <param name="Steers">조향(−100~100, 왼쪽 −).</param>
+/// <param name="Rpms">엔진 RPM.</param>
 public sealed record FieldSurfacesFrame(
     string SessionRef,
     uint FrameId,
@@ -44,13 +46,18 @@ public sealed record FieldSurfacesFrame(
     IReadOnlyList<sbyte>? Gears = null,
     IReadOnlyList<byte>? Throttles = null,
     IReadOnlyList<byte>? Brakes = null,
-    IReadOnlyList<bool>? DrsOpen = null) : ITelemetryFrame;
+    IReadOnlyList<bool>? DrsOpen = null,
+    IReadOnlyList<sbyte>? Steers = null,
+    IReadOnlyList<ushort>? Rpms = null) : ITelemetryFrame;
 
-/// <summary>모든 차의 타이어(F1 Car Status): 보이는 컴파운드(게임 원시 값)와 사용 랩 수. 칸 번호 = 차 번호, 최신 값을 쓴다.</summary>
+/// <summary>
+/// 모든 차의 타이어·ERS(F1 Car Status): 보이는 컴파운드(게임 원시 값)·사용 랩 수·ERS 배터리 잔량(kJ). 칸 번호 = 차 번호, 최신 값을 쓴다.
+/// </summary>
 public sealed record FieldStatusFrame(
     string SessionRef,
     IReadOnlyList<byte> TyreCompounds,
-    IReadOnlyList<byte> TyreAgeLaps) : ITelemetryFrame;
+    IReadOnlyList<byte> TyreAgeLaps,
+    IReadOnlyList<ushort>? ErsStoreKj = null) : ITelemetryFrame;
 
 /// <summary>추월(F1 Event OVTK): 추월한 차와 당한 차 번호.</summary>
 public sealed record FieldOvertakeFrame(string SessionRef, int Overtaker, int Overtaken) : ITelemetryFrame;

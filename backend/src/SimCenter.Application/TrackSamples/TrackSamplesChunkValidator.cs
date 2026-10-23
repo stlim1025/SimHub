@@ -6,8 +6,8 @@ namespace SimCenter.Application.TrackSamples;
 /// <summary><c>TrackSamplesChunk</c> payload 검증. 실패는 영구 무효(Reject)다.</summary>
 public static class TrackSamplesChunkValidator
 {
-    /// <summary>지원하는 표본 배치 버전(1: 위치·랩 거리·노면, 2: + G-force·속도·손상·충격 표시, 3: + 기어·페달·DRS·타이어·추월, 4: + 높이).</summary>
-    public static readonly IReadOnlyList<int> SupportedFormats = [1, 2, 3, 4];
+    /// <summary>지원하는 표본 배치 버전(1: 위치·랩 거리·노면, 2: + G-force·속도·손상·충격 표시, 3: + 기어·페달·DRS·타이어·추월, 4: + 높이, 5: + 조향·RPM·ERS 잔량).</summary>
+    public static readonly IReadOnlyList<int> SupportedFormats = [1, 2, 3, 4, 5];
 
     /// <summary>gzip 본문 최대 크기(바이트). 봉투 한도(768KiB) 안에 base64로 들어가는 크기.</summary>
     public const int MaxPayloadBytes = 576 * 1024;

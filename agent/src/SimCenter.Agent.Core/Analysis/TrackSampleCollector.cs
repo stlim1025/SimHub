@@ -179,7 +179,10 @@ public sealed class TrackSampleCollector : ITelemetryAnalyzer
                 At(_status?.TyreCompounds, car),
                 At(_status?.TyreAgeLaps, car),
                 (byte)(drs | overtakeFlags),
-                position.Y));
+                position.Y,
+                At(surfaces.Steers, car),
+                At(surfaces.Rpms, car),
+                At(_status?.ErsStoreKj, car)));
         }
 
         if (isBase)

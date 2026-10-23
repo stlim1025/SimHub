@@ -23,8 +23,11 @@ public sealed partial class F1PacketMapper
     private const int PitStatusMask = 0x3;
     private const int PitStatusShift = 3;
 
-    /// <summary>페달 값(0~1) → %.</summary>
+    /// <summary>페달 값(0~1)·조향(−1~1) → %.</summary>
     private const float PercentScale = 100f;
+
+    /// <summary>ERS 배터리 잔량 J → kJ.</summary>
+    private const float JoulesPerKilojoule = 1000f;
 
     private static FieldPositionsFrame MapFieldPositions(MotionDataPacket packet)
     {
@@ -69,6 +72,8 @@ public sealed partial class F1PacketMapper
         var throttles = new byte[cars.Length];
         var brakes = new byte[cars.Length];
         var drs = new bool[cars.Length];
+        var steers = new sbyte[cars.Length];
+        var rpms = new ushort[cars.Length];
         for (var i = 0; i < cars.Length; i++)
         {
             var car = cars[i];
@@ -78,10 +83,21 @@ public sealed partial class F1PacketMapper
             throttles[i] = ToPercent(car.Throttle);
             brakes[i] = ToPercent(car.Brake);
             drs[i] = car.IsDrsOn;
+            steers[i] = ToSignedPercent(car.Steer);
+            rpms[i] = car.EngineRPM;
         }
 
         return new FieldSurfacesFrame(
-            packet.Header.SessionUID.ToString(), packet.Header.FrameIdentifier, surfaces, speeds, gears, throttles, brakes, drs);
+            packet.Header.SessionUID.ToString(),
+            packet.Header.FrameIdentifier,
+            surfaces,
+            speeds,
+            gears,
+            throttles,
+            brakes,
+            drs,
+            steers,
+            rpms);
     }
 
     private static FieldStatusFrame MapFieldStatus(CarStatusDataPacket packet)
@@ -89,17 +105,23 @@ public sealed partial class F1PacketMapper
         var cars = packet.CarStatusData.AsReadOnlySpan();
         var compounds = new byte[cars.Length];
         var ages = new byte[cars.Length];
+        var ers = new ushort[cars.Length];
         for (var i = 0; i < cars.Length; i++)
         {
             compounds[i] = (byte)cars[i].VisualTyreCompound;
             ages[i] = cars[i].TyresAgeLaps;
+            var kj = cars[i].ErsStoreEnergy / JoulesPerKilojoule;
+            ers[i] = float.IsFinite(kj) ? (ushort)Math.Clamp(MathF.Round(kj), ushort.MinValue, ushort.MaxValue) : (ushort)0;
         }
 
-        return new FieldStatusFrame(packet.Header.SessionUID.ToString(), compounds, ages);
+        return new FieldStatusFrame(packet.Header.SessionUID.ToString(), compounds, ages, ers);
     }
 
     private static byte ToPercent(float pedal)
         => float.IsFinite(pedal) ? (byte)Math.Clamp(MathF.Round(pedal * PercentScale), 0, PercentScale) : (byte)0;
+
+    private static sbyte ToSignedPercent(float steer)
+        => float.IsFinite(steer) ? (sbyte)Math.Clamp(MathF.Round(steer * PercentScale), -PercentScale, PercentScale) : (sbyte)0;
 
     /// <summary>차체 손상: 날개(좌·우·뒤)·플로어·디퓨저·사이드포드 손상률(%) 가운데 가장 큰 값. 타이어·엔진 마모는 넣지 않는다(충격과 무관하게 늘어난다).</summary>
     private static FieldDamageFrame MapFieldDamage(CarDamageDataPacket packet)

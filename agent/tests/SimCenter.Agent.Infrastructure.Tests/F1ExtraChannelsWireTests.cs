@@ -35,7 +35,9 @@ public class F1ExtraChannelsWireTests
     {
         var datagram = Datagram(F1Enums.PacketType.CarTelemetry, CarTelemetryPacketSize);
         var car = HeaderSize + (PlayerIndex * CarTelemetryCarSize);
+        WriteFloats(datagram, car + 6, -0.42f);                                     // m_steer
         datagram[car + 14] = 35;                                                    // m_clutch
+        WriteUInt16s(datagram, car + 16, 11_234);                                   // m_engineRPM
         datagram[car + 18] = 1;                                                     // m_drs
         datagram[car + 19] = 87;                                                    // m_revLightsPercent
         WriteUInt16s(datagram, car + 22, 501, 502, 503, 504);                       // m_brakesTemperature[RL, RR, FL, FR]
@@ -53,6 +55,8 @@ public class F1ExtraChannelsWireTests
         Assert.IsType<CarTelemetryFrame>(frames[1]);
         var surfaces = Assert.IsType<FieldSurfacesFrame>(frames[2]);         // 모든 차 노면: FL·FR·RL·RR 4비트씩
         Assert.Equal(4 | (7 << 4) | (0 << 8) | (1 << 12), surfaces.Surfaces[PlayerIndex]);
+        Assert.Equal(-42, surfaces.Steers![PlayerIndex]);                   // 모든 차 조향(%)·RPM(다른 차 비교용)
+        Assert.Equal(11_234, surfaces.Rpms![PlayerIndex]);
         Assert.Equal(35, extra["clutch"]);
         Assert.Equal(1, extra["drs"]);
         Assert.Equal(87, extra["revLightsPercent"]);
@@ -84,6 +88,7 @@ public class F1ExtraChannelsWireTests
 
         Assert.IsType<CarStatusFrame>(frames[0]);
         var extra = Assert.Single(frames.OfType<ExtraChannelsFrame>()).Channels;
+        Assert.Equal(3_457, Assert.Single(frames.OfType<FieldStatusFrame>()).ErsStoreKj![PlayerIndex]);   // 모든 차 ERS 잔량(kJ)
         Assert.Equal(new[] { 2d, 1d, 3d, 56d, 1d }, new[] { extra["tractionControl"], extra["antiLockBrakes"], extra["fuelMix"], extra["frontBrakeBias"], extra["pitLimiter"] });
         Assert.Equal(24.57, extra["fuelInTank"]);
         Assert.Equal(-0.25, extra["fuelRemainingLaps"]);
