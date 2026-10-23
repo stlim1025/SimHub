@@ -21,6 +21,11 @@ final lapTraceProvider = FutureProvider.autoDispose.family<LapTrace?, String>(
   (ref, lapId) => ref.watch(lapDetailRepositoryProvider).getLapTrace(lapId),
 );
 
+/// 같은 세션의 다른 차 베스트 랩 트레이스(모든 차 표본으로 복원). 없으면 null.
+final fieldLapTraceProvider = FutureProvider.autoDispose.family<LapTrace?, ({String sessionId, int carIndex})>(
+  (ref, key) => ref.watch(lapDetailRepositoryProvider).getFieldLapTrace(key.sessionId, key.carIndex),
+);
+
 /// 비교 랩 트레이스(남의 공개 랩 포함, D-51). 없거나 볼 수 없으면 null.
 final comparisonTraceProvider = FutureProvider.autoDispose.family<LapTrace?, String>(
   (ref, lapId) => ref.watch(lapDetailRepositoryProvider).getComparisonTrace(lapId),

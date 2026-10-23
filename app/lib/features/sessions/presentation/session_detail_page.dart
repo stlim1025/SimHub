@@ -10,6 +10,8 @@ import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/page_loading_bar.dart';
 import '../../../core/widgets/not_found_state.dart';
 import '../../../core/widgets/track_flag.dart';
+import '../../lap_detail/domain/lap_compare.dart';
+import '../../lap_detail/domain/lap_detail_display.dart';
 import '../../seasons/domain/season_display.dart';
 import '../application/sessions_providers.dart';
 import '../domain/session_detail_display.dart';
@@ -135,9 +137,25 @@ class _SessionCards extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final details = SessionDetailsCard(detail: detail);
+    // 모든 차 표본이 있고 내 최고 랩이 있으면, 순위표의 다른 차(최고 랩 기록이 있는)와 내 최고 랩을 비교할 수 있다.
+    final myBestLapId = detail.myBestLap?.lapId;
     final classification = FinalClassificationCard(
       results: detail.results,
       isRace: detail.header.sessionType == 'Race',
+      onCompare: !detail.header.hasFieldSamples || myBestLapId == null
+          ? null
+          : (row) => context.go(lapDetailLocation(
+                myBestLapId,
+                tab: kLapTabTelemetry,
+                compare: LapCompareSelection.car(
+                  sessionId: detail.header.sessionId,
+                  carIndex: row.carIndex,
+                  name: row.name,
+                  lapTimeMs: row.bestLapTimeMs,
+                  teamColor: row.teamColor,
+                ),
+              )),
+      canCompare: (row) => !row.isPlayer && row.bestLapTimeMs != null,
     );
     final laps = SessionLapsCard(laps: detail.laps);
     final engine = EngineWearCard(wear: detail.engineWear);

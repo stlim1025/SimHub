@@ -17,7 +17,7 @@ class LapDetailRepository {
   /// 내 랩 상세. [compare] = 비교 대상 선택(D-51, 기본값은 쿼리 없음). 남의 랩이거나 없으면 404 [ApiException](D-34와 같다).
   Future<LapDetail> getLapDetail(String lapId, {LapCompareSelection compare = LapCompareSelection.defaults}) async {
     try {
-      final query = compare.toQuery();
+      final query = compare.toApiQuery();
       final res = await _dio.get<Map<String, dynamic>>(
         _lapPath(lapId),
         queryParameters: query.isEmpty ? null : query,
@@ -33,6 +33,11 @@ class LapDetailRepository {
 
   /// 비교 랩 트레이스(`GET /laps/{lapId}/trace`, D-51). 내 랩이거나 남의 랭킹 적격 랩만 — 그 밖·트레이스 없음(404)은 null.
   Future<LapTrace?> getComparisonTrace(String lapId) => _traceOrNull('/laps/${Uri.encodeComponent(lapId)}/trace');
+
+  /// 같은 세션의 다른 차 베스트 랩을 모든 차 표본으로 복원한 트레이스(`GET /me/sessions/{id}/cars/{carIndex}/best-lap-trace`).
+  /// 표본이 없거나 복원할 랩이 없으면(404) null.
+  Future<LapTrace?> getFieldLapTrace(String sessionId, int carIndex) =>
+      _traceOrNull('/me/sessions/${Uri.encodeComponent(sessionId)}/cars/$carIndex/best-lap-trace');
 
   Future<LapTrace?> _traceOrNull(String path) async {
     try {

@@ -24,6 +24,7 @@ import '../domain/lap_detail_display.dart';
 import '../domain/lap_detail_models.dart';
 import '../domain/telemetry_channels.dart';
 import '../domain/telemetry_math.dart';
+import 'compare_controls.dart';
 import 'ghost_replay.dart';
 import 'lap_time_cards.dart';
 import 'telemetry_chart.dart';
@@ -77,13 +78,19 @@ class TelemetryTab extends ConsumerWidget {
     if (!lap.hasTrace) {
       return const EmptyLapsCard(message: _noTraceText);
     }
-    final comparison = compare.kind == LapCompareKind.none ? null : detail.comparison;
+    final otherCar = compare.kind == LapCompareKind.car && compare.compareSessionId != null && compare.compareCar != null;
+    final comparison = compare.kind == LapCompareKind.none || otherCar ? null : detail.comparison;
     final comparisonId = comparison != null && comparison.hasTrace && comparison.lapId != lap.lapId
         ? comparison.lapId
         : null;
     final trace = ref.watch(lapTraceProvider(lap.lapId));
     // 비교 랩 트레이스는 공개 규칙을 지키는 경로(`/laps/{id}/trace`)로 읽는다 — 남의 공개 랩도 여기로 온다(D-51).
-    final reference = comparisonId == null ? null : ref.watch(comparisonTraceProvider(comparisonId));
+    // 같은 세션의 다른 차는 모든 차 표본으로 복원한 트레이스를 읽는다.
+    final reference = otherCar
+        ? ref.watch(fieldLapTraceProvider((sessionId: compare.compareSessionId!, carIndex: compare.compareCar!)))
+        : (comparisonId == null ? null : ref.watch(comparisonTraceProvider(comparisonId)));
+    final otherCarName = (compare.compareName ?? '').isEmpty ? kCompareKindLabels[LapCompareKind.car]! : compare.compareName!;
+    final otherCarColor = compare.compareTeamColor;
     final units = ref.watch(authControllerProvider).valueOrNull?.preferences.units ?? UnitSystem.metric;
 
     // 비교 랩 트레이스가 아직 오는 중이면 기다린다. 실패하면 이 랩만 그린다.
@@ -103,13 +110,17 @@ class TelemetryTab extends ConsumerWidget {
               trace: data,
               reference: reference?.valueOrNull,
               lapTimeMs: lap.lapTimeMs,
-              referenceLapTimeMs: comparison?.lapTimeMs,
-              referenceLabel: comparison == null ? _bestLapLabel : referenceLegendLabel(comparison),
+              referenceLapTimeMs: otherCar ? compare.compareTimeMs : comparison?.lapTimeMs,
+              referenceLabel: otherCar
+                  ? otherCarName
+                  : (comparison == null ? _bestLapLabel : referenceLegendLabel(comparison)),
               units: units,
               sectors: lap.sectors,
               referenceSectors: comparison?.sectors ?? const [],
               playerTeam: lap.team,
-              referenceTeam: comparison?.team,
+              referenceTeam: otherCar
+                  ? (otherCarColor == null ? null : LapTeam(name: otherCarName, color: otherCarColor))
+                  : comparison?.team,
               playerTyreCompound: visualCompoundName(detail.car?.visualTyreCompound),
               realTrack: ref.watch(trackWidthsProvider).valueOrNull?[lap.trackName],
               trackSamples: ref.watch(trackGeometryProvider((trackId: detail.trackId, gameCode: lap.gameCode))).valueOrNull,

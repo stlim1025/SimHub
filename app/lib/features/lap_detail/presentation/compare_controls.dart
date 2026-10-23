@@ -25,6 +25,7 @@ const Map<LapCompareKind, String> kCompareKindLabels = {
   LapCompareKind.leaderboard: 'Leaderboard best lap',
   LapCompareKind.lap: 'Another lap ID',
   LapCompareKind.none: "Don't compare lap",
+  LapCompareKind.car: 'Another car',
 };
 
 /// 필터 → 메뉴 글자.
@@ -86,10 +87,16 @@ class CompareControls extends StatelessWidget {
           tooltip: 'Compare with',
           onSelected: (kind) => _pickKind(context, kind),
           itemBuilder: (_) => [
+            // 다른 차 비교는 세션 순위표에서 고른다(메뉴에는 없다).
             for (final kind in LapCompareKind.values)
-              CheckMenuItem<LapCompareKind>(value: kind, checked: kind == selection.kind, label: compareButtonText(kind)),
+              if (kind != LapCompareKind.car)
+                CheckMenuItem<LapCompareKind>(value: kind, checked: kind == selection.kind, label: compareButtonText(kind)),
           ],
-          child: _MenuButtonFace(text: compareButtonText(selection.kind)),
+          child: _MenuButtonFace(
+            text: selection.kind == LapCompareKind.car && (selection.compareName ?? '').isNotEmpty
+                ? '$_comparePrefix${selection.compareName}'
+                : compareButtonText(selection.kind),
+          ),
         ),
         if (filtersEnabled) filterMenu else Tooltip(message: _filtersDisabledTooltip, child: filterMenu),
       ],

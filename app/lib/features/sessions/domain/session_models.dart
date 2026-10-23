@@ -131,6 +131,7 @@ class SessionDetailHeader extends SessionSummary {
     required this.isNetworkGame,
     required this.round,
     this.weather,
+    this.hasFieldSamples = false,
   });
 
   final int totalLaps;
@@ -142,6 +143,9 @@ class SessionDetailHeader extends SessionSummary {
 
   /// 세션 날씨(`Clear`·`LightRain` …, docs/15 §11.4). 모르면 null.
   final String? weather;
+
+  /// 이 세션의 모든 차 표본이 있는지(다른 차 베스트 랩을 복원해 내 랩과 비교할 수 있다).
+  final bool hasFieldSamples;
 
   factory SessionDetailHeader.fromJson(Map<String, dynamic> json) {
     final summary = SessionSummary.fromJson(json);
@@ -168,6 +172,7 @@ class SessionDetailHeader extends SessionSummary {
       isNetworkGame: json['isNetworkGame'] as bool,
       round: json['round'] as int?,
       weather: jsonString(json['weather']),
+      hasFieldSamples: json['hasFieldSamples'] == true,
     );
   }
 }

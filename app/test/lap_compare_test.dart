@@ -7,6 +7,31 @@ import 'package:simcenter_app/features/lap_detail/presentation/lap_info_card.dar
 /// 비교 대상 선택·필터·어시스트(docs/15 §10, D-51)의 순수 로직.
 void main() {
   group('LapCompareSelection 주소 쿼리', () {
+    test('다른 차(car): 세션·차 번호·이름·랩타임·팀 색이 주소를 오가고, API에는 비교 없음으로 보낸다', () {
+      const sessionId = '0192f0aa-4444-7000-8000-000000000004';
+      const selection = LapCompareSelection.car(
+        sessionId: sessionId,
+        carIndex: 4,
+        name: 'VERSTAPPEN',
+        lapTimeMs: 71157,
+        teamColor: '#3671C6',
+      );
+
+      final query = selection.toQuery();
+      expect(query, {
+        'compare': 'car',
+        'compareSession': sessionId,
+        'compareCar': '4',
+        'compareName': 'VERSTAPPEN',
+        'compareTimeMs': '71157',
+        'compareTeamColor': '#3671C6',
+      });
+      expect(LapCompareSelection.fromQuery(query), selection);
+      expect(selection.toApiQuery(), {'compare': 'none'});
+      // 세션·차 번호가 없으면 기본으로.
+      expect(LapCompareSelection.fromQuery(const {'compare': 'car', 'compareCar': '4'}), LapCompareSelection.defaults);
+    });
+
     test('쿼리가 없으면 기본(내 최고 랩, 필터 없음)이고, 기본은 쿼리에 싣지 않는다', () {
       final selection = LapCompareSelection.fromQuery(const {});
 

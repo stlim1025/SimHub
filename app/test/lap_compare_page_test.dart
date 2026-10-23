@@ -26,10 +26,11 @@ LapDetail? _byCompare(String lapId, LapCompareSelection compare) => switch (comp
         ),
       LapCompareKind.none => sampleDetail(withComparison: false, unavailable: ComparisonUnavailable.noMatch),
       LapCompareKind.best => compare.filters.isEmpty ? sampleDetail() : sampleDetail(withComparison: false),
+      LapCompareKind.car => sampleDetail(withComparison: false),
     };
 
-FakeLapDetailRepository _repo({Map<String, LapTrace> traces = const {}}) =>
-    FakeLapDetailRepository(details: {'l1': sampleDetail()}, traces: traces, compared: _byCompare);
+FakeLapDetailRepository _repo({Map<String, LapTrace> traces = const {}, Map<String, LapTrace> fieldTraces = const {}}) =>
+    FakeLapDetailRepository(details: {'l1': sampleDetail()}, traces: traces, compared: _byCompare, fieldTraces: fieldTraces);
 
 Future<void> _openCompareMenu(WidgetTester t) async {
   await t.tap(find.byKey(const ValueKey('compare-with-menu')));
@@ -130,6 +131,34 @@ void main() {
       expect(repo.comparisonTraceRequests, ['r1']);
       expect(find.byKey(const ValueKey('telemetry-chart-delta')), findsOneWidget);
       expect(find.text('리더보드 랩 · $_leaderboardName 1:37.000'), findsOneWidget);
+    });
+  });
+
+  group('다른 차(세션 순위표의 비교 버튼)', () {
+    const session = '0192f0aa-4444-7000-8000-000000000004';
+    const location = '/laps/l1?tab=telemetry&compare=car&compareSession=$session&compareCar=4'
+        '&compareName=POLE&compareTimeMs=71157&compareTeamColor=%233671C6';
+
+    testWidgets('텔레메트리는 그 차의 복원 트레이스와 비교하고, 버튼에 이름을 보이며, 서버에는 비교 없음으로 묻는다', (t) async {
+      final repo = _repo(
+        traces: {'l1': traceOf('l1', count: 20)},
+        fieldTraces: {'$session/4': traceOf('pole', count: 20)},
+      );
+      await pumpLapDetail(t, detailRepo: repo, location: location);
+
+      expect(repo.fieldTraceRequests, ['$session/4']);
+      expect(repo.comparisonTraceRequests, isEmpty);
+      expect(repo.compareRequests.last.toApiQuery(), {'compare': 'none'});
+      expect(find.text('Compare with: POLE'), findsOneWidget);
+      expect(find.byKey(const ValueKey('telemetry-chart-delta')), findsOneWidget);
+      expect(find.text('POLE 1:11.157'), findsOneWidget);
+    });
+
+    testWidgets('메뉴에는 다른 차가 없다(순위표에서 고른다)', (t) async {
+      await pumpLapDetail(t, detailRepo: _repo(), location: '/laps/l1?tab=details');
+
+      await _openCompareMenu(t);
+      expect(find.text('Compare with: Another car'), findsNothing);
     });
   });
 

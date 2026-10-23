@@ -38,7 +38,9 @@ class LapDetailsTab extends StatelessWidget {
     // 왼쪽 위(랩 시간·비교)는 Car & Tyres와, 왼쪽 아래(랩 정보·보조)는 Damage와 한 줄씩 높이를 맞춘다.
     final leftTop = <Widget>[
       LapTimeCard(lap: detail.lap),
-      if (compare.kind != LapCompareKind.none) ComparisonCard(detail: detail, compare: compare),
+      // 다른 차 비교는 섹터를 모르니 Comparison 카드 없이 텔레메트리에서만 본다.
+      if (compare.kind != LapCompareKind.none && compare.kind != LapCompareKind.car)
+        ComparisonCard(detail: detail, compare: compare),
     ];
     final leftBottom = <Widget>[
       LapInfoCard(detail: detail),

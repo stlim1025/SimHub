@@ -290,11 +290,15 @@ MyTrack trackOf(String id, String name, {int lapCount = 3, int? bestMs = 83452, 
 /// [traces]에 없는 랩의 트레이스는 null(서버 404와 같다).
 class FakeLapDetailRepository implements LapDetailRepository {
   /// [compared]가 있으면 비교 선택마다 상세를 바꿔 돌려준다(없거나 null이면 [details]).
-  FakeLapDetailRepository({this.details = const {}, this.traces = const {}, this.compared});
+  FakeLapDetailRepository({this.details = const {}, this.traces = const {}, this.compared, this.fieldTraces = const {}});
 
   final Map<String, LapDetail> details;
   final Map<String, LapTrace> traces;
   final LapDetail? Function(String lapId, LapCompareSelection compare)? compared;
+
+  /// 다른 차 복원 트레이스(키 = `세션Id/차 번호`). 없으면 null(서버 404와 같다).
+  final Map<String, LapTrace> fieldTraces;
+  final fieldTraceRequests = <String>[];
   final detailRequests = <String>[];
   final compareRequests = <LapCompareSelection>[];
   final traceRequests = <String>[];
@@ -321,6 +325,12 @@ class FakeLapDetailRepository implements LapDetailRepository {
   Future<LapTrace?> getComparisonTrace(String lapId) async {
     comparisonTraceRequests.add(lapId);
     return traces[lapId];
+  }
+
+  @override
+  Future<LapTrace?> getFieldLapTrace(String sessionId, int carIndex) async {
+    fieldTraceRequests.add('$sessionId/$carIndex');
+    return fieldTraces['$sessionId/$carIndex'];
   }
 }
 
@@ -632,6 +642,7 @@ SessionDetail detailOf(
   EngineWear? engineWear,
   List<SessionTyreStint> tyreStints = const [],
   List<SessionPenalty> penalties = const [],
+  bool hasFieldSamples = false,
 }) =>
     SessionDetail(
       qualifyingPositions: qualifyingPositions,
@@ -642,6 +653,7 @@ SessionDetail detailOf(
       tyreStints: tyreStints,
       penalties: penalties,
       header: SessionDetailHeader(
+        hasFieldSamples: hasFieldSamples,
         countryCode: countryCode,
         myTeam: myTeam,
         seasonNumber: seasonNumber,

@@ -16,19 +16,35 @@ const double _positionWidth = 64;
 const double _changeWidth = 56;
 const double _pointsWidth = 52;
 const double _gapWidth = 96;
+const double _compareWidth = 40;
+const double _compareIconSize = 18;
+const String _compareTooltip = '내 최고 랩과 비교';
 
 /// 순위 변동: 서버 `positionChange`(레이스만). 옛 서버의 레이스면 그리드 − 순위, 예선·연습은 없음(`-`).
 int? _changeOf(SessionResult row, {required bool isRace}) =>
     row.positionChange ?? (isRace && row.gridPosition > 0 ? row.gridPosition - row.position : null);
 
 /// Final Classification 카드(docs/15 §11.3): # · DRIVER(팀 점 + 이름, 나는 "You" + 강조 행) · POSITION · CHANGE · POINTS · GAP.
+/// [onCompare]가 있으면 끝에 비교 버튼 열을 두고, 그 차와 내 최고 랩을 비교하게 한다([canCompare]인 행만).
 class FinalClassificationCard extends StatelessWidget {
-  const FinalClassificationCard({super.key, required this.results, required this.isRace});
+  const FinalClassificationCard({
+    super.key,
+    required this.results,
+    required this.isRace,
+    this.onCompare,
+    this.canCompare,
+  });
 
   final List<SessionResult> results;
 
   /// 레이스면 GAP이 총 시간 차, 아니면 최고 랩 차.
   final bool isRace;
+
+  /// 비교 버튼을 누른 행. null이면 비교 열이 없다.
+  final ValueChanged<SessionResult>? onCompare;
+
+  /// 그 행에 비교 버튼을 보일지. null이면 모든 행.
+  final bool Function(SessionResult row)? canCompare;
 
   @override
   Widget build(BuildContext context) {
@@ -86,6 +102,22 @@ class FinalClassificationCard extends StatelessWidget {
               style: kTabularStyle,
             ),
           ),
+          if (onCompare case final compare?)
+            CompactColumn(
+              label: '',
+              width: _compareWidth,
+              alignment: Alignment.center,
+              cell: (row) => canCompare?.call(row) ?? true
+                  ? IconButton(
+                      key: ValueKey('classification-compare-${row.carIndex}'),
+                      tooltip: _compareTooltip,
+                      iconSize: _compareIconSize,
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.compare_arrows),
+                      onPressed: () => compare(row),
+                    )
+                  : const SizedBox.shrink(),
+            ),
         ],
       ),
     );

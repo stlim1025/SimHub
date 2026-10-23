@@ -336,6 +336,44 @@ void main() {
       expect(highlighted.color, AppColors.playerRow);
     });
 
+    testWidgets('모든 차 표본이 있으면 다른 차(최고 랩이 있는) 행의 비교 버튼으로 내 최고 랩을 그 차와 비교한다', (t) async {
+      final detail = detailOf(
+        'd1',
+        hasFieldSamples: true,
+        myBestLap: const SessionBestLap(lapId: 'lap-9', lapTimeMs: 72684),
+        results: [
+          resultOf(1, carIndex: 4, name: 'POLE', bestLapTimeMs: 71157, teamColor: '#3671C6'),
+          resultOf(2, carIndex: 9, name: 'ME', isPlayer: true, bestLapTimeMs: 72684),
+          resultOf(3, carIndex: 5, name: 'NOTIME'),
+        ],
+      );
+      final router = await _pumpPage(t, _repo(detail));
+
+      expect(find.byKey(const ValueKey('classification-compare-4')), findsOneWidget);
+      expect(find.byKey(const ValueKey('classification-compare-9')), findsNothing); // 나
+      expect(find.byKey(const ValueKey('classification-compare-5')), findsNothing); // 최고 랩 없음
+
+      await t.tap(find.byKey(const ValueKey('classification-compare-4')));
+      await t.pumpAndSettle();
+      final location = Uri.parse(_location(router));
+      expect(location.path, '/laps/lap-9');
+      expect(location.queryParameters, {
+        'tab': 'telemetry',
+        'compare': 'car',
+        'compareSession': 'd1',
+        'compareCar': '4',
+        'compareName': 'POLE',
+        'compareTimeMs': '71157',
+        'compareTeamColor': '#3671C6',
+      });
+    });
+
+    testWidgets('표본이 없는 세션에는 비교 버튼이 없다', (t) async {
+      await _pumpPage(t, _repo(_fullDetail()));
+
+      expect(find.byIcon(Icons.compare_arrows), findsNothing);
+    });
+
     testWidgets('결과가 없으면 안내 문구', (t) async {
       await _pumpPage(t, _repo(detailOf('d1')));
 
