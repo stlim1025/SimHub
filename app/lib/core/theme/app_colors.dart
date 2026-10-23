@@ -146,6 +146,9 @@ class AppColors {
   static const Color replayGrass3d = Color(0xFF3F7A3A);
   static const Color replayWall = Color(0xFFC9CDD4);
 
+  /// 고스트 재생 3D 시가지 서킷의 도로 밖 바닥(보도·건물 바닥 회색).
+  static const Color replayStreetGround = Color(0xFF55595F);
+
   /// 고스트 재생 3D 차: 타이어 고무·휠·헬멧(타이어 옆 띠는 컴파운드 색).
   static const Color replayCarTyre = Color(0xFF17181B);
   static const Color replayCarRim = Color(0xFF3B3F47);

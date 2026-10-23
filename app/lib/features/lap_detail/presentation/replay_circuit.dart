@@ -84,6 +84,7 @@ class ReplayCircuit {
     required this.rightWidths,
     required this.curvatures,
     required this.isMeasured,
+    required this.street,
     required this.closed,
     required this.leftPoints,
     required this.rightPoints,
@@ -113,6 +114,9 @@ class ReplayCircuit {
 
   /// 실측 서킷 폭을 썼는지(아니면 주행 기록으로 추정).
   final bool isMeasured;
+
+  /// 시가지 서킷인지(그래블 없이 도로 바로 옆에 방호벽).
+  final bool street;
 
   /// 중심선이 한 바퀴 닫혔는지(마지막 점 → 첫 점도 길).
   final bool closed;
@@ -146,12 +150,14 @@ class ReplayCircuit {
   /// 실측이 없고 [samples](모든 차 표본으로 만든 트랙 형상)가 있으면 그것으로 만든 도로를 실측처럼 쓴다.
   /// 높이·연석은 [samples]가 있으면 그것을 먼저 쓴다(내 랩 하나보다 여러 차·여러 랩이 고르다).
   /// [baseWidthM]은 실측이 없는 구간의 직선 도로 폭(트랙마다 다를 수 있다, 기본 [kCircuitBaseWidthM]).
+  /// [street](시가지 서킷)이면 코너 바깥 그래블을 깔지 않는다.
   factory ReplayCircuit.build(
     LapReplay player, {
     LapReplay? ghost,
     TrackWidthProfile? real,
     TrackSampleGeometry? samples,
     double baseWidthM = kCircuitBaseWidthM,
+    bool street = false,
   }) {
     final lines = [player.trace, if (ghost != null) ghost.trace];
     final playerLine = _positions(player.trace);
@@ -206,7 +212,9 @@ class ReplayCircuit {
             left: [for (var i = 0; i < n; i++) traceKerbs.left[i] || sampleKerbs.left[i]],
             right: [for (var i = 0; i < n; i++) traceKerbs.right[i] || sampleKerbs.right[i]],
           );
-    final gravelAt = _dropShortRuns([for (final k in curvatures) k.abs() >= kCircuitGravelCurvature], closed: closed);
+    final gravelAt = street
+        ? List.filled(n, false)
+        : _dropShortRuns([for (final k in curvatures) k.abs() >= kCircuitGravelCurvature], closed: closed);
 
     final asphalt = Path();
     final kerbRed = Path();
@@ -255,6 +263,7 @@ class ReplayCircuit {
       rightWidths: rightWidths,
       curvatures: curvatures,
       isMeasured: aligned != null,
+      street: street,
       closed: closed,
       leftPoints: left,
       rightPoints: right,

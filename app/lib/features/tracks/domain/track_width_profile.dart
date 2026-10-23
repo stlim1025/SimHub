@@ -13,8 +13,12 @@ class TrackWidthProfile {
 }
 
 /// 실측 데이터가 없는 트랙 가운데 기본 추정 폭(13m)과 크게 다른 곳의 직선 도로 폭(m).
-/// 모나코: 공개 자료의 대략값(가장 좁은 곳 약 8m, 넓은 곳 10~11m, 평균 약 10m) — 공식 수치는 아니다.
-const Map<String, double> kEstimatedTrackWidthsM = {'Monaco': 10};
+/// 모나코: 공개 자료의 대략값(가장 좁은 곳 약 8m, 넓은 곳 10~11m) — 공식 수치는 아니다. 시가지라 좁게 느껴지도록 9m로 둔다
+/// (차들이 넓게 달린 곳은 표본 형상이 그만큼 넓힌다).
+const Map<String, double> kEstimatedTrackWidthsM = {'Monaco': 9};
+
+/// 시가지 서킷(앱 트랙 이름): 그래블·잔디 런오프 없이 도로 바로 옆에 방호벽이 선다.
+const Set<String> kStreetCircuits = {'Monaco', 'Baku (Azerbaijan)', 'Singapore', 'Jeddah', 'Las Vegas'};
 
 /// asset JSON(`{"tracks": {"앱 트랙 이름": "데이터 이름"}, "data": {"데이터 이름": [[x, y, 오른쪽 폭, 왼쪽 폭], …]}}`)
 /// → 앱 트랙 이름별 실측 서킷. 형식이 틀린 항목은 건너뛴다.

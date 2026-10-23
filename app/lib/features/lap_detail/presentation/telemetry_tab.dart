@@ -114,6 +114,7 @@ class TelemetryTab extends ConsumerWidget {
               realTrack: ref.watch(trackWidthsProvider).valueOrNull?[lap.trackName],
               trackSamples: ref.watch(trackGeometryProvider((trackId: detail.trackId, gameCode: lap.gameCode))).valueOrNull,
               estimatedTrackWidthM: kEstimatedTrackWidthsM[lap.trackName],
+              streetCircuit: kStreetCircuits.contains(lap.trackName),
             ),
     );
   }
@@ -144,6 +145,7 @@ class TelemetryCharts extends StatefulWidget {
     this.realTrack,
     this.trackSamples,
     this.estimatedTrackWidthM,
+    this.streetCircuit = false,
   });
 
   final LapTrace trace;
@@ -178,6 +180,9 @@ class TelemetryCharts extends StatefulWidget {
 
   /// 실측이 없는 구간의 직선 도로 폭(m, 트랙별). null이면 기본값.
   final double? estimatedTrackWidthM;
+
+  /// 시가지 서킷인지(다시보기에 그래블 없이 벽을 도로 옆에).
+  final bool streetCircuit;
 
   @override
   State<TelemetryCharts> createState() => _TelemetryChartsState();
@@ -286,6 +291,7 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
                 realTrack: widget.realTrack,
                 trackSamples: widget.trackSamples,
                 estimatedTrackWidthM: widget.estimatedTrackWidthM,
+                streetCircuit: widget.streetCircuit,
               ),
               const SizedBox(height: _panelGap),
               chartsCard,

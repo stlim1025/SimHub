@@ -22,8 +22,11 @@ enum ReplayCamera {
 }
 
 /// 코너 바깥 연석·그래블 너머 방호벽까지의 런오프 폭(m)·방호벽 높이(m).
+/// 시가지 서킷은 연석 바로 바깥에 더 높은 벽(콘크리트 벽 + 펜스)이 선다.
 const double _runoffM = 3;
 const double _wallHeightM = 1;
+const double _streetRunoffM = 0.3;
+const double _streetWallHeightM = 1.6;
 
 /// 방호벽 위치(가장자리에서 m)를 고르는 범위(점 수): 앞뒤 가장 먼 값으로 넓힌 뒤 평균해 그래블 끝에서 들쭉날쭉하지 않게.
 const int _wallSmoothSamples = 4;
@@ -395,7 +398,9 @@ class ReplayTrack3d {
     List<double> smoothWall(List<bool> kerbs, int side) {
       final raw = [
         for (var i = 0; i < n; i++)
-          (kerbs[i] ? kCircuitKerbWidthM : 0) + (gravelSide[i] == side ? kCircuitGravelWidthM : 0) + _runoffM,
+          (kerbs[i] ? kCircuitKerbWidthM : 0) +
+          (gravelSide[i] == side ? kCircuitGravelWidthM : 0) +
+          (circuit.street ? _streetRunoffM : _runoffM),
       ];
       final widened = [
         for (var i = 0; i < n; i++)
@@ -696,7 +701,7 @@ class GhostReplay3dPainter extends CustomPainter {
 
   /// 잔디로 채운 뒤 지평선 위를 하늘 그라데이션으로 칠한다(카메라는 기울지 않아 지평선은 수평).
   void _paintSky(Canvas canvas, Size size, _View view) {
-    canvas.drawRect(Offset.zero & size, Paint()..color = AppColors.replayGrass3d);
+    canvas.drawRect(Offset.zero & size, Paint()..color = _groundColor);
     final direction = view.direction(view.horizontalForward);
     if (direction.z >= 0) {
       return;
@@ -740,6 +745,9 @@ class GhostReplay3dPainter extends CustomPainter {
       }
     }
   }
+
+  /// 도로 밖 바닥: 시가지 서킷은 회색(보도·건물 바닥), 그 밖은 잔디.
+  Color get _groundColor => track.circuit.street ? AppColors.replayStreetGround : AppColors.replayGrass3d;
 
   _V3 _point(int i, Offset p, [double lift = 0]) => _V3(p.dx, track.circuit.elevations[i] + lift, p.dy);
 
@@ -788,7 +796,7 @@ class GhostReplay3dPainter extends CustomPainter {
     final wallLj = lj + olj * track.wallLeftM[j];
     final wallRi = ri + ori * track.wallRightM[i];
     final wallRj = rj + orj * track.wallRightM[j];
-    face([_point(i, wallLi), _point(j, wallLj), _point(j, wallRj), _point(i, wallRi)], AppColors.replayGrass3d);
+    face([_point(i, wallLi), _point(j, wallLj), _point(j, wallRj), _point(i, wallRi)], _groundColor);
 
     final gravel = track.gravelSide[i];
     if (gravel != 0) {
@@ -857,7 +865,8 @@ class GhostReplay3dPainter extends CustomPainter {
       if (!standing) {
         continue;
       }
-      final polygon = [_point(i, bi), _point(j, bj), _point(j, bj, _wallHeightM), _point(i, bi, _wallHeightM)];
+      final height = track.circuit.street ? _streetWallHeightM : _wallHeightM;
+      final polygon = [_point(i, bi), _point(j, bj), _point(j, bj, height), _point(i, bi, height)];
       final projected = view.projectPolygon(polygon);
       if (projected == null) {
         continue;

@@ -336,6 +336,7 @@ class _SharedTelemetry extends ConsumerWidget {
                   .watch(trackGeometryProvider((trackId: shared.detail.trackId, gameCode: lap.gameCode)))
                   .valueOrNull,
               estimatedTrackWidthM: kEstimatedTrackWidthsM[lap.trackName],
+              streetCircuit: kStreetCircuits.contains(lap.trackName),
             ),
     );
   }

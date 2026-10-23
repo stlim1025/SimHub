@@ -68,6 +68,7 @@ class GhostReplay extends StatefulWidget {
     this.realTrack,
     this.trackSamples,
     this.estimatedTrackWidthM,
+    this.streetCircuit = false,
   });
 
   final LapTrace trace;
@@ -99,6 +100,9 @@ class GhostReplay extends StatefulWidget {
 
   /// 실측이 없는 구간의 직선 도로 폭(m). null이면 기본값.
   final double? estimatedTrackWidthM;
+
+  /// 시가지 서킷인지(그래블 없이 도로 바로 옆에 벽).
+  final bool streetCircuit;
 
   @override
   State<GhostReplay> createState() => _GhostReplayState();
@@ -148,13 +152,20 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
     _ghost = reference != null && reference.hasPositions ? LapReplay(reference) : null;
     final baseWidth = widget.estimatedTrackWidthM;
     _circuit = baseWidth == null
-        ? ReplayCircuit.build(_player, ghost: _ghost, real: widget.realTrack, samples: widget.trackSamples)
+        ? ReplayCircuit.build(
+            _player,
+            ghost: _ghost,
+            real: widget.realTrack,
+            samples: widget.trackSamples,
+            street: widget.streetCircuit,
+          )
         : ReplayCircuit.build(
             _player,
             ghost: _ghost,
             real: widget.realTrack,
             samples: widget.trackSamples,
             baseWidthM: baseWidth,
+            street: widget.streetCircuit,
           );
     _track3d = null;
   }
