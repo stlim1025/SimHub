@@ -342,6 +342,10 @@ void main() {
       expect(find.descendant(of: table, matching: find.text('0:00.800')), findsOneWidget);
       expect(find.descendant(of: table, matching: find.text('+0.100')), findsOneWidget);
       expect(find.descendant(of: table, matching: find.text('0:00.900')), findsNothing);
+      // 비교 랩 계기판: 비교 랩 S1 시간과 비교 랩 기준 차이.
+      final theirTable = find.byKey(const ValueKey('ghost-replay-ghost-sectors'));
+      expect(find.descendant(of: theirTable, matching: find.text('0:00.700')), findsOneWidget);
+      expect(find.descendant(of: theirTable, matching: find.text('-0.100')), findsOneWidget);
     });
 
     testWidgets('재생하면 시간이 흐르고 그래프 십자선이 따라오며, 일시정지하면 멈춘다', (t) async {

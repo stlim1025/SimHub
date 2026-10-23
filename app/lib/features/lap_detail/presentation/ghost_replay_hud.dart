@@ -75,7 +75,7 @@ const String _gearLabel = 'GEAR';
 /// 고스트 재생 계기판(게임 텔레메트리 화면처럼). 이 랩은 오른쪽, 비교 랩이 있으면 같은 계기판을 왼쪽에 둔다.
 /// - 위: 팀 색 띠·이름(이 랩은 타이어 컴파운드), 이 랩은 그 아래 경과 시간(초록)·비교 랩과의 시간 차.
 /// - 가운데 다이얼: 바깥 고리 속도(파랑, 눈금), 안쪽 고리 스로틀(초록, 넓게)·브레이크(빨강), 가운데 속도·RPM, 아래 기어.
-/// - ERS 배터리·충전/사용, 이 랩은 섹터 S1·S2·S3(지난 섹터는 시간·차이, 지금 섹터는 흰 밑줄).
+/// - ERS 배터리·충전/사용, 섹터 S1·S2·S3(지난 섹터는 그 랩 시간·상대 랩과의 차이, 지금 섹터는 흰 밑줄).
 class GhostReplayHud extends StatelessWidget {
   const GhostReplayHud({
     super.key,
@@ -330,9 +330,13 @@ class GhostReplayHud extends StatelessWidget {
               ],
             ),
           ],
-          if (isPlayer && sectors.isNotEmpty) ...[
+          if (sectors.isNotEmpty) ...[
             const SizedBox(height: 10),
-            _Sectors(key: const ValueKey('ghost-replay-sectors'), rows: sectors),
+            _Sectors(
+              key: ValueKey(isPlayer ? 'ghost-replay-sectors' : 'ghost-replay-ghost-sectors'),
+              rows: sectors,
+              isPlayer: isPlayer,
+            ),
           ],
         ],
       ),
@@ -379,15 +383,18 @@ class _TyreBadge extends StatelessWidget {
       );
 }
 
-/// 섹터 S1·S2·S3: 이름, 밑줄(지난 섹터는 차이 색, 지금 섹터는 흰색), 지난 섹터의 이 랩 시간과 비교 랩과의 차이.
+/// 섹터 S1·S2·S3: 이름, 밑줄(지난 섹터는 차이 색, 지금 섹터는 흰색), 지난 섹터의 그 랩 시간과 상대 랩과의 차이.
 class _Sectors extends StatelessWidget {
-  const _Sectors({super.key, required this.rows});
+  const _Sectors({super.key, required this.rows, required this.isPlayer});
 
   final List<ReplaySectorRow> rows;
 
+  /// 이 랩 계기판이면 이 랩 시간·(이 랩 − 비교 랩), 비교 랩 계기판이면 비교 랩 시간·(비교 랩 − 이 랩).
+  final bool isPlayer;
+
   @override
   Widget build(BuildContext context) {
-    final current = rows.indexWhere((r) => r.playerMs == null);
+    final current = rows.indexWhere((r) => (isPlayer ? r.playerMs : r.referenceMs) == null);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -400,8 +407,8 @@ class _Sectors extends StatelessWidget {
   }
 
   Widget _cell(ReplaySectorRow row, {required bool isCurrent}) {
-    final playerMs = row.playerMs;
-    final referenceMs = row.referenceMs;
+    final playerMs = isPlayer ? row.playerMs : row.referenceMs;
+    final referenceMs = isPlayer ? row.referenceMs : row.playerMs;
     final delta = playerMs != null && referenceMs != null ? (playerMs - referenceMs).toDouble() : null;
     final bar = isCurrent
         ? AppColors.replayHudText
