@@ -12,6 +12,7 @@ import 'package:simcenter_app/features/tracks/domain/track_overview_models.dart'
 import 'package:simcenter_app/features/tracks/presentation/track_overview_page.dart';
 import 'package:simcenter_app/features/tracks/presentation/tracks_page.dart';
 
+import 'support/lap_detail_harness.dart';
 import 'support/fakes.dart';
 import 'support/setups_fakes.dart';
 
@@ -170,6 +171,19 @@ void main() {
 
       expect(lapRepo.comparisonTraceRequests, ['l1']);
       expect(find.byKey(const ValueKey('track-overview-map')), findsOneWidget);
+    });
+
+    testWidgets('지도 랩의 섹터 시간이 있으면 랩 상세 지도처럼 섹터 범례를 보인다', (t) async {
+      final lapRepo = FakeLapDetailRepository(details: {'l1': sampleDetail()}, traces: {'l1': _positionedTrace});
+      await _pump(
+        t,
+        '/tracks/au',
+        tracksRepo: FakeTracksRepository(overviews: {'au': trackOverviewOf(mapLapId: 'l1')}),
+        lapRepo: lapRepo,
+      );
+
+      expect(lapRepo.detailRequests, contains('l1'));
+      expect(find.text('Sector 1'), findsOneWidget);
     });
 
     testWidgets('기록이 없으면 각 카드에 안내 문장', (t) async {

@@ -15,9 +15,11 @@ import '../../../core/widgets/section_card.dart';
 import '../../../core/widgets/stat.dart';
 import '../../../core/widgets/team_name_cell.dart';
 import '../../lap_detail/application/lap_detail_providers.dart';
+import '../../lap_detail/domain/lap_compare.dart';
 import '../../lap_detail/presentation/detail_list.dart';
 import '../../lap_detail/presentation/track_map.dart';
 import '../../laps/domain/lap_display.dart';
+import '../../laps/domain/lap_models.dart';
 import '../../profile/application/selected_game_provider.dart';
 import '../../sessions/presentation/session_widgets.dart';
 import '../../setups/domain/setups_display.dart';
@@ -406,7 +408,7 @@ class _TrackDetailsCard extends StatelessWidget {
   }
 }
 
-/// [lapId] 랩의 트레이스로 그린 트랙 지도(커서 없음, 섹터를 모르므로 한 색). 위치가 없거나 불러오지 못하면 아무것도 그리지 않는다.
+/// [lapId] 랩의 트레이스로 그린 트랙 지도(커서 없음, 랩 상세의 섹터 시간으로 섹터 색·범례). 위치가 없거나 불러오지 못하면 아무것도 그리지 않는다.
 /// 남의 Time Trial 랩도 볼 수 있게 비교 랩 트레이스([comparisonTraceProvider])를 쓴다.
 class _TrackOverviewMap extends ConsumerStatefulWidget {
   const _TrackOverviewMap({required this.lapId});
@@ -433,13 +435,15 @@ class _TrackOverviewMapState extends ConsumerState<_TrackOverviewMap> {
     if (trace == null || !trace.hasPositions) {
       return const SizedBox.shrink();
     }
+    // 지도 랩은 내 랩이라 랩 상세의 섹터 시간으로 랩 상세 지도처럼 섹터별 색을 칠한다(못 불러오면 한 색).
+    final sectors = ref.watch(lapDetailProvider(LapDetailKey(widget.lapId))).valueOrNull?.lap.sectors ?? const <LapSector>[];
     return Padding(
       padding: const EdgeInsets.only(top: _blockGap),
       child: TrackMap(
         trace: trace,
-        sectors: const [],
+        sectors: sectors,
         cursor: _noCursor,
-        showLegend: false,
+        showLegend: sectors.isNotEmpty,
         paintKey: const ValueKey('track-overview-map'),
       ),
     );
