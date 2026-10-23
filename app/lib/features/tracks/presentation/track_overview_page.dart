@@ -30,9 +30,7 @@ const String _errorMessage = '트랙 정보를 불러오지 못했다.';
 const String _notFoundMessage = '찾을 수 없는 트랙이다.';
 
 const String _setupsLinkTitle = 'Top Setups';
-const String _setupsLinkText = '이 트랙의 상위 10개 셋업이다.';
 const String _leaderboardLinkTitle = 'Leaderboard';
-const String _leaderboardLinkText = '이 트랙의 Time Trial 순위다.';
 const String _statsSuffix = 'stats';
 
 const String _statBestLap = 'My best lap';
@@ -62,7 +60,6 @@ const double _blockGap = 20;
 const double _headingGap = 12;
 const double _linkPadding = 20;
 const double _linkIconGap = 12;
-const double _linkTextGap = 2;
 const double _statsPadding = 24;
 const double _statsSpacing = 40;
 const double _statsRunSpacing = 20;
@@ -139,14 +136,12 @@ class _OverviewBody extends StatelessWidget {
         key: const ValueKey('track-link-setups'),
         icon: Icons.tune,
         title: _setupsLinkTitle,
-        text: _setupsLinkText,
         path: setupTrackLocation(track.trackId),
       ),
       _QuickLinkCard(
         key: const ValueKey('track-link-leaderboard'),
         icon: Icons.emoji_events_outlined,
         title: _leaderboardLinkTitle,
-        text: _leaderboardLinkText,
         path: leaderboardLocation(track.trackId),
       ),
     ];
@@ -194,13 +189,12 @@ class _Responsive extends StatelessWidget {
   }
 }
 
-/// 바로가기 카드: 아이콘 + 굵은 제목 + 흐린 설명. 누르면 [path]로 간다.
+/// 바로가기 카드: 아이콘 + 굵은 제목. 누르면 [path]로 간다.
 class _QuickLinkCard extends StatelessWidget {
-  const _QuickLinkCard({super.key, required this.icon, required this.title, required this.text, required this.path});
+  const _QuickLinkCard({super.key, required this.icon, required this.title, required this.path});
 
   final IconData icon;
   final String title;
-  final String text;
   final String path;
 
   @override
@@ -223,8 +217,6 @@ class _QuickLinkCard extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(title, style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: _linkTextGap),
-                    Text(text, style: textTheme.bodySmall?.copyWith(color: palette.textMuted)),
                   ],
                 ),
               ),

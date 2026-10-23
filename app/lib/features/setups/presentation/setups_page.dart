@@ -15,7 +15,6 @@ import 'page_heading.dart';
 import 'track_grid.dart';
 
 const String _setupsLabel = 'Setups';
-const String _introText = 'F1Laps에 올라온 트랙별 상위 10개 셋업을 모아 보여 준다. 트랙을 고르면 셋업 목록이 열린다.';
 const String _errorMessage = '트랙 목록을 불러오지 못했다.';
 const String _emptyMessage = '아직 가져온 셋업이 없다.';
 const double _headingGap = 20;
@@ -49,7 +48,6 @@ class SetupsPage extends ConsumerWidget {
         PageHeading(
           crumbs: [(label: gameYearLabelOf(gameCode), path: null), (label: _setupsLabel, path: null)],
           title: '${gameTitleOf(gameCode)} $_setupsLabel',
-          intro: _introText,
         ),
         const SizedBox(height: _headingGap),
         Align(

@@ -197,14 +197,10 @@ void main() {
       expect(find.text('100%'), findsOneWidget);
     });
 
-    testWidgets('View on F1Laps는 원본 주소를 연다', (t) async {
-      final opened = <String>[];
-      await _pump(t, FakeSetupsRepository(details: {'s1': setupDetailOf('s1')}), '/setups/au/s1', opened: opened);
+    testWidgets('원본 사이트로 가는 버튼은 두지 않는다', (t) async {
+      await _pump(t, FakeSetupsRepository(details: {'s1': setupDetailOf('s1')}), '/setups/au/s1');
 
-      await t.tap(find.text('View on F1Laps'));
-      await t.pump();
-
-      expect(opened, ['https://www.f1laps.com/f1-25/setups/australia/s1/']);
+      expect(find.text('View on F1Laps'), findsNothing);
     });
 
     testWidgets('없는 셋업이면 404 상태', (t) async {

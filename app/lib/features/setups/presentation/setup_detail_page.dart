@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 
 import '../../../core/layout/page_padding.dart';
 import '../../../core/network/api_exception.dart';
-import '../../../core/platform/download_launcher.dart';
 import '../../../core/util/lap_time.dart';
 import '../../../core/widgets/empty_state_card.dart';
 import '../../../core/widgets/error_retry.dart';
@@ -22,7 +21,6 @@ import 'page_heading.dart';
 
 const String _setupsLabel = 'Setups';
 const String _setupLabel = 'Setup';
-const String _viewOnSourceLabel = 'View on F1Laps';
 const String _errorMessage = '셋업을 불러오지 못했다.';
 const String _notFoundMessage = '찾을 수 없는 셋업이다.';
 const String _emptyMessage = '이 셋업에는 보여 줄 값이 없다.';
@@ -120,16 +118,6 @@ class _SetupDetailBody extends ConsumerWidget {
               value: Text(setOn == null ? kLapNoValueText : _dateFormat.format(setOn)),
             ),
           ],
-        ),
-        const SizedBox(height: _cardGap),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: OutlinedButton.icon(
-            key: const ValueKey('setup-source-link'),
-            onPressed: () => ref.read(downloadLauncherProvider)(detail.sourceUrl),
-            icon: const Icon(Icons.open_in_new),
-            label: const Text(_viewOnSourceLabel),
-          ),
         ),
         const SizedBox(height: _cardGap),
         if (detail.sections.isEmpty)

@@ -13,7 +13,6 @@ import '../../setups/presentation/page_heading.dart';
 import '../../setups/presentation/track_grid.dart';
 
 const String _tracksLabel = 'Tracks';
-const String _introText = '시즌 캘린더 순서의 모든 트랙이다. 트랙을 고르면 내 기록, Time Trial 상위 기록, 트랙 정보를 본다.';
 const String _errorMessage = '트랙 목록을 불러오지 못했다.';
 const String _emptyMessage = '아직 등록된 트랙이 없다.';
 const double _headingGap = 20;
@@ -33,7 +32,6 @@ class TracksPage extends ConsumerWidget {
         PageHeading(
           crumbs: [(label: gameYearLabelOf(gameCode), path: null), (label: _tracksLabel, path: null)],
           title: '${gameTitleOf(gameCode)} $_tracksLabel',
-          intro: _introText,
         ),
         const SizedBox(height: _headingGap),
         tracks.when(
