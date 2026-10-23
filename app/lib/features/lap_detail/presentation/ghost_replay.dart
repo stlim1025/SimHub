@@ -374,29 +374,174 @@ class _Hud extends StatelessWidget {
         ],
       ),
     );
-    return Padding(
-      padding: _hudInset,
-      child: LayoutBuilder(
-        // 넓으면 왼쪽 위 시간 · 오른쪽 위 두 차, 좁으면 왼쪽 위에 위아래로 쌓는다.
-        builder: (context, box) => box.maxWidth >= _hudSideBySideMinWidth
-            ? Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  timing,
-                  const SizedBox(width: _hudDotGap),
-                  Expanded(
-                    child: Align(alignment: Alignment.topRight, child: cars(CrossAxisAlignment.end)),
+    return LayoutBuilder(
+      builder: (context, box) {
+        // 넓으면 왼쪽 위 시간 · 오른쪽 위 두 차(한 줄씩). 좁으면 작은 글자로 같은 배치를 하되 차 정보는 세로로 접어
+        // 오른쪽 위 구석에 둔다(가운데 차를 가리지 않게).
+        if (box.maxWidth >= _hudSideBySideMinWidth) {
+          return Padding(
+            padding: _hudInset,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                timing,
+                const SizedBox(width: _hudDotGap),
+                Expanded(child: Align(alignment: Alignment.topRight, child: cars(CrossAxisAlignment.end))),
+              ],
+            ),
+          );
+        }
+        return Padding(
+          padding: _compactHudInset,
+          child: DefaultTextStyle.merge(
+            style: const TextStyle(fontSize: _compactFontSize),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 그래도 폭이 모자라면 넘치지 않게 통째로 줄인다.
+                Flexible(
+                  flex: _compactTimingFlex,
+                  child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.topLeft, child: _compactTiming()),
+                ),
+                const SizedBox(width: _hudDotGap),
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.topRight,
+                    child: _compactBox(
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _compactCar(const ValueKey('ghost-replay-player-hud'), playerColor, player),
+                          if (ghostFrame != null) ...[
+                            const SizedBox(height: _compactCarGap),
+                            _compactCar(const ValueKey('ghost-replay-ghost-hud'), ghostColor, ghostFrame),
+                          ],
+                        ],
+                      ),
+                    ),
                   ),
-                ],
-              )
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  timing,
-                  const SizedBox(height: _hudRowGap),
-                  cars(CrossAxisAlignment.start),
-                ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// 좁은 화면의 왼쪽 위: 경과 시간·시간 차·섹터 표(작은 글자).
+  Widget _compactTiming() {
+    final gap = gapMs;
+    return _compactBox(
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            formatLapTime(elapsedMs.round()),
+            key: const ValueKey('ghost-replay-elapsed'),
+            style: const TextStyle(
+              color: AppColors.replayHudText,
+              fontSize: _compactElapsedFontSize,
+              fontWeight: FontWeight.w700,
+              fontFeatures: _tabular,
+            ),
+          ),
+          if (gap != null)
+            Text(
+              formatReplayGap(gap),
+              key: const ValueKey('ghost-replay-gap'),
+              style: TextStyle(
+                color: gap < 0 ? AppColors.success : (gap > 0 ? AppColors.danger : AppColors.replayHudMuted),
+                fontSize: _compactGapFontSize,
+                fontWeight: FontWeight.w700,
+                fontFeatures: _tabular,
               ),
+            ),
+          if (sectors.isNotEmpty) ...[
+            const SizedBox(height: _hudRowGap),
+            _sectorTable(padding: _compactSectorCellPadding),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _compactBox(Widget child) => DecoratedBox(
+    decoration: BoxDecoration(color: AppColors.replayHudBackground, borderRadius: BorderRadius.circular(_hudRadius)),
+    child: Padding(padding: _compactHudPadding, child: child),
+  );
+
+  /// 좁은 화면의 차 하나: `● 속도 · 기어` / 스로틀·브레이크 막대 / 배터리 %·충전/사용 막대·kW. 색 점이 범례 색과 같다.
+  Widget _compactCar(Key key, Color color, ReplayFrame frame) {
+    final keyName = (key as ValueKey<String>).value;
+    final speed = units == UnitSystem.imperial ? kphToMph(frame.speedKph) : frame.speedKph;
+    final battery = frame.batteryPercent;
+    final flow = frame.ersFlowKw;
+    return Column(
+      key: key,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ChartDot(color: color),
+            const SizedBox(width: _hudDotGap),
+            Text(
+              '${TelemetryChannel.speed.format(speed, units)} · ${gearLabel(frame.gear)}',
+              style: const TextStyle(color: AppColors.replayHudText, fontWeight: FontWeight.w600, fontFeatures: _tabular),
+            ),
+          ],
+        ),
+        const SizedBox(height: _compactLineGap),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _PedalBar(key: ValueKey('$keyName-throttle'), percent: frame.throttle, color: AppColors.success, width: _compactBarWidth),
+            const SizedBox(width: _pedalGap),
+            _PedalBar(key: ValueKey('$keyName-brake'), percent: frame.brake, color: AppColors.danger, width: _compactBarWidth),
+          ],
+        ),
+        if (battery != null && flow != null) ...[
+          const SizedBox(height: _compactLineGap),
+          _ErsFlowBar(
+            key: ValueKey('$keyName-ers-flow'),
+            fraction: flow / kErsMaxFlowKw,
+            width: _compactBarWidth * 2 + _pedalGap,
+          ),
+          const SizedBox(height: _compactLineGap),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '${battery.round()}%',
+                key: ValueKey('$keyName-battery-text'),
+                style: const TextStyle(color: AppColors.replayBattery, fontFeatures: _tabular),
+              ),
+              const SizedBox(width: _hudDotGap),
+              _ersFlowText(keyName, flow),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// 충전/사용 출력 글자: `+150 kW`(초록) · `−200 kW`(파랑) · `0 kW`.
+  Widget _ersFlowText(String keyName, double flow) {
+    final flowKw = flow.round();
+    final charging = flowKw > 0;
+    return Text(
+      '${charging ? '+' : (flowKw < 0 ? '−' : '')}${flowKw.abs()} kW',
+      key: ValueKey('$keyName-ers-flow-text'),
+      textAlign: TextAlign.end,
+      style: TextStyle(
+        color: charging ? AppColors.success : (flowKw < 0 ? AppColors.replayDeploy : AppColors.replayHudMuted),
+        fontWeight: FontWeight.w600,
+        fontFeatures: _tabular,
       ),
     );
   }
@@ -445,8 +590,7 @@ class _Hud extends StatelessWidget {
     if (battery == null || flow == null) {
       return const [];
     }
-    final flowKw = flow.round();
-    final charging = flowKw > 0;
+    final charging = flow.round() > 0;
     return [
       const SizedBox(width: _hudDotGap),
       Icon(
@@ -468,24 +612,12 @@ class _Hud extends StatelessWidget {
       const SizedBox(width: _pedalGap),
       _ErsFlowBar(key: ValueKey('$keyName-ers-flow'), fraction: flow / kErsMaxFlowKw),
       const SizedBox(width: _pedalGap),
-      SizedBox(
-        width: _ersFlowTextWidth,
-        child: Text(
-          '${charging ? '+' : (flowKw < 0 ? '−' : '')}${flowKw.abs()} kW',
-          key: ValueKey('$keyName-ers-flow-text'),
-          textAlign: TextAlign.end,
-          style: TextStyle(
-            color: charging ? AppColors.success : (flowKw < 0 ? AppColors.replayDeploy : AppColors.replayHudMuted),
-            fontWeight: FontWeight.w600,
-            fontFeatures: _tabular,
-          ),
-        ),
-      ),
+      SizedBox(width: _ersFlowTextWidth, child: _ersFlowText(keyName, flow)),
     ];
   }
 
   /// 섹터 비교 표: `S1  이 랩  비교 랩  차이`. 아직 지나지 않은 칸은 `–`, 차이는 빠르면 초록 `-`, 느리면 빨강 `+`.
-  Widget _sectorTable() {
+  Widget _sectorTable({EdgeInsets padding = _sectorCellPadding}) {
     const muted = TextStyle(color: AppColors.replayHudMuted, fontFeatures: _tabular);
     const value = TextStyle(color: AppColors.replayHudText, fontWeight: FontWeight.w600, fontFeatures: _tabular);
     String time(int? ms) => ms == null ? _notYet : formatLapTime(ms);
@@ -496,18 +628,18 @@ class _Hud extends StatelessWidget {
         for (final row in sectors)
           TableRow(
             children: [
-              Padding(padding: _sectorCellPadding, child: Text('S${row.sector}', style: muted)),
-              Padding(padding: _sectorCellPadding, child: Text(time(row.playerMs), style: value, textAlign: TextAlign.end)),
+              Padding(padding: padding, child: Text('S${row.sector}', style: muted)),
+              Padding(padding: padding, child: Text(time(row.playerMs), style: value, textAlign: TextAlign.end)),
               if (ghost != null)
-                Padding(padding: _sectorCellPadding, child: Text(time(row.referenceMs), style: muted, textAlign: TextAlign.end)),
-              if (ghost != null) _sectorDelta(row),
+                Padding(padding: padding, child: Text(time(row.referenceMs), style: muted, textAlign: TextAlign.end)),
+              if (ghost != null) _sectorDelta(row, padding),
             ],
           ),
       ],
     );
   }
 
-  Widget _sectorDelta(ReplaySectorRow row) {
+  Widget _sectorDelta(ReplaySectorRow row, EdgeInsets padding) {
     final playerMs = row.playerMs;
     final referenceMs = row.referenceMs;
     if (playerMs == null || referenceMs == null) {
@@ -515,7 +647,7 @@ class _Hud extends StatelessWidget {
     }
     final delta = (playerMs - referenceMs).toDouble();
     return Padding(
-      padding: _sectorCellPadding,
+      padding: padding,
       child: Text(
         formatReplayGap(delta),
         textAlign: TextAlign.end,
@@ -536,14 +668,29 @@ const double _pedalMaxPercent = 100;
 const double _ersIconSize = 14;
 const double _ersPercentWidth = 34;
 const double _ersFlowTextWidth = 58;
+
+/// 좁은 화면 HUD: 글자 크기(기본·경과 시간·시간 차), 여백, 줄·차 사이 간격, 페달 막대 폭.
+const double _compactFontSize = 11;
+const double _compactElapsedFontSize = 15;
+const double _compactGapFontSize = 12;
+const EdgeInsets _compactHudInset = EdgeInsets.all(6);
+const EdgeInsets _compactHudPadding = EdgeInsets.symmetric(horizontal: 6, vertical: 4);
+const double _compactLineGap = 3;
+const double _compactCarGap = 6;
+const double _compactBarWidth = 26;
+const EdgeInsets _compactSectorCellPadding = EdgeInsets.only(right: 6, top: 1, bottom: 1);
+
+/// 좁은 화면에서 남는 폭을 시간·섹터 칸이 차 정보 칸보다 몇 배 더 가져갈지.
+const int _compactTimingFlex = 2;
 const String _notYet = '–';
 const EdgeInsets _sectorCellPadding = EdgeInsets.only(right: 10, top: 1, bottom: 1);
 
 /// ERS 충전/사용 막대: 가운데에서 오른쪽(초록)으로 차면 충전, 왼쪽(파랑)으로 차면 사용. [fraction]은 −1 ~ 1.
 class _ErsFlowBar extends StatelessWidget {
-  const _ErsFlowBar({super.key, required this.fraction});
+  const _ErsFlowBar({super.key, required this.fraction, this.width = _pedalBarWidth * 2});
 
   final double fraction;
+  final double width;
 
   @override
   Widget build(BuildContext context) {
@@ -552,7 +699,7 @@ class _ErsFlowBar extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(_pedalBarHeight / 2),
       child: Container(
-        width: _pedalBarWidth * 2,
+        width: width,
         height: _pedalBarHeight,
         color: AppColors.replayHudMuted.withValues(alpha: 0.3),
         child: Row(
@@ -587,17 +734,18 @@ class _ErsFlowBar extends StatelessWidget {
 
 /// 페달을 밟은 정도(0~100%) 막대: 어두운 바탕 위 색 채움.
 class _PedalBar extends StatelessWidget {
-  const _PedalBar({super.key, required this.percent, required this.color});
+  const _PedalBar({super.key, required this.percent, required this.color, this.width = _pedalBarWidth});
 
   final int percent;
   final Color color;
+  final double width;
 
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(_pedalBarHeight / 2),
       child: Container(
-        width: _pedalBarWidth,
+        width: width,
         height: _pedalBarHeight,
         color: AppColors.replayHudMuted.withValues(alpha: 0.3),
         alignment: Alignment.centerLeft,
