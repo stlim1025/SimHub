@@ -55,6 +55,7 @@ public static class DependencyInjection
         services.AddSingleton<SessionResultTracker>();
         services.AddSingleton<ITelemetryAnalyzer>(sp => sp.GetRequiredService<LapAnalyzer>());
         services.AddSingleton<ITelemetryAnalyzer>(sp => sp.GetRequiredService<SessionResultTracker>());
+        services.AddSingleton<ITelemetryAnalyzer, TrackSampleCollector>();
         services.AddSingleton<DomainEventFactory>();
 
         // P6: 계정 연결 시 발급된 장치 키는 Windows DPAPI로 암호화해 보관한다(Windows 전용).

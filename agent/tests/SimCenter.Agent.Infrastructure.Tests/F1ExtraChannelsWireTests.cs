@@ -48,9 +48,11 @@ public class F1ExtraChannelsWireTests
 
         var frames = Mapper.Map(datagram);
 
-        Assert.Equal(2, frames.Count);
+        Assert.Equal(3, frames.Count);
         var extra = Assert.IsType<ExtraChannelsFrame>(frames[0]).Channels;   // 같은 패킷의 값이 같은 칸에 찍히도록 먼저
         Assert.IsType<CarTelemetryFrame>(frames[1]);
+        var surfaces = Assert.IsType<FieldSurfacesFrame>(frames[2]);         // 모든 차 노면: FL·FR·RL·RR 4비트씩
+        Assert.Equal(4 | (7 << 4) | (0 << 8) | (1 << 12), surfaces.Surfaces[PlayerIndex]);
         Assert.Equal(35, extra["clutch"]);
         Assert.Equal(1, extra["drs"]);
         Assert.Equal(87, extra["revLightsPercent"]);
@@ -105,8 +107,13 @@ public class F1ExtraChannelsWireTests
         WriteFloats(datagram, car + 36, 3.456f, -4.2f, 1.01f);                           // G-force 횡·종·수직
         WriteFloats(datagram, car + 48, (float)Math.PI / 2, -0.1f, 0.05f);               // 요·피치·롤(rad)
 
-        var extra = Assert.IsType<ExtraChannelsFrame>(Assert.Single(Mapper.Map(datagram))).Channels;
+        var frames = Mapper.Map(datagram);
 
+        Assert.Equal(2, frames.Count);
+        var extra = Assert.IsType<ExtraChannelsFrame>(frames[0]).Channels;
+        var field = Assert.IsType<FieldPositionsFrame>(frames[1]);   // 모든 차 위치(트랙 형상 표본용)는 뒤에
+        Assert.Equal(-523.456f, field.Cars[PlayerIndex].X);
+        Assert.Equal(800.96f, field.Cars[PlayerIndex].Z);
         Assert.Equal(-523.5, extra["worldPosX"]);   // 위치는 소수 첫째 자리(10cm)
         Assert.Equal(12, extra["worldPosY"]);
         Assert.Equal(801, extra["worldPosZ"]);
@@ -122,11 +129,11 @@ public class F1ExtraChannelsWireTests
     }
 
     [Fact]
-    public void Motion_PlayerIndexBeyondSlots_IsDropped()
+    public void Motion_PlayerIndexBeyondSlots_KeepsOnlyFieldPositions()
     {
         var datagram = Datagram(F1Enums.PacketType.Motion, MotionPacketSize, playerIndex: byte.MaxValue);
 
-        Assert.Empty(Mapper.Map(datagram));
+        Assert.IsType<FieldPositionsFrame>(Assert.Single(Mapper.Map(datagram)));
     }
 
     [Fact]

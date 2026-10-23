@@ -154,7 +154,7 @@ public class F1DetailSectionsWireTests
     }
 
     [Fact]
-    public void LapData_DetailsAreLastFrame_WithPenaltiesAndGhostIndices()
+    public void LapData_DetailsFollowPlayerFrames_ThenFieldLapStates()
     {
         var datagram = Datagram(F1Enums.PacketType.LapData, 1285);
         var car = HeaderSize + (PlayerIndex * 57);
@@ -166,8 +166,9 @@ public class F1DetailSectionsWireTests
         var frames = Mapper.Map(datagram);
 
         Assert.IsType<LapFrame>(frames[0]);
-        var lapData = Assert.IsType<CarDetailsFrame>(frames[^1]).Values;
-        Assert.Equal(F1DetailSections.LapData, ((CarDetailsFrame)frames[^1]).Section);
+        Assert.IsType<FieldLapStatesFrame>(frames[^1]);   // 모든 차 랩 상태(트랙 형상 표본용)는 맨 뒤
+        var lapData = Assert.IsType<CarDetailsFrame>(frames[^2]).Values;
+        Assert.Equal(F1DetailSections.LapData, ((CarDetailsFrame)frames[^2]).Section);
         Assert.Equal(PlayerIndex, Convert.ToInt32(lapData["carIndex"]));
         Assert.Equal((byte)5, lapData["penaltiesS"]);
         Assert.Equal((byte)3, lapData["totalWarnings"]);

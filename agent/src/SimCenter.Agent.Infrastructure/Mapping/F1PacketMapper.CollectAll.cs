@@ -8,7 +8,7 @@ namespace SimCenter.Agent.Infrastructure.Mapping;
 /// <summary>
 /// "전부 수집"(D-49, docs/15 §8) 매핑: 패킷마다 기존 프레임에 더해 트레이스 extra 채널(<see cref="ExtraChannelsFrame"/>)·
 /// 상세 묶음(<see cref="CarDetailsFrame"/>)·게임 이벤트·세션 기록 프레임을 낸다. 같은 패킷 안 프레임 순서가 뜻을 가진다(각 메서드 주석).
-/// 다른 차의 Motion·Lobby Info(9)는 읽지 않는다(헌장 — 플레이어 차와 세션만).
+/// Lobby Info(9)는 읽지 않는다. 다른 차는 트랙 형상 표본용 위치·랩 상태·노면만 읽는다(헌장 Agent Rules 예외, <c>F1PacketMapper.Field.cs</c>).
 /// </summary>
 public sealed partial class F1PacketMapper
 {
@@ -18,7 +18,7 @@ public sealed partial class F1PacketMapper
         switch (packet.PacketType)
         {
             case F1Enums.PacketType.Motion when packet.TryGetMotionDataPacket(out var motion):
-                return MapPlayerCar(packet.PacketType, packet.Header, motion.CarMotionData.AsReadOnlySpan(), MapMotionFrames);
+                return [.. MapPlayerCar(packet.PacketType, packet.Header, motion.CarMotionData.AsReadOnlySpan(), MapMotionFrames), MapFieldPositions(motion)];
 
             case F1Enums.PacketType.MotionEx when packet.TryGetMotionExDataPacket(out var motionEx):
                 return [ExtraFrame(motionEx.Header, F1ExtraChannels.FromMotionEx(motionEx))];
@@ -55,11 +55,16 @@ public sealed partial class F1PacketMapper
         var cars = packet.CarTelemetryData.AsReadOnlySpan();
         if (!IsPlayerSlot(F1Enums.PacketType.CarTelemetry, packet.Header, cars.Length))
         {
-            return Empty;
+            return [MapFieldSurfaces(packet)];
         }
 
         var car = cars[packet.Header.PlayerCarIndex];
-        return [ExtraFrame(packet.Header, F1ExtraChannels.FromCarTelemetry(car, packet.SuggestedGear)), MapCarTelemetry(car, packet.Header)];
+        return
+        [
+            ExtraFrame(packet.Header, F1ExtraChannels.FromCarTelemetry(car, packet.SuggestedGear)),
+            MapCarTelemetry(car, packet.Header),
+            MapFieldSurfaces(packet),
+        ];
     }
 
     /// <summary>
@@ -70,7 +75,7 @@ public sealed partial class F1PacketMapper
         var laps = packet.LapData.AsReadOnlySpan();
         if (!IsPlayerSlot(F1Enums.PacketType.LapData, packet.Header, laps.Length))
         {
-            return Empty;
+            return [MapFieldLapStates(packet)];
         }
 
         var index = packet.Header.PlayerCarIndex;
@@ -80,6 +85,7 @@ public sealed partial class F1PacketMapper
             MapLap(lap, packet.Header),
             ExtraFrame(packet.Header, F1ExtraChannels.FromLapData(lap)),
             DetailsFrame(packet.Header, F1DetailSections.LapData, F1DetailSections.FromLapData(lap, index, packet)),
+            MapFieldLapStates(packet),
         ];
     }
 

@@ -109,3 +109,23 @@ public sealed record SessionClassified(
 {
     public override TelemetryEventType Type => TelemetryEventType.SessionClassified;
 }
+
+/// <summary>
+/// 트랙 형상 표본 조각(헌장 Agent Rules 예외). 오프라인 세션의 모든 차 위치·랩 거리·노면만 추린 표본을 <see cref="Format"/> 배치로 gzip해
+/// base64로 싣는다(<see cref="Data"/>). 세션 하나가 여러 조각이 되며 마지막 조각은 <see cref="IsLast"/>다. shared/schema/track_samples_chunk.json.
+/// </summary>
+public sealed record TrackSamplesChunk(
+    string SessionRef,
+    int TrackId,
+    SessionType SessionType,
+    int? TrackLengthM,
+    int Format,
+    int SampleRateHz,
+    int ChunkIndex,
+    bool IsLast,
+    int FrameCount,
+    int SampleCount,
+    string Data) : TelemetryEvent(SessionRef)
+{
+    public override TelemetryEventType Type => TelemetryEventType.TrackSamplesChunk;
+}

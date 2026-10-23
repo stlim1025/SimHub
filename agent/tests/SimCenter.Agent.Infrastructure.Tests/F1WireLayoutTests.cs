@@ -122,8 +122,9 @@ public class F1WireLayoutTests
         var lap = ReadFixture("lapdata.bin");
         lap[PlayerCarIndexOffset] = byte.MaxValue; // 관전 등으로 플레이어 차가 없을 때 게임이 보내는 값
 
-        Assert.Empty(sut.Map(lap));
-        Assert.Empty(sut.Map(lap));
+        // 플레이어 칸은 버리고 모든 차 랩 상태(트랙 형상 표본용)만 낸다.
+        Assert.IsType<FieldLapStatesFrame>(Assert.Single(sut.Map(lap)));
+        Assert.IsType<FieldLapStatesFrame>(Assert.Single(sut.Map(lap)));
 
         Assert.Single(Warnings(logger));
     }
@@ -226,10 +227,10 @@ public class F1WireLayoutTests
         var status = Datagram(F1Enums.PacketType.CarStatus, 1239, playerIndex: byte.MaxValue);
         var damage = Datagram(F1Enums.PacketType.CarDamage, 1041, playerIndex: byte.MaxValue);
 
-        Assert.Empty(sut.Map(telemetry));
+        Assert.IsType<FieldSurfacesFrame>(Assert.Single(sut.Map(telemetry)));
         Assert.Empty(sut.Map(status));
         Assert.Empty(sut.Map(damage));
-        Assert.Empty(sut.Map(lap));
+        Assert.IsType<FieldLapStatesFrame>(Assert.Single(sut.Map(lap)));
 
         Assert.Single(Warnings(logger));   // 관전 중이면 모든 차 패킷이 같은 이유로 버려진다 — 한 번만 알린다
     }

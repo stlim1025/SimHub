@@ -248,14 +248,14 @@ public class F1PacketMapperCarStateTests
     }
 
     [Fact]
-    public void Map_CarPackets_PlayerIndexBeyondSlots_ReturnsEmpty()
+    public void Map_CarPackets_PlayerIndexBeyondSlots_KeepOnlyFieldFrames()
     {
         var header = Header(playerIndex: byte.MaxValue);   // 관전 중
         var telemetry = new CarTelemetryDataPacket { Header = header, CarTelemetryData = new CarTelemetryData[CarSlotCount] };
         var status = new CarStatusDataPacket { Header = header, CarStatusData = new CarStatusData[CarSlotCount] };
         var damage = new CarDamageDataPacket { Header = header, CarDamageData = new CarDamageData[CarSlotCount] };
 
-        Assert.Empty(_sut.Map(telemetry));
+        Assert.IsType<FieldSurfacesFrame>(Assert.Single(_sut.Map(telemetry)));   // 모든 차 노면은 관전 중에도 낸다
         Assert.Empty(_sut.Map(status));
         Assert.Empty(_sut.Map(damage));
     }

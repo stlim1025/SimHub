@@ -42,7 +42,8 @@
 - `8`: **Final Classification Packet** (세션 최종 순위표 — [docs/12](../../docs/12-seasons-sessions.md) §5.2)
 - `10`: **Car Damage Packet** (타이어 마모·손상, 날개·차체 손상 — 스냅샷 §5.5)
 - `0`·`5`·`11`·`12`·`13`·`14`·`15`: **Motion · Car Setups · Session History · Tyre Sets · Motion Ex · Time Trial · Lap Positions** — "전부 수집"(D-49):
-  트레이스 `extra`(§6) · 스냅샷 `details`(§7) · 순위표 랩 기록(§8). 읽지 않는 것은 `9`(Lobby Info)와 다른 차의 Motion뿐이다.
+  트레이스 `extra`(§6) · 스냅샷 `details`(§7) · 순위표 랩 기록(§8). 읽지 않는 것은 `9`(Lobby Info)뿐이다.
+  다른 차는 트랙 형상 표본(`TrackSamplesChunk`, 헌장 예외)용으로 Motion 위치(X·Z)·Lap Data(랩 거리·Driver/Pit/Result Status)·Car Telemetry 노면만 읽는다 — `shared/schema/track_samples_chunk.json`.
 
 ---
 
@@ -259,7 +260,7 @@
 | `ersHarvestedThisLapMguk` · `ersHarvestedThisLapMguh` | `ErsHarvestedThisLapMGUK` · `…MGUH` | J(랩마다 0으로) | 0 |
 | `ersDeployedThisLap` | `ErsDeployedThisLap` | J(랩마다 0으로) | 0 |
 
-**Motion (0) 플레이어 칸 — 12채널** (다른 차 칸은 읽지 않는다)
+**Motion (0) 플레이어 칸 — 12채널** (다른 차 칸은 트랙 형상 표본용 위치만 따로 읽는다)
 
 | 채널 | 원천 필드 | 단위 | 소수 |
 |---|---|---|---|

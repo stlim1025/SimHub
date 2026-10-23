@@ -51,7 +51,7 @@ internal static class F1ExtraChannels
         .Add("ersDeployedThisLap", car.ErsDeployedThisLap, Integer)
         .Build();
 
-    /// <summary>Motion(0)의 플레이어 칸 — 월드 위치·속도, G-force, 자세(다른 차 Motion은 읽지 않는다 — 헌장).</summary>
+    /// <summary>Motion(0)의 플레이어 칸 — 월드 위치·속도, G-force, 자세(다른 차는 트랙 형상 표본용 위치만 따로 읽는다 — <c>F1PacketMapper.Field.cs</c>).</summary>
     public static IReadOnlyDictionary<string, double> FromMotion(CarMotionData car) => new ChannelBag()
         .Add("worldPosX", car.WorldPositionX, OneDecimal)
         .Add("worldPosY", car.WorldPositionY, OneDecimal)

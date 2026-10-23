@@ -9,4 +9,5 @@ public enum TelemetryEventType
     LapFinished,
     SessionEnded,
     SessionClassified,
+    TrackSamplesChunk,
 }

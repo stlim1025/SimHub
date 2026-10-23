@@ -27,7 +27,8 @@ public class DependencyInjectionTests
 
         var analyzers = provider.GetServices<ITelemetryAnalyzer>().ToList();
 
-        Assert.Equal(2, analyzers.Count);
+        Assert.Equal(3, analyzers.Count);
+        Assert.Single(analyzers.OfType<TrackSampleCollector>());
         var lapAnalyzer = Assert.Single(analyzers.OfType<LapAnalyzer>());
         var tracker = Assert.Single(analyzers.OfType<SessionResultTracker>());
 

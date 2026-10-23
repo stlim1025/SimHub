@@ -12,7 +12,7 @@ namespace SimCenter.Agent.Infrastructure.Mapping;
 /// <summary>
 /// F1Game.UDP 패킷을 Agent.Core의 게임중립 프레임으로 매핑한다(D-20 경계).
 /// 처음엔 관심 패킷만 처리했으나(docs/06 §2.2) D-49(docs/15 §8)부터 Lobby Info(9)를 뺀 모든 패킷의 플레이어 차·세션 값을 읽는다
-/// (추가분은 <c>F1PacketMapper.CollectAll.cs</c>). 다른 차의 Motion은 읽지 않는다.
+/// (추가분은 <c>F1PacketMapper.CollectAll.cs</c>). 다른 차는 트랙 형상 표본용 위치·랩 상태·노면만 읽는다(<c>F1PacketMapper.Field.cs</c>).
 /// 개별 Map* 메서드는 구성 가능한 패킷 구조체를 받아 단위테스트가 가능하다.
 /// </summary>
 public sealed partial class F1PacketMapper
