@@ -123,7 +123,11 @@ class AppColors {
   static const Color replayHudText = Color(0xFFF3F4F6);
   static const Color replayHudMuted = Color(0xFFB4BAC6);
 
-  /// 고스트 재생 HUD의 ERS 배터리 잔량 막대(노랑)·배포 출력 막대(파랑).
+  /// 고스트 재생 서킷의 코너 바깥 그래블(자갈)·연석 빨강(흰 칸은 [replayRoadEdge]).
+  static const Color replayGravel = Color(0xFF8C7B5A);
+  static const Color replayKerbRed = Color(0xFFD62828);
+
+  /// 고스트 재생 HUD의 ERS 배터리 잔량 막대(노랑)·사용 출력 막대(파랑, 충전은 `success` 초록).
   static const Color replayBattery = Color(0xFFFACC15);
   static const Color replayDeploy = Color(0xFF60A5FA);
 }

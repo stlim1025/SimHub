@@ -8,6 +8,7 @@ import 'package:simcenter_app/features/auth/domain/user_preferences.dart';
 import 'package:simcenter_app/features/lap_detail/domain/ghost_replay.dart';
 import 'package:simcenter_app/features/lap_detail/domain/lap_detail_models.dart';
 import 'package:simcenter_app/features/lap_detail/presentation/ghost_replay_painter.dart';
+import 'package:simcenter_app/features/lap_detail/presentation/replay_circuit.dart';
 import 'package:simcenter_app/features/lap_detail/presentation/telemetry_tab.dart';
 import 'package:simcenter_app/features/laps/domain/lap_models.dart';
 
@@ -161,8 +162,8 @@ void main() {
   });
 
   group('ERS 배터리', () {
-    // 표본 100ms마다 배터리 4MJ → 표본당 −20kJ, 누적 배포 표본당 +10kJ(= 100 kW).
-    LapTrace withErs() {
+    // 표본 100ms마다 배터리 4MJ → 표본당 −20kJ(= −200 kW 사용), [chargeJ]를 주면 표본당 그만큼 충전.
+    LapTrace withErs({double? chargeJ}) {
       final base = _player;
       return LapTrace(
         lapId: base.lapId,
@@ -176,21 +177,28 @@ void main() {
         rpm: base.rpm,
         worldPosX: base.worldPosX,
         worldPosZ: base.worldPosZ,
-        ersStoreJ: [for (var i = 0; i < base.length; i++) 4000000.0 - i * 20000],
+        ersStoreJ: [
+          for (var i = 0; i < base.length; i++) chargeJ == null ? 4000000.0 - i * 20000 : 1000000.0 + i * chargeJ,
+        ],
         ersDeployedJ: [for (var i = 0; i < base.length; i++) i * 10000.0],
       );
     }
 
-    test('배터리 잔량(%)과 배포 출력(kW)을 계산한다', () {
+    test('배터리 잔량(%)과 사용 출력(− kW)을 계산한다', () {
       final frame = LapReplay(withErs()).frameAt(1000); // 표본 10
       expect(frame.batteryPercent, closeTo(95, 0.01)); // 3.8 MJ / 4 MJ
-      expect(frame.deployKw, closeTo(100, 0.01));
+      expect(frame.ersFlowKw, closeTo(-200, 0.01));
+    });
+
+    test('배터리가 차면 충전 출력(+ kW), 최대 출력으로 자른다', () {
+      expect(LapReplay(withErs(chargeJ: 15000)).frameAt(1000).ersFlowKw, closeTo(150, 0.01));
+      expect(LapReplay(withErs(chargeJ: 50000)).frameAt(1000).ersFlowKw, kErsMaxFlowKw);
     });
 
     test('ERS 채널이 없으면 null', () {
       final frame = LapReplay(_player).frameAt(1000);
       expect(frame.batteryPercent, isNull);
-      expect(frame.deployKw, isNull);
+      expect(frame.ersFlowKw, isNull);
     });
 
     test('트레이스 JSON의 extra ERS 채널을 읽는다(길이가 다르면 버린다)', () {
@@ -210,12 +218,19 @@ void main() {
       expect(LapTrace.fromJson(json([4000000])).hasErs, isFalse);
     });
 
-    testWidgets('ERS가 있으면 HUD에 배터리 %와 배포 막대가 보인다', (t) async {
+    testWidgets('ERS가 있으면 HUD에 배터리 %와 충전/사용 막대·kW가 보인다', (t) async {
       await _pumpCharts(t, trace: withErs());
 
       expect(find.byKey(const ValueKey('ghost-replay-player-hud-battery')), findsOneWidget);
-      expect(find.byKey(const ValueKey('ghost-replay-player-hud-deploy')), findsOneWidget);
+      expect(find.byKey(const ValueKey('ghost-replay-player-hud-ers-flow')), findsOneWidget);
       expect(_textOf(t, 'ghost-replay-player-hud-battery-text'), '100%');
+      expect(_textOf(t, 'ghost-replay-player-hud-ers-flow-text'), '−200 kW');
+    });
+
+    testWidgets('충전 중이면 + kW', (t) async {
+      await _pumpCharts(t, trace: withErs(chargeJ: 15000));
+
+      expect(_textOf(t, 'ghost-replay-player-hud-ers-flow-text'), '+150 kW');
     });
   });
 
@@ -272,7 +287,7 @@ void main() {
       final painter = GhostReplayPainter(
         player: player,
         ghost: ghost,
-        road: replayRoadPath(player),
+        circuit: ReplayCircuit.build(player, ghost),
         time: time,
         playerColor: AppColors.teamFerrari,
         ghostColor: AppColors.comparisonLap,

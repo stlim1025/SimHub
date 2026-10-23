@@ -12,11 +12,12 @@ import '../domain/lap_detail_models.dart';
 import '../domain/telemetry_channels.dart';
 import '../domain/telemetry_math.dart';
 import 'ghost_replay_painter.dart';
+import 'replay_circuit.dart';
 import 'telemetry_chart.dart';
 
 /// 재생 화면 높이(넓은 화면·좁은 화면).
-const double kGhostReplayWideHeight = 360;
-const double kGhostReplayNarrowHeight = 260;
+const double kGhostReplayWideHeight = 540;
+const double kGhostReplayNarrowHeight = 380;
 
 /// 재생 배속 선택지.
 const List<double> kGhostReplaySpeeds = [0.5, 1, 2, 4];
@@ -91,7 +92,7 @@ class GhostReplay extends StatefulWidget {
 class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStateMixin {
   late LapReplay _player;
   LapReplay? _ghost;
-  late Path _road;
+  late ReplayCircuit _circuit;
 
   /// 재생 경과 시간(ms).
   final ValueNotifier<double> _time = ValueNotifier<double>(0);
@@ -123,7 +124,7 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
     _player = LapReplay(widget.trace);
     final reference = widget.reference;
     _ghost = reference != null && reference.hasPositions ? LapReplay(reference) : null;
-    _road = replayRoadPath(_player);
+    _circuit = ReplayCircuit.build(_player, _ghost);
   }
 
   @override
@@ -192,7 +193,7 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
                       painter: GhostReplayPainter(
                         player: _player,
                         ghost: _ghost,
-                        road: _road,
+                        circuit: _circuit,
                         time: _time,
                         playerColor: playerColor,
                         ghostColor: ghostColor,
@@ -429,16 +430,23 @@ class _Hud extends StatelessWidget {
     );
   }
 
-  /// ERS: 배터리 잔량(노랑 막대 + %)·지금 배포 출력(파랑 막대, 최대 120 kW = 가득). 트레이스에 ERS가 없으면 비운다.
+  /// ERS: 배터리 잔량(노랑 막대 + %)·지금 충전/사용 출력(가운데 기준 오른쪽 초록 = 충전, 왼쪽 파랑 = 사용 + kW).
+  /// 트레이스에 ERS가 없으면 비운다.
   List<Widget> _ersReadout(String keyName, ReplayFrame frame) {
     final battery = frame.batteryPercent;
-    final deploy = frame.deployKw;
-    if (battery == null || deploy == null) {
+    final flow = frame.ersFlowKw;
+    if (battery == null || flow == null) {
       return const [];
     }
+    final flowKw = flow.round();
+    final charging = flowKw > 0;
     return [
       const SizedBox(width: _hudDotGap),
-      const Icon(Icons.battery_charging_full, size: _ersIconSize, color: AppColors.replayBattery),
+      Icon(
+        charging ? Icons.battery_charging_full : Icons.battery_full,
+        size: _ersIconSize,
+        color: AppColors.replayBattery,
+      ),
       _PedalBar(key: ValueKey('$keyName-battery'), percent: battery.round(), color: AppColors.replayBattery),
       const SizedBox(width: _pedalGap),
       SizedBox(
@@ -451,10 +459,20 @@ class _Hud extends StatelessWidget {
         ),
       ),
       const SizedBox(width: _pedalGap),
-      _PedalBar(
-        key: ValueKey('$keyName-deploy'),
-        percent: (deploy / kErsMaxDeployKw * _pedalMaxPercent).round(),
-        color: AppColors.replayDeploy,
+      _ErsFlowBar(key: ValueKey('$keyName-ers-flow'), fraction: flow / kErsMaxFlowKw),
+      const SizedBox(width: _pedalGap),
+      SizedBox(
+        width: _ersFlowTextWidth,
+        child: Text(
+          '${charging ? '+' : (flowKw < 0 ? '−' : '')}${flowKw.abs()} kW',
+          key: ValueKey('$keyName-ers-flow-text'),
+          textAlign: TextAlign.end,
+          style: TextStyle(
+            color: charging ? AppColors.success : (flowKw < 0 ? AppColors.replayDeploy : AppColors.replayHudMuted),
+            fontWeight: FontWeight.w600,
+            fontFeatures: _tabular,
+          ),
+        ),
       ),
     ];
   }
@@ -510,8 +528,55 @@ const double _pedalGap = 4;
 const double _pedalMaxPercent = 100;
 const double _ersIconSize = 14;
 const double _ersPercentWidth = 34;
+const double _ersFlowTextWidth = 58;
 const String _notYet = '–';
 const EdgeInsets _sectorCellPadding = EdgeInsets.only(right: 10, top: 1, bottom: 1);
+
+/// ERS 충전/사용 막대: 가운데에서 오른쪽(초록)으로 차면 충전, 왼쪽(파랑)으로 차면 사용. [fraction]은 −1 ~ 1.
+class _ErsFlowBar extends StatelessWidget {
+  const _ErsFlowBar({super.key, required this.fraction});
+
+  final double fraction;
+
+  @override
+  Widget build(BuildContext context) {
+    final amount = fraction.abs().clamp(0.0, 1.0);
+    final charging = fraction > 0;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(_pedalBarHeight / 2),
+      child: Container(
+        width: _pedalBarWidth * 2,
+        height: _pedalBarHeight,
+        color: AppColors.replayHudMuted.withValues(alpha: 0.3),
+        child: Row(
+          children: [
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: FractionallySizedBox(
+                  widthFactor: charging ? 0 : amount,
+                  heightFactor: 1,
+                  child: const ColoredBox(color: AppColors.replayDeploy),
+                ),
+              ),
+            ),
+            const SizedBox(width: 1, height: _pedalBarHeight, child: ColoredBox(color: AppColors.replayHudText)),
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: FractionallySizedBox(
+                  widthFactor: charging ? amount : 0,
+                  heightFactor: 1,
+                  child: const ColoredBox(color: AppColors.success),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 /// 페달을 밟은 정도(0~100%) 막대: 어두운 바탕 위 색 채움.
 class _PedalBar extends StatelessWidget {

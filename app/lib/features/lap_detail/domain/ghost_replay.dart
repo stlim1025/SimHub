@@ -23,17 +23,17 @@ typedef ReplayFrame = ({
   int brake,
   bool finished,
   double? batteryPercent,
-  double? deployKw,
+  double? ersFlowKw,
 });
 
 /// ERS 배터리 최대 저장량(J, 4 MJ).
 const double kErsStoreMaxJ = 4000000;
 
-/// MGU-K 최대 배포 출력(kW). 배포 막대의 100%.
-const double kErsMaxDeployKw = 120;
+/// ERS 충전·사용 출력 막대의 가득(kW). F1 26 MGU-K 최대 출력 350 kW 기준.
+const double kErsMaxFlowKw = 350;
 
-/// 배포 출력을 구할 때 앞뒤로 보는 표본 수(표본 하나의 흔들림을 줄인다).
-const int _deployWindowSamples = 2;
+/// ERS 출력을 구할 때 앞뒤로 보는 표본 수(표본 하나의 흔들림을 줄인다).
+const int _ersFlowWindowSamples = 2;
 
 const double _percent = 100;
 
@@ -109,21 +109,22 @@ class LapReplay {
       brake: _lerpAt(trace.brake, position).round(),
       finished: elapsedMs >= durationMs,
       batteryPercent: trace.hasErs ? (_lerpAt(trace.ersStoreJ, position) / kErsStoreMaxJ * _percent).clamp(0.0, _percent) : null,
-      deployKw: trace.hasErs ? _deployKwAt(lower) : null,
+      ersFlowKw: trace.hasErs ? _ersFlowKwAt(lower) : null,
     );
   }
 
-  /// 표본 [index] 앞뒤 [_deployWindowSamples]칸의 누적 배포량 변화 ÷ 시간 = 배포 출력(J/ms = kW). 0 ~ [kErsMaxDeployKw]로 자른다.
-  double _deployKwAt(int index) {
+  /// 표본 [index] 앞뒤 [_ersFlowWindowSamples]칸의 배터리 잔량 변화 ÷ 시간 = ERS 출력(J/ms = kW).
+  /// + 충전(회수가 더 많음), − 사용(배포가 더 많음). ±[kErsMaxFlowKw]로 자른다.
+  double _ersFlowKwAt(int index) {
     final last = trace.length - 1;
-    final from = math.max(0, index - _deployWindowSamples);
-    final to = math.min(last, index + _deployWindowSamples);
+    final from = math.max(0, index - _ersFlowWindowSamples);
+    final to = math.min(last, index + _ersFlowWindowSamples);
     final dt = trace.timeMs[to] - trace.timeMs[from];
     if (dt <= 0) {
       return 0;
     }
-    final dE = trace.ersDeployedJ[to] - trace.ersDeployedJ[from];
-    return (dE / dt).clamp(0.0, kErsMaxDeployKw);
+    final dE = trace.ersStoreJ[to] - trace.ersStoreJ[from];
+    return (dE / dt).clamp(-kErsMaxFlowKw, kErsMaxFlowKw);
   }
 
   static double _lerpAt(List<num> values, double position) {

@@ -8,16 +8,16 @@ import '../../../core/util/hex_color.dart';
 import '../../../core/widgets/team_name_cell.dart';
 import '../../laps/domain/lap_models.dart';
 import '../domain/ghost_replay.dart';
+import 'replay_circuit.dart';
 
 /// 화면 세로 한 칸에 담는 서킷 길이(m). 화면 높이와 상관없이 같은 거리를 보여 차 크기가 일정하게 느껴진다.
-const double kReplayViewHeightM = 60;
+const double kReplayViewHeightM = 90;
 
-/// 내 차를 놓는 세로 위치(위에서부터 비율). 가운데보다 아래에 두어 앞쪽 길을 더 보여 준다(앞 약 43m).
+/// 내 차를 놓는 세로 위치(위에서부터 비율). 가운데보다 아래에 두어 앞쪽 길을 더 보여 준다(앞 약 65m).
 const double kReplayPlayerAnchorY = 0.72;
 
-/// 아스팔트 폭과 양쪽 흰 가장자리 선 굵기(m).
-const double kReplayRoadWidthM = 12;
-const double _roadEdgeWidthM = 0.5;
+/// 도로 양쪽 흰 가장자리 선 굵기(m).
+const double _roadEdgeWidthM = 0.4;
 
 /// 출발·결승선 굵기(m, 진행 방향).
 const double _startLineDepthM = 1.2;
@@ -75,16 +75,6 @@ Color replayCarColor(LapTeam? team, {required Color fallback}) {
     return fallback;
   }
   return parseHexColor(team.color, fallback: teamColorOfName(team.name) ?? fallback);
-}
-
-/// 내 랩 주행선을 따라 그릴 서킷 길(월드 좌표 m, 표본 위치를 잇는다).
-Path replayRoadPath(LapReplay replay) {
-  final trace = replay.trace;
-  final path = Path()..moveTo(trace.worldPosX.first, trace.worldPosZ.first);
-  for (var i = 1; i < trace.length; i++) {
-    path.lineTo(trace.worldPosX[i], trace.worldPosZ[i]);
-  }
-  return path;
 }
 
 /// 위에서 본 F1 차 한 대를 칠한다(차 중심이 원점, 앞이 +x, 단위 m). [opacity]는 몸체·바퀴에 적용하고, [outline]은 몸체·날개 테두리(굵기 [outlineWidth] m).
@@ -170,7 +160,7 @@ class GhostReplayPainter extends CustomPainter {
   GhostReplayPainter({
     required this.player,
     required this.ghost,
-    required this.road,
+    required this.circuit,
     required this.time,
     required this.playerColor,
     required this.ghostColor,
@@ -181,8 +171,8 @@ class GhostReplayPainter extends CustomPainter {
   /// 비교 랩 재생기. null이면 고스트 없음.
   final LapReplay? ghost;
 
-  /// [replayRoadPath]로 만든 길(월드 좌표).
-  final Path road;
+  /// 주행 기록으로 추정한 서킷 모양(월드 좌표).
+  final ReplayCircuit circuit;
   final ValueListenable<double> time;
   final Color playerColor;
   final Color ghostColor;
@@ -223,25 +213,34 @@ class GhostReplayPainter extends CustomPainter {
     canvas.restore();
   }
 
+  /// 그래블(코너 바깥) → 아스팔트 → 연석(빨강·흰색) → 흰 가장자리 선 → 출발·결승선 순으로 칠한다.
   void _paintRoad(Canvas canvas) {
-    Paint stroke(Color color, double width) => Paint()
+    Paint fill(Color color) => Paint()
       ..color = color
+      ..style = PaintingStyle.fill;
+    final edge = Paint()
+      ..color = AppColors.replayRoadEdge
       ..style = PaintingStyle.stroke
-      ..strokeWidth = width
-      ..strokeJoin = StrokeJoin.round
-      ..strokeCap = StrokeCap.round;
+      ..strokeWidth = _roadEdgeWidthM
+      ..strokeJoin = StrokeJoin.round;
     canvas
-      ..drawPath(road, stroke(AppColors.replayRoadEdge, kReplayRoadWidthM + _roadEdgeWidthM * 2))
-      ..drawPath(road, stroke(AppColors.replayAsphalt, kReplayRoadWidthM));
+      ..drawPath(circuit.gravel, fill(AppColors.replayGravel))
+      ..drawPath(circuit.asphalt, fill(AppColors.replayAsphalt))
+      ..drawPath(circuit.kerbRed, fill(AppColors.replayKerbRed))
+      ..drawPath(circuit.kerbWhite, fill(AppColors.replayRoadEdge))
+      ..drawPath(circuit.leftEdge, edge)
+      ..drawPath(circuit.rightEdge, edge);
 
-    // 출발·결승선: 랩 거리 0에서 길을 가로지르는 흰 띠.
-    final start = player.positionAtDistance(0);
+    // 출발·결승선: 서킷 중심선 첫 점에서 길을 가로지르는 흰 띠.
+    final start = circuit.center.first;
+    final next = circuit.center[1];
+    final width = circuit.widths.first;
     canvas
       ..save()
-      ..translate(start.x, start.z)
-      ..rotate(player.headingAtDistance(0))
+      ..translate(start.dx, start.dy)
+      ..rotate(math.atan2(next.dy - start.dy, next.dx - start.dx))
       ..drawRect(
-        Rect.fromLTRB(-_startLineDepthM / 2, -kReplayRoadWidthM / 2, _startLineDepthM / 2, kReplayRoadWidthM / 2),
+        Rect.fromLTRB(-_startLineDepthM / 2, -width / 2, _startLineDepthM / 2, width / 2),
         Paint()..color = AppColors.replayRoadEdge,
       )
       ..restore();
@@ -267,7 +266,7 @@ class GhostReplayPainter extends CustomPainter {
   bool shouldRepaint(GhostReplayPainter oldDelegate) =>
       !identical(oldDelegate.player, player) ||
       !identical(oldDelegate.ghost, ghost) ||
-      !identical(oldDelegate.road, road) ||
+      !identical(oldDelegate.circuit, circuit) ||
       oldDelegate.time != time ||
       oldDelegate.playerColor != playerColor ||
       oldDelegate.ghostColor != ghostColor;
