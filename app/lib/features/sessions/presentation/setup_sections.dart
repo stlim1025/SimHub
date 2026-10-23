@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/layout/equal_height.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/section_card.dart';
 import '../../lap_detail/presentation/detail_list.dart';
 import '../domain/setup_display.dart';
+import '../domain/setup_ranges.dart';
 
 const double _cardGap = 20;
 const double _metaPadding = 20;
@@ -115,7 +117,8 @@ class SetupGrid extends StatelessWidget {
   }
 }
 
-/// 셋업 묶음 하나: 카드 제목 + 이름표(왼쪽)·값(오른쪽, 굵게) 줄 목록. `setup-group-{제목}` 키를 갖는다.
+/// 셋업 묶음 하나: 카드 제목 + 이름표(왼쪽) · 범위 막대 · 값(오른쪽, 굵게) 줄 목록(F1Laps 셋업 페이지 모양).
+/// 범위를 아는 항목만 막대를 그린다([setupBarFraction]). `setup-group-{제목}` 키를 갖는다.
 class SetupGroupCard extends StatelessWidget {
   SetupGroupCard({required this.group}) : super(key: ValueKey('setup-group-${group.title}'));
 
@@ -125,7 +128,75 @@ class SetupGroupCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return SectionCard(
       title: group.title,
-      child: DetailList(items: [for (final item in group.items) DetailItem(item.label, text: item.value)]),
+      child: DetailList(
+        items: [
+          for (final item in group.items)
+            switch (setupBarFraction(item.label, item.value)) {
+              final double fraction => DetailItem(item.label, value: _BarValue(fraction: fraction, text: item.value)),
+              null => DetailItem(item.label, text: item.value),
+            },
+        ],
+      ),
+    );
+  }
+}
+
+const double _barWidth = 140;
+
+/// 막대가 이보다 좁아지면 막대 없이 값만 보인다.
+const double _barMinWidth = 48;
+const double _barHeight = 8;
+const double _barRadius = 2;
+const double _barValueGap = 16;
+const double _barValueWidth = 64;
+
+/// 범위 막대(회색 바탕 위 강조색 채움) + 오른쪽 정렬 값. `setup-bar` 키의 채움 폭이 비율이다.
+class _BarValue extends StatelessWidget {
+  const _BarValue({required this.fraction, required this.text});
+
+  final double fraction;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    // 남는 폭에 맞춰 막대를 줄이고, 너무 좁으면(휴대폰 폭) 막대 없이 값만 보인다.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final room = constraints.maxWidth - _barValueGap - _barValueWidth;
+        final barWidth = room.isFinite ? room.clamp(0.0, _barWidth) : _barWidth;
+        return barWidth < _barMinWidth ? _valueText() : _barRow(context, barWidth);
+      },
+    );
+  }
+
+  Widget _valueText() => Text(
+        text,
+        textAlign: TextAlign.end,
+        style: const TextStyle(fontWeight: FontWeight.w600, fontFeatures: [FontFeature.tabularFigures()]),
+      );
+
+  Widget _barRow(BuildContext context, double barWidth) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(_barRadius),
+          child: Container(
+            width: barWidth,
+            height: _barHeight,
+            color: context.palette.border,
+            alignment: Alignment.centerLeft,
+            child: FractionallySizedBox(
+              key: const ValueKey('setup-bar'),
+              widthFactor: fraction,
+              heightFactor: 1,
+              child: const ColoredBox(color: AppColors.accent),
+            ),
+          ),
+        ),
+        const SizedBox(width: _barValueGap),
+        SizedBox(width: _barValueWidth, child: _valueText()),
+      ],
     );
   }
 }

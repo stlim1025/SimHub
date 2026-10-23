@@ -59,6 +59,10 @@ class AppTheme {
       ),
       scaffoldBackgroundColor: palette.background,
       canvasColor: palette.surface,
+      // 웹 화면처럼: 누를 때 번지는 물결·회색 누름 덩어리(모바일 터치 효과)는 없애고, 마우스를 올렸을 때의 옅은 색만 남긴다.
+      splashFactory: NoSplash.splashFactory,
+      splashColor: Colors.transparent,
+      highlightColor: Colors.transparent,
       dividerColor: palette.border,
       dividerTheme: DividerThemeData(color: palette.border, space: 1, thickness: 1),
       appBarTheme: AppBarTheme(
