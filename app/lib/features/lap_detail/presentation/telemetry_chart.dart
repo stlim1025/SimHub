@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../domain/telemetry_channels.dart';
 import '../domain/telemetry_math.dart';
@@ -15,6 +16,9 @@ const double _gridLineWidth = 1;
 const double _cursorLineWidth = 1;
 const double _cursorDotRadius = 3.5;
 const double _cursorAlpha = 0.6;
+
+/// 재생 위치 막대 굵기(강조색, 마우스 십자선보다 굵게).
+const double _playheadLineWidth = 2;
 const double _leftGutter = 44;
 const double _rightPadding = 8;
 const double _topPadding = 6;
@@ -155,8 +159,9 @@ class TelemetryAxesPainter extends CustomPainter {
       oldDelegate.axisLabel != axisLabel;
 }
 
-/// 그래프 그림(docs/15 §2.3): 그림 영역([telemetryPlotRect]) 안에 (Delta면) 0 기준선, 계열 선, 십자선(세로선 + 계열마다 점).
-/// [cursor]가 바뀌면 다시 그린다(모든 그래프가 같은 [cursor]를 보아 십자선이 함께 움직인다). 축은 [TelemetryAxesPainter].
+/// 그래프 그림(docs/15 §2.3): 그림 영역([telemetryPlotRect]) 안에 (Delta면) 0 기준선, 계열 선, 재생 위치 막대([playhead]),
+/// 마우스 십자선(세로선 + 계열마다 점). [cursor]·[playhead]가 바뀌면 다시 그린다(모든 그래프가 같은 값을 보아 함께 움직인다).
+/// 축은 [TelemetryAxesPainter].
 class TelemetryChartPainter extends CustomPainter {
   TelemetryChartPainter({
     required this.series,
@@ -165,13 +170,17 @@ class TelemetryChartPainter extends CustomPainter {
     required this.cursor,
     required this.cursorColor,
     this.baseline,
-  }) : super(repaint: cursor);
+    this.playhead,
+  }) : super(repaint: playhead == null ? cursor : Listenable.merge([cursor, playhead]));
 
   final List<ChartSeries> series;
   final double maxDistanceM;
   final ValueRange range;
   final ValueListenable<double?> cursor;
   final Color cursorColor;
+
+  /// 고스트 재생 위치(랩 거리 m). 마우스 십자선과 따로 강조색 막대로 그린다. null이면 없음.
+  final ValueListenable<double?>? playhead;
 
   /// 기준선 값(Delta의 0). null이면 그리지 않는다.
   final double? baseline;
@@ -205,8 +214,20 @@ class TelemetryChartPainter extends CustomPainter {
         canvas.drawPath(Path()..addPolygon(segment, false), paint);
       }
     }
+    _paintPlayhead(canvas, geometry);
     _paintCursor(canvas, geometry);
     canvas.restore();
+  }
+
+  void _paintPlayhead(Canvas canvas, ChartGeometry geometry) {
+    final distance = playhead?.value;
+    if (distance == null) {
+      return;
+    }
+    final x = geometry.xFor(distance);
+    canvas.drawLine(Offset(x, 0), Offset(x, geometry.height), Paint()
+      ..color = AppColors.accent
+      ..strokeWidth = _playheadLineWidth);
   }
 
   void _paintCursor(Canvas canvas, ChartGeometry geometry) {
@@ -233,12 +254,14 @@ class TelemetryChartPainter extends CustomPainter {
       oldDelegate.range.min != range.min ||
       oldDelegate.range.max != range.max ||
       oldDelegate.cursor != cursor ||
+      oldDelegate.playhead != playhead ||
       oldDelegate.cursorColor != cursorColor ||
       oldDelegate.baseline != baseline;
 }
 
-/// 텔레메트리 그래프 한 장: 제목 + 십자선 위치의 값(계열마다 색 점 + 값) + 그림(왼쪽 값 눈금·아래 거리 눈금).
+/// 텔레메트리 그래프 한 장: 제목 + 십자선 위치(없으면 재생 위치)의 값(계열마다 색 점 + 값) + 그림(왼쪽 값 눈금·아래 거리 눈금).
 /// 마우스를 올리거나(웹·데스크톱) 누르고 끌면(터치) [cursor]에 그 거리를 넣는다(그림 영역 기준, 왼쪽 끝 = 0m).
+/// 재생 위치([playhead])는 [cursor]와 따로 그려, 마우스를 올려도 재생 막대가 그 자리에 남는다.
 class TelemetryChart extends StatelessWidget {
   const TelemetryChart({
     super.key,
@@ -251,6 +274,7 @@ class TelemetryChart extends StatelessWidget {
     this.baseline,
     this.axisLabel = formatAxisValue,
     this.height = kTelemetryChartHeight,
+    this.playhead,
   });
 
   final String title;
@@ -269,13 +293,16 @@ class TelemetryChart extends StatelessWidget {
   /// 그림 영역 높이(축 글자 칸 제외).
   final double height;
 
+  /// 고스트 재생 위치(랩 거리 m). null이면 재생 막대가 없다.
+  final ValueListenable<double?>? playhead;
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _ChartHeader(title: title, series: series, cursor: cursor, format: format),
+        _ChartHeader(title: title, series: series, cursor: cursor, playhead: playhead, format: format),
         const SizedBox(height: _headerGap),
         SizedBox(
           height: telemetryChartTotalHeight(height),
@@ -321,6 +348,7 @@ class TelemetryChart extends StatelessWidget {
                               cursor: cursor,
                               cursorColor: palette.textMuted,
                               baseline: baseline,
+                              playhead: playhead,
                             ),
                           ),
                         ),
@@ -338,11 +366,18 @@ class TelemetryChart extends StatelessWidget {
 }
 
 class _ChartHeader extends StatelessWidget {
-  const _ChartHeader({required this.title, required this.series, required this.cursor, required this.format});
+  const _ChartHeader({
+    required this.title,
+    required this.series,
+    required this.cursor,
+    required this.playhead,
+    required this.format,
+  });
 
   final String title;
   final List<ChartSeries> series;
   final ValueListenable<double?> cursor;
+  final ValueListenable<double?>? playhead;
   final String Function(double value) format;
 
   @override
@@ -358,12 +393,13 @@ class _ChartHeader extends StatelessWidget {
           child: FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerRight,
-            child: ValueListenableBuilder<double?>(
-              valueListenable: cursor,
-              builder: (context, distance, _) => Row(
+            // 마우스 십자선 위치의 값, 없으면 재생 위치의 값.
+            child: ListenableBuilder(
+              listenable: playhead == null ? cursor : Listenable.merge([cursor, playhead]),
+              builder: (context, _) => Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (distance != null)
+                  if (cursor.value ?? playhead?.value case final distance?)
                     for (final line in series)
                       if (line.valueAt(distance) case final value?) ...[
                         const SizedBox(width: _valueGap),

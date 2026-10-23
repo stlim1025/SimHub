@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/gestures.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:simcenter_app/core/theme/app_colors.dart';
@@ -10,6 +12,7 @@ import 'package:simcenter_app/features/lap_detail/domain/lap_detail_models.dart'
 import 'package:simcenter_app/features/lap_detail/presentation/ghost_replay_3d_painter.dart';
 import 'package:simcenter_app/features/lap_detail/presentation/ghost_replay_painter.dart';
 import 'package:simcenter_app/features/lap_detail/presentation/replay_circuit.dart';
+import 'package:simcenter_app/features/lap_detail/presentation/telemetry_chart.dart';
 import 'package:simcenter_app/features/lap_detail/presentation/telemetry_tab.dart';
 import 'package:simcenter_app/features/laps/domain/lap_models.dart';
 
@@ -364,6 +367,29 @@ void main() {
       final paused = _textOf(t, 'ghost-replay-elapsed');
       await t.pump(const Duration(seconds: 1));
       expect(_textOf(t, 'ghost-replay-elapsed'), paused);
+    });
+
+    testWidgets('재생 중 그래프에 마우스를 올려도 재생 막대는 재생 위치에 남고, 십자선만 마우스 자리로 간다', (t) async {
+      await _pumpCharts(t, trace: _player, reference: _reference);
+      await t.tap(find.byKey(const ValueKey('ghost-replay-play')));
+      await t.pump();
+      await t.pump(const Duration(seconds: 1));
+      await t.tap(find.byKey(const ValueKey('ghost-replay-play'))); // 멈춰서 재생 위치를 고정
+      await t.pump();
+
+      final chart = find.byKey(const ValueKey('telemetry-chart-delta'));
+      final mouse = await t.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: t.getCenter(chart) + const Offset(200, 20));
+      await t.pump();
+
+      final painter = t
+          .widgetList<CustomPaint>(find.descendant(of: chart, matching: find.byType(CustomPaint)))
+          .map((w) => w.painter)
+          .whereType<TelemetryChartPainter>()
+          .single;
+      expect(painter.playhead!.value, 50);
+      expect(painter.cursor.value, isNot(50));
+      await mouse.removePointer();
     });
 
     testWidgets('배속 2×면 1초에 2초가 흐르고, 끝나면 랩 끝에서 멈춘다', (t) async {

@@ -754,12 +754,15 @@ class GhostReplay3dPainter extends CustomPainter {
   }) {
     final circuit = track.circuit;
     final middle = (circuit.center[i] + circuit.center[j]) / 2;
-    var depth = math.max(
+    // [distance]는 실제 거리(밝기·안개), [depth]는 칠하는 순서 — 차 둘레면 그 차보다 조금 먼 것으로 친다.
+    // 화면에 안 보이는 차(카메라 뒤 등, 깊이 무한)는 순서에 끼지 않는다(안 그러면 그 둘레 바닥이 맨 먼저 칠해져 덮인다).
+    final distance = math.max(
       (_point(i, circuit.center[i]) - view.eye).length,
       (_point(j, circuit.center[j]) - view.eye).length,
     );
+    var depth = distance;
     for (final car in cars) {
-      if ((car.at - middle).distance < _carGroundRadiusM) {
+      if (car.depth.isFinite && (car.at - middle).distance < _carGroundRadiusM) {
         depth = math.max(depth, car.depth + _groundBeforeCarM);
       }
     }
@@ -767,7 +770,7 @@ class GhostReplay3dPainter extends CustomPainter {
     void face(List<_V3> polygon, Color color) {
       final projected = view.projectPolygon(polygon);
       if (projected != null) {
-        faces.add((points: projected, color: _shade(color, _normalUp(polygon), depth)));
+        faces.add((points: projected, color: _shade(color, _normalUp(polygon), distance)));
       }
     }
 

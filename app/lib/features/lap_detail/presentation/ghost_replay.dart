@@ -47,7 +47,7 @@ const List<({ReplayCamera? value, String label})> kGhostReplayViews = [
 String ghostReplaySpeedLabel(double speed) => '${speed == speed.roundToDouble() ? speed.round() : speed}×';
 
 /// 고스트 재생 카드: 이 랩과 비교 랩을 같은 시계로 달리게 해 추격 카메라로 보여 준다(타임 트라이얼 고스트처럼).
-/// 재생 중에는 이 랩의 현재 거리를 [cursor]에 써서 그래프 십자선·트랙 지도 점이 따라오게 한다.
+/// 재생 중에는 이 랩의 현재 거리를 [cursor]에 써서 그래프 재생 막대·트랙 지도 점이 따라오게 한다.
 /// [trace]에 위치가 있어야 하고, 고스트는 [reference]에 위치가 있을 때만 그린다.
 class GhostReplay extends StatefulWidget {
   const GhostReplay({

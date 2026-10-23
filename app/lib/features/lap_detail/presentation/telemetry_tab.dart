@@ -177,12 +177,29 @@ class TelemetryCharts extends StatefulWidget {
 }
 
 class _TelemetryChartsState extends State<TelemetryCharts> {
-  /// 십자선이 가리키는 랩 거리(m). null이면 숨김.
+  /// 마우스 십자선이 가리키는 랩 거리(m). null이면 숨김.
   final ValueNotifier<double?> _cursor = ValueNotifier<double?>(null);
+
+  /// 고스트 재생 위치(랩 거리 m). 그래프에 십자선과 따로 재생 막대로 그린다.
+  final ValueNotifier<double?> _playhead = ValueNotifier<double?>(null);
+
+  /// 범례·트랙 지도·통계가 보는 거리: 마우스 십자선이 있으면 그 거리, 없으면 재생 위치.
+  final ValueNotifier<double?> _shown = ValueNotifier<double?>(null);
+
+  @override
+  void initState() {
+    super.initState();
+    _cursor.addListener(_updateShown);
+    _playhead.addListener(_updateShown);
+  }
+
+  void _updateShown() => _shown.value = _cursor.value ?? _playhead.value;
 
   @override
   void dispose() {
     _cursor.dispose();
+    _playhead.dispose();
+    _shown.dispose();
     super.dispose();
   }
 
@@ -211,6 +228,7 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
         range: channel.rangeOf(series.expand((s) => s.values)),
         maxDistanceM: maxDistanceM,
         cursor: _cursor,
+        playhead: _playhead,
         format: (value) => channel.format(value, widget.units),
         axisLabel: channel.axisLabel,
       );
@@ -232,7 +250,7 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
               referenceText: reference == null || referenceTime == null
                   ? null
                   : '${widget.referenceLabel} ${formatLapTime(referenceTime)}',
-              cursor: _cursor,
+              cursor: _shown,
             ),
             for (final chart in charts) ...[const SizedBox(height: _chartGap), chart],
           ],
@@ -248,7 +266,7 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
               GhostReplay(
                 trace: trace,
                 reference: reference,
-                cursor: _cursor,
+                cursor: _playhead,
                 units: widget.units,
                 height: replayHeight,
                 thisLapLabel: _thisLapLabel,
@@ -266,7 +284,7 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
             ],
           );
     // 트랙 지도(같은 십자선 거리에 점) + Lap Telemetry 통계.
-    final panel = LapTelemetryPanel(trace: trace, sectors: widget.sectors, cursor: _cursor, units: widget.units);
+    final panel = LapTelemetryPanel(trace: trace, sectors: widget.sectors, cursor: _shown, units: widget.units);
     return LayoutBuilder(
       builder: (context, box) => box.maxWidth >= kTelemetrySideBySideMinWidth
           // 넓은 화면: 왼쪽 그래프, 오른쪽 지도·통계 칸 — 스크롤해도 화면 위쪽에 붙어 있다.
@@ -283,7 +301,7 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
               charts: mainColumn(kGhostReplayNarrowHeight),
               trace: trace,
               sectors: widget.sectors,
-              cursor: _cursor,
+              cursor: _shown,
             ),
     );
   }
@@ -298,6 +316,7 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
       range: valueRangeOf(values, symmetric: true),
       maxDistanceM: maxDistanceM,
       cursor: _cursor,
+      playhead: _playhead,
       baseline: 0,
       height: _deltaChartHeight,
       format: formatDeltaSeconds,
