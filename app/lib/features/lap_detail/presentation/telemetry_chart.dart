@@ -17,7 +17,7 @@ const double _cursorLineWidth = 1;
 const double _cursorDotRadius = 3.5;
 const double _cursorAlpha = 0.6;
 
-/// 재생 위치 막대 굵기(강조색, 마우스 십자선보다 굵게).
+/// 재생 위치 막대 굵기(노랑, 마우스 십자선보다 굵게).
 const double _playheadLineWidth = 2;
 const double _leftGutter = 44;
 const double _rightPadding = 8;
@@ -179,7 +179,7 @@ class TelemetryChartPainter extends CustomPainter {
   final ValueListenable<double?> cursor;
   final Color cursorColor;
 
-  /// 고스트 재생 위치(랩 거리 m). 마우스 십자선과 따로 강조색 막대로 그린다. null이면 없음.
+  /// 고스트 재생 위치(랩 거리 m). 마우스 십자선과 따로 노란 막대로 그린다. null이면 없음.
   final ValueListenable<double?>? playhead;
 
   /// 기준선 값(Delta의 0). null이면 그리지 않는다.
@@ -226,7 +226,7 @@ class TelemetryChartPainter extends CustomPainter {
     }
     final x = geometry.xFor(distance);
     canvas.drawLine(Offset(x, 0), Offset(x, geometry.height), Paint()
-      ..color = AppColors.accent
+      ..color = AppColors.telemetryPlayhead
       ..strokeWidth = _playheadLineWidth);
   }
 

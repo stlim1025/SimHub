@@ -137,6 +137,9 @@ class AppColors {
   static const Color replayThrottle = Color(0xFF2BD66B);
   static const Color replayBrake = Color(0xFFFF3B3B);
 
+  /// 텔레메트리 그래프의 재생 위치 막대(노랑 — 이 랩 강조색·비교 랩 청록 선과 헷갈리지 않게, 두 테마 공통).
+  static const Color telemetryPlayhead = Color(0xFFF5B800);
+
   /// 고스트 재생 3D 시점: 하늘(위·지평선 — 먼 곳 안개 색), 잔디, 낮은 방호벽.
   static const Color replaySkyTop = Color(0xFF3D6FA8);
   static const Color replaySkyHorizon = Color(0xFFB9CCDD);
