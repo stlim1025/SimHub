@@ -381,10 +381,10 @@ void main() {
       expect(find.byIcon(Icons.play_arrow), findsOneWidget);
     });
 
-    testWidgets('시점 버튼으로 2D 지도와 3D 카메라(추격·중계·헬기)를 바꾸고, 3D에서도 시계가 흐른다', (t) async {
+    testWidgets('기본은 추격 시점이고, 시점 버튼으로 3D 카메라(추격·중계·헬기)와 2D 지도를 바꾸며 3D에서도 시계가 흐른다', (t) async {
       await _pumpCharts(t, trace: _player, reference: _reference);
       CustomPainter? painter() => t.widget<CustomPaint>(find.byKey(const ValueKey('ghost-replay-view'))).painter;
-      expect(painter(), isA<GhostReplayPainter>());
+      expect((painter()! as GhostReplay3dPainter).camera, ReplayCamera.chase);
 
       for (final camera in ReplayCamera.values) {
         await t.tap(find.byKey(ValueKey('ghost-replay-view-${camera.name}')));

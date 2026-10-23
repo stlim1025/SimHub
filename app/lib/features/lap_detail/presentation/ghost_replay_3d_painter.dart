@@ -39,6 +39,9 @@ const List<double> _wallShrinkSteps = [0.8, 0.6, 0.4, 0.25, 0.1];
 /// 가까운 중심선 점을 찾는 격자 칸 크기(m).
 const double _gridCellM = 20;
 
+/// 점 사이 평균 거리의 최소값(m).
+const double _minSpacingM = 0.01;
+
 /// 흰 가장자리 선 폭(m, 도로 안쪽으로).
 const double _edgeLineWidthM = 0.4;
 
@@ -52,6 +55,10 @@ const double _lodMidM = 250;
 
 /// 카메라 뒤로 이보다 먼(m) 묶음은 건너뛴다.
 const double _behindCullM = 30;
+
+/// 차 둘레 이 거리(m) 안의 바닥 구간(중심선 가운데 기준)은 그 차보다 [_groundBeforeCarM] 먼 것으로 쳐서 먼저 칠한다.
+const double _carGroundRadiusM = 14;
+const double _groundBeforeCarM = 0.01;
 
 /// 카메라 앞 자르는 면(m).
 const double _nearM = 0.3;
@@ -109,6 +116,10 @@ enum _CarPaint { body, carbon, tyre, rim, stripe, helmet }
 /// 차 면 하나(차 기준 좌표: x = 앞, y = 옆, z = 위, m). [inside]는 이 면이 둘러싼 부품 안쪽 점(법선을 바깥으로 맞춘다).
 typedef _CarFace = ({List<_V3> points, _V3 inside, _CarPaint paint});
 
+/// 차 부품 하나: 면들, 차 기준 상자 범위(최소·최대), 볼록한지(볼록하면 카메라 쪽 면끼리 겹치지 않아 넣은 순서대로 칠한다 —
+/// 타이어 옆면 위 휠·띠처럼 겹쳐 붙인 면이 뒤집히지 않게). 볼록하지 않은 몸통은 면끼리 거리순으로 칠한다.
+typedef _CarPart = ({List<_CarFace> faces, _V3 min, _V3 max, bool convex});
+
 /// 차 모양을 만드는 치수(m, 현행 F1 — 길이 약 5.6m·폭 2m·휠베이스 3.6m).
 const double _frontAxle = 1.65;
 const double _rearAxle = -1.95;
@@ -144,11 +155,20 @@ const List<(double, List<(double, double)>)> _helmetSections = [
   (0.16, [(0.06, 0.62), (0.09, 0.66), (0.09, 0.74), (0.04, 0.77)]),
 ];
 
-/// 차 한 대의 면들(한 번 만들어 모든 차가 함께 쓴다).
-final List<_CarFace> _carMesh = _buildCarMesh();
+/// 차 한 대의 부품들(한 번 만들어 모든 차가 함께 쓴다).
+final List<_CarPart> _carMesh = _buildCarMesh();
 
-List<_CarFace> _buildCarMesh() {
-  final faces = <_CarFace>[];
+List<_CarPart> _buildCarMesh() {
+  final parts = <_CarPart>[];
+  void part(List<_CarFace> faces, {bool convex = true}) {
+    final points = [for (final f in faces) ...f.points];
+    parts.add((
+      faces: faces,
+      min: _V3(points.map((p) => p.x).reduce(math.min), points.map((p) => p.y).reduce(math.min), points.map((p) => p.z).reduce(math.min)),
+      max: _V3(points.map((p) => p.x).reduce(math.max), points.map((p) => p.y).reduce(math.max), points.map((p) => p.z).reduce(math.max)),
+      convex: convex,
+    ));
+  }
 
   // 단면을 이어 붙인 몸통(앞뒤 끝은 막는다).
   void loft(List<(double, List<(double, double)>)> sections, _CarPaint paint) {
@@ -160,6 +180,7 @@ List<_CarFace> _buildCarMesh() {
         ],
     ];
     _V3 middle(List<_V3> ring) => ring.reduce((a, b) => a + b) * (1 / ring.length);
+    final faces = <_CarFace>[];
     for (var k = 0; k < rings.length - 1; k++) {
       final a = rings[k];
       final b = rings[k + 1];
@@ -173,13 +194,14 @@ List<_CarFace> _buildCarMesh() {
     faces
       ..add((points: rings.first, inside: inside, paint: paint))
       ..add((points: rings.last, inside: inside, paint: paint));
+    part(faces, convex: false);
   }
 
   void corners(List<_V3> c, _CarPaint paint) {
     final inside = (c[0] + c[7]) * 0.5;
-    for (final indices in _boxFaces) {
-      faces.add((points: [for (final k in indices) c[k]], inside: inside, paint: paint));
-    }
+    part([
+      for (final indices in _boxFaces) (points: [for (final k in indices) c[k]], inside: inside, paint: paint),
+    ]);
   }
 
   // 축에 맞춘 상자(옆 [y0, y1]이 한쪽이면 [mirror]로 반대쪽도).
@@ -215,6 +237,7 @@ List<_CarFace> _buildCarMesh() {
     for (final sign in const [1.0, -1.0]) {
       final (inner, outer) = (y0 * sign, y1 * sign);
       final center = _V3(x, (inner + outer) / 2, radius);
+      final faces = <_CarFace>[];
       _V3 at(double y, double r, int k) {
         final angle = 2 * math.pi * k / _wheelSides;
         return _V3(x + r * math.cos(angle), y, radius + r * math.sin(angle));
@@ -245,17 +268,20 @@ List<_CarFace> _buildCarMesh() {
           ));
         }
       }
+      part(faces);
     }
   }
 
   // 플로어·몸통·조종석·헬멧.
   box(-2.3, 1.4, -0.82, 0.82, 0.03, 0.07, _CarPaint.carbon);
   loft(_bodySections, _CarPaint.body);
-  faces.add((
-    points: const [_V3(0.88, 0.16, 0.602), _V3(0.88, -0.16, 0.602), _V3(0.3, -0.19, 0.645), _V3(0.3, 0.19, 0.645)],
-    inside: const _V3(0.6, 0, 0.4),
-    paint: _CarPaint.carbon,
-  ));
+  part(const [
+    (
+      points: [_V3(0.88, 0.16, 0.602), _V3(0.88, -0.16, 0.602), _V3(0.3, -0.19, 0.645), _V3(0.3, 0.19, 0.645)],
+      inside: _V3(0.6, 0, 0.4),
+      paint: _CarPaint.carbon,
+    ),
+  ]);
   loft(_helmetSections, _CarPaint.helmet);
 
   // 롤 후프·에어박스, 샤크핀, 미러.
@@ -292,7 +318,34 @@ List<_CarFace> _buildCarMesh() {
   }
   wheel(_frontAxle, _frontTyreRadius, 0.67, 0.97);
   wheel(_rearAxle, _rearTyreRadius, 0.57, 0.97);
-  return faces;
+  return parts;
+}
+
+/// 차 기준 좌표의 축 성분(0 = 앞, 1 = 옆, 2 = 위).
+double _axis(_V3 v, int axis) => switch (axis) { 0 => v.x, 1 => v.y, _ => v.z };
+
+/// 두 부품 [a]·[b]의 칠하는 순서를 차 기준 카메라 위치 [camera]로 정한다: 어느 축으로든 서로 떨어져 있으면
+/// 카메라 반대쪽 부품을 먼저(−1 = a 먼저, 1 = b 먼저). 모든 축에서 겹치면 0(거리로 정한다).
+int _partOrder(_CarPart a, _CarPart b, _V3 camera) {
+  for (var axis = 0; axis < 3; axis++) {
+    final c = _axis(camera, axis);
+    if (_axis(a.max, axis) <= _axis(b.min, axis)) {
+      if (c >= _axis(b.min, axis)) {
+        return -1;
+      }
+      if (c <= _axis(a.max, axis)) {
+        return 1;
+      }
+    } else if (_axis(b.max, axis) <= _axis(a.min, axis)) {
+      if (c >= _axis(a.min, axis)) {
+        return 1;
+      }
+      if (c <= _axis(b.max, axis)) {
+        return -1;
+      }
+    }
+  }
+  return 0;
 }
 
 /// 상자 면 6개(모서리 번호: bit0 = 앞(끝점), bit1 = 옆 +, bit2 = 위). 법선 방향은 그릴 때 바깥으로 맞춘다.
@@ -365,7 +418,9 @@ class ReplayTrack3d {
     for (var i = 1; i < n; i++) {
       length += (center[i] - center[i - 1]).distance;
     }
-    final window = n < 2 ? n : (_sameStretchM / (length / (n - 1))).ceil();
+    // 점 사이 평균 거리. 움직이지 않은 트레이스(길이 0)는 1m로 봐서 나눗셈이 터지지 않게 한다.
+    final spacing = n < 2 || length <= 0 ? 1.0 : math.max(length / (n - 1), _minSpacingM);
+    final window = n < 2 ? n : (_sameStretchM / spacing).ceil();
     bool onOtherRoad(Offset p, int i) {
       final (cx, cz) = cell(p);
       for (var dx = -1; dx <= 1; dx++) {
@@ -411,7 +466,6 @@ class ReplayTrack3d {
     final right = wall(circuit.rightPoints, outwardRight, circuit.kerbRight, -1);
 
     // 중계 카메라 자리: 간격마다 그 둘레(앞뒤 1/3)에서 곡률이 가장 큰 점의 코너 바깥, 방호벽 밖 높은 곳.
-    final spacing = n < 2 ? 1.0 : length / (n - 1);
     final step = math.max(1, (_stationSpacingM / spacing).round());
     final picked = <int>{};
     for (var p = 0; p < (circuit.closed ? n : n - 1); p += step) {
@@ -612,13 +666,16 @@ class GhostReplay3dPainter extends CustomPainter {
     _paintSky(canvas, size, view);
 
     // 바닥 구간·방호벽·차를 한데 모아 먼 것부터 칠한다(언덕 너머 낮은 구간의 벽이 앞 도로 위로 비치지 않게).
-    final items = <_Item>[];
-    _collectTrack(view, Offset(frame.x, frame.z), rig.radiusM, items);
+    // 차 둘레 바닥은 늘 그 차보다 먼저 칠한다(연석을 밟아 차가 비스듬할 때 바로 뒤 바닥이 바퀴를 덮지 않게).
     final ghostReplay = ghost;
-    if (ghostReplay != null) {
-      items.add(_car(view, ghostReplay.frameAt(elapsed), ghostColor, opacity: kGhostCarOpacity));
-    }
-    items.add(_car(view, frame, playerColor, tyreMark: playerTyre));
+    final ghostFrame = ghostReplay?.frameAt(elapsed);
+    final cars = [
+      if (ghostFrame != null)
+        (at: Offset(ghostFrame.x, ghostFrame.z), item: _car(view, ghostFrame, ghostColor, opacity: kGhostCarOpacity)),
+      (at: Offset(frame.x, frame.z), item: _car(view, frame, playerColor, tyreMark: playerTyre)),
+    ];
+    final items = <_Item>[for (final car in cars) car.item];
+    _collectTrack(view, Offset(frame.x, frame.z), rig.radiusM, items, cars: [for (final c in cars) (at: c.at, depth: c.item.depth)]);
 
     final batch = _Batch();
     items.sort((a, b) => b.depth.compareTo(a.depth));
@@ -661,7 +718,13 @@ class GhostReplay3dPainter extends CustomPainter {
   }
 
   /// 카메라 둘레 [radiusM] 안의 서킷 구간을 바닥 면(잔디·그래블·아스팔트·연석·선) 묶음과 방호벽으로 모은다.
-  void _collectTrack(_View view, Offset focus, double radiusM, List<_Item> items) {
+  void _collectTrack(
+    _View view,
+    Offset focus,
+    double radiusM,
+    List<_Item> items, {
+    required List<({Offset at, double depth})> cars,
+  }) {
     final circuit = track.circuit;
     final n = track.length;
     final segments = circuit.closed ? n : n - 1;
@@ -673,7 +736,7 @@ class GhostReplay3dPainter extends CustomPainter {
       final step = distance < _lodFineM ? 1 : (distance < _lodMidM ? 2 : _lodBlock);
       for (var i = block; i < math.min(block + _lodBlock, segments); i += step) {
         final j = circuit.closed ? math.min(i + step, n) % n : math.min(i + step, n - 1);
-        _addSegment(view, i, j, step, items);
+        _addSegment(view, i, j, step, items, cars: cars);
       }
     }
   }
@@ -681,12 +744,25 @@ class GhostReplay3dPainter extends CustomPainter {
   _V3 _point(int i, Offset p, [double lift = 0]) => _V3(p.dx, track.circuit.elevations[i] + lift, p.dy);
 
   /// 구간 하나. 바닥 묶음의 깊이는 중심선 양 끝 가운데 먼 쪽(차 밑 바닥이 차보다 먼저 칠해지게), 방호벽은 벽 가운데.
-  void _addSegment(_View view, int i, int j, int step, List<_Item> items) {
+  void _addSegment(
+    _View view,
+    int i,
+    int j,
+    int step,
+    List<_Item> items, {
+    required List<({Offset at, double depth})> cars,
+  }) {
     final circuit = track.circuit;
-    final depth = math.max(
+    final middle = (circuit.center[i] + circuit.center[j]) / 2;
+    var depth = math.max(
       (_point(i, circuit.center[i]) - view.eye).length,
       (_point(j, circuit.center[j]) - view.eye).length,
     );
+    for (final car in cars) {
+      if ((car.at - middle).distance < _carGroundRadiusM) {
+        depth = math.max(depth, car.depth + _groundBeforeCarM);
+      }
+    }
     final faces = <_Face>[];
     void face(List<_V3> polygon, Color color) {
       final projected = view.projectPolygon(polygon);
@@ -817,34 +893,87 @@ class GhostReplay3dPainter extends CustomPainter {
       _CarPaint.stripe: tyreMark ?? AppColors.replayCarTyre,
       _CarPaint.helmet: AppColors.replayCarHelmet,
     };
+    // 카메라 위치를 차 기준 좌표로(부품 순서를 정할 때).
+    final toEye = view.eye - origin;
+    final camera = _V3(toEye.dot(forward), toEye.dot(side), toEye.dot(up));
     var depth = double.infinity;
-    final faces = <({double depth, _Face face})>[];
-    for (final face in _carMesh) {
-      final polygon = [for (final p in face.points) place(p)];
-      final center = polygon.reduce((a, b) => a + b) * (1 / polygon.length);
-      var normal = (polygon[1] - polygon[0]).cross(polygon[polygon.length - 1] - polygon[0]).normalized;
-      if (normal.dot(center - place(face.inside)) < 0) {
-        normal = normal * -1;
+    final visible = <({_CarPart part, double distance, List<_Face> faces})>[];
+    for (final part in _carMesh) {
+      final faces = <({double depth, _Face face})>[];
+      for (final face in part.faces) {
+        final polygon = [for (final p in face.points) place(p)];
+        final center = polygon.reduce((a, b) => a + b) * (1 / polygon.length);
+        var normal = (polygon[1] - polygon[0]).cross(polygon[polygon.length - 1] - polygon[0]).normalized;
+        if (normal.dot(center - place(face.inside)) < 0) {
+          normal = normal * -1;
+        }
+        final toFace = center - view.eye;
+        if (normal.dot(toFace) >= 0) {
+          continue;
+        }
+        final projected = view.projectPolygon(polygon);
+        if (projected == null) {
+          continue;
+        }
+        depth = math.min(depth, toFace.length);
+        faces.add((
+          depth: toFace.length,
+          face: (
+            points: projected,
+            color: _shade(colors[face.paint]!, normal, distance, ambient: _carAmbient, diffuse: _carDiffuse),
+          ),
+        ));
       }
-      final toFace = center - view.eye;
-      if (normal.dot(toFace) >= 0) {
+      if (faces.isEmpty) {
         continue;
       }
-      final projected = view.projectPolygon(polygon);
-      if (projected == null) {
-        continue;
+      if (!part.convex) {
+        faces.sort((a, b) => b.depth.compareTo(a.depth));
       }
-      depth = math.min(depth, toFace.length);
-      faces.add((
-        depth: toFace.length,
-        face: (
-          points: projected,
-          color: _shade(colors[face.paint]!, normal, distance, ambient: _carAmbient, diffuse: _carDiffuse),
-        ),
+      visible.add((
+        part: part,
+        distance: (place((part.min + part.max) * 0.5) - view.eye).length,
+        faces: [for (final f in faces) f.face],
       ));
     }
-    faces.sort((a, b) => b.depth.compareTo(a.depth));
-    return (depth: depth, faces: [for (final f in faces) f.face], opacity: opacity);
+
+    // 부품 순서: 서로 떨어진 부품은 카메라 반대쪽부터(프레임마다 뒤집히지 않게), 정해지지 않으면 먼 것부터.
+    final count = visible.length;
+    final after = [for (var i = 0; i < count; i++) <int>[]];
+    final waiting = List.filled(count, 0);
+    for (var i = 0; i < count; i++) {
+      for (var j = i + 1; j < count; j++) {
+        final order = _partOrder(visible[i].part, visible[j].part, camera);
+        if (order < 0) {
+          after[i].add(j);
+          waiting[j]++;
+        } else if (order > 0) {
+          after[j].add(i);
+          waiting[i]++;
+        }
+      }
+    }
+    final done = List.filled(count, false);
+    final ordered = <_Face>[];
+    for (var drawn = 0; drawn < count; drawn++) {
+      var next = -1;
+      for (final free in [true, false]) {
+        for (var i = 0; i < count; i++) {
+          if (!done[i] && (!free || waiting[i] == 0) && (next < 0 || visible[i].distance > visible[next].distance)) {
+            next = i;
+          }
+        }
+        if (next >= 0) {
+          break;
+        }
+      }
+      done[next] = true;
+      ordered.addAll(visible[next].faces);
+      for (final j in after[next]) {
+        waiting[j]--;
+      }
+    }
+    return (depth: depth, faces: ordered, opacity: opacity);
   }
 
   /// 바닥 면 법선(위를 향하게).

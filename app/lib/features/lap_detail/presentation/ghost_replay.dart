@@ -35,12 +35,12 @@ const String _playTooltip = '재생';
 const String _pauseTooltip = '일시정지';
 const String _restartTooltip = '처음부터';
 
-/// 시점 선택지: 위에서 본 2D 지도(null)와 3D 카메라들.
+/// 시점 선택지: 3D 카메라들(기본 추격)과 위에서 본 2D 지도(null).
 const List<({ReplayCamera? value, String label})> kGhostReplayViews = [
-  (value: null, label: '2D'),
   (value: ReplayCamera.chase, label: '추격'),
   (value: ReplayCamera.broadcast, label: '중계'),
   (value: ReplayCamera.helicopter, label: '헬기'),
+  (value: null, label: '2D'),
 ];
 
 /// 배속 글자: `0.5×`·`1×`(순수 함수).
@@ -104,9 +104,9 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
   LapReplay? _ghost;
   late ReplayCircuit _circuit;
 
-  /// 3D 시점 서킷(3D 시점을 처음 고를 때 만든다)·고른 3D 카메라(null이면 2D 지도).
+  /// 3D 시점 서킷(3D 시점을 처음 그릴 때 만든다)·고른 3D 카메라(기본 추격, null이면 2D 지도).
   ReplayTrack3d? _track3d;
-  ReplayCamera? _camera;
+  ReplayCamera? _camera = ReplayCamera.chase;
 
   /// 재생 경과 시간(ms).
   final ValueNotifier<double> _time = ValueNotifier<double>(0);
