@@ -144,4 +144,10 @@ class AppColors {
   static const Color replaySlower = Color(0xFFFFD12E);
   static const Color replayThrottle = Color(0xFF2BD66B);
   static const Color replayBrake = Color(0xFFFF3B3B);
+
+  /// 고스트 재생 3D 시점: 하늘(위·지평선 — 먼 곳 안개 색), 잔디, 낮은 방호벽.
+  static const Color replaySkyTop = Color(0xFF3D6FA8);
+  static const Color replaySkyHorizon = Color(0xFFB9CCDD);
+  static const Color replayGrass3d = Color(0xFF3F7A3A);
+  static const Color replayWall = Color(0xFFC9CDD4);
 }

@@ -63,6 +63,9 @@ const int _curvatureSmoothSamples = 3;
 const int _widthSmoothSamples = 6;
 const int _minFeatureRunSamples = 4;
 
+/// 노면 높이를 고르는 이동 평균 반폭(표본 수, 서스펜션·연석으로 튀는 높이를 없앤다).
+const int _elevationSmoothSamples = 4;
+
 /// 주행 표본을 중심선 점에 짝지을 때 앞 표본의 짝 둘레로 찾는 범위(점 수)·그 안에서 이보다 멀면(m) 전체에서 다시 찾는다.
 const int _matchWindow = 40;
 const double _rematchM = 30;
@@ -80,6 +83,13 @@ class ReplayCircuit {
     required this.rightWidths,
     required this.curvatures,
     required this.isMeasured,
+    required this.closed,
+    required this.leftPoints,
+    required this.rightPoints,
+    required this.kerbLeft,
+    required this.kerbRight,
+    required this.gravelAt,
+    required this.elevations,
     required this.asphalt,
     required this.leftEdge,
     required this.rightEdge,
@@ -102,6 +112,20 @@ class ReplayCircuit {
 
   /// 실측 서킷 폭을 썼는지(아니면 주행 기록으로 추정).
   final bool isMeasured;
+
+  /// 중심선이 한 바퀴 닫혔는지(마지막 점 → 첫 점도 길).
+  final bool closed;
+
+  /// 점마다 왼쪽·오른쪽 가장자리 위치, 그 쪽 가장자리 바깥에 연석이 있는지, 코너 바깥에 그래블이 있는지
+  /// (점 i → 다음 점 구간 기준, 3D 시점이 면을 세운다).
+  final List<Offset> leftPoints;
+  final List<Offset> rightPoints;
+  final List<bool> kerbLeft;
+  final List<bool> kerbRight;
+  final List<bool> gravelAt;
+
+  /// 점마다 노면 높이(m, 월드 Y). 내 랩에 높이 채널이 없으면 모두 0.
+  final List<double> elevations;
 
   /// 칠할 모양들(채움: 아스팔트·연석·그래블, 선: 가장자리).
   final Path asphalt;
@@ -219,6 +243,13 @@ class ReplayCircuit {
       rightWidths: rightWidths,
       curvatures: curvatures,
       isMeasured: aligned != null,
+      closed: closed,
+      leftPoints: left,
+      rightPoints: right,
+      kerbLeft: kerbs.left,
+      kerbRight: kerbs.right,
+      gravelAt: gravelAt,
+      elevations: _elevations(player.trace, playerLine, center, at),
       asphalt: asphalt,
       leftEdge: _polyline(left, closed: closed),
       rightEdge: _polyline(right, closed: closed),
@@ -299,6 +330,16 @@ class ReplayCircuit {
   }
 
   static double _lerp(double a, double b, double t) => a + (b - a) * t;
+
+  /// 중심선 점마다 가장 가까운 내 랩 표본의 높이를 앞뒤 몇 칸 평균한 값. 높이 채널이 없으면 모두 0.
+  static List<double> _elevations(LapTrace trace, List<Offset> line, List<Offset> center, int Function(int) at) {
+    if (!trace.hasElevation) {
+      return List.filled(center.length, 0);
+    }
+    final matcher = _SequentialMatcher(line, closed: false);
+    final raw = [for (final p in center) trace.worldPosY[matcher.match(p)]];
+    return _movingAverage(raw, _elevationSmoothSamples, at);
+  }
 
   /// 주행선이 (연석을 밟은 곳을 빼고) 도로 안에 들도록 중심선을 좌우로 조금씩 옮긴다.
   /// 실측 중심선은 지도 GPS를 평활한 것이라 몇 m 어긋날 수 있어서다. 폭은 그대로.

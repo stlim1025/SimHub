@@ -177,6 +177,38 @@ void main() {
     });
   });
 
+  test('높이 채널이 있으면 서킷 점마다 노면 높이를 붙이고, 없으면 0', () {
+    const radius = 200.0;
+    final count = (2 * math.pi * radius / 5).round();
+    final points = [
+      for (var i = 0; i < count; i++) Offset(radius * math.cos(2 * math.pi * i / count), radius * math.sin(2 * math.pi * i / count)),
+    ];
+    // 높이: 한 바퀴에 0 → 20m → 0(코사인 언덕).
+    double heightAt(int i) => 10 - 10 * math.cos(2 * math.pi * i / count);
+    final flat = _trace(points);
+    final hilly = LapTrace(
+      lapId: 'lap',
+      resolutionM: flat.resolutionM,
+      timeMs: flat.timeMs,
+      speedKph: flat.speedKph,
+      throttle: flat.throttle,
+      brake: flat.brake,
+      steer: flat.steer,
+      gear: flat.gear,
+      rpm: flat.rpm,
+      worldPosX: flat.worldPosX,
+      worldPosZ: flat.worldPosZ,
+      worldPosY: [for (var i = 0; i < count; i++) heightAt(i)],
+    );
+
+    final circuit = ReplayCircuit.build(LapReplay(hilly));
+    expect(hilly.hasElevation, isTrue);
+    final top = circuit.center.indexWhere((p) => (p - Offset(-radius, 0)).distance < 6);
+    expect(circuit.elevations[top], closeTo(20, 0.5));
+    expect(circuit.elevations.reduce(math.min), closeTo(0, 0.5));
+    expect(ReplayCircuit.build(LapReplay(flat)).elevations.every((e) => e == 0), isTrue);
+  });
+
   test('트레이스 JSON의 네 바퀴 노면 채널로 연석을 밟았는지 읽는다', () {
     Map<String, dynamic> json(Map<String, dynamic> extra) => {
           'lapId': 'x',
@@ -197,6 +229,7 @@ void main() {
       'surfaceTypeRR': [0, 0, 0],
     }));
     expect(trace.kerbContact, [false, true, false]);
+    expect(LapTrace.fromJson(json({'worldPosX': [0, 1, 2], 'worldPosZ': [0, 0, 0], 'worldPosY': [5, 6, 7]})).worldPosY, [5, 6, 7]);
     expect(LapTrace.fromJson(json({'surfaceTypeFL': [0, 1, 0]})).hasKerbContact, isFalse);
   });
 }

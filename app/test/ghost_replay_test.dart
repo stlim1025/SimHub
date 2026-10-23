@@ -7,6 +7,7 @@ import 'package:simcenter_app/core/theme/app_colors.dart';
 import 'package:simcenter_app/features/auth/domain/user_preferences.dart';
 import 'package:simcenter_app/features/lap_detail/domain/ghost_replay.dart';
 import 'package:simcenter_app/features/lap_detail/domain/lap_detail_models.dart';
+import 'package:simcenter_app/features/lap_detail/presentation/ghost_replay_3d_painter.dart';
 import 'package:simcenter_app/features/lap_detail/presentation/ghost_replay_painter.dart';
 import 'package:simcenter_app/features/lap_detail/presentation/replay_circuit.dart';
 import 'package:simcenter_app/features/lap_detail/presentation/telemetry_tab.dart';
@@ -372,6 +373,26 @@ void main() {
       expect(_textOf(t, 'ghost-replay-elapsed'), '0:04.000');
       expect(_textOf(t, 'telemetry-cursor-distance'), '200 m');
       expect(find.byIcon(Icons.play_arrow), findsOneWidget);
+    });
+
+    testWidgets('시점 버튼으로 2D 지도와 3D 카메라(추격·중계·헬기)를 바꾸고, 3D에서도 시계가 흐른다', (t) async {
+      await _pumpCharts(t, trace: _player, reference: _reference);
+      CustomPainter? painter() => t.widget<CustomPaint>(find.byKey(const ValueKey('ghost-replay-view'))).painter;
+      expect(painter(), isA<GhostReplayPainter>());
+
+      for (final camera in ReplayCamera.values) {
+        await t.tap(find.byKey(ValueKey('ghost-replay-view-${camera.name}')));
+        await t.pump();
+        expect((painter()! as GhostReplay3dPainter).camera, camera);
+      }
+      await t.tap(find.byKey(const ValueKey('ghost-replay-play')));
+      await t.pump();
+      await t.pump(const Duration(seconds: 1));
+      expect(_textOf(t, 'ghost-replay-elapsed'), '0:01.000');
+
+      await t.tap(find.byKey(const ValueKey('ghost-replay-view-2d')));
+      await t.pump();
+      expect(painter(), isA<GhostReplayPainter>());
     });
 
     testWidgets('시간 막대를 옮기면 그 시간으로 가고, 처음부터를 누르면 0', (t) async {

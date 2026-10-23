@@ -9,6 +9,7 @@ import '../../laps/domain/lap_models.dart';
 import '../../tracks/domain/track_width_profile.dart';
 import '../domain/ghost_replay.dart';
 import '../domain/lap_detail_models.dart';
+import 'ghost_replay_3d_painter.dart';
 import 'ghost_replay_hud.dart';
 import 'ghost_replay_painter.dart';
 import 'replay_circuit.dart';
@@ -26,12 +27,20 @@ const double _viewRadius = 8;
 const double _controlsGap = 12;
 const double _controlSpacing = 8;
 
-/// 조작 줄 폭이 이보다 좁으면 시간 막대를 아랫줄로 내린다.
-const double _singleRowControlsMinWidth = 520;
+/// 조작 줄 폭이 이보다 좁으면 시간 막대를 아랫줄로 내리고 버튼은 줄을 바꿔 감싼다.
+const double _singleRowControlsMinWidth = 760;
 const double _microsecondsPerMs = 1000;
 const String _playTooltip = '재생';
 const String _pauseTooltip = '일시정지';
 const String _restartTooltip = '처음부터';
+
+/// 시점 선택지: 위에서 본 2D 지도(null)와 3D 카메라들.
+const List<({ReplayCamera? value, String label})> kGhostReplayViews = [
+  (value: null, label: '2D'),
+  (value: ReplayCamera.chase, label: '추격'),
+  (value: ReplayCamera.broadcast, label: '중계'),
+  (value: ReplayCamera.helicopter, label: '헬기'),
+];
 
 /// 배속 글자: `0.5×`·`1×`(순수 함수).
 String ghostReplaySpeedLabel(double speed) => '${speed == speed.roundToDouble() ? speed.round() : speed}×';
@@ -90,6 +99,10 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
   LapReplay? _ghost;
   late ReplayCircuit _circuit;
 
+  /// 3D 시점 서킷(3D 시점을 처음 고를 때 만든다)·고른 3D 카메라(null이면 2D 지도).
+  ReplayTrack3d? _track3d;
+  ReplayCamera? _camera;
+
   /// 재생 경과 시간(ms).
   final ValueNotifier<double> _time = ValueNotifier<double>(0);
   late final Ticker _ticker = createTicker(_onTick);
@@ -126,6 +139,7 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
     _circuit = baseWidth == null
         ? ReplayCircuit.build(_player, ghost: _ghost, real: widget.realTrack)
         : ReplayCircuit.build(_player, ghost: _ghost, real: widget.realTrack, baseWidthM: baseWidth);
+    _track3d = null;
   }
 
   @override
@@ -191,14 +205,7 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
                   children: [
                     CustomPaint(
                       key: const ValueKey('ghost-replay-view'),
-                      painter: GhostReplayPainter(
-                        player: _player,
-                        ghost: _ghost,
-                        circuit: _circuit,
-                        time: _time,
-                        playerColor: playerColor,
-                        ghostColor: ghostColor,
-                      ),
+                      painter: _painter(playerColor, ghostColor),
                     ),
                     ValueListenableBuilder<double>(
                       valueListenable: _time,
@@ -227,6 +234,30 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
     );
   }
 
+  /// 고른 시점의 페인터: 2D 지도 또는 3D 카메라.
+  CustomPainter _painter(Color playerColor, Color ghostColor) {
+    final camera = _camera;
+    if (camera == null) {
+      return GhostReplayPainter(
+        player: _player,
+        ghost: _ghost,
+        circuit: _circuit,
+        time: _time,
+        playerColor: playerColor,
+        ghostColor: ghostColor,
+      );
+    }
+    return GhostReplay3dPainter(
+      player: _player,
+      ghost: _ghost,
+      track: _track3d ??= ReplayTrack3d.build(_circuit),
+      camera: camera,
+      time: _time,
+      playerColor: playerColor,
+      ghostColor: ghostColor,
+    );
+  }
+
   /// 이 랩의 현재 거리에서 비교 랩과의 시간 차(ms). 고스트가 없으면 null.
   double? _gapAt(double elapsedMs) {
     final ghost = _ghost;
@@ -236,29 +267,37 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
     return replayGapMs(_player.trace, ghost.trace, _player.frameAt(elapsedMs).distanceM);
   }
 
-  /// 재생·처음부터·배속, 그리고 시간 막대. 폭이 좁으면 시간 막대를 아랫줄에 둔다.
+  /// 재생·처음부터·배속·시점, 그리고 시간 막대. 폭이 좁으면 버튼을 줄 바꿔 감싸고 시간 막대를 아랫줄에 둔다.
   Widget _controls(AppPalette palette) {
-    final buttons = <Widget>[
-      IconButton(
-        key: const ValueKey('ghost-replay-play'),
-        tooltip: _playing ? _pauseTooltip : _playTooltip,
-        icon: Icon(_playing ? Icons.pause : Icons.play_arrow),
-        onPressed: _togglePlay,
-      ),
-      IconButton(
-        key: const ValueKey('ghost-replay-restart'),
-        tooltip: _restartTooltip,
-        icon: const Icon(Icons.replay),
-        onPressed: _restart,
-      ),
-      const SizedBox(width: _controlSpacing),
-      ButtonGroup<double>(
-        options: [for (final speed in kGhostReplaySpeeds) (value: speed, label: ghostReplaySpeedLabel(speed))],
-        selected: _speed,
-        onSelected: (speed) => setState(() => _speed = speed),
-        segmentKeyOf: (speed) => ValueKey('ghost-replay-speed-$speed'),
-      ),
-    ];
+    final transport = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          key: const ValueKey('ghost-replay-play'),
+          tooltip: _playing ? _pauseTooltip : _playTooltip,
+          icon: Icon(_playing ? Icons.pause : Icons.play_arrow),
+          onPressed: _togglePlay,
+        ),
+        IconButton(
+          key: const ValueKey('ghost-replay-restart'),
+          tooltip: _restartTooltip,
+          icon: const Icon(Icons.replay),
+          onPressed: _restart,
+        ),
+      ],
+    );
+    final speeds = ButtonGroup<double>(
+      options: [for (final speed in kGhostReplaySpeeds) (value: speed, label: ghostReplaySpeedLabel(speed))],
+      selected: _speed,
+      onSelected: (speed) => setState(() => _speed = speed),
+      segmentKeyOf: (speed) => ValueKey('ghost-replay-speed-$speed'),
+    );
+    final views = ButtonGroup<ReplayCamera?>(
+      options: kGhostReplayViews,
+      selected: _camera,
+      onSelected: (camera) => setState(() => _camera = camera),
+      segmentKeyOf: (camera) => ValueKey('ghost-replay-view-${camera?.name ?? '2d'}'),
+    );
     final scrub = ValueListenableBuilder<double>(
       valueListenable: _time,
       builder: (context, elapsed, _) => Slider(
@@ -274,7 +313,11 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
       builder: (context, box) => box.maxWidth >= _singleRowControlsMinWidth
           ? Row(
               children: [
-                ...buttons,
+                transport,
+                const SizedBox(width: _controlSpacing),
+                speeds,
+                const SizedBox(width: _controlSpacing),
+                views,
                 const SizedBox(width: _controlSpacing),
                 Expanded(child: scrub),
               ],
@@ -282,7 +325,12 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
           : Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Row(children: buttons),
+                Wrap(
+                  spacing: _controlSpacing,
+                  runSpacing: _controlSpacing,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [transport, speeds, views],
+                ),
                 scrub,
               ],
             ),

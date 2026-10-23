@@ -337,6 +337,9 @@ class LapDetail {
 const String kWorldPosXChannel = 'worldPosX';
 const String kWorldPosZChannel = 'worldPosZ';
 
+/// extra 채널: 플레이어 차 월드 높이(m) — 3D 시점의 높낮이.
+const String kWorldPosYChannel = 'worldPosY';
+
 /// extra 채널: ERS 배터리 잔량(J)·이번 랩 누적 배포량(J).
 const String kErsStoreChannel = 'ersStoreEnergy';
 const String kErsDeployedChannel = 'ersDeployedThisLap';
@@ -361,6 +364,7 @@ class LapTrace {
     required this.rpm,
     this.worldPosX = const [],
     this.worldPosZ = const [],
+    this.worldPosY = const [],
     this.ersStoreJ = const [],
     this.ersDeployedJ = const [],
     this.kerbContact = const [],
@@ -392,10 +396,16 @@ class LapTrace {
   /// 표본마다 플레이어 차 월드 Z(m). 없으면 빈 목록.
   final List<double> worldPosZ;
 
+  /// 표본마다 플레이어 차 월드 높이(m). 없거나 길이가 다르면 빈 목록.
+  final List<double> worldPosY;
+
   int get length => timeMs.length;
 
   /// 표본마다 월드 위치가 있는지(트랙 모양을 그릴 수 있는지).
   bool get hasPositions => length > 0 && worldPosX.length == length && worldPosZ.length == length;
+
+  /// 표본마다 높이가 있는지(3D 시점의 높낮이).
+  bool get hasElevation => hasPositions && worldPosY.length == length;
 
   /// ERS 배터리 잔량(J)·이번 랩 누적 배포량(J) — extra 채널, 없거나 길이가 다르면 빈 목록.
   final List<double> ersStoreJ;
@@ -444,6 +454,7 @@ class LapTrace {
       rpm: channel(6),
       worldPosX: hasBoth ? posX : const [],
       worldPosZ: hasBoth ? posZ : const [],
+      worldPosY: hasBoth ? _positionChannel(extra?[kWorldPosYChannel], length) : const [],
       ersStoreJ: _positionChannel(extra?[kErsStoreChannel], length),
       ersDeployedJ: _positionChannel(extra?[kErsDeployedChannel], length),
       kerbContact: _kerbContact(extra, length),
