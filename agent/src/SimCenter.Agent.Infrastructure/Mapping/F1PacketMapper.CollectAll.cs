@@ -145,9 +145,15 @@ public sealed partial class F1PacketMapper
 
         var sessionRef = packet.Header.SessionUID.ToString();
         var frame = new GameEventFrame(sessionRef, gameEvent.Code, gameEvent.Details);
-        // 차 대 차 충돌은 트랙 형상 표본에도 표시한다(벽 충돌은 게임이 이벤트로 보내지 않아 G-force·손상으로 가려낸다).
-        return packet.EventDetails.TryGetCollisionEvent(out var collision)
-            ? [frame, new FieldCollisionFrame(sessionRef, collision.Vehicle1Index, collision.Vehicle2Index)]
+        // 차 대 차 충돌·추월은 표본에도 표시한다(벽 충돌은 게임이 이벤트로 보내지 않아 G-force·손상으로 가려낸다).
+        var details = packet.EventDetails;
+        if (details.TryGetCollisionEvent(out var collision))
+        {
+            return [frame, new FieldCollisionFrame(sessionRef, collision.Vehicle1Index, collision.Vehicle2Index)];
+        }
+
+        return details.TryGetOvertakeEvent(out var overtake)
+            ? [frame, new FieldOvertakeFrame(sessionRef, overtake.OvertakingVehicleIdx, overtake.BeingOvertakenVehicleIdx)]
             : [frame];
     }
 

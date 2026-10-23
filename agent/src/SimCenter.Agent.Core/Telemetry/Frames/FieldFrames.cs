@@ -28,14 +28,30 @@ public sealed record FieldLapStatesFrame(
 public readonly record struct FieldLapState(float LapDistanceM, bool IsOnTrack, byte Status);
 
 /// <summary>
-/// 모든 차의 바퀴 노면과 속도(F1 Car Telemetry). 칸 번호 = 차 번호. 노면은 바퀴 4개를 4비트씩 묶은 값(FL·FR·RL·RR 순, 하위 비트부터).
-/// <paramref name="SpeedsKph"/>가 비었으면 속도를 모른다(0으로 싣는다).
+/// 모든 차의 바퀴 노면과 주행 상태(F1 Car Telemetry). 칸 번호 = 차 번호. 노면은 바퀴 4개를 4비트씩 묶은 값(FL·FR·RL·RR 순, 하위 비트부터).
+/// 노면 뒤 목록이 비었으면 그 값을 모른다(0으로 싣는다).
 /// </summary>
+/// <param name="Gears">−1 = R, 0 = N, 1~8.</param>
+/// <param name="Throttles">스로틀(%).</param>
+/// <param name="Brakes">브레이크(%).</param>
 public sealed record FieldSurfacesFrame(
     string SessionRef,
     uint FrameId,
     IReadOnlyList<ushort> Surfaces,
-    IReadOnlyList<ushort>? SpeedsKph = null) : ITelemetryFrame;
+    IReadOnlyList<ushort>? SpeedsKph = null,
+    IReadOnlyList<sbyte>? Gears = null,
+    IReadOnlyList<byte>? Throttles = null,
+    IReadOnlyList<byte>? Brakes = null,
+    IReadOnlyList<bool>? DrsOpen = null) : ITelemetryFrame;
+
+/// <summary>모든 차의 타이어(F1 Car Status): 보이는 컴파운드(게임 원시 값)와 사용 랩 수. 칸 번호 = 차 번호, 최신 값을 쓴다.</summary>
+public sealed record FieldStatusFrame(
+    string SessionRef,
+    IReadOnlyList<byte> TyreCompounds,
+    IReadOnlyList<byte> TyreAgeLaps) : ITelemetryFrame;
+
+/// <summary>추월(F1 Event OVTK): 추월한 차와 당한 차 번호.</summary>
+public sealed record FieldOvertakeFrame(string SessionRef, int Overtaker, int Overtaken) : ITelemetryFrame;
 
 /// <summary>
 /// 모든 차의 차체 손상(F1 Car Damage). 칸 번호 = 차 번호, 값은 날개·플로어·디퓨저·사이드포드 손상률(%) 가운데 가장 큰 값.

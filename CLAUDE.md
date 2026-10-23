@@ -41,7 +41,7 @@ EF Core Code First + Migration. JWT 인증. 실시간은 SignalR, 조회는 REST
 모든 UDP 패킷을 보내지 않는다. **의미 있는 도메인 이벤트만** 전송
 (SessionStarted/LapStarted/SectorCompleted/LapFinished/SessionEnded/SessionClassified/TrackSamplesChunk — SessionClassified는 세션당 최종 순위표 1건).
 Raw 패킷 firehose는 서버로 흘리거나 원본 저장하지 않는다.
-**예외(트랙 형상):** 오프라인 세션에서 모든 차의 위치·랩 거리·노면만 추린 표본은 `TrackSamplesChunk` 조각으로 보낸다(이름 없음, 패킷 원본은 여전히 보내지 않는다 — `docs/Track-Envelope-From-All-Cars-2026-10-23.html`).
+**예외(트랙 형상·레이스 리플레이):** 오프라인 세션에서 모든 차의 위치·랩 거리·노면·주행 상태(속도·기어·페달·DRS·타이어·충격)만 추린 표본은 `TrackSamplesChunk` 조각으로 보낸다(이름 없음, 패킷 원본은 여전히 보내지 않는다 — `docs/Track-Envelope-From-All-Cars-2026-10-23.html`, `shared/schema/track_samples_chunk.json`).
 오프라인 시 SQLite Outbox 저장 → 복구 시 자동 재전송(멱등키 + Ack). 자동 실행/재접속.
 **계정 연결:** 웹에서 받은 1회용 연결 코드를 장치별 키로 교환해 DPAPI로 저장하고, 허브는 그 키(`X-Agent-Key`)로 인증한다(D-26).
 

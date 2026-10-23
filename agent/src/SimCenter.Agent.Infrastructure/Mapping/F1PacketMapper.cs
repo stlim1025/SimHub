@@ -109,7 +109,7 @@ public sealed partial class F1PacketMapper
                 return MapCarTelemetryPacket(telemetry);
 
             case F1Enums.PacketType.CarStatus when packet.TryGetCarStatusDataPacket(out var status):
-                return MapPlayerCar(packet.PacketType, packet.Header, status.CarStatusData.AsReadOnlySpan(), MapCarStatusFrames);
+                return [.. MapPlayerCar(packet.PacketType, packet.Header, status.CarStatusData.AsReadOnlySpan(), MapCarStatusFrames), MapFieldStatus(status)];
 
             case F1Enums.PacketType.CarDamage when packet.TryGetCarDamageDataPacket(out var damage):
                 return [.. MapPlayerCar(packet.PacketType, packet.Header, damage.CarDamageData.AsReadOnlySpan(), MapCarDamageFrames), MapFieldDamage(damage)];

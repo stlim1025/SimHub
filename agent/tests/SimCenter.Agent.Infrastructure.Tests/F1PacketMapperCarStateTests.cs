@@ -256,7 +256,7 @@ public class F1PacketMapperCarStateTests
         var damage = new CarDamageDataPacket { Header = header, CarDamageData = new CarDamageData[CarSlotCount] };
 
         Assert.IsType<FieldSurfacesFrame>(Assert.Single(_sut.Map(telemetry)));   // 모든 차 노면은 관전 중에도 낸다
-        Assert.Empty(_sut.Map(status));
+        Assert.IsType<FieldStatusFrame>(Assert.Single(_sut.Map(status)));     // 모든 차 타이어도 관전 중에 낸다
         Assert.IsType<FieldDamageFrame>(Assert.Single(_sut.Map(damage)));     // 모든 차 손상도 관전 중에 낸다
     }
 

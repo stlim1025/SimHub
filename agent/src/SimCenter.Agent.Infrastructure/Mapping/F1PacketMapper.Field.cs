@@ -6,8 +6,8 @@ using F1Enums = F1Game.UDP.Enums;
 namespace SimCenter.Agent.Infrastructure.Mapping;
 
 /// <summary>
-/// 모든 차 프레임(트랙 형상 표본의 원천, 헌장 Agent Rules 예외): Motion·Lap Data·Car Telemetry·Car Damage의 22칸과
-/// 차 대 차 충돌 이벤트를 옮긴다.
+/// 모든 차 프레임(트랙 형상·레이스 리플레이 표본의 원천, 헌장 Agent Rules 예외): Motion·Lap Data·Car Telemetry·Car Status·Car Damage의
+/// 22칸과 차 대 차 충돌·추월 이벤트를 옮긴다.
 /// 플레이어 칸이 없어도(관전 중) 낸다. 서버로 가는 것은 수집기가 추린 표본뿐이다.
 /// </summary>
 public sealed partial class F1PacketMapper
@@ -22,6 +22,9 @@ public sealed partial class F1PacketMapper
     private const int DriverStatusMask = 0x7;
     private const int PitStatusMask = 0x3;
     private const int PitStatusShift = 3;
+
+    /// <summary>페달 값(0~1) → %.</summary>
+    private const float PercentScale = 100f;
 
     private static FieldPositionsFrame MapFieldPositions(MotionDataPacket packet)
     {
@@ -62,14 +65,41 @@ public sealed partial class F1PacketMapper
         var cars = packet.CarTelemetryData.AsReadOnlySpan();
         var surfaces = new ushort[cars.Length];
         var speeds = new ushort[cars.Length];
+        var gears = new sbyte[cars.Length];
+        var throttles = new byte[cars.Length];
+        var brakes = new byte[cars.Length];
+        var drs = new bool[cars.Length];
         for (var i = 0; i < cars.Length; i++)
         {
-            surfaces[i] = PackSurfaces(cars[i].SurfaceType);
-            speeds[i] = cars[i].Speed;
+            var car = cars[i];
+            surfaces[i] = PackSurfaces(car.SurfaceType);
+            speeds[i] = car.Speed;
+            gears[i] = car.Gear;
+            throttles[i] = ToPercent(car.Throttle);
+            brakes[i] = ToPercent(car.Brake);
+            drs[i] = car.IsDrsOn;
         }
 
-        return new FieldSurfacesFrame(packet.Header.SessionUID.ToString(), packet.Header.FrameIdentifier, surfaces, speeds);
+        return new FieldSurfacesFrame(
+            packet.Header.SessionUID.ToString(), packet.Header.FrameIdentifier, surfaces, speeds, gears, throttles, brakes, drs);
     }
+
+    private static FieldStatusFrame MapFieldStatus(CarStatusDataPacket packet)
+    {
+        var cars = packet.CarStatusData.AsReadOnlySpan();
+        var compounds = new byte[cars.Length];
+        var ages = new byte[cars.Length];
+        for (var i = 0; i < cars.Length; i++)
+        {
+            compounds[i] = (byte)cars[i].VisualTyreCompound;
+            ages[i] = cars[i].TyresAgeLaps;
+        }
+
+        return new FieldStatusFrame(packet.Header.SessionUID.ToString(), compounds, ages);
+    }
+
+    private static byte ToPercent(float pedal)
+        => float.IsFinite(pedal) ? (byte)Math.Clamp(MathF.Round(pedal * PercentScale), 0, PercentScale) : (byte)0;
 
     /// <summary>차체 손상: 날개(좌·우·뒤)·플로어·디퓨저·사이드포드 손상률(%) 가운데 가장 큰 값. 타이어·엔진 마모는 넣지 않는다(충격과 무관하게 늘어난다).</summary>
     private static FieldDamageFrame MapFieldDamage(CarDamageDataPacket packet)

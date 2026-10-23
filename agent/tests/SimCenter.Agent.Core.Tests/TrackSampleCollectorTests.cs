@@ -33,7 +33,11 @@ public class TrackSampleCollectorTests
         _sut.Process(new FieldPositionsFrame(SessionRef, frameId, timeMs, positions));
         _sut.Process(new FieldLapStatesFrame(SessionRef, frameId, states));
         var speeds = Enumerable.Range(0, Cars).Select(i => (ushort)(250 + i)).ToList();
-        return _sut.Process(new FieldSurfacesFrame(SessionRef, frameId, surfaces ?? new ushort[Cars], speeds));
+        var gears = Enumerable.Range(0, Cars).Select(i => (sbyte)(7 - i)).ToList();
+        var throttles = Enumerable.Range(0, Cars).Select(i => (byte)(100 - i)).ToList();
+        var brakes = Enumerable.Range(0, Cars).Select(i => (byte)i).ToList();
+        var drs = Enumerable.Range(0, Cars).Select(i => i == 0).ToList();
+        return _sut.Process(new FieldSurfacesFrame(SessionRef, frameId, surfaces ?? new ushort[Cars], speeds, gears, throttles, brakes, drs));
     }
 
     private static TrackSamplesChunk End(TrackSampleCollector sut)
@@ -123,6 +127,40 @@ public class TrackSampleCollectorTests
     }
 
     [Fact]
+    public void ReplayColumns_GearPedalsDrsAndTyres_AreRecorded()
+    {
+        _sut.Process(Session());
+        _sut.Process(new FieldStatusFrame(SessionRef, [16, 17, 18], [3, 12, 0]));
+        Tick(0, 0);
+
+        var samples = Decode(End(_sut).Data).Samples;
+
+        Assert.Equal([7, 6, 5], samples.Select(x => (int)x.Gear));
+        Assert.Equal([100, 99, 98], samples.Select(x => (int)x.Throttle));
+        Assert.Equal([0, 1, 2], samples.Select(x => (int)x.Brake));
+        Assert.Equal([16, 17, 18], samples.Select(x => (int)x.TyreCompound));
+        Assert.Equal([3, 12, 0], samples.Select(x => (int)x.TyreAgeLaps));
+        Assert.Equal([TrackSampleEncoder.DrsFlag, 0, 0], samples.Select(x => (int)x.Flags2));
+    }
+
+    [Fact]
+    public void Overtake_FlagsOvertakerAndOvertaken_WithAnExtraSample()
+    {
+        _sut.Process(Session());
+        Tick(0, 0);
+        _sut.Process(new FieldOvertakeFrame(SessionRef, Overtaker: 2, Overtaken: 1));
+        Tick(1, 40);
+
+        var samples = Decode(End(_sut).Data).Samples;
+
+        Assert.Equal(Cars + 2, samples.Count);
+        Assert.Equal(1, samples[Cars].CarIndex);
+        Assert.Equal(TrackSampleEncoder.OvertakenFlag, samples[Cars].Flags2);
+        Assert.Equal(2, samples[Cars + 1].CarIndex);
+        Assert.Equal(TrackSampleEncoder.OvertookFlag, samples[Cars + 1].Flags2);
+    }
+
+    [Fact]
     public void CarsOffTrack_OrBeforeTheLine_AreSkipped()
     {
         _sut.Process(Session());
@@ -177,7 +215,13 @@ public class TrackSampleCollectorTests
         var sut = new TrackSampleCollector();
         sut.Process(Session());
         var chunks = new List<TrackSamplesChunk>();
-        var framesForOneChunk = TrackSampleCollector.RawChunkBytes / (TrackSampleEncoder.FrameBytes + Cars * TrackSampleEncoder.SampleBytes) + 1;
+        // 압축 전 크기가 처음으로 조각 기준에 닿는 프레임 수.
+        var framesForOneChunk = 1;
+        while (TrackSampleEncoder.RawSize(framesForOneChunk, framesForOneChunk * Cars) < TrackSampleCollector.RawChunkBytes)
+        {
+            framesForOneChunk++;
+        }
+
         for (var i = 0; i < framesForOneChunk; i++)
         {
             var positions = Enumerable.Range(0, Cars).Select(c => new FieldPosition(i * 7.1f + c, i * 3.3f - c)).ToList();
@@ -204,7 +248,7 @@ public class TrackSampleCollectorTests
     {
         var frames = new[]
         {
-            new TrackSampleFrame(1234, [new TrackSample(5, 100.3f, -12.34f, 56.78f, 0x1234, 9, -40f, 3.1f, 312, 77)]),
+            new TrackSampleFrame(1234, [new TrackSample(5, 100.3f, -12.34f, 56.78f, 0x1234, 9, -40f, 3.1f, 312, 77, -1, 64, 32, 17, 9, 5)]),
         };
 
         var decoded = Decode(Convert.ToBase64String(TrackSampleEncoder.Encode(frames)));
@@ -221,15 +265,22 @@ public class TrackSampleCollectorTests
         Assert.Equal(12, sample.GLongQuarterG);
         Assert.Equal(312, sample.SpeedKph);
         Assert.Equal(77, sample.Damage);
+        Assert.Equal(-1, sample.Gear);
+        Assert.Equal(64, sample.Throttle);
+        Assert.Equal(32, sample.Brake);
+        Assert.Equal(17, sample.TyreCompound);
+        Assert.Equal(9, sample.TyreAgeLaps);
+        Assert.Equal(5, sample.Flags2);
     }
 
     private sealed record DecodedSample(
         byte CarIndex, ushort LapDistanceQuarterM, int XDecimeters, int ZDecimeters, ushort Surface, byte Status,
-        sbyte GLatQuarterG, sbyte GLongQuarterG, ushort SpeedKph, byte Damage);
+        sbyte GLatQuarterG, sbyte GLongQuarterG, ushort SpeedKph, byte Damage,
+        sbyte Gear, byte Throttle, byte Brake, byte TyreCompound, byte TyreAgeLaps, byte Flags2);
 
     private sealed record Decoded(uint[] TimesMs, List<DecodedSample> Samples);
 
-    /// <summary>format 2 디코더(계약 문서 그대로 — 서버가 같은 순서로 읽는다).</summary>
+    /// <summary>format 3 디코더(계약 문서 그대로 — 서버가 같은 순서로 읽는다).</summary>
     private static Decoded Decode(string base64)
     {
         using var input = new GZipStream(new MemoryStream(Convert.FromBase64String(base64)), CompressionMode.Decompress);
@@ -289,11 +340,26 @@ public class TrackSampleCollectorTests
             speed[i] = BinaryPrimitives.ReadUInt16LittleEndian(raw.AsSpan(offset));
         }
 
-        var damage = raw.AsSpan(offset, total).ToArray();
-        Assert.Equal(raw.Length, offset + total);
+        byte[] Column()
+        {
+            var column = raw.AsSpan(offset, total).ToArray();
+            offset += total;
+            return column;
+        }
+
+        var damage = Column();
+        var gear = Column().Select(b => (sbyte)b).ToArray();
+        var throttle = Column();
+        var brake = Column();
+        var compound = Column();
+        var age = Column();
+        var flags2 = Column();
+        Assert.Equal(raw.Length, offset);
 
         return new Decoded(times, Enumerable.Range(0, total)
-            .Select(i => new DecodedSample(cars[i], dist[i], x[i], z[i], surface[i], status[i], gLat[i], gLong[i], speed[i], damage[i]))
+            .Select(i => new DecodedSample(
+                cars[i], dist[i], x[i], z[i], surface[i], status[i], gLat[i], gLong[i], speed[i], damage[i],
+                gear[i], throttle[i], brake[i], compound[i], age[i], flags2[i]))
             .ToList());
     }
 }

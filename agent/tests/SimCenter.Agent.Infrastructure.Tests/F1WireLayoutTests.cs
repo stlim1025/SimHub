@@ -228,7 +228,7 @@ public class F1WireLayoutTests
         var damage = Datagram(F1Enums.PacketType.CarDamage, 1041, playerIndex: byte.MaxValue);
 
         Assert.IsType<FieldSurfacesFrame>(Assert.Single(sut.Map(telemetry)));
-        Assert.Empty(sut.Map(status));
+        Assert.IsType<FieldStatusFrame>(Assert.Single(sut.Map(status)));
         Assert.IsType<FieldDamageFrame>(Assert.Single(sut.Map(damage)));
         Assert.IsType<FieldLapStatesFrame>(Assert.Single(sut.Map(lap)));
 
