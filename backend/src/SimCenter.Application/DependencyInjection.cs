@@ -30,6 +30,7 @@ public static class DependencyInjection
         services.AddScoped<ITrackSamplesIngestor, TrackSamplesIngestor>();
         services.AddScoped<ITrackGeometryService, TrackGeometryService>();
         services.AddScoped<IFieldLapService, FieldLapService>();
+        services.AddScoped<IHighlightsService, HighlightsService>();
         services.AddScoped<ISeasonQueryService, SeasonQueryService>();
         services.AddScoped<ISeasonImportService, SeasonImportService>();
         services.AddScoped<ISeasonCommandService, SeasonCommandService>();

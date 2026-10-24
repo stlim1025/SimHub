@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SimCenter.Application.Common.Interfaces;
 using SimCenter.Domain.Entities;
+using SimCenter.Domain.Enums;
 
 namespace SimCenter.Infrastructure.Persistence.Repositories;
 
@@ -37,4 +38,25 @@ public sealed class TrackSampleChunkRepository : ITrackSampleChunkRepository
             .OrderBy(x => x.ChunkIndex)
             .Select(x => new StoredTrackSampleChunk(x.SessionRef, x.ChunkIndex, x.Format, x.Payload, x.TrackLengthM))
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<UnclassifiedSampleSession>> ListUnclassifiedSessionsAsync(
+        Guid userId, Guid trackId, string gameCode, SessionType sessionType, DateTime before,
+        CancellationToken cancellationToken = default)
+        => await _context.TrackSampleChunks
+            .AsNoTracking()
+            .Where(x => x.UserId == userId && x.TrackId == trackId && x.GameCode == gameCode && x.SessionType == sessionType
+                        && !x.IsDeleted
+                        && !_context.GameSessions.Any(g => g.UserId == userId && g.SessionRef == x.SessionRef && !g.IsDeleted))
+            .GroupBy(x => x.SessionRef)
+            .Select(g => new { SessionRef = g.Key, First = g.Min(x => x.CreatedAt) })
+            .Where(s => s.First < before)
+            .OrderByDescending(s => s.First)
+            .Select(s => new UnclassifiedSampleSession(s.SessionRef, s.First))
+            .ToListAsync(cancellationToken);
+
+    public async Task<DateTime?> FirstReceivedAtAsync(Guid userId, string sessionRef, CancellationToken cancellationToken = default)
+        => await _context.TrackSampleChunks
+            .AsNoTracking()
+            .Where(x => x.UserId == userId && x.SessionRef == sessionRef && !x.IsDeleted)
+            .MinAsync(x => (DateTime?)x.CreatedAt, cancellationToken);
 }

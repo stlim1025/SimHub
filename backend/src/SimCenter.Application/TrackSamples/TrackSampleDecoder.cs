@@ -21,6 +21,10 @@ namespace SimCenter.Application.TrackSamples;
 /// <param name="Steer">format 5부터(−100~100, 왼쪽 −).</param>
 /// <param name="Rpm">format 5부터.</param>
 /// <param name="ErsStoreKj">format 5부터(ERS 배터리 잔량 kJ).</param>
+/// <param name="GLateral">format 2부터(횡 G, g).</param>
+/// <param name="GLongitudinal">format 2부터(종 G, g).</param>
+/// <param name="Damage">format 2부터(차체 손상률 최댓값 %).</param>
+/// <param name="Flags2">format 3부터(표시 비트 2: DRS·추월함·추월당함).</param>
 public sealed record DecodedTrackSamples(
     int Format,
     int[] TimeMs,
@@ -38,7 +42,11 @@ public sealed record DecodedTrackSamples(
     float[]? Y,
     sbyte[]? Steer,
     ushort[]? Rpm,
-    ushort[]? ErsStoreKj)
+    ushort[]? ErsStoreKj,
+    float[]? GLateral = null,
+    float[]? GLongitudinal = null,
+    byte[]? Damage = null,
+    byte[]? Flags2 = null)
 {
     public int Count => CarIndex.Length;
 }
@@ -55,6 +63,7 @@ public static class TrackSampleDecoder
     /// <summary>열 단위.</summary>
     private const float LapDistanceUnitM = 0.25f;
     private const float PositionUnitM = 0.1f;
+    private const float GForceUnit = 0.25f;
 
     /// <summary>풀었을 때 크기 한도(조각은 Agent에서 약 1.2MB에 끊긴다 — 압축 폭탄 방어).</summary>
     private const int MaxRawBytes = 16 * 1024 * 1024;
@@ -103,12 +112,16 @@ public static class TrackSampleDecoder
         sbyte[]? steer = null;
         ushort[]? rpm = null;
         ushort[]? ers = null;
+        float[]? gLateral = null;
+        float[]? gLongitudinal = null;
+        byte[]? damage = null;
+        byte[]? flags2 = null;
         if (format >= 2)
         {
-            reader.Skip(total); // 횡 G
-            reader.Skip(total); // 종 G
+            gLateral = Array.ConvertAll(reader.SBytes(total), v => v * GForceUnit);
+            gLongitudinal = Array.ConvertAll(reader.SBytes(total), v => v * GForceUnit);
             speed = reader.UInt16s(total);
-            reader.Skip(total); // 손상
+            damage = reader.Bytes(total);
         }
 
         if (format >= 3)
@@ -118,7 +131,7 @@ public static class TrackSampleDecoder
             brake = reader.Bytes(total);
             tyre = reader.Bytes(total);
             reader.Skip(total); // 타이어 랩
-            reader.Skip(total); // 표시2
+            flags2 = reader.Bytes(total);
         }
 
         if (format >= 4)
@@ -139,7 +152,8 @@ public static class TrackSampleDecoder
         }
 
         return new DecodedTrackSamples(
-            format, times, car, distance, x, z, surface, status, speed, gear, throttle, brake, tyre, y, steer, rpm, ers);
+            format, times, car, distance, x, z, surface, status, speed, gear, throttle, brake, tyre, y, steer, rpm, ers,
+            gLateral, gLongitudinal, damage, flags2);
     }
 
     private static byte[] Decompress(byte[] gzip)

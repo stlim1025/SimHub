@@ -17,7 +17,8 @@ namespace SimCenter.Api.Controllers;
 [ApiController]
 [Route("api/v1/me/sessions")]
 [Authorize]
-public sealed class MySessionsController(ISessionQueryService sessionService, IFieldLapService fieldLapService) : ControllerBase
+public sealed class MySessionsController(
+    ISessionQueryService sessionService, IFieldLapService fieldLapService, IHighlightsService highlightsService) : ControllerBase
 {
     private const string SessionTypeField = "sessionType";
     private const string SessionTypeError = "sessionType는 Practice/Qualifying/Race 중 하나여야 합니다.";
@@ -63,6 +64,16 @@ public sealed class MySessionsController(ISessionQueryService sessionService, IF
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<LapTraceResponse>> GetCarBestLapTrace(Guid sessionId, int carIndex, CancellationToken cancellationToken)
         => Ok(await fieldLapService.GetBestLapTraceAsync(User.GetRequiredUserId(), sessionId, carIndex, cancellationToken));
+
+    /// <summary>
+    /// 레이스 하이라이트: 모든 차 표본에서 고른 출발·추월·충돌·리타이어·세이프티카·결승 장면을 내 하이라이트·레이스 하이라이트 두 묶음으로.
+    /// 남의 세션·없는 세션·레이스가 아닌 세션·표본 없음은 404.
+    /// </summary>
+    [HttpGet("{sessionId:guid}/highlights")]
+    [ProducesResponseType(typeof(HighlightsResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<HighlightsResponse>> GetHighlights(Guid sessionId, CancellationToken cancellationToken)
+        => Ok(await highlightsService.GetHighlightsAsync(User.GetRequiredUserId(), sessionId, cancellationToken));
 
     /// <summary>
     /// 명시적 이름 목록(Practice·Qualifying·Race, 대소문자 무시)만 받는다. 비어 있으면 필터 없음.
