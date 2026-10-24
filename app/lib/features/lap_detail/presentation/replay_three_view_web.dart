@@ -7,16 +7,16 @@ import 'package:web/web.dart' as web;
 import 'ghost_replay_3d_painter.dart';
 import 'replay_three_scene.dart';
 
-/// 앱 주소에 `?replay3d=three`가 있으면 3D 시점을 three.js로 그린다(기본 화면으로 바꾸기 전 확인용).
+/// 웹에서는 3D 시점을 three.js로 그린다. 앱 주소에 `?replay3d=canvas`가 있으면 예전 캔버스 그림을 쓴다(비교·문제 확인용).
 const String _flagParameter = 'replay3d';
-const String _flagValue = 'three';
+const String _canvasValue = 'canvas';
 
 /// three.js 그림 모듈(앱 web 폴더, main.dart.js 기준 상대 경로).
 const String _modulePath = './replay3d/replay3d.js';
 const String _containerTag = 'div';
 const String _fill = '100%';
 
-bool get replayThreeEnabled => Uri.base.queryParameters[_flagParameter] == _flagValue;
+bool get replayThreeEnabled => Uri.base.queryParameters[_flagParameter] != _canvasValue;
 
 extension type _SceneModule(JSObject _) implements JSObject {
   external _SceneHandle createReplayScene(web.HTMLElement container);

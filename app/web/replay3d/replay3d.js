@@ -16,6 +16,10 @@ const FOG_END_M = 1100;
 const GROUND_SIZE_M = 8000;
 const GROUND_BELOW_M = 0.3;
 const MAX_PIXEL_RATIO = 2;
+/** 휴대폰으로 보는 화면 짧은 변(CSS px) 기준. */
+const PHONE_SCREEN_MAX_PX = 768;
+/** 기기 픽셀 비율이 이 이상이면 화소가 촘촘해 안티앨리어싱을 끈다(채우기 비용이 가장 크다). */
+const NO_AA_PIXEL_RATIO = 2;
 const EXPOSURE = 1.05;
 
 /** 해 방향(위쪽 앞에서 비스듬히). */
@@ -24,8 +28,26 @@ const SUN_DISTANCE_M = 150;
 /** 그림자를 드리우는 범위: 카메라가 보는 곳 둘레 반경(m)과 그림자 지도 해상도. */
 const SHADOW_RADIUS_M = 45;
 const SHADOW_MAP_SIZE = 2048;
+const PHONE_SHADOW_MAP_SIZE = 1024;
 const SHADOW_BIAS = -0.0004;
 const SHADOW_NORMAL_BIAS = 0.03;
+
+/**
+ * 재생 중 프레임이 밀리면 한 단계씩 낮추는 품질(되돌리지 않는다): 픽셀 비율 상한과 그림자.
+ * 앱이 재생 중에는 매 화면 갱신마다 그리라고 부르므로, 부른 간격이 곧 프레임 간격이다.
+ */
+const QUALITY_LEVELS = [
+  { pixelRatio: MAX_PIXEL_RATIO, shadows: true },
+  { pixelRatio: 1.5, shadows: true },
+  { pixelRatio: 1, shadows: true },
+  { pixelRatio: 1, shadows: false },
+];
+/** 이만큼 프레임을 모아 평균 간격을 본다. */
+const QUALITY_WINDOW_FRAMES = 90;
+/** 평균 간격이 이보다 길면(약 40fps 밑) 한 단계 낮춘다. */
+const QUALITY_SLOW_FRAME_MS = 25;
+/** 간격이 이보다 길면 재생이 멈췄던 것으로 보고 모으기를 새로 시작한다. */
+const QUALITY_GAP_MS = 120;
 
 /** sRGB(0~1) 꼭짓점 색 배열을 three.js 작업 색 공간(선형)으로 바꾼다. */
 function toLinear(colors) {
@@ -44,19 +66,23 @@ function toLinear(colors) {
  * [container] 안에 캔버스를 만들고 장면 핸들을 돌려준다. WebGL을 못 쓰면 ok = false(앱이 예전 그림으로 돌아간다).
  */
 export function createReplayScene(container) {
+  const deviceRatio = window.devicePixelRatio || 1;
+  const phone = Math.min(window.screen.width, window.screen.height) < PHONE_SCREEN_MAX_PX;
+  const shadowMapSize = phone ? PHONE_SHADOW_MAP_SIZE : SHADOW_MAP_SIZE;
   let renderer;
   try {
-    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer = new THREE.WebGLRenderer({ antialias: deviceRatio < NO_AA_PIXEL_RATIO });
   } catch (e) {
     console.warn('replay3d: WebGL unavailable', e);
     return { ok: false, setTrack() {}, render() {}, lastFrameMs() { return 0; }, dispose() {} };
   }
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO));
+  renderer.setPixelRatio(Math.min(deviceRatio, MAX_PIXEL_RATIO));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = EXPOSURE;
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  // 휴대폰은 부드러운 그림자(여러 번 표본) 대신 기본 거르기.
+  renderer.shadowMap.type = phone ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
   const canvas = renderer.domElement;
   canvas.style.width = '100%';
   canvas.style.height = '100%';
@@ -72,7 +98,7 @@ export function createReplayScene(container) {
   scene.add(new THREE.HemisphereLight(0xdfe9f5, 0x4a5a40, 1.3));
   const sun = new THREE.DirectionalLight(0xfff4e5, 2.8);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
+  sun.shadow.mapSize.set(shadowMapSize, shadowMapSize);
   sun.shadow.bias = SHADOW_BIAS;
   sun.shadow.normalBias = SHADOW_NORMAL_BIAS;
   Object.assign(sun.shadow.camera, {
@@ -92,7 +118,7 @@ export function createReplayScene(container) {
   // 그림자 지도 한 칸 단위로 해를 옮겨, 카메라가 움직여도 그림자 가장자리가 떨리지 않게 한다.
   const lightRight = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), SUN_DIRECTION).normalize();
   const lightUp = new THREE.Vector3().crossVectors(SUN_DIRECTION, lightRight).normalize();
-  const shadowTexel = (SHADOW_RADIUS_M * 2) / SHADOW_MAP_SIZE;
+  const shadowTexel = (SHADOW_RADIUS_M * 2) / shadowMapSize;
   const aim = new THREE.Vector3();
   const snapped = new THREE.Vector3();
   function placeSun(x, y, z) {
@@ -114,6 +140,35 @@ export function createReplayScene(container) {
   let lost = false;
   let lastState = null;
   let frameMs = 0;
+  let quality = 0;
+  let lastCall = 0;
+  let windowMs = 0;
+  let windowFrames = 0;
+
+  /** 그리라고 부른 간격으로 프레임 속도를 재고, 느리면 품질을 한 단계 낮춘다. */
+  function watchFrameRate() {
+    const now = performance.now();
+    const gap = now - lastCall;
+    lastCall = now;
+    if (gap > QUALITY_GAP_MS) {
+      windowMs = 0;
+      windowFrames = 0;
+      return;
+    }
+    windowMs += gap;
+    windowFrames += 1;
+    if (windowFrames < QUALITY_WINDOW_FRAMES) return;
+    const average = windowMs / windowFrames;
+    windowMs = 0;
+    windowFrames = 0;
+    if (average <= QUALITY_SLOW_FRAME_MS || quality >= QUALITY_LEVELS.length - 1) return;
+    quality += 1;
+    const level = QUALITY_LEVELS[quality];
+    renderer.setPixelRatio(Math.min(deviceRatio, level.pixelRatio));
+    renderer.shadowMap.enabled = level.shadows;
+    sun.castShadow = level.shadows;
+    console.info(`replay3d: quality ${quality} (average frame ${average.toFixed(1)} ms)`);
+  }
 
   canvas.addEventListener('webglcontextlost', (e) => {
     e.preventDefault();
@@ -135,6 +190,19 @@ export function createReplayScene(container) {
     if (lastState) draw(lastState);
   });
   observer.observe(container);
+
+  // 화면 밖(스크롤로 벗어남)이거나 탭이 숨으면 그리지 않는다. 다시 보이면 마지막 상태를 한 번 그린다.
+  let onScreen = true;
+  const visible = () => onScreen && !document.hidden;
+  const showAgain = () => {
+    if (visible() && lastState) draw(lastState);
+  };
+  const viewport = new IntersectionObserver((entries) => {
+    onScreen = entries[entries.length - 1].isIntersecting;
+    showAgain();
+  });
+  viewport.observe(container);
+  document.addEventListener('visibilitychange', showAgain);
 
   function clearTrack() {
     for (const mesh of trackMeshes) {
@@ -185,7 +253,7 @@ export function createReplayScene(container) {
   }
 
   function draw(state) {
-    if (lost) return;
+    if (lost || !visible()) return;
     resize();
     const start = performance.now();
     camera.position.set(state[0], state[1], state[2]);
@@ -227,6 +295,7 @@ export function createReplayScene(container) {
     setTrack,
     render(state) {
       lastState = state;
+      watchFrameRate();
       draw(state);
     },
     /** 마지막 그리기에 든 시간(ms, 측정용). */
@@ -235,6 +304,8 @@ export function createReplayScene(container) {
     },
     dispose() {
       observer.disconnect();
+      viewport.disconnect();
+      document.removeEventListener('visibilitychange', showAgain);
       clearTrack();
       for (const car of cars) car.dispose();
       renderer.dispose();
