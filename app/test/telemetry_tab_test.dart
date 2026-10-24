@@ -65,6 +65,7 @@ void main() {
       expect(TelemetryChannel.gear.format(7, UnitSystem.metric), '7');
       expect(TelemetryChannel.steer.format(-34, UnitSystem.metric), '-34');
       expect(TelemetryChannel.rpm.format(11500, UnitSystem.metric), '11,500');
+      expect(TelemetryChannel.ers.format(2.512, UnitSystem.metric), '2.51 MJ');
     });
 
     test('Imperial이면 속도 값을 mph로 바꾼다', () {
@@ -149,6 +150,35 @@ void main() {
       for (final title in ['Delta', 'Speed', 'Throttle', 'Brake', 'Gear', 'Steering', 'RPM']) {
         expect(find.text(title), findsOneWidget, reason: title);
       }
+    });
+
+    testWidgets('ERS 배터리 잔량 채널이 있으면 RPM 아래에 MJ 단위 ERS Energy 그래프, 없으면 그리지 않는다', (t) async {
+      final base = traceOf('l1');
+      final withErs = LapTrace(
+        lapId: base.lapId,
+        resolutionM: base.resolutionM,
+        timeMs: base.timeMs,
+        speedKph: base.speedKph,
+        throttle: base.throttle,
+        brake: base.brake,
+        steer: base.steer,
+        gear: base.gear,
+        rpm: base.rpm,
+        ersStoreJ: [for (var i = 0; i < base.length; i++) 3000000 - i * 250000.0],
+      );
+      await _pump(t, traces: {'l1': withErs, 'best': _bestTrace});
+
+      expect(find.text('ERS Energy'), findsOneWidget);
+      expect(t.getTopLeft(_chart('rpm')).dy, lessThan(t.getTopLeft(_chart('ers')).dy));
+      final painter = _painterOf(t, 'ers');
+      expect(painter.series, hasLength(1)); // 비교 랩에는 ERS 채널이 없어 이 랩 선만
+      expect(painter.series.single.values.first, 3);
+    });
+
+    testWidgets('ERS 채널이 없는 랩이면 ERS Energy 그래프가 없다', (t) async {
+      await _pump(t);
+
+      expect(_chart('ers'), findsNothing);
     });
 
     testWidgets('범례에 두 랩의 랩타임, 선 색은 이 랩 강조색·비교 랩 청록', (t) async {

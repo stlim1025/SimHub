@@ -21,8 +21,13 @@ const int _neutralGear = 0;
 const String _integerPattern = '#,##0';
 final NumberFormat _integerFormat = NumberFormat(_integerPattern);
 
+/// ERS 배터리 잔량 표시 단위(J → MJ).
+const double _joulesPerMegajoule = 1e6;
+const int _megajouleDecimals = 2;
+
 /// 텔레메트리 그래프 한 장의 채널(docs/15 §2.3, 위에서 아래 순서). Delta는 따로 그린다.
-enum TelemetryChannel { speed, throttle, brake, gear, steer, rpm }
+/// [TelemetryChannel.ers]는 ERS 배터리 잔량 — 트레이스에 그 채널이 없으면 값이 비어 그래프를 그리지 않는다.
+enum TelemetryChannel { speed, throttle, brake, gear, steer, rpm, ers }
 
 /// 화면에 쌓는 순서.
 const List<TelemetryChannel> kTelemetryChannels = TelemetryChannel.values;
@@ -36,6 +41,7 @@ extension TelemetryChannelInfo on TelemetryChannel {
         TelemetryChannel.gear => 'Gear',
         TelemetryChannel.steer => 'Steering',
         TelemetryChannel.rpm => 'RPM',
+        TelemetryChannel.ers => 'ERS Energy',
       };
 
   /// 트레이스의 이 채널 값. 속도는 [units]에 맞춘다(Imperial이면 mph).
@@ -48,27 +54,29 @@ extension TelemetryChannelInfo on TelemetryChannel {
         TelemetryChannel.gear => _doubles(trace.gear),
         TelemetryChannel.steer => _doubles(trace.steer),
         TelemetryChannel.rpm => _doubles(trace.rpm),
+        TelemetryChannel.ers => [for (final j in trace.ersStoreJ) j / _joulesPerMegajoule],
       };
 
-  /// 세로축 범위. 고정 범위가 없는 채널(속도·RPM)은 0부터 값의 최댓값까지.
+  /// 세로축 범위. 고정 범위가 없는 채널(속도·RPM·ERS)은 0부터 값의 최댓값까지.
   ValueRange rangeOf(Iterable<double?> values) => switch (this) {
         TelemetryChannel.throttle || TelemetryChannel.brake =>
           valueRangeOf(values, fixedMin: _percentMin, fixedMax: _percentMax),
         TelemetryChannel.steer => valueRangeOf(values, fixedMin: _steerMin, fixedMax: _steerMax),
         TelemetryChannel.gear => valueRangeOf(values, fixedMin: _gearMin, fixedMax: _gearMax),
-        TelemetryChannel.speed || TelemetryChannel.rpm => valueRangeOf(values, fixedMin: 0),
+        TelemetryChannel.speed || TelemetryChannel.rpm || TelemetryChannel.ers => valueRangeOf(values, fixedMin: 0),
       };
 
   /// 세로축 눈금 글자 함수: 기어는 `R`·`N`·숫자, 그 밖은 [formatAxisValue].
   AxisLabelFormat get axisLabel => this == TelemetryChannel.gear ? gearAxisLabel : formatAxisValue;
 
-  /// 십자선 값 글자: `287 km/h`·`178 mph`·`85%`·`N`·`-34`·`11,500`.
+  /// 십자선 값 글자: `287 km/h`·`178 mph`·`85%`·`N`·`-34`·`11,500`·`2.51 MJ`.
   String format(double value, UnitSystem units) => switch (this) {
         TelemetryChannel.speed => '${value.round()} ${units == UnitSystem.imperial ? 'mph' : 'km/h'}',
         TelemetryChannel.throttle || TelemetryChannel.brake => '${value.round()}%',
         TelemetryChannel.gear => gearLabel(value.round()),
         TelemetryChannel.steer => '${value.round()}',
         TelemetryChannel.rpm => _integerFormat.format(value.round()),
+        TelemetryChannel.ers => '${value.toStringAsFixed(_megajouleDecimals)} MJ',
       };
 }
 

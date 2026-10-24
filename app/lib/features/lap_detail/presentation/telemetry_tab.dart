@@ -234,7 +234,8 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
     final maxDistanceM = math.max(trace.lengthM, reference?.lengthM ?? 0);
     final referenceTime = widget.referenceLapTimeMs;
 
-    Widget channelChart(TelemetryChannel channel) {
+    // 값이 없는 랩(ERS 채널이 없는 옛 기록 등)은 그 선을 빼고, 두 랩 모두 없으면 그래프를 그리지 않는다.
+    Widget? channelChart(TelemetryChannel channel) {
       final series = [
         ChartSeries(values: channel.valuesOf(trace, widget.units), resolutionM: trace.resolutionM, color: AppColors.accent),
         if (reference != null)
@@ -243,7 +244,10 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
             resolutionM: reference.resolutionM,
             color: palette.comparison,
           ),
-      ];
+      ].where((s) => s.values.isNotEmpty).toList();
+      if (series.isEmpty) {
+        return null;
+      }
       return TelemetryChart(
         key: ValueKey('telemetry-chart-${channel.name}'),
         title: channel.title,
@@ -259,7 +263,7 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
 
     final charts = <Widget>[
       if (reference != null) _deltaChart(trace, reference, maxDistanceM),
-      for (final channel in kTelemetryChannels) channelChart(channel),
+      for (final channel in kTelemetryChannels) ?channelChart(channel),
     ];
 
     final chartsCard = Card(
