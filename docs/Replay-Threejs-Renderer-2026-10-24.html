@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>다시보기 three.js 설계</title>
+<style>
+  :root {
+    --bg: #fbfaf8; --text: #1f2328; --text-soft: #5b636c; --text-faint: #9aa1a9;
+    --line: #cfd4da; --line-soft: #e6e9ec; --code-bg: #f0f1f3; --code-text: #24292f;
+    --mark: #b4530a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17191d; --text: #e2e5e9; --text-soft: #9aa3ad; --text-faint: #6b7480;
+      --line: #40464e; --line-soft: #2b3037; --code-bg: #262b32; --code-text: #d5d9de;
+      --mark: #e69a55;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: "Pretendard Variable", "Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
+    font-size: 15px; line-height: 1.75; -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: 960px; margin: 0 auto; padding: 52px 32px 110px; }
+
+  /* 머리 */
+  .masthead { border-top: 3px solid var(--text); padding-top: 14px; margin-bottom: 40px; }
+  .masthead .row { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; font-size: 13px; color: var(--text-soft); font-family: Consolas, "Cascadia Mono", monospace; }
+  h1 { font-size: clamp(26px, 4.5vw, 38px); font-weight: 800; letter-spacing: -0.03em; line-height: 1.25; margin: 18px 0 10px; }
+  .standfirst { font-size: 16px; color: var(--text-soft); max-width: 700px; margin: 0; }
+
+  /* 요약띠: 결론 세 가지 */
+  .rules { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border-top: 2px solid var(--text); border-bottom: 2px solid var(--text); margin-bottom: 60px; }
+  .rule { padding: 18px 22px 20px 0; }
+  .rule + .rule { border-left: 1px solid var(--line-soft); padding-left: 22px; }
+  .rule .k { font-size: 12px; font-weight: 800; color: var(--text-soft); margin-bottom: 6px; }
+  .rule .t { font-size: 16px; font-weight: 800; line-height: 1.45; margin-bottom: 6px; }
+  .rule .d { font-size: 13.5px; color: var(--text-soft); }
+
+  /* 결정 시트: 회의에서 결정받을 안건 */
+  .sheet { margin-bottom: 64px; }
+  .sheet-title { font-size: 13px; font-weight: 800; margin-bottom: 8px; }
+  .sheet-title .hint { font-weight: 400; color: var(--text-faint); margin-left: 10px; font-size: 12.5px; }
+  table.sheet-tbl { margin: 0; }
+  .sheet-tbl th { padding: 8px 14px 8px 0; }
+  .sheet-tbl td { padding: 11px 14px 11px 0; }
+  .sheet-tbl tr:last-child td { border-bottom: 2px solid var(--text); }
+  .sheet-tbl .n { color: var(--text-faint); font-variant-numeric: tabular-nums; padding-right: 0; width: 26px; }
+  .sheet-tbl a { color: inherit; text-decoration: none; font-weight: 700; }
+  .sheet-tbl a:hover { text-decoration: underline; }
+  .sheet-tbl .rec { color: var(--text-soft); }
+  .sheet-tbl .decide { width: 26%; min-width: 150px; border-bottom: 1px solid var(--line); color: var(--text); outline: none; cursor: text; }
+  .sheet-tbl .decide:empty::before { content: "회의에서 기입"; color: var(--text-faint); }
+  .sheet-tbl .decide:focus { border-bottom-color: var(--text); }
+
+  /* 섹션 */
+  section { display: grid; grid-template-columns: 84px 1fr; gap: 0 28px; border-top: 1px solid var(--line); padding: 32px 0 36px; }
+  section .num { font-size: 44px; font-weight: 800; line-height: 1; letter-spacing: -0.04em; color: var(--line); font-variant-numeric: tabular-nums; }
+  section .body { min-width: 0; }
+  h2 { font-size: 19px; font-weight: 800; letter-spacing: -0.015em; margin: 4px 0 14px; line-height: 1.45; }
+  h3 { font-size: 15px; font-weight: 800; margin: 20px 0 6px; }
+  p { margin: 0 0 12px; }
+  p:last-child { margin-bottom: 0; }
+  ul, ol { margin: 0 0 12px; padding-left: 20px; }
+  li { margin-bottom: 6px; }
+  li::marker { color: var(--text-faint); }
+  strong { font-weight: 750; }
+  .soft { color: var(--text-soft); font-size: 14px; }
+  .kv { font-weight: 800; font-size: 13px; color: var(--text-soft); margin-right: 6px; }
+  code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 0.88em; background: var(--code-bg); color: var(--code-text); padding: 1px 6px; border-radius: 3px; word-break: break-all; }
+  pre { font-family: Consolas, "Cascadia Mono", monospace; font-size: 13px; line-height: 1.6; background: var(--code-bg); color: var(--code-text); padding: 12px 14px; border-radius: 4px; overflow-x: auto; margin: 0 0 12px; }
+  pre code { background: none; padding: 0; font-size: inherit; word-break: normal; }
+
+  /* 권장: 본문 마지막 줄 */
+  .verdict { margin-top: 16px; display: flex; gap: 12px; }
+  .verdict .k { flex: none; font-weight: 800; font-size: 13px; padding-top: 2px; }
+  .verdict .k::after { content: ""; display: block; width: 100%; height: 2px; background: var(--text); margin-top: 2px; }
+
+  /* 흐름: 순서와 단계 */
+  .timelines { margin: 18px 0 14px; }
+  .tl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 0; }
+  .tl + .tl { border-top: 1px dashed var(--line-soft); }
+  .tl .lab { flex: none; width: 76px; font-size: 13px; font-weight: 800; }
+  .tl .arrow { color: var(--text-faint); font-size: 12px; }
+  .tl .note { flex-basis: 100%; padding-left: 84px; font-size: 12.5px; color: var(--text-soft); margin-top: -4px; }
+  .step { display: inline-block; border: 1px solid var(--line); border-radius: 4px; padding: 3px 11px; font-size: 12.5px; line-height: 1.6; color: var(--text-soft); white-space: nowrap; }
+  .step.solid { background: var(--text); border-color: var(--text); color: var(--bg); font-weight: 700; }
+  .step.ring { border: 2px solid var(--text); color: var(--text); font-weight: 700; }
+  .legend { font-size: 12.5px; color: var(--text-soft); margin: 10px 0 0; display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+  .legend .step { padding: 1px 9px; font-size: 12px; margin-right: 4px; }
+
+  /* 선택지 대조 */
+  .versus { display: grid; grid-template-columns: 1fr 1fr; margin: 16px 0 6px; }
+  .versus.three { grid-template-columns: repeat(3, 1fr); }
+  .versus .opt { padding: 2px 24px 6px 0; }
+  .versus .opt + .opt { border-left: 1px solid var(--line-soft); padding-left: 24px; padding-right: 0; }
+  .versus h3 { font-size: 14px; margin: 0 0 8px; }
+  .versus h3 .tag { font-weight: 400; color: var(--text-soft); font-size: 12.5px; margin-left: 8px; }
+  .versus ul { font-size: 13.5px; color: var(--text-soft); margin: 0; padding-left: 18px; }
+  .versus .pro::marker { content: "+  "; color: var(--text); }
+  .versus .con::marker { content: "−  "; color: var(--text-faint); }
+
+  /* 적용 범위 */
+  .scope { display: flex; gap: 10px; align-items: stretch; margin: 16px 0 8px; flex-wrap: wrap; }
+  .scope .item { border: 1px solid var(--line); border-radius: 4px; padding: 10px 18px 8px; text-align: center; min-width: 96px; }
+  .scope .item .t { font-weight: 800; font-size: 14px; }
+  .scope .item .s { font-size: 11.5px; color: var(--text-soft); margin-top: 2px; }
+  .scope .item.on { background: var(--text); border-color: var(--text); }
+  .scope .item.on .t { color: var(--bg); }
+  .scope .item.on .s { color: var(--bg); opacity: 0.75; }
+
+  /* 표 */
+  table { width: 100%; border-collapse: collapse; margin: 12px 0 14px; font-size: 14px; }
+  th { text-align: left; font-weight: 700; color: var(--text-soft); font-size: 12px; border-top: 2px solid var(--text); border-bottom: 1px solid var(--text); padding: 7px 12px 7px 0; }
+  td { border-bottom: 1px solid var(--line-soft); padding: 9px 12px 9px 0; vertical-align: top; }
+  tr:last-child td { border-bottom: 2px solid var(--text); }
+  td.c { text-align: center; white-space: nowrap; font-weight: 800; }
+  td.c.no { color: var(--text-faint); font-weight: 400; }
+  td.c.err { color: var(--mark); }
+  .ex { color: var(--text-soft); font-size: 13px; }
+
+  /* 경우별 설명 */
+  dl { margin: 0; }
+  dt { font-weight: 800; font-size: 13.5px; margin: 14px 0 4px; }
+  dd { margin: 0 0 4px; color: var(--text-soft); font-size: 14px; }
+  dd code { color: var(--code-text); }
+
+  /* 도표 */
+  figure { margin: 16px 0 12px; overflow-x: auto; }
+  figure svg { display: block; max-width: 100%; height: auto; color: var(--text); }
+  figcaption { font-size: 12.5px; color: var(--text-soft); margin-top: 6px; }
+
+  /* 강조: 문서 전체에서 한 지점만 */
+  .mark { color: var(--mark); font-weight: 800; }
+
+  footer { border-top: 3px solid var(--text); margin-top: 8px; padding-top: 14px; display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; color: var(--text-soft); font-size: 12.5px; }
+  footer a { color: inherit; }
+
+  @media (max-width: 720px) {
+    .page { padding: 36px 18px 70px; }
+    .rules { grid-template-columns: 1fr; }
+    .rule + .rule { border-left: none; border-top: 1px solid var(--line-soft); padding-left: 0; }
+    section { grid-template-columns: 1fr; gap: 6px; }
+    section .num { font-size: 28px; }
+    .tl .note { padding-left: 0; }
+    .versus, .versus.three { grid-template-columns: 1fr; }
+    .versus .opt + .opt { border-left: none; border-top: 1px solid var(--line-soft); padding: 14px 0 0; margin-top: 10px; }
+    table { display: block; overflow-x: auto; }
+  }
+  @media print {
+    body { background: #fff; }
+    section { break-inside: avoid; }
+    .sheet-tbl .decide:empty::before { content: ""; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+<div class="masthead">
+  <div class="row">
+    <span>SimHub 다시보기 · 설계</span>
+    <span>2026-10-24</span>
+  </div>
+  <h1>다시보기 3D 화면을<br>three.js로 바꾸는 설계</h1>
+  <p class="standfirst">이 문서는 랩 다시보기와 레이스 하이라이트의 3D 화면을 three.js(WebGL) 엔진으로 옮기는 방식을 정한다. 결정 시트의 네 가지를 정해 주면 1단계부터 구현한다.</p>
+</div>
+
+<div class="sheet">
+  <div class="sheet-title">결정 시트<span class="hint">결정란은 직접 기입한다</span></div>
+  <table class="sheet-tbl">
+    <tr><th></th><th>안건</th><th style="width:34%">권장</th><th>결정</th></tr>
+    <tr><td class="n">1</td><td><a href="#s3">엔진과 배포 방식</a></td><td class="rec">three.js 0.186.1을 저장소에 동봉하고 다시보기를 열 때만 불러온다</td><td class="decide" contenteditable="true" data-note="d1"></td></tr>
+    <tr><td class="n">2</td><td><a href="#s4">차 모델 출처</a></td><td class="rec">우리가 코드로 직접 만든 F1 스타일 모델</td><td class="decide" contenteditable="true" data-note="d2"></td></tr>
+    <tr><td class="n">3</td><td><a href="#s7">대체 경로</a></td><td class="rec">WebGL을 못 쓰는 환경과 테스트, 휴대폰 앱 빌드에서는 지금 그림을 그대로 쓴다</td><td class="decide" contenteditable="true" data-note="d3"></td></tr>
+    <tr><td class="n">4</td><td><a href="#s9">진행 순서</a></td><td class="rec">다섯 단계로 나누고 단계마다 화면을 보고 넘어간다</td><td class="decide" contenteditable="true" data-note="d4"></td></tr>
+  </table>
+</div>
+
+<section id="s1">
+  <div class="num">1</div>
+  <div class="body">
+    <h2>지금 구조와 한계</h2>
+    <p>지금 3D 화면은 <code>GhostReplay3dPainter</code>(1,262줄)가 Flutter 캔버스에 직접 그린다. 3D 엔진 없이 면을 하나씩 화면에 투영하고 먼 면부터 덮어 칠한다(화가 알고리즘). 깊이 버퍼가 없어서 면이 겹치는 곳마다 칠하는 순서를 손으로 맞춰야 한다. 면마다 밝기가 하나라서 곡면이 각져 보인다. 차도 상자와 단면 몇 개를 이은 모양이라 블록처럼 보인다. 질감(텍스처), 그림자, 반사도 없다.</p>
+    <p>이 페인터는 두 화면이 함께 쓴다. 랩 다시보기(<code>ghost_replay.dart</code>)와 레이스 하이라이트(<code>session_highlights_page.dart</code>)다. 두 화면이 넘기는 입력은 같다. 트랙 모양(<code>ReplayTrack3d</code>), 차의 움직임(<code>ReplayCar</code>: 시간마다 위치·방향·보임 여부), 카메라 종류(추격·중계·헬기), 경과 시간, 차 색, 둘레 차와 이름표다.</p>
+    <div class="verdict"><span class="k">권장</span><p>이 입력을 경계로 삼는다. 그러면 두 화면의 나머지 코드는 건드리지 않고 그리는 부분만 바꿀 수 있다.</p></div>
+  </div>
+</section>
+
+<section id="s2">
+  <div class="num">2</div>
+  <div class="body">
+    <h2>구조</h2>
+    <p>Dart가 무엇을 그릴지 정하고 three.js는 그리기만 한다.</p>
+    <figure>
+      <svg viewBox="0 0 640 200" role="img" aria-label="Dart가 트랙 데이터와 매 프레임 상태를 만들어 three.js 모듈에 넘기고, Flutter 오버레이를 캔버스 위에 얹는 구조">
+        <rect x="10" y="20" width="200" height="70" rx="4" fill="currentColor"/>
+        <text x="110" y="48" text-anchor="middle" font-size="13" style="fill: var(--bg)">Dart (순수 계산)</text>
+        <text x="110" y="70" text-anchor="middle" font-size="11" style="fill: var(--bg)">트랙 메시 · 카메라 · 차 상태</text>
+        <line x1="210" y1="45" x2="420" y2="45" stroke="currentColor"/>
+        <text x="315" y="38" text-anchor="middle" font-size="11" fill="currentColor">처음 한 번: 트랙 Float32Array</text>
+        <line x1="210" y1="70" x2="420" y2="70" stroke="currentColor"/>
+        <text x="315" y="86" text-anchor="middle" font-size="11" fill="currentColor">매 프레임: 차·카메라 Float32Array</text>
+        <rect x="420" y="20" width="210" height="70" rx="4" fill="none" stroke="currentColor" stroke-width="2"/>
+        <text x="525" y="48" text-anchor="middle" font-size="13" fill="currentColor">replay3d.js + three.js</text>
+        <text x="525" y="70" text-anchor="middle" font-size="11" fill="currentColor">&lt;canvas&gt;에 그리기만</text>
+        <rect x="420" y="120" width="210" height="60" rx="4" fill="none" stroke="currentColor" stroke-width="2"/>
+        <text x="525" y="146" text-anchor="middle" font-size="13" fill="currentColor">Flutter 오버레이</text>
+        <text x="525" y="166" text-anchor="middle" font-size="11" fill="currentColor">HUD · 순위표 · 자막 · 이름표</text>
+        <line x1="110" y1="90" x2="110" y2="150" stroke="currentColor"/>
+        <line x1="110" y1="150" x2="420" y2="150" stroke="currentColor"/>
+        <text x="265" y="143" text-anchor="middle" font-size="11" fill="currentColor">이름표 화면 위치(같은 카메라로 투영)</text>
+      </svg>
+      <figcaption>Dart가 장면을 정하고 JS 모듈은 그리기만 한다. 글자는 Flutter가 캔버스 위에 얹는다.</figcaption>
+    </figure>
+    <dl>
+      <dt>Dart 쪽</dt>
+      <dd>트랙 메시 데이터(꼭짓점·색·재질 구역)를 <code>ReplayTrack3d</code>에서 한 번 만들고 매 프레임 차 위치·방향·바퀴 조향과 카메라 위치·화각을 계산한다. 지금 페인터에 있는 카메라 계산(추격·중계·헬기)을 순수 함수로 떼어 내 그대로 쓴다. 순수 계산이라 단위 테스트로 지킨다.</dd>
+      <dt>JS 쪽</dt>
+      <dd><code>web/replay3d/replay3d.js</code> 모듈 하나. 장면을 만들고 트랙 데이터를 받아 메시를 만든다. 매 프레임 받은 상태로 차와 카메라를 옮겨 그린다. 판단하는 코드는 두지 않는다.</dd>
+      <dt>연결</dt>
+      <dd>Flutter web의 플랫폼 뷰(<code>HtmlElementView</code>)로 <code>&lt;canvas&gt;</code>를 화면에 넣고 <code>dart:js_interop</code>로 JS 모듈 함수를 부른다. 트랙은 처음 한 번 <code>Float32Array</code>로 넘기고 매 프레임에는 차와 카메라 상태를 담은 작은 <code>Float32Array</code> 하나만 넘긴다.</dd>
+      <dt>겹쳐 그리는 것</dt>
+      <dd>HUD, 순위표, 자막, 깃발 띠, 이름표는 지금처럼 Flutter 위젯으로 3D 캔버스 위에 얹는다. 이름표의 화면 위치는 Dart가 같은 카메라로 투영해 계산하므로 앱 글꼴을 그대로 쓴다.</dd>
+    </dl>
+    <p><span class="kv">확인 필요</span>Flutter web에서 플랫폼 뷰 위에 Flutter 위젯을 겹치면 렌더러에 따라 합성 비용이 든다. 1단계에서 실제 프레임 속도를 재서 확인한다. 3D 캔버스 위의 터치·스크롤 이벤트 처리도 같이 확인한다.</p>
+  </div>
+</section>
+
+<section id="s3">
+  <div class="num">3</div>
+  <div class="body">
+    <h2>엔진과 배포</h2>
+    <p>three.js 0.186.1(MIT 라이선스, 2026-09-24 배포)을 <code>app/web/vendor/three/</code>에 넣어 GitHub Pages와 같이 배포한다. 외부 CDN에 기대지 않는다. 필요한 파일은 <code>three.module.min.js</code>(393KB)와 <code>three.core.min.js</code>(416KB)이고 gzip으로 합쳐 약 195KB다. 하늘(Sky) 같은 보조 모듈은 three.js 저장소의 <code>examples/jsm</code>에서 필요한 것만 같이 넣는다.</p>
+    <div class="verdict"><span class="k">권장</span><p>다시보기 카드가 처음 3D 시점을 그릴 때 동적으로 불러온다. 그래서 앱 첫 화면 로딩에는 영향이 없다.</p></div>
+  </div>
+</section>
+
+<section id="s4">
+  <div class="num">4</div>
+  <div class="body">
+    <h2>차 모델</h2>
+    <p>라이선스가 확실한 공개 F1 모델은 찾지 못했다. CC0 F1 모델은 검색에서 나오지 않았다. TurboSquid 무료 모델은 자체 라이선스이며 다른 무료 F1 모델은 라이선스 표기가 없었다.</p>
+    <div class="versus">
+      <div class="opt">
+        <h3>A. 코드로 직접 만든 모델<span class="tag">권장</span></h3>
+        <ul>
+          <li class="pro">라이선스 걱정이 없다</li>
+          <li class="pro">팀 색·타이어 컴파운드 색·바퀴 회전·앞바퀴 조향을 코드에서 바로 바꿀 수 있다</li>
+          <li class="con">모양을 다듬는 데 시간이 든다(2단계 전체)</li>
+        </ul>
+      </div>
+      <div class="opt">
+        <h3>B. 외부 공개 모델(glTF)</h3>
+        <ul>
+          <li class="pro">처음부터 세부가 많을 수 있다</li>
+          <li class="con">조건에 맞는 모델을 찾지 못했다. 찾더라도 모델마다 라이선스를 확인해야 한다</li>
+          <li class="con">팀 로고·번호가 들어 있으면 지워야 하고 부품별 색 바꾸기가 모델 구조에 달려 있다</li>
+        </ul>
+      </div>
+    </div>
+    <p>모양(현행 F1 비율: 길이 약 5.6m, 폭 2m, 휠베이스 3.6m):</p>
+    <ul>
+      <li>노즈와 모노코크: 단면 여러 개를 이어 매끈한 곡면으로 만들고 부드러운 법선을 준다.</li>
+      <li>사이드포드(아래를 파낸 언더컷), 엔진 커버와 에어박스, 샤크 핀.</li>
+      <li>헤일로: 관 모양(<code>TubeGeometry</code>).</li>
+      <li>앞날개와 뒷날개: 익형 단면을 밀어 낸 여러 장의 날개판과 엔드플레이트, 뒷날개 DRS 플랩.</li>
+      <li>바닥과 디퓨저, 서스펜션 암, 미러, 헬멧.</li>
+      <li>타이어: 회전체(<code>LatheGeometry</code>)로 둥근 숄더를 살리고 옆면에 컴파운드 색 띠와 휠 커버.</li>
+    </ul>
+    <p>재질: 몸체는 팀 색에 클리어코트를 준 물리 기반 재질, 날개·바닥은 카본 무늬 텍스처(코드로 생성), 타이어는 무광 고무. 팀 로고, 번호, 스폰서는 넣지 않는다.</p>
+    <p>움직임: 바퀴는 속도만큼 돌리고 앞바퀴는 트레이스의 스티어 값만큼 꺾는다. 고스트 차는 반투명으로 그린다.</p>
+  </div>
+</section>
+
+<section id="s5">
+  <div class="num">5</div>
+  <div class="body">
+    <h2>트랙과 환경</h2>
+    <p>트랙 모양은 지금처럼 <code>ReplayTrack3d</code>(가장자리·높이·연석·그래블·방호벽 위치)에서 만든다. 데이터는 그대로 두고 표현만 바꾼다.</p>
+    <table>
+      <tr><th style="width:120px">요소</th><th>표현</th></tr>
+      <tr><td>아스팔트</td><td>코드로 만든 노이즈 텍스처와 미세한 거칠기</td></tr>
+      <tr><td>연석</td><td>빨강·흰 줄무늬에 살짝 솟은 단면</td></tr>
+      <tr><td>선</td><td>흰 가장자리 선, 출발·결승선, 피트 레인</td></tr>
+      <tr><td>그래블·잔디</td><td>자갈 질감, 깎은 줄무늬가 보이는 잔디</td></tr>
+      <tr><td>방호벽</td><td>일반 서킷은 타이어 배리어와 가드레일, 시가지 서킷은 콘크리트 벽과 펜스</td></tr>
+      <tr><td>환경</td><td>하늘, 해 방향의 그림자(카메라 둘레만), 거리 안개, 영화 같은 톤 매핑(ACES), 안티앨리어싱</td></tr>
+    </table>
+    <p>관중석, 나무, 건물 같은 장식은 이번 범위에 넣지 않는다.</p>
+  </div>
+</section>
+
+<section id="s6">
+  <div class="num">6</div>
+  <div class="body">
+    <h2>성능</h2>
+    <p>목표는 데스크톱 60fps, 휴대폰 30fps 이상이다. 기기 픽셀 비율은 2로 제한하고 그림자 해상도와 안티앨리어싱은 화면 크기에 맞춰 낮출 수 있게 한다. 하이라이트는 차가 최대 22대라 차 지오메트리를 모든 차가 함께 쓰고 재질 색만 바꾼다. 화면에서 보이지 않을 때(탭 전환, 스크롤로 벗어남)는 그리기를 멈춘다.</p>
+    <p><span class="kv">확인 필요</span>휴대폰 실기기 성능은 1단계 뒤 직접 열어 보고 판단한다.</p>
+  </div>
+</section>
+
+<section id="s7">
+  <div class="num">7</div>
+  <div class="body">
+    <h2>대체 경로</h2>
+    <table>
+      <tr><th>환경</th><th style="width:90px">three.js</th><th style="width:110px">지금 페인터</th></tr>
+      <tr><td>웹 브라우저(WebGL 있음)</td><td class="c">●</td><td class="c no">—</td></tr>
+      <tr><td>WebGL을 못 쓰는 브라우저, 컨텍스트 손실</td><td class="c no">—</td><td class="c">●</td></tr>
+      <tr><td><code>flutter test</code>(VM에서 돌아 WebGL이 없다)</td><td class="c no">—</td><td class="c">●</td></tr>
+      <tr><td>안드로이드·iOS 빌드</td><td class="c no">—</td><td class="c">●</td></tr>
+    </table>
+    <p class="soft">● 는 그 환경에서 쓰는 그리기 방식을 나타내고, 회색 줄표는 해당 없음을 나타낸다.</p>
+    <p>조건부 import(<code>download_launcher</code>와 같은 방식)로 웹에서만 three.js 경로를 고른다. 2D 지도 시점도 그대로 둔다. 3D 엔진이 실패하면 그 자리에서 지금 페인터로 바꿔 그린다.</p>
+  </div>
+</section>
+
+<section id="s8">
+  <div class="num">8</div>
+  <div class="body">
+    <h2>테스트와 확인</h2>
+    <dl>
+      <dt>Dart</dt>
+      <dd>트랙 메시 데이터 만들기, 카메라 계산, 이름표 투영, 매 프레임 상태 묶기를 단위 테스트한다.</dd>
+      <dt>위젯</dt>
+      <dd>테스트 환경에서는 대체 경로가 그려지는지 확인한다.</dd>
+      <dt>화면</dt>
+      <dd>로컬 웹 빌드를 브라우저에서 열어 모나코·카탈루냐 실제 랩과 하이라이트로 스크린샷을 찍어 확인한다.</dd>
+    </dl>
+  </div>
+</section>
+
+<section id="s9">
+  <div class="num">9</div>
+  <div class="body">
+    <h2>단계</h2>
+    <div class="timelines">
+      <div class="tl">
+        <span class="lab">1</span>
+        <span class="step solid">연결 뼈대</span>
+        <span class="note">캔버스, 단색 트랙 메시, 상자 차, 세 카메라가 지금 화면과 같은 구도인지, 대체 경로. 프레임 속도 측정.</span>
+      </div>
+      <div class="tl">
+        <span class="lab">2</span>
+        <span class="step">차 모델</span>
+        <span class="note">몸체, 날개, 헤일로, 타이어, 재질, 바퀴 회전과 조향.</span>
+      </div>
+      <div class="tl">
+        <span class="lab">3</span>
+        <span class="step">트랙 재질과 환경</span>
+        <span class="note">아스팔트, 연석, 그래블, 잔디, 방호벽, 하늘, 그림자.</span>
+      </div>
+      <div class="tl">
+        <span class="lab">4</span>
+        <span class="step">하이라이트 이전</span>
+        <span class="note">둘레 차 22대, 이름표, 피트 레인, 출발 그리드.</span>
+      </div>
+      <div class="tl">
+        <span class="lab">5</span>
+        <span class="step">기본 화면 전환</span>
+        <span class="note">성능 조정과 휴대폰 확인 뒤 기본 화면으로 바꾸고 옛 3D 페인터는 대체 경로로만 남긴다.</span>
+      </div>
+    </div>
+    <div class="scope">
+      <div class="item on"><div class="t">차·트랙·환경</div><div class="s">이번 범위</div></div>
+      <div class="item"><div class="t">관중석·건물 같은 주변 장식</div><div class="s">범위 밖</div></div>
+      <div class="item"><div class="t">날씨(비·밤)</div><div class="s">범위 밖</div></div>
+      <div class="item"><div class="t">녹화·내보내기, 팀별 실제 도색</div><div class="s">범위 밖</div></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <span>Replay-Threejs-Renderer · 2026-10-24</span>
+  <span><a href="Track-Envelope-From-All-Cars-2026-10-23.html">트랙 형상 설계</a></span>
+</footer>
+
+</div>
+<script>
+  // 결정란 자동 저장: 이 브라우저의 localStorage 에만 남는다. 저장에 실패해도 기입은 된다.
+  document.querySelectorAll("[data-note]").forEach(function (el) {
+    var key = "Replay-Threejs-Renderer-2026-10-24:" + el.dataset.note;
+    try { var v = localStorage.getItem(key); if (v) el.textContent = v; } catch (e) {}
+    el.addEventListener("input", function () { try { localStorage.setItem(key, el.textContent); } catch (e) {} });
+  });
+</script>
+</body>
+</html>

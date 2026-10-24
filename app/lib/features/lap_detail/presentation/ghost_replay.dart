@@ -15,6 +15,7 @@ import 'ghost_replay_3d_painter.dart';
 import 'ghost_replay_hud.dart';
 import 'ghost_replay_painter.dart';
 import 'replay_circuit.dart';
+import 'replay_three_view.dart';
 
 /// 재생 화면 높이(넓은 화면·좁은 화면).
 const double kGhostReplayWideHeight = 540;
@@ -231,10 +232,7 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    CustomPaint(
-                      key: const ValueKey('ghost-replay-view'),
-                      painter: _painter(playerColor, ghostColor),
-                    ),
+                    _view(playerColor, ghostColor),
                     ValueListenableBuilder<double>(
                       valueListenable: _time,
                       builder: (context, elapsed, _) => GhostReplayHud(
@@ -260,6 +258,26 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
           ],
         ),
       ),
+    );
+  }
+
+  /// 재생 화면: 3D 시점이고 WebGL 다시보기를 켰으면 three.js 그림(못 쓰면 캔버스 그림으로 돌아간다), 아니면 캔버스 그림.
+  Widget _view(Color playerColor, Color ghostColor) {
+    final canvas = CustomPaint(key: const ValueKey('ghost-replay-view'), painter: _painter(playerColor, ghostColor));
+    final camera = _camera;
+    if (camera == null || !replayThreeEnabled) {
+      return canvas;
+    }
+    final ghost = _ghost;
+    return ReplayThreeView(
+      track: _track3d ??= ReplayTrack3d.build(_circuit),
+      cars: [
+        (car: _player, color: playerColor, opacity: 1),
+        if (ghost != null) (car: ghost, color: ghostColor, opacity: kGhostCarOpacity),
+      ],
+      camera: camera,
+      time: _time,
+      fallback: canvas,
     );
   }
 

@@ -577,6 +577,9 @@ class ReplayTrack3d {
 
   int get length => circuit.center.length;
 
+  /// 방호벽 높이(m): 시가지 서킷은 더 높은 콘크리트 벽.
+  double get wallHeightM => circuit.street ? _streetWallHeightM : _wallHeightM;
+
   int wrap(int i) => circuit.closed ? (i % length + length) % length : i.clamp(0, length - 1);
 
   /// 수평 위치 [p]의 노면 높이(m)와 진행 방향 경사(높이 변화 ÷ 거리), 가장 가까운 중심선 점: 가장 가까운 구간에 투영해 보간한다.
@@ -615,6 +618,49 @@ class ReplayTrack3d {
       index: nearest,
     );
   }
+}
+
+/// 월드 좌표 점(X·Z 수평, Y 위, m).
+typedef ReplayPoint3 = ({double x, double y, double z});
+
+/// 3D 카메라 자세: 눈 위치, 바라보는 곳(위 = 월드 Y, 기울지 않음), 세로 화각(라디안).
+typedef ReplayCameraPose = ({ReplayPoint3 eye, ReplayPoint3 target, double fovRadians});
+
+/// 경과 시간 [elapsedMs]에 [player]를 [camera]로 찍는 카메라 자세(순수 계산 — 캔버스 그림과 WebGL 그림이 같은 구도를 쓴다).
+/// 추격·헬기는 차 뒤 위에서 진행 방향을 보고, 중계는 코너 바깥 카메라 자리에서 차를 보며 멀수록 줌을 당긴다.
+ReplayCameraPose replayCameraPose(ReplayTrack3d track, ReplayCar player, ReplayCamera camera, double elapsedMs) {
+  final frame = player.frameAt(elapsedMs);
+  final spot = track.locate(Offset(frame.x, frame.z));
+  final target = _V3(frame.x, spot.elevation, frame.z);
+  if (camera == ReplayCamera.broadcast) {
+    final station = track.broadcastStation(spot.index);
+    final eye = _V3(station.position.dx, station.height, station.position.dy);
+    final look = target + _worldUp * _broadcastLookUpM;
+    final fov = 2 * math.atan(_broadcastFrameM / 2 / math.max((look - eye).length, 1));
+    return (
+      eye: eye.point,
+      target: look.point,
+      fovRadians: fov.clamp(_minBroadcastFovDegrees * math.pi / 180, _maxBroadcastFovDegrees * math.pi / 180),
+    );
+  }
+  final rig = _rigs[camera]!;
+  final heading = player.headingAt(elapsedMs, lookM: _cameraHeadingLookM);
+  final forward = _V3(math.cos(heading), 0, math.sin(heading));
+  final side = _V3(-math.sin(heading), 0, math.cos(heading));
+  return (
+    eye: (target - forward * rig.back + side * rig.side + _worldUp * rig.up).point,
+    target: (target + forward * rig.lookAhead + _worldUp * rig.lookUp).point,
+    fovRadians: rig.fovDegrees * math.pi / 180,
+  );
+}
+
+/// 차 한 대의 자세: 노면 위 기준점, 진행 방향(라디안, 월드 X에서 Z 쪽으로), 앞뒤 기울기(라디안, 오르막이 +).
+typedef ReplayCarPose = ({ReplayPoint3 origin, double heading, double pitch});
+
+/// [frame]의 차를 [track] 노면에 올린 자세(순수 계산): 높이·기울기는 가장 가까운 중심선 구간에서 보간한다.
+ReplayCarPose replayCarPose(ReplayTrack3d track, ReplayFrame frame) {
+  final spot = track.locate(Offset(frame.x, frame.z));
+  return (origin: (x: frame.x, y: spot.elevation, z: frame.z), heading: frame.heading, pitch: math.atan(spot.slope));
 }
 
 /// 3D 재생에 함께 그리는 둘레 차 한 대: 움직임·몸체 색·이름표(경과 시간마다 — 피트 인·아웃을 붙이게).
@@ -667,33 +713,9 @@ class GhostReplay3dPainter extends CustomPainter {
     }
     final elapsed = time.value;
     final frame = player.frameAt(elapsed);
-    final spot = track.locate(Offset(frame.x, frame.z));
-    final target = _V3(frame.x, spot.elevation, frame.z);
-    final heading = player.headingAt(elapsed, lookM: _cameraHeadingLookM);
     final rig = _rigs[camera]!;
-    final _View view;
-    if (camera == ReplayCamera.broadcast) {
-      // 코너 카메라: 제자리에서 차를 바라보고, 멀수록 줌을 당긴다.
-      final station = track.broadcastStation(spot.index);
-      final eye = _V3(station.position.dx, station.height, station.position.dy);
-      final look = target + _worldUp * _broadcastLookUpM;
-      final fov = 2 * math.atan(_broadcastFrameM / 2 / math.max((look - eye).length, 1));
-      view = _View(
-        eye: eye,
-        target: look,
-        fovRadians: fov.clamp(_minBroadcastFovDegrees * math.pi / 180, _maxBroadcastFovDegrees * math.pi / 180),
-        size: size,
-      );
-    } else {
-      final forward = _V3(math.cos(heading), 0, math.sin(heading));
-      final side = _V3(-math.sin(heading), 0, math.cos(heading));
-      view = _View(
-        eye: target - forward * rig.back + side * rig.side + _worldUp * rig.up,
-        target: target + forward * rig.lookAhead + _worldUp * rig.lookUp,
-        fovRadians: rig.fovDegrees * math.pi / 180,
-        size: size,
-      );
-    }
+    final pose = replayCameraPose(track, player, camera, elapsed);
+    final view = _View(eye: _V3.of(pose.eye), target: _V3.of(pose.target), fovRadians: pose.fovRadians, size: size);
 
     _paintSky(canvas, size, view);
 
@@ -1006,14 +1028,13 @@ class GhostReplay3dPainter extends CustomPainter {
   /// 로우폴리 차 한 대: [_carMesh]를 차 방향·노면 경사대로 세우고, 카메라 쪽 면만 먼 것부터 모은다.
   /// 깊이는 차에서 카메라와 가장 가까운 점(차 밑 바닥보다 늦게 칠한다). [tyreMark]는 타이어 옆 띠 색(컴파운드).
   _Item _car(_View view, ReplayFrame frame, Color body, {Color? tyreMark, double opacity = 1}) {
-    final spot = track.locate(Offset(frame.x, frame.z));
-    final pitch = math.atan(spot.slope);
-    final (sh, ch) = (math.sin(frame.heading), math.cos(frame.heading));
-    final (sp, cp) = (math.sin(pitch), math.cos(pitch));
+    final pose = replayCarPose(track, frame);
+    final (sh, ch) = (math.sin(pose.heading), math.cos(pose.heading));
+    final (sp, cp) = (math.sin(pose.pitch), math.cos(pose.pitch));
     final forward = _V3(ch * cp, sp, sh * cp);
     final side = _V3(-sh, 0, ch);
     final up = _V3(-ch * sp, cp, -sh * sp);
-    final origin = _V3(frame.x, spot.elevation, frame.z);
+    final origin = _V3.of(pose.origin);
     _V3 place(_V3 local) => origin + forward * local.x + side * local.y + up * local.z;
     final distance = (origin - view.eye).length;
     final colors = {
@@ -1154,6 +1175,8 @@ class GhostReplay3dPainter extends CustomPainter {
 class _V3 {
   const _V3(this.x, this.y, this.z);
 
+  _V3.of(ReplayPoint3 p) : this(p.x, p.y, p.z);
+
   final double x;
   final double y;
   final double z;
@@ -1164,6 +1187,8 @@ class _V3 {
   double dot(_V3 o) => x * o.x + y * o.y + z * o.z;
   _V3 cross(_V3 o) => _V3(y * o.z - z * o.y, z * o.x - x * o.z, x * o.y - y * o.x);
   double get length => math.sqrt(dot(this));
+
+  ReplayPoint3 get point => (x: x, y: y, z: z);
 
   _V3 get normalized {
     final l = length;
