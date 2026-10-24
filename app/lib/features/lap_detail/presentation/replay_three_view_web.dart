@@ -24,7 +24,16 @@ extension type _SceneModule(JSObject _) implements JSObject {
 
 extension type _SceneHandle(JSObject _) implements JSObject {
   external bool get ok;
-  external void setTrack(JSFloat32Array positions, JSFloat32Array colors, JSArray<JSNumber> groundRgb, double minElevation);
+  /// 면 종류별 층(종류 번호·위치·무늬 좌표·색을 같은 순서의 배열로), 넓은 바닥 색, 가장 낮은 노면 높이, 시가지인지.
+  external void setTrack(
+    JSArray<JSNumber> surfaces,
+    JSArray<JSFloat32Array> positions,
+    JSArray<JSFloat32Array> uvs,
+    JSArray<JSFloat32Array> colors,
+    JSArray<JSNumber> groundRgb,
+    double minElevation,
+    bool street,
+  );
   external void render(JSFloat32Array state);
   external void dispose();
 }
@@ -121,10 +130,13 @@ class _ReplayThreeViewState extends State<ReplayThreeView> {
     final mesh = buildReplayTrackMesh(widget.track);
     final ground = mesh.groundColor;
     scene.setTrack(
-      mesh.positions.toJS,
-      mesh.colors.toJS,
+      [for (final l in mesh.layers) l.surface.index.toJS].toJS,
+      [for (final l in mesh.layers) l.positions.toJS].toJS,
+      [for (final l in mesh.layers) l.uvs.toJS].toJS,
+      [for (final l in mesh.layers) l.colors.toJS].toJS,
       [ground.r.toJS, ground.g.toJS, ground.b.toJS].toJS,
       mesh.minElevationM,
+      mesh.street,
     );
   }
 

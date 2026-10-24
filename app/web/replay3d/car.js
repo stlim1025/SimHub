@@ -20,7 +20,8 @@ const LOFT_STEPS = 5;
 const HALO_RADIUS_M = 0.034;
 const ARM_RADIUS_M = 0.016;
 const SHADOW_LIFT_M = 0.075;
-const SHADOW_OPACITY = 0.55;
+/** 차 바로 아래 접지 그늘(해 그림자와 별개, 바닥에 붙어 보이게). */
+const SHADOW_OPACITY = 0.35;
 /** 카본 무늬 한 칸 크기(m). */
 const CARBON_TILE_M = 0.06;
 
@@ -494,7 +495,9 @@ export function makeCar(assets) {
     }),
   };
   for (const name of ['body', 'carbon', 'dark', 'helmet', 'visor']) {
-    group.add(new THREE.Mesh(assets[name], materials[name]));
+    const mesh = new THREE.Mesh(assets[name], materials[name]);
+    mesh.castShadow = true;
+    group.add(mesh);
   }
   group.add(new THREE.Mesh(assets.shadow, materials.shadow));
 
@@ -506,7 +509,9 @@ export function makeCar(assets) {
       const pivot = new THREE.Group();
       pivot.position.set(axle, tyre.radius, side * tyre.center);
       const spin = new THREE.Group();
-      spin.add(new THREE.Mesh(set.tyre, materials.tyre));
+      const tyreMesh = new THREE.Mesh(set.tyre, materials.tyre);
+      tyreMesh.castShadow = true;
+      spin.add(tyreMesh);
       spin.add(new THREE.Mesh(set.cover, materials.cover));
       const band = new THREE.Mesh(set.band, materials.band);
       spin.add(band);

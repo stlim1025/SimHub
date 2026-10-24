@@ -51,26 +51,43 @@ void main() {
   group('트랙 메시', () {
     final mesh = buildReplayTrackMesh(track);
 
-    test('삼각형 목록: 꼭짓점마다 위치 XYZ와 색 RGB, 꼭짓점 수는 3의 배수', () {
-      expect(mesh.positions.length % 9, 0);
-      expect(mesh.colors.length, mesh.positions.length);
+    test('면 종류별 층: 꼭짓점마다 위치 XYZ·무늬 좌표 UV·색 RGB, 삼각형 단위', () {
+      for (final layer in mesh.layers) {
+        expect(layer.positions.length % 9, 0, reason: layer.surface.name);
+        expect(layer.colors.length, layer.positions.length);
+        expect(layer.uvs.length, layer.vertexCount * 2);
+      }
+      expect(mesh.layers.map((l) => l.surface).toSet().length, mesh.layers.length);
       expect(mesh.vertexCount, greaterThan(track.length * 6));
     });
 
-    test('아스팔트·바닥 색을 쓰고, 넓은 바닥은 잔디 색·가장 낮은 노면 높이', () {
-      bool hasColor(Color c) {
-        for (var i = 0; i < mesh.colors.length; i += 3) {
-          if ((mesh.colors[i] - c.r).abs() < 1e-6 && (mesh.colors[i + 1] - c.g).abs() < 1e-6 && (mesh.colors[i + 2] - c.b).abs() < 1e-6) {
-            return true;
-          }
-        }
-        return false;
-      }
+    test('바닥·아스팔트·선(가장자리와 출발선)이 있고, 넓은 바닥은 잔디 색·가장 낮은 노면 높이', () {
+      final asphalt = mesh.layer(ReplaySurface.asphalt)!;
+      final ground = mesh.layer(ReplaySurface.ground)!;
 
-      expect(hasColor(AppColors.replayAsphalt), isTrue);
-      expect(hasColor(AppColors.replayGrass3d), isTrue);
+      expect(asphalt.colors[0], closeTo(AppColors.replayAsphalt.r, 1e-6));
+      expect(ground.colors[0], closeTo(AppColors.replayGrass3d.r, 1e-6));
+      expect(mesh.layer(ReplaySurface.line), isNotNull);
       expect(mesh.groundColor, AppColors.replayGrass3d);
       expect(mesh.minElevationM, 0);
+      expect(mesh.street, isFalse);
+    });
+
+    test('아스팔트 무늬 좌표: U는 중심선을 따라 늘고, V는 옆 거리(왼쪽 +, 오른쪽 −)', () {
+      final uv = mesh.layer(ReplaySurface.asphalt)!.uvs;
+      var maxU = 0.0;
+      var minV = 0.0;
+      var maxV = 0.0;
+      for (var k = 0; k < uv.length; k += 2) {
+        maxU = math.max(maxU, uv[k]);
+        minV = math.min(minV, uv[k + 1]);
+        maxV = math.max(maxV, uv[k + 1]);
+      }
+
+      // 반지름 100m 원 둘레(약 628m)를 따라 잰 거리, 길 폭 절반쯤의 옆 거리.
+      expect(maxU, closeTo(2 * math.pi * 100, 30));
+      expect(maxV, greaterThan(4));
+      expect(minV, lessThan(-4));
     });
   });
 
