@@ -321,7 +321,7 @@ String standingAbbreviation(String name) {
   return letters.length <= 3 ? letters : letters.substring(0, 3);
 }
 
-/// 순위표 간격 글자: 리더 `Leader`, 랩 뒤처지면 `+1 LAP`·`+2 LAPS`, 그 밖 `+1.2`(초), 모르면 빈 글자(순수 함수).
+/// 순위표 간격 글자: 리더 `Leader`, 랩 뒤처지면 `+1 LAP`·`+2 LAPS`, 1분 안은 `+1.2`(초), 1분부터 `+1:10.2`(분:초), 모르면 빈 글자(순수 함수).
 String standingGapText(HighlightStandingRow row, {required bool leader}) {
   if (leader) {
     return 'Leader';
@@ -330,7 +330,43 @@ String standingGapText(HighlightStandingRow row, {required bool leader}) {
     return '+${row.lapsDown} ${row.lapsDown == 1 ? 'LAP' : 'LAPS'}';
   }
   final gap = row.gapMs;
-  return gap == null ? '' : '+${(gap / 1000).toStringAsFixed(1)}';
+  if (gap == null) {
+    return '';
+  }
+  // 0.1초로 먼저 반올림해 59.96초가 `+60.0`이 아닌 `+1:00.0`이 되게.
+  final tenths = (gap / _msPerTenth).round();
+  if (tenths < _tenthsPerMinute) {
+    return '+${(tenths / _tenthsPerSecond).toStringAsFixed(1)}';
+  }
+  final minutes = tenths ~/ _tenthsPerMinute;
+  final seconds = (tenths % _tenthsPerMinute) / _tenthsPerSecond;
+  return '+$minutes:${seconds.toStringAsFixed(1).padLeft(_secondsWidth, '0')}';
+}
+
+const int _msPerTenth = 100;
+const int _tenthsPerSecond = 10;
+const int _tenthsPerMinute = 600;
+
+/// `ss.s` 글자 폭(1분 넘는 간격의 초 칸, 앞을 0으로 채운다).
+const int _secondsWidth = 4;
+
+/// 하단 자막 머리 글자: `LAP 12 · 추월`, 출발은 `출발`(순수 함수).
+String highlightCaptionTag(HighlightClip clip) {
+  final kind = kHighlightKindLabels[clip.kind]!;
+  return clip.kind == HighlightKind.start ? kind : 'LAP ${clip.lap} · $kind';
+}
+
+/// 하단 자막 본문: 추월 `A → B`, 충돌 `A ↔ B`, 그 밖은 중심 차 이름, 출발은 빈 글자(순수 함수).
+String highlightCaptionTitle(HighlightClip clip, String Function(int carIndex) nameOf) {
+  final focus = nameOf(clip.focusCar);
+  final other = clip.otherCar == null ? null : nameOf(clip.otherCar!);
+  return switch (clip.kind) {
+    HighlightKind.start => '',
+    HighlightKind.overtake when other != null => '$focus → $other',
+    HighlightKind.collision when other != null => '$focus ↔ $other',
+    HighlightKind.safetyCar || HighlightKind.virtualSafetyCar || HighlightKind.redFlag => '',
+    _ => focus,
+  };
 }
 
 /// 피트 표시 글자.
@@ -350,26 +386,6 @@ const String kHighlightFinishLabel = '피니시';
 
 /// 결승 클립에서 결승선을 지난 뒤인지(피니시 배너, 순수 함수).
 bool highlightFinished(HighlightClip clip, double timeMs) => clip.kind == HighlightKind.finish && timeMs >= clip.eventMs;
-
-/// 클립 캡션: `12랩 · 추월 · A → B`, `12랩 · 충돌 · A ↔ B`, 출발은 `출발`, 결승은 `39랩 · 결승 · A`(순수 함수).
-String highlightCaption(HighlightClip clip, String Function(int carIndex) nameOf) {
-  final kind = kHighlightKindLabels[clip.kind]!;
-  final focus = nameOf(clip.focusCar);
-  final other = clip.otherCar == null ? null : nameOf(clip.otherCar!);
-  final scene = switch (clip.kind) {
-    HighlightKind.start => kind,
-    HighlightKind.overtake when other != null => '$kind · $focus → $other',
-    HighlightKind.collision when other != null => '$kind · $focus ↔ $other',
-    HighlightKind.overtake ||
-    HighlightKind.collision ||
-    HighlightKind.crash ||
-    HighlightKind.retirement ||
-    HighlightKind.finish =>
-      '$kind · $focus',
-    _ => kind,
-  };
-  return clip.kind == HighlightKind.start ? scene : '${clip.lap}랩 · $scene';
-}
 
 /// 세션 시간 [timeMs]에 걸린 깃발(겹치면 적기 > 세이프티카 > 버추얼). 없으면 null(순수 함수).
 RaceFlagKind? activeRaceFlag(List<HighlightFlag> flags, double timeMs) {

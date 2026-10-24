@@ -97,10 +97,12 @@ Future<void> _pumpPlayer(WidgetTester tester, RaceHighlights highlights) async {
   await tester.pump();
 }
 
-String _caption(WidgetTester t) => t.widget<Text>(find.descendant(
-      of: find.byKey(const ValueKey('highlights-caption')),
-      matching: find.byType(Text),
-    )).data!;
+/// 하단 자막: 머리 칸 + 본문(없으면 머리 칸만).
+String _caption(WidgetTester t) {
+  final tag = t.widget<Text>(find.byKey(const ValueKey('highlights-caption-tag'))).data!;
+  final title = find.byKey(const ValueKey('highlights-caption-title'));
+  return title.evaluate().isEmpty ? tag : '$tag | ${t.widget<Text>(title).data}';
+}
 
 void main() {
   group('RaceHighlights.fromJson', () {
@@ -130,14 +132,17 @@ void main() {
     });
   });
 
-  group('highlightCaption', () {
+  group('하단 자막', () {
     final highlights = _highlights();
 
-    test('랩·장면·드라이버(추월은 →, 충돌은 ↔, 출발은 랩 없이)', () {
-      expect(highlightCaption(highlights.mine[0], highlights.nameOf), '출발');
-      expect(highlightCaption(highlights.mine[1], highlights.nameOf), '12랩 · 추월 · ME → RUSSELL');
-      expect(highlightCaption(highlights.race[1], highlights.nameOf), '20랩 · 충돌 · RUSSELL ↔ VERSTAPPEN');
-      expect(highlightCaption(highlights.race[2], highlights.nameOf), '39랩 · 결승 · VERSTAPPEN');
+    test('머리 칸은 랩·장면(출발은 랩 없이), 본문은 드라이버(추월 →, 충돌 ↔)', () {
+      expect(highlightCaptionTag(highlights.mine[0]), '출발');
+      expect(highlightCaptionTitle(highlights.mine[0], highlights.nameOf), '');
+      expect(highlightCaptionTag(highlights.mine[1]), 'LAP 12 · 추월');
+      expect(highlightCaptionTitle(highlights.mine[1], highlights.nameOf), 'ME → RUSSELL');
+      expect(highlightCaptionTitle(highlights.race[1], highlights.nameOf), 'RUSSELL ↔ VERSTAPPEN');
+      expect(highlightCaptionTag(highlights.race[2]), 'LAP 39 · 결승');
+      expect(highlightCaptionTitle(highlights.race[2], highlights.nameOf), 'VERSTAPPEN');
     });
   });
 
@@ -230,7 +235,7 @@ void main() {
       expect(clip.standingAt(23500)!.rows.first.state, StandingState.finished);
     });
 
-    test('이름은 세 글자, 간격은 Leader·+1.2·+1 LAP·빈 글자', () {
+    test('이름은 세 글자, 간격은 Leader·+1.2·+1:10.2·+1 LAP·빈 글자', () {
       expect(standingAbbreviation('VERSTAPPEN'), 'VER');
       expect(standingAbbreviation('GOMDOL SUPER'), 'GOM');
       expect(standingAbbreviation('PÉREZ'), 'PÉR');
@@ -239,6 +244,10 @@ void main() {
       expect(standingGapText(row, leader: false), '+1.2');
       expect(standingGapText((carIndex: 1, gapMs: 90000, lapsDown: 2, state: StandingState.running), leader: false), '+2 LAPS');
       expect(standingGapText((carIndex: 1, gapMs: null, lapsDown: 0, state: StandingState.running), leader: false), '');
+      expect(standingGapText((carIndex: 1, gapMs: 59_940, lapsDown: 0, state: StandingState.running), leader: false), '+59.9');
+      expect(standingGapText((carIndex: 1, gapMs: 59_960, lapsDown: 0, state: StandingState.running), leader: false), '+1:00.0');
+      expect(standingGapText((carIndex: 1, gapMs: 70_230, lapsDown: 0, state: StandingState.running), leader: false), '+1:10.2');
+      expect(standingGapText((carIndex: 1, gapMs: 125_000, lapsDown: 0, state: StandingState.running), leader: false), '+2:05.0');
     });
   });
 
@@ -256,7 +265,7 @@ void main() {
 
       await t.tap(find.byKey(const ValueKey('highlights-next')));
       await t.pump();
-      expect(_caption(t), '12랩 · 추월 · ME → RUSSELL');
+      expect(_caption(t), 'LAP 12 · 추월 | ME → RUSSELL');
       expect(find.text('2 / 2'), findsOneWidget);
 
       await t.tap(find.byKey(const ValueKey('highlights-reel-race')));
@@ -274,7 +283,7 @@ void main() {
       await t.pump(const Duration(milliseconds: 2500));
       await t.pump();
 
-      expect(_caption(t), '12랩 · 추월 · ME → RUSSELL');
+      expect(_caption(t), 'LAP 12 · 추월 | ME → RUSSELL');
       await t.tap(find.byKey(const ValueKey('highlights-play')));
       await t.pump();
     });
@@ -318,10 +327,10 @@ void main() {
       await _pumpPlayer(t, _highlights());
 
       final tower = find.byKey(const ValueKey('highlights-standings'));
-      expect(find.descendant(of: tower, matching: find.text('LAP 3/39')), findsOneWidget);
+      expect(t.widget<Text>(find.descendant(of: tower, matching: find.byKey(const ValueKey('highlights-standings-lap')))).textSpan!.toPlainText(), 'LAP  3 / 39');
       expect(find.descendant(of: find.byKey(const ValueKey('standing-row-4')), matching: find.text('Leader')), findsOneWidget);
       expect(find.descendant(of: find.byKey(const ValueKey('standing-row-21')), matching: find.text('+1.2')), findsOneWidget);
-      expect(find.descendant(of: find.byKey(const ValueKey('standing-row-21')), matching: find.text('P')), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const ValueKey('standing-row-21')), matching: find.text('PIT')), findsOneWidget);
       expect(find.descendant(of: find.byKey(const ValueKey('standing-row-21')), matching: find.text('ME')), findsOneWidget);
     });
 

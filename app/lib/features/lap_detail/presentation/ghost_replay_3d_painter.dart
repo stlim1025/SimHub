@@ -107,12 +107,12 @@ const int _slopeSamples = 2;
 const double _labelLiftM = 1.6;
 const double _labelMaxM = 180;
 const double _labelFontSize = 11;
+const double _labelLetterSpacing = 0.4;
 const double _labelPaddingX = 6;
 const double _labelPaddingY = 2;
-const double _labelBarWidth = 3;
-const double _labelRadius = 3;
+const double _labelBarWidth = 4;
 const double _labelGapAbove = 4;
-const double _labelPanelOpacity = 0.85;
+const double _labelPanelOpacity = 0.88;
 
 /// 카메라마다: 눈 위치(차 기준 뒤·옆·위, m), 바라보는 곳(차 기준 앞·위, m), 세로 화각(도), 그리는 반경(m).
 typedef _CameraRig = ({double back, double side, double up, double lookAhead, double lookUp, double fovDegrees, double radiusM});
@@ -759,7 +759,8 @@ class GhostReplay3dPainter extends CustomPainter {
     placed.sort((a, b) => b.distance.compareTo(a.distance));
     final style = (labelStyle ?? const TextStyle()).copyWith(
       fontSize: _labelFontSize,
-      fontWeight: FontWeight.w600,
+      fontWeight: FontWeight.w800,
+      letterSpacing: _labelLetterSpacing,
       color: AppColors.replayHudText,
     );
     for (final car in placed) {
@@ -767,13 +768,10 @@ class GhostReplay3dPainter extends CustomPainter {
       final width = _labelBarWidth + _labelPaddingX * 2 + text.width;
       final height = text.height + _labelPaddingY * 2;
       final box = Rect.fromLTWH(car.at.dx - width / 2, car.at.dy - height - _labelGapAbove, width, height);
-      final rounded = RRect.fromRectAndRadius(box, const Radius.circular(_labelRadius));
+      // 중계 그래픽처럼 각진 칸: 왼쪽 팀 색 띠 + 어두운 판.
       canvas
-        ..drawRRect(rounded, Paint()..color = AppColors.replayDashPanel.withValues(alpha: _labelPanelOpacity))
-        ..save()
-        ..clipRRect(rounded)
-        ..drawRect(Rect.fromLTWH(box.left, box.top, _labelBarWidth, height), Paint()..color = car.color)
-        ..restore();
+        ..drawRect(box, Paint()..color = AppColors.replayBroadcastPanel.withValues(alpha: _labelPanelOpacity))
+        ..drawRect(Rect.fromLTWH(box.left, box.top, _labelBarWidth, height), Paint()..color = car.color);
       text.paint(canvas, Offset(box.left + _labelBarWidth + _labelPaddingX, box.top + _labelPaddingY));
       text.dispose();
     }
