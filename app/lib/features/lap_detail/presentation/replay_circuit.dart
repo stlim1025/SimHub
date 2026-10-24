@@ -159,8 +159,9 @@ class ReplayCircuit {
   final List<Offset> pitNormals;
   final Path pitAsphalt;
 
-  /// [player](와 [ghost]) 주행 기록으로 서킷 모양을 만든다. [real]이 있고 주행선에 맞으면 실측 중심선·폭을 쓴다.
-  /// 실측이 없고 [samples](모든 차 표본으로 만든 트랙 형상)가 있으면 그것으로 만든 도로를 실측처럼 쓴다.
+  /// [player](와 [ghost]) 주행 기록으로 서킷 모양을 만든다. [samples](모든 차 표본으로 만든 트랙 형상)가 있으면
+  /// 그것으로 만든 도로를 실측처럼 쓴다 — 게임 레이아웃 그대로라 [real](지도 실측)보다 맞다(카탈루냐는 지도가 옛 레이아웃).
+  /// 표본 형상이 없고 [real]이 있고 주행선에 맞으면 실측 중심선·폭을 쓴다.
   /// 높이·연석은 [samples]가 있으면 그것을 먼저 쓴다(내 랩 하나보다 여러 차·여러 랩이 고르다).
   /// [baseWidthM]은 실측이 없는 구간의 직선 도로 폭(트랙마다 다를 수 있다, 기본 [kCircuitBaseWidthM]).
   /// [street](시가지 서킷)이면 코너 바깥 그래블을 깔지 않는다.
@@ -174,7 +175,7 @@ class ReplayCircuit {
   }) {
     final lines = [player.trace, if (ghost != null) ghost.trace];
     final playerLine = _positions(player.trace);
-    final profile = real ?? (samples == null ? null : trackProfileFromSamples(samples, widthM: baseWidthM));
+    final profile = samples == null ? real : trackProfileFromSamples(samples, widthM: baseWidthM);
     final aligned = profile == null ? null : alignTrackProfile(profile, playerLine);
     final estimated = _estimated(player, ghost, baseWidthM);
     final geometry = aligned == null ? estimated : _keepLinesInside(_withMeasured(estimated, aligned), lines);
