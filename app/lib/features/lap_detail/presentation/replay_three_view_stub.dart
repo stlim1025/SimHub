@@ -16,6 +16,7 @@ class ReplayThreeView extends StatelessWidget {
     required this.camera,
     required this.time,
     required this.fallback,
+    this.overlay,
   });
 
   final ReplayTrack3d track;
@@ -23,6 +24,9 @@ class ReplayThreeView extends StatelessWidget {
   final ReplayCamera camera;
   final ValueListenable<double> time;
   final Widget fallback;
+
+  /// three.js 그림 위에 얹는 위젯(이름표 등). 대체 그림을 쓸 때는 얹지 않는다(대체 그림이 직접 그린다).
+  final Widget? overlay;
 
   @override
   Widget build(BuildContext context) => fallback;

@@ -759,44 +759,10 @@ class GhostReplay3dPainter extends CustomPainter {
     batch.flush(canvas);
 
     final label = playerLabel;
-    _paintLabels(canvas, view, [
+    _paintCarLabels(canvas, view, track, labelStyle, [
       for (final other in fieldFrames) (frame: other.frame, color: other.color, label: other.label),
       if (label != null) (frame: frame, color: playerColor, label: label(elapsed)),
     ]);
-  }
-
-  /// 차 위 이름표(팀 색 띠 + 이름): 먼 차부터 그려 가까운 차 이름표가 위에 온다. 카메라 뒤·너무 먼 차는 뺀다.
-  void _paintLabels(Canvas canvas, _View view, List<({ReplayFrame frame, Color color, String label})> cars) {
-    final placed = <({double distance, Offset at, Color color, String label})>[];
-    for (final car in cars) {
-      final spot = track.locate(Offset(car.frame.x, car.frame.z));
-      final anchor = _V3(car.frame.x, spot.elevation + _labelLiftM, car.frame.z);
-      final c = view.toCamera(anchor);
-      final distance = (anchor - view.eye).length;
-      if (c.z > -_nearM || distance > _labelMaxM) {
-        continue;
-      }
-      placed.add((distance: distance, at: view._project(c), color: car.color, label: car.label));
-    }
-    placed.sort((a, b) => b.distance.compareTo(a.distance));
-    final style = (labelStyle ?? const TextStyle()).copyWith(
-      fontSize: _labelFontSize,
-      fontWeight: FontWeight.w800,
-      letterSpacing: _labelLetterSpacing,
-      color: AppColors.replayHudText,
-    );
-    for (final car in placed) {
-      final text = TextPainter(text: TextSpan(text: car.label, style: style), textDirection: TextDirection.ltr)..layout();
-      final width = _labelBarWidth + _labelPaddingX * 2 + text.width;
-      final height = text.height + _labelPaddingY * 2;
-      final box = Rect.fromLTWH(car.at.dx - width / 2, car.at.dy - height - _labelGapAbove, width, height);
-      // 중계 그래픽처럼 각진 칸: 왼쪽 팀 색 띠 + 어두운 판.
-      canvas
-        ..drawRect(box, Paint()..color = AppColors.replayBroadcastPanel.withValues(alpha: _labelPanelOpacity))
-        ..drawRect(Rect.fromLTWH(box.left, box.top, _labelBarWidth, height), Paint()..color = car.color);
-      text.paint(canvas, Offset(box.left + _labelBarWidth + _labelPaddingX, box.top + _labelPaddingY));
-      text.dispose();
-    }
   }
 
   /// 잔디로 채운 뒤 지평선 위를 하늘 그라데이션으로 칠한다(카메라는 기울지 않아 지평선은 수평).
@@ -1167,6 +1133,93 @@ class GhostReplay3dPainter extends CustomPainter {
       oldDelegate.playerTyre != playerTyre ||
       !identical(oldDelegate.field, field) ||
       oldDelegate.playerLabel != playerLabel ||
+      oldDelegate.labelStyle != labelStyle;
+}
+
+/// 차 위 이름표(팀 색 띠 + 이름): 먼 차부터 그려 가까운 차 이름표가 위에 온다. 카메라 뒤·너무 먼 차는 뺀다.
+void _paintCarLabels(
+  Canvas canvas,
+  _View view,
+  ReplayTrack3d track,
+  TextStyle? labelStyle,
+  List<({ReplayFrame frame, Color color, String label})> cars,
+) {
+  final placed = <({double distance, Offset at, Color color, String label})>[];
+  for (final car in cars) {
+    final spot = track.locate(Offset(car.frame.x, car.frame.z));
+    final anchor = _V3(car.frame.x, spot.elevation + _labelLiftM, car.frame.z);
+    final c = view.toCamera(anchor);
+    final distance = (anchor - view.eye).length;
+    if (c.z > -_nearM || distance > _labelMaxM) {
+      continue;
+    }
+    placed.add((distance: distance, at: view._project(c), color: car.color, label: car.label));
+  }
+  placed.sort((a, b) => b.distance.compareTo(a.distance));
+  final style = (labelStyle ?? const TextStyle()).copyWith(
+    fontSize: _labelFontSize,
+    fontWeight: FontWeight.w800,
+    letterSpacing: _labelLetterSpacing,
+    color: AppColors.replayHudText,
+  );
+  for (final car in placed) {
+    final text = TextPainter(text: TextSpan(text: car.label, style: style), textDirection: TextDirection.ltr)..layout();
+    final width = _labelBarWidth + _labelPaddingX * 2 + text.width;
+    final height = text.height + _labelPaddingY * 2;
+    final box = Rect.fromLTWH(car.at.dx - width / 2, car.at.dy - height - _labelGapAbove, width, height);
+    // 중계 그래픽처럼 각진 칸: 왼쪽 팀 색 띠 + 어두운 판.
+    canvas
+      ..drawRect(box, Paint()..color = AppColors.replayBroadcastPanel.withValues(alpha: _labelPanelOpacity))
+      ..drawRect(Rect.fromLTWH(box.left, box.top, _labelBarWidth, height), Paint()..color = car.color);
+    text.paint(canvas, Offset(box.left + _labelBarWidth + _labelPaddingX, box.top + _labelPaddingY));
+    text.dispose();
+  }
+}
+
+/// three.js 다시보기 위에 얹는 차 이름표: 3D 그림과 같은 카메라([camera]로 [player]를 따라간다)로 [cars] 위치를 투영해
+/// 이름표만 그린다([GhostReplay3dPainter]의 이름표와 같은 모양). [time]이 바뀌면 다시 그린다.
+class ReplayLabelsPainter extends CustomPainter {
+  ReplayLabelsPainter({
+    required this.player,
+    required this.track,
+    required this.camera,
+    required this.time,
+    required this.cars,
+    this.labelStyle,
+  }) : super(repaint: time);
+
+  final ReplayCar player;
+  final ReplayTrack3d track;
+  final ReplayCamera camera;
+  final ValueListenable<double> time;
+
+  /// 이름표를 달 차(카메라가 따라가는 차도 넣는다).
+  final List<ReplayFieldCar> cars;
+
+  /// 이름표 글꼴(앱 글꼴). null이면 기본 글꼴.
+  final TextStyle? labelStyle;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty) {
+      return;
+    }
+    final elapsed = time.value;
+    final pose = replayCameraPose(track, player, camera, elapsed);
+    final view = _View(eye: _V3.of(pose.eye), target: _V3.of(pose.target), fovRadians: pose.fovRadians, size: size);
+    _paintCarLabels(canvas, view, track, labelStyle, [
+      for (final car in cars)
+        if (car.car.visibleAt(elapsed)) (frame: car.car.frameAt(elapsed), color: car.color, label: car.label(elapsed)),
+    ]);
+  }
+
+  @override
+  bool shouldRepaint(ReplayLabelsPainter oldDelegate) =>
+      !identical(oldDelegate.player, player) ||
+      !identical(oldDelegate.track, track) ||
+      oldDelegate.camera != camera ||
+      oldDelegate.time != time ||
+      !identical(oldDelegate.cars, cars) ||
       oldDelegate.labelStyle != labelStyle;
 }
 

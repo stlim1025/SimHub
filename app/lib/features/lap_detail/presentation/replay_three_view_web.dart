@@ -54,6 +54,7 @@ class ReplayThreeView extends StatefulWidget {
     required this.camera,
     required this.time,
     required this.fallback,
+    this.overlay,
   });
 
   final ReplayTrack3d track;
@@ -61,6 +62,9 @@ class ReplayThreeView extends StatefulWidget {
   final ReplayCamera camera;
   final ValueListenable<double> time;
   final Widget fallback;
+
+  /// three.js 그림 위에 얹는 위젯(이름표 등). 대체 그림을 쓸 때는 얹지 않는다(대체 그림이 직접 그린다).
+  final Widget? overlay;
 
   @override
   State<ReplayThreeView> createState() => _ReplayThreeViewState();
@@ -154,6 +158,7 @@ class _ReplayThreeViewState extends State<ReplayThreeView> {
       children: [
         if (_scene == null) widget.fallback,
         HtmlElementView.fromTagName(tagName: _containerTag, onElementCreated: _onElementCreated),
+        if (_scene != null && widget.overlay != null) widget.overlay!,
       ],
     );
   }

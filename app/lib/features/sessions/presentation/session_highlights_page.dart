@@ -17,6 +17,7 @@ import '../../lap_detail/domain/lap_detail_models.dart';
 import '../../lap_detail/presentation/ghost_replay.dart';
 import '../../lap_detail/presentation/ghost_replay_3d_painter.dart';
 import '../../lap_detail/presentation/replay_circuit.dart';
+import '../../lap_detail/presentation/replay_three_view.dart';
 import '../../tracks/application/track_widths_provider.dart';
 import '../../tracks/application/tracks_providers.dart';
 import '../../tracks/domain/track_sample_geometry.dart';
@@ -386,6 +387,52 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
     );
   }
 
+  /// 3D 장면: WebGL 다시보기를 켰으면 three.js 그림 위에 이름표를 얹는다(못 쓰면 캔버스 그림으로 돌아간다), 아니면 캔버스 그림.
+  Widget _scene(BuildContext context, HighlightClip clip) {
+    final focus = _focus!;
+    final focusColor = _colorOf(clip.focusCar);
+    String focusLabel(double t) => highlightCarLabel(widget.highlights.nameOf(clip.focusCar), focus, t);
+    final labelStyle = DefaultTextStyle.of(context).style;
+    final canvas = CustomPaint(
+      key: const ValueKey('highlights-view'),
+      painter: GhostReplay3dPainter(
+        player: focus,
+        ghost: null,
+        track: _track,
+        camera: _camera,
+        time: _time,
+        playerColor: focusColor,
+        ghostColor: AppColors.accent,
+        field: _field,
+        playerLabel: focusLabel,
+        labelStyle: labelStyle,
+      ),
+    );
+    if (!replayThreeEnabled) {
+      return canvas;
+    }
+    return ReplayThreeView(
+      track: _track,
+      cars: [
+        (car: focus, color: focusColor, opacity: 1, tyre: null),
+        for (final other in _field) (car: other.car, color: other.color, opacity: 1, tyre: null),
+      ],
+      camera: _camera,
+      time: _time,
+      fallback: canvas,
+      overlay: CustomPaint(
+        painter: ReplayLabelsPainter(
+          player: focus,
+          track: _track,
+          camera: _camera,
+          time: _time,
+          cars: [(car: focus, color: focusColor, label: focusLabel), ..._field],
+          labelStyle: labelStyle,
+        ),
+      ),
+    );
+  }
+
   Widget _emptyView(AppPalette palette) => ColoredBox(
         color: AppColors.replayDashPanel,
         child: Center(child: Text(_emptyReelText, style: TextStyle(color: palette.textMuted))),
@@ -402,21 +449,7 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
     return Stack(
       fit: StackFit.expand,
       children: [
-        CustomPaint(
-          key: const ValueKey('highlights-view'),
-          painter: GhostReplay3dPainter(
-            player: _focus!,
-            ghost: null,
-            track: _track,
-            camera: _camera,
-            time: _time,
-            playerColor: _colorOf(clip.focusCar),
-            ghostColor: AppColors.accent,
-            field: _field,
-            playerLabel: (t) => highlightCarLabel(highlights.nameOf(clip.focusCar), _focus!, t),
-            labelStyle: DefaultTextStyle.of(context).style,
-          ),
-        ),
+        _scene(context, clip),
         if (clip.standings.isNotEmpty)
           Positioned(
             left: _overlayInset,

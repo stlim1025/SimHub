@@ -73,6 +73,25 @@ void main() {
       expect(mesh.street, isFalse);
     });
 
+    test('출발선 뒤 그리드 22칸(칸마다 가로선 + 옆 다리 둘)이 흰 선 층에 들어 있고, 좌우를 번갈아 앉는다', () {
+      // 반지름 100m 원은 곡률이 커서 둘레가 모두 연석이라 가장자리 선이 없다: 출발선 한 장 뒤에 그리드가 온다.
+      const withoutGrid = 6;
+      final line = mesh.layer(ReplaySurface.line)!;
+
+      expect(line.vertexCount, withoutGrid + 22 * 3 * 6);
+      // 첫 두 칸의 가로선 가운데는 중심선 양쪽에 있다(옆 거리 부호가 다르다).
+      Offset barCenter(int slot) {
+        final o = (withoutGrid + slot * 3 * 6) * 3;
+        final p = line.positions;
+        return Offset((p[o] + p[o + 3] + p[o + 6] + p[o + 15]) / 4, (p[o + 2] + p[o + 5] + p[o + 8] + p[o + 17]) / 4);
+      }
+
+      final first = barCenter(0).distance;
+      final second = barCenter(1).distance;
+      expect(first, isNot(closeTo(100, 0.5)));
+      expect((first - 100).sign, isNot((second - 100).sign));
+    });
+
     test('아스팔트 무늬 좌표: U는 중심선을 따라 늘고, V는 옆 거리(왼쪽 +, 오른쪽 −)', () {
       final uv = mesh.layer(ReplaySurface.asphalt)!.uvs;
       var maxU = 0.0;

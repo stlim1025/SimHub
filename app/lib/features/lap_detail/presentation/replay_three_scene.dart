@@ -24,6 +24,17 @@ const double _edgeLineWidthM = 0.4;
 /// 출발·결승선 폭(m, 진행 방향).
 const double _startLineDepthM = 1.2;
 
+/// 출발 그리드: 칸 수, 출발선에서 첫 칸까지와 칸 사이 거리(m, 진행 반대쪽), 칸 앞 가로선 폭·두께, 옆 다리 길이·두께(m),
+/// 칸 가운데의 옆 위치(길 절반 폭에 대한 비, 칸마다 좌우 번갈아).
+const int _gridSlots = 22;
+const double _gridFirstSlotM = 8;
+const double _gridSlotGapM = 8;
+const double _gridBarWidthM = 2.4;
+const double _gridBarDepthM = 0.2;
+const double _gridLegLengthM = 1.2;
+const double _gridLegWidthM = 0.15;
+const double _gridSideRatio = 0.45;
+
 /// 방호벽 위 펜스 높이(m).
 const double _fenceHeightM = 2.6;
 
@@ -264,6 +275,31 @@ ReplayTrackMesh buildReplayTrackMesh(ReplayTrack3d track) {
     );
   }
 
+  // 출발 그리드: 출발선 뒤로 좌우 번갈아 칸마다 앞 가로선과 뒤로 뻗은 옆 다리 두 개(ㄷ 모양).
+  final lapLength = circuit.closed ? along[n - 1] + (center[0] - center[n - 1]).distance : along[n - 1];
+  for (var k = 0; k < _gridSlots; k++) {
+    final spot = _pointAlong(circuit, along, lapLength, along[start] - _gridFirstSlotM - k * _gridSlotGapM);
+    if (spot == null) {
+      break;
+    }
+    final (:i, :at, :forward, :leftward, :halfWidth) = spot;
+    final slot = at + leftward * (halfWidth * _gridSideRatio * (k.isEven ? 1 : -1));
+    final u = along[i];
+    _Vertex g(Offset p) => (x: p.dx, y: circuit.elevations[i] + _edgeLineLiftM, z: p.dy, u: u, v: 0);
+    void strip(Offset from, Offset to, double width) {
+      final d = to - from;
+      final side = Offset(-d.dy, d.dx) / d.distance * (width / 2);
+      layers[ReplaySurface.line]!.quad(g(from + side), g(to + side), g(to - side), g(from - side), AppColors.replayRoadEdge);
+    }
+
+    const halfBar = _gridBarWidthM / 2;
+    strip(slot - leftward * halfBar, slot + leftward * halfBar, _gridBarDepthM);
+    for (final s in const [1.0, -1.0]) {
+      final end = slot + leftward * (s * (halfBar - _gridLegWidthM / 2));
+      strip(end, end - forward * _gridLegLengthM, _gridLegWidthM);
+    }
+  }
+
   final lane = circuit.pitLane;
   const halfLane = kCircuitPitLaneWidthM / 2;
   final pitColor = Color.lerp(AppColors.replayAsphalt, AppColors.replayRoadEdge, _pitLaneLighten)!;
@@ -333,4 +369,40 @@ Float32List packReplayFrame(ReplayTrack3d track, List<ReplaySceneCar> cars, Repl
       ..[o + 13] = tyre?.b ?? 0;
   }
   return out;
+}
+
+/// 중심선을 따라 [distanceM] 지점(닫힌 서킷은 한 바퀴 [lapLength]로 감는다, 열린 길 밖이면 null):
+/// 가장 가까운 앞쪽 점 번호, 위치, 진행 방향·왼쪽 단위 벡터, 그 자리 길 절반 폭.
+({int i, Offset at, Offset forward, Offset leftward, double halfWidth})? _pointAlong(
+  ReplayCircuit circuit,
+  List<double> along,
+  double lapLength,
+  double distanceM,
+) {
+  final n = along.length;
+  var d = distanceM;
+  if (circuit.closed) {
+    d %= lapLength;
+  } else if (d < 0 || d > along[n - 1]) {
+    return null;
+  }
+  var i = 0;
+  while (i + 1 < n && along[i + 1] <= d) {
+    i++;
+  }
+  final j = (i + 1) % n;
+  final a = circuit.center[i];
+  final step = circuit.center[j] - a;
+  if (step.distance == 0) {
+    return null;
+  }
+  final forward = step / step.distance;
+  final at = a + forward * (d - along[i]);
+  // 왼쪽 가장자리 쪽에서 진행 방향 성분을 뺀 단위 벡터.
+  final toLeft = circuit.leftPoints[i] - a;
+  final across = toLeft - forward * (toLeft.dx * forward.dx + toLeft.dy * forward.dy);
+  if (across.distance == 0) {
+    return null;
+  }
+  return (i: i, at: at, forward: forward, leftward: across / across.distance, halfWidth: toLeft.distance);
 }
