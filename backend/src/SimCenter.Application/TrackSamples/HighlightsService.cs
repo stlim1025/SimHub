@@ -113,7 +113,7 @@ public sealed class HighlightsService : IHighlightsService
             }
         }
 
-        return HighlightsBuilder.Build(session.Id, session.TotalLaps, timeline, length, cars, flags, allRetirements);
+        return HighlightsBuilder.Build(session.Id, session.TrackId, session.GameCode, session.TotalLaps, timeline, length, cars, flags, allRetirements);
     }
 
     /// <summary>순위표 없는 앞 조각 중 시간이 이어지는 것을 차례로 [parts] 앞에 붙인다.</summary>

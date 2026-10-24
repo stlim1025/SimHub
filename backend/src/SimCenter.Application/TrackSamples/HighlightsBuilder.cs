@@ -47,10 +47,13 @@ public sealed record HighlightClipDto(
     IReadOnlyList<HighlightCarTrackDto> Cars);
 
 /// <summary>
-/// 레이스 하이라이트(<c>GET /api/v1/me/sessions/{id}/highlights</c>): 차 이름표, 깃발 구간, 내 하이라이트·레이스 하이라이트 두 묶음(시간 순).
+/// 레이스 하이라이트(<c>GET /api/v1/me/sessions/{id}/highlights</c>): 트랙(형상을 불러올 때), 차 이름표, 깃발 구간,
+/// 내 하이라이트·레이스 하이라이트 두 묶음(시간 순).
 /// </summary>
 public sealed record HighlightsResponse(
     Guid SessionId,
+    Guid TrackId,
+    string GameCode,
     int TotalLaps,
     IReadOnlyList<HighlightCarDto> Cars,
     IReadOnlyList<HighlightFlagDto> Flags,
@@ -120,6 +123,8 @@ public static class HighlightsBuilder
 
     public static HighlightsResponse Build(
         Guid sessionId,
+        Guid trackId,
+        string gameCode,
         int totalLaps,
         RaceTimeline timeline,
         double trackLengthM,
@@ -130,7 +135,7 @@ public static class HighlightsBuilder
         var flagDtos = flags.Select(f => new HighlightFlagDto(f.Kind.ToString(), f.FromMs, f.ToMs)).ToList();
         if (timeline.Cars.Count == 0)
         {
-            return new HighlightsResponse(sessionId, totalLaps, cars, flagDtos, [], []);
+            return new HighlightsResponse(sessionId, trackId, gameCode, totalLaps, cars, flagDtos, [], []);
         }
 
         var player = cars.FirstOrDefault(c => c.IsPlayer)?.CarIndex;
@@ -192,6 +197,8 @@ public static class HighlightsBuilder
 
         return new HighlightsResponse(
             sessionId,
+            trackId,
+            gameCode,
             totalLaps,
             cars,
             flagDtos,

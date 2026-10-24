@@ -63,7 +63,7 @@ public sealed class HighlightsBuilderTests
     ];
 
     private static HighlightsResponse Build(DecodedTrackSamples samples, IReadOnlyList<RaceFlagPeriod>? flags = null)
-        => HighlightsBuilder.Build(Guid.Empty, 5, RaceTimeline.Build([samples]), TrackLength, Cars, flags ?? [], []);
+        => HighlightsBuilder.Build(Guid.Empty, Guid.Empty, "F1_25", 5, RaceTimeline.Build([samples]), TrackLength, Cars, flags ?? [], []);
 
     [Fact]
     public void Timeline_WhenTimeGoesBack_DropsSamplesAfterTheRewind()
@@ -200,7 +200,7 @@ public sealed class HighlightsBuilderTests
     [Fact]
     public void NoSamples_GivesEmptyReels()
     {
-        var result = HighlightsBuilder.Build(Guid.Empty, 5, RaceTimeline.Build([]), TrackLength, Cars, [], []);
+        var result = HighlightsBuilder.Build(Guid.Empty, Guid.Empty, "F1_25", 5, RaceTimeline.Build([]), TrackLength, Cars, [], []);
 
         Assert.Empty(result.Mine);
         Assert.Empty(result.Race);
