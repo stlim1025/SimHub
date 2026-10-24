@@ -45,6 +45,9 @@ abstract interface class ReplayCar {
 
   /// 경과 시간 [elapsedMs]의 진행 방향을 앞뒤 [lookM]만큼 넓게 본 값(카메라가 표본 흔들림을 따라 떨지 않게).
   double headingAt(double elapsedMs, {required double lookM});
+
+  /// 경과 시간 [elapsedMs]에 그릴지(기록이 끊긴 구간 — 피트 레인 등 — 에서는 숨긴다).
+  bool visibleAt(double elapsedMs);
 }
 
 /// 위치가 있는 랩 트레이스를 시간으로 따라가는 재생기(순수 계산). [trace]는 `hasPositions`여야 한다.
@@ -105,6 +108,9 @@ class LapReplay implements ReplayCar {
   @override
   double headingAt(double elapsedMs, {required double lookM}) =>
       headingAtDistance(samplePositionAt(elapsedMs) * trace.resolutionM, lookM: lookM);
+
+  @override
+  bool visibleAt(double elapsedMs) => true;
 
   /// 경과 시간 [elapsedMs]의 상태. 랩을 끝냈으면 결승점에 멈춰 있다([ReplayFrame.finished]).
   @override

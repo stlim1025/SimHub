@@ -617,8 +617,8 @@ class ReplayTrack3d {
   }
 }
 
-/// 3D 재생에 함께 그리는 둘레 차 한 대: 움직임·몸체 색·이름표.
-typedef ReplayFieldCar = ({ReplayCar car, Color color, String label});
+/// 3D 재생에 함께 그리는 둘레 차 한 대: 움직임·몸체 색·이름표(경과 시간마다 — 피트 인·아웃을 붙이게).
+typedef ReplayFieldCar = ({ReplayCar car, Color color, String Function(double elapsedMs) label});
 
 /// 고스트 재생 3D 시점: [camera]로 서킷(높낮이·잔디·그래블·아스팔트·연석·흰 선·출발선·낮은 방호벽)과
 /// 로우폴리 차(고스트는 반투명)를 원근 투영해 그린다. 먼 것부터 칠하고(화가 알고리즘), [time]이 바뀌면 다시 그린다.
@@ -652,8 +652,8 @@ class GhostReplay3dPainter extends CustomPainter {
   /// 함께 그리는 둘레 차(하이라이트).
   final List<ReplayFieldCar> field;
 
-  /// 카메라가 따라가는 차의 이름표. null이면 달지 않는다.
-  final String? playerLabel;
+  /// 카메라가 따라가는 차의 이름표(경과 시간마다). null이면 달지 않는다.
+  final String Function(double elapsedMs)? playerLabel;
 
   /// 이름표 글꼴(앱 글꼴). null이면 기본 글꼴.
   final TextStyle? labelStyle;
@@ -705,8 +705,9 @@ class GhostReplay3dPainter extends CustomPainter {
     // 둘레 차는 그리는 반경 안의 것만(서킷도 그 안만 그린다).
     final fieldFrames = [
       for (final other in field)
-        if (other.car.frameAt(elapsed) case final f when (Offset(f.x, f.z) - focus).distance <= rig.radiusM)
-          (frame: f, color: other.color, label: other.label),
+        if (other.car.visibleAt(elapsed))
+          if (other.car.frameAt(elapsed) case final f when (Offset(f.x, f.z) - focus).distance <= rig.radiusM)
+            (frame: f, color: other.color, label: other.label(elapsed)),
     ];
     final cars = [
       if (ghostFrame != null)
@@ -715,7 +716,9 @@ class GhostReplay3dPainter extends CustomPainter {
       (at: focus, item: _car(view, frame, playerColor, tyreMark: playerTyre)),
     ];
     final items = <_Item>[for (final car in cars) car.item];
-    _collectTrack(view, focus, rig.radiusM, items, cars: [for (final c in cars) (at: c.at, depth: c.item.depth)]);
+    final carSpots = [for (final c in cars) (at: c.at, depth: c.item.depth)];
+    _collectTrack(view, focus, rig.radiusM, items, cars: carSpots);
+    _collectPitLane(view, focus, rig.radiusM, items, cars: carSpots);
 
     final batch = _Batch();
     items.sort((a, b) => b.depth.compareTo(a.depth));
@@ -736,7 +739,7 @@ class GhostReplay3dPainter extends CustomPainter {
     final label = playerLabel;
     _paintLabels(canvas, view, [
       for (final other in fieldFrames) (frame: other.frame, color: other.color, label: other.label),
-      if (label != null) (frame: frame, color: playerColor, label: label),
+      if (label != null) (frame: frame, color: playerColor, label: label(elapsed)),
     ]);
   }
 
@@ -797,6 +800,47 @@ class GhostReplay3dPainter extends CustomPainter {
           colors: [AppColors.replaySkyTop, AppColors.replaySkyHorizon],
         ).createShader(sky),
     );
+  }
+
+  /// 카메라 둘레 [radiusM] 안의 피트 레인 구간(아스팔트 띠). 깊이 규칙은 서킷 바닥과 같다.
+  void _collectPitLane(
+    _View view,
+    Offset focus,
+    double radiusM,
+    List<_Item> items, {
+    required List<({Offset at, double depth})> cars,
+  }) {
+    final circuit = track.circuit;
+    final lane = circuit.pitLane;
+    const half = kCircuitPitLaneWidthM / 2;
+    for (var i = 0; i + 1 < lane.length; i++) {
+      final middle = (lane[i] + lane[i + 1]) / 2;
+      if ((middle - focus).distance > radiusM) {
+        continue;
+      }
+      _V3 at(int k, double side) {
+        final p = lane[k] + circuit.pitNormals[k] * side;
+        return _V3(p.dx, circuit.pitElevations[k], p.dy);
+      }
+
+      final polygon = [at(i, half), at(i + 1, half), at(i + 1, -half), at(i, -half)];
+      final projected = view.projectPolygon(polygon);
+      if (projected == null) {
+        continue;
+      }
+      final distance = math.max((at(i, 0) - view.eye).length, (at(i + 1, 0) - view.eye).length);
+      var depth = distance;
+      for (final car in cars) {
+        if (car.depth.isFinite && (car.at - middle).distance < _carGroundRadiusM) {
+          depth = math.max(depth, car.depth + _groundBeforeCarM);
+        }
+      }
+      items.add((
+        depth: depth,
+        faces: [(points: projected, color: _shade(AppColors.replayAsphalt, _normalUp(polygon), distance))],
+        opacity: 1,
+      ));
+    }
   }
 
   /// 카메라 둘레 [radiusM] 안의 서킷 구간을 바닥 면(잔디·그래블·아스팔트·연석·선) 묶음과 방호벽으로 모은다.

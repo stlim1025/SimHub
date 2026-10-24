@@ -183,6 +183,39 @@ void main() {
     });
   });
 
+  group('피트·피니시', () {
+    final track = HighlightCarTrack.fromJsonOrNull({
+      'carIndex': 2,
+      'timeMs': [0, 1000, 2000, 20000, 21000],
+      'x': [0.0, 10.0, 20.0, 30.0, 40.0],
+      'z': [0.0, 0.0, 0.0, 0.0, 0.0],
+      'speedKph': [100, 100, 80, 60, 100],
+      'gear': [3, 3, 3, 2, 3],
+      'throttle': [50, 50, 50, 50, 50],
+      'brake': [0, 0, 0, 0, 0],
+      'lap': [5, 5, 5, 5, 5],
+      'pit': [0, 1, 1, 2, 2],
+    })!;
+    final path = TimedCarPath(track);
+
+    test('표본이 오래 끊긴 사이(피트 레인)에는 숨기고, 이름표에 PIT IN·PIT OUT을 붙인다', () {
+      expect(path.visibleAt(500), isTrue);
+      expect(path.visibleAt(10000), isFalse);
+      expect(path.visibleAt(30000), isTrue);
+      expect(highlightCarLabel('NORRIS', path, 500), 'NORRIS');
+      expect(highlightCarLabel('NORRIS', path, 1500), 'NORRIS · PIT IN');
+      expect(highlightCarLabel('NORRIS', path, 20500), 'NORRIS · PIT OUT');
+    });
+
+    test('피니시는 결승 클립에서 결승선을 지난 뒤만', () {
+      final highlights = _highlights();
+      final finish = highlights.race[2];
+      expect(highlightFinished(finish, finish.eventMs - 1.0), isFalse);
+      expect(highlightFinished(finish, finish.eventMs.toDouble()), isTrue);
+      expect(highlightFinished(highlights.race[1], 1e9), isFalse);
+    });
+  });
+
   group('HighlightsPlayer', () {
     testWidgets('내 하이라이트부터 첫 장면 캡션과 장면 수를 보인다', (t) async {
       await _pumpPlayer(t, _highlights());
@@ -233,6 +266,26 @@ void main() {
       await t.tap(find.byKey(const ValueKey('highlights-next')));
       await t.pump();
       expect(find.byKey(const ValueKey('highlights-flag')), findsNothing);
+    });
+
+    testWidgets('결승 클립에서 결승선을 지나면 피니시 배너', (t) async {
+      await _pumpPlayer(t, _highlights());
+      await t.tap(find.byKey(const ValueKey('highlights-reel-race')));
+      await t.pump();
+      await t.tap(find.byKey(const ValueKey('highlights-next')));
+      await t.pump();
+      await t.tap(find.byKey(const ValueKey('highlights-next')));
+      await t.pump();
+      expect(find.byKey(const ValueKey('highlights-finish')), findsNothing);
+
+      await t.tap(find.byKey(const ValueKey('highlights-play')));
+      await t.pump();
+      for (var i = 0; i < 12; i++) {
+        await t.pump(const Duration(milliseconds: 500));
+      }
+      expect(find.descendant(of: find.byKey(const ValueKey('highlights-finish')), matching: find.text('피니시')), findsOneWidget);
+      await t.tap(find.byKey(const ValueKey('highlights-play')));
+      await t.pump();
     });
 
     testWidgets('묶음에 장면이 없으면 안내 문구', (t) async {

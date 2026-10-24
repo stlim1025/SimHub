@@ -28,6 +28,9 @@ const double kCircuitGravelCurvature = 0.0125;
 const double kCircuitKerbWidthM = 1.5;
 const double kCircuitGravelWidthM = 12;
 
+/// 피트 레인 폭(m).
+const double kCircuitPitLaneWidthM = 7;
+
 /// 첫·마지막 표본이 이 거리(m)보다 가까우면 한 바퀴로 이어진 닫힌 서킷으로 본다.
 const double _closedLoopM = 40;
 
@@ -102,7 +105,11 @@ class ReplayCircuit {
     required this.startHeading,
     required this.startLeftM,
     required this.startRightM,
-  });
+    this.pitLane = const [],
+    this.pitElevations = const [],
+    this.pitNormals = const [],
+    Path? pitAsphalt,
+  }) : pitAsphalt = pitAsphalt ?? Path();
 
   /// 중심선 점.
   final List<Offset> center;
@@ -145,6 +152,12 @@ class ReplayCircuit {
   final double startHeading;
   final double startLeftM;
   final double startRightM;
+
+  /// 피트 레인 선(입구 → 출구, 월드 X·Z)·점마다 노면 높이·왼쪽 법선, 그리고 2D로 칠할 피트 레인 면. 표본 형상에 피트 레인이 없으면 비어 있다.
+  final List<Offset> pitLane;
+  final List<double> pitElevations;
+  final List<Offset> pitNormals;
+  final Path pitAsphalt;
 
   /// [player](와 [ghost]) 주행 기록으로 서킷 모양을 만든다. [real]이 있고 주행선에 맞으면 실측 중심선·폭을 쓴다.
   /// 실측이 없고 [samples](모든 차 표본으로 만든 트랙 형상)가 있으면 그것으로 만든 도로를 실측처럼 쓴다.
@@ -257,7 +270,29 @@ class ReplayCircuit {
     }
 
     final start = _nearestIndex(center, playerLine.first);
+    final elevations = _elevations(player.trace, playerLine, center, at, samples);
+    final pitLane = samples?.pitLine ?? const <Offset>[];
+    final pitNormals = [
+      for (var i = 0; i < pitLane.length; i++)
+        () {
+          final d = pitLane[math.min(i + 1, pitLane.length - 1)] - pitLane[math.max(i - 1, 0)];
+          return d.distance == 0 ? Offset.zero : Offset(-d.dy, d.dx) / d.distance;
+        }(),
+    ];
+    final pitAsphalt = Path();
+    for (var i = 0; i + 1 < pitLane.length; i++) {
+      final a = pitNormals[i] * (kCircuitPitLaneWidthM / 2);
+      final b = pitNormals[i + 1] * (kCircuitPitLaneWidthM / 2);
+      _quad(pitAsphalt, pitLane[i] + a, pitLane[i + 1] + b, pitLane[i + 1] - b, pitLane[i] - a);
+    }
+    final pitHeights = samples?.pitY;
     return ReplayCircuit._(
+      pitLane: pitLane,
+      pitNormals: pitNormals,
+      pitElevations: [
+        for (var i = 0; i < pitLane.length; i++) pitHeights?[i] ?? elevations[_nearestIndex(center, pitLane[i])],
+      ],
+      pitAsphalt: pitAsphalt,
       center: center,
       leftWidths: leftWidths,
       rightWidths: rightWidths,
@@ -270,7 +305,7 @@ class ReplayCircuit {
       kerbLeft: kerbs.left,
       kerbRight: kerbs.right,
       gravelAt: gravelAt,
-      elevations: _elevations(player.trace, playerLine, center, at, samples),
+      elevations: elevations,
       asphalt: asphalt,
       leftEdge: _polyline(left, closed: closed),
       rightEdge: _polyline(right, closed: closed),

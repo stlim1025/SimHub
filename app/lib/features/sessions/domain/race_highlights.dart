@@ -69,7 +69,13 @@ class HighlightFlag {
   }
 }
 
-/// 클립 안 차 한 대의 움직임(같은 칸 = 같은 순간, 시간은 세션 ms, 시간 순).
+/// 피트 인·아웃 표시(서버 `pit` 열 값).
+enum HighlightPit { none, pitIn, pitOut }
+
+/// 표본 사이가 이보다(ms) 비면 그 사이 차는 기록이 없는 곳(피트 레인 — 옛 에이전트)에 있었다고 보고 숨긴다.
+const int kHighlightHiddenGapMs = 1500;
+
+/// 클립 안 차 한 대의 움직임(같은 칸 = 같은 순간, 시간은 세션 ms, 시간 순). [pit]은 표본마다 피트 인·아웃(없으면 모두 none).
 class HighlightCarTrack {
   const HighlightCarTrack({
     required this.carIndex,
@@ -81,6 +87,7 @@ class HighlightCarTrack {
     required this.throttle,
     required this.brake,
     required this.lap,
+    this.pit = const [],
   });
 
   final int carIndex;
@@ -92,6 +99,7 @@ class HighlightCarTrack {
   final List<int> throttle;
   final List<int> brake;
   final List<int> lap;
+  final List<HighlightPit> pit;
 
   int get length => timeMs.length;
 
@@ -108,10 +116,12 @@ class HighlightCarTrack {
     final throttle = ints('throttle');
     final brake = ints('brake');
     final lap = ints('lap');
+    final pit = ints('pit');
     final n = time.length;
     if (car == null || n == 0 || [x, z, speed, gear, throttle, brake, lap].any((c) => c.length != n)) {
       return null;
     }
+    HighlightPit pitOf(int value) => value >= 0 && value < HighlightPit.values.length ? HighlightPit.values[value] : HighlightPit.none;
     return HighlightCarTrack(
       carIndex: car,
       timeMs: time,
@@ -122,6 +132,7 @@ class HighlightCarTrack {
       throttle: throttle,
       brake: brake,
       lap: lap,
+      pit: pit.length == n ? [for (final p in pit) pitOf(p)] : const [],
     );
   }
 }
@@ -241,6 +252,24 @@ const Map<RaceFlagKind, int> _flagPriority = {
   RaceFlagKind.redFlag: 3,
 };
 
+/// 피트 표시 글자.
+const Map<HighlightPit, String> kHighlightPitLabels = {
+  HighlightPit.pitIn: 'PIT IN',
+  HighlightPit.pitOut: 'PIT OUT',
+};
+
+/// 차 이름표: 이름, 피트 인·아웃 중이면 `NORRIS · PIT IN`(순수 함수).
+String highlightCarLabel(String name, TimedCarPath path, double elapsedMs) {
+  final pit = kHighlightPitLabels[path.pitAt(elapsedMs)];
+  return pit == null ? name : '$name · $pit';
+}
+
+/// 피니시 배너 글자.
+const String kHighlightFinishLabel = '피니시';
+
+/// 결승 클립에서 결승선을 지난 뒤인지(피니시 배너, 순수 함수).
+bool highlightFinished(HighlightClip clip, double timeMs) => clip.kind == HighlightKind.finish && timeMs >= clip.eventMs;
+
 /// 클립 캡션: `12랩 · 추월 · A → B`, `12랩 · 충돌 · A ↔ B`, 출발은 `출발`, 결승은 `39랩 · 결승 · A`(순수 함수).
 String highlightCaption(HighlightClip clip, String Function(int carIndex) nameOf) {
   final kind = kHighlightKindLabels[clip.kind]!;
@@ -356,6 +385,25 @@ class TimedCarPath implements ReplayCar {
   @override
   double headingAt(double elapsedMs, {required double lookM}) =>
       _headingAtDistance(_lerp(_distances, _positionAt(elapsedMs)), lookM);
+
+  /// 표본 사이가 [kHighlightHiddenGapMs]보다 빈 구간 안이면 숨긴다(첫 표본 전·마지막 표본 뒤는 그 자리에 보인다).
+  @override
+  bool visibleAt(double elapsedMs) {
+    final position = _positionAt(elapsedMs);
+    final lower = position.floor();
+    if (lower >= track.length - 1 || position == lower) {
+      return true;
+    }
+    return track.timeMs[lower + 1] - track.timeMs[lower] <= kHighlightHiddenGapMs;
+  }
+
+  /// [elapsedMs]의 피트 인·아웃(바로 앞 표본 값, 표시가 없으면 none).
+  HighlightPit pitAt(double elapsedMs) {
+    if (track.pit.isEmpty) {
+      return HighlightPit.none;
+    }
+    return track.pit[_positionAt(elapsedMs).floor()];
+  }
 
   @override
   ReplayFrame frameAt(double elapsedMs) {

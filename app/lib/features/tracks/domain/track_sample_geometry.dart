@@ -26,6 +26,9 @@ class TrackSampleGeometry {
     required this.bandRightM,
     required this.kerbLeft,
     required this.kerbRight,
+    this.pitX,
+    this.pitZ,
+    this.pitY,
   });
 
   final double resolutionM;
@@ -40,7 +43,19 @@ class TrackSampleGeometry {
   final List<bool> kerbLeft;
   final List<bool> kerbRight;
 
+  /// 피트 레인 선(입구 → 출구, 월드 X·Z·높이). 피트 레인 표본이 모자라면 null.
+  final List<double>? pitX;
+  final List<double>? pitZ;
+  final List<double>? pitY;
+
   int get length => x.length;
+
+  /// 피트 레인 점(월드 X·Z). 없으면 빈 목록.
+  List<Offset> get pitLine {
+    final px = pitX;
+    final pz = pitZ;
+    return px == null || pz == null ? const [] : [for (var i = 0; i < px.length; i++) Offset(px[i], pz[i])];
+  }
 
   /// 레이싱 라인 점(월드 X·Z).
   List<Offset> get line => [for (var i = 0; i < length; i++) Offset(x[i], z[i])];
@@ -66,7 +81,14 @@ class TrackSampleGeometry {
     if (n < 3 || [z, left, right].any((l) => l.length != n) || kerbLeft.length != n || kerbRight.length != n) {
       return null;
     }
+    final pitX = numbers(json['pitX']);
+    final pitZ = numbers(json['pitZ']);
+    final pitY = numbers(json['pitY']);
+    final hasPit = pitX != null && pitZ != null && pitX.length >= 2 && pitZ.length == pitX.length;
     return TrackSampleGeometry(
+      pitX: hasPit ? pitX : null,
+      pitZ: hasPit ? pitZ : null,
+      pitY: hasPit && pitY != null && pitY.length == pitX.length ? pitY : null,
       resolutionM: resolution.toDouble(),
       sessionCount: (json['sessionCount'] as num?)?.toInt() ?? 0,
       x: x,

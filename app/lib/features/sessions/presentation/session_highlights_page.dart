@@ -65,6 +65,8 @@ const EdgeInsets _captionPadding = EdgeInsets.symmetric(horizontal: 10, vertical
 const EdgeInsets _flagPadding = EdgeInsets.symmetric(horizontal: 14, vertical: 6);
 const double _overlayRadius = 6;
 const double _captionOpacity = 0.85;
+const double _bannerGap = 6;
+const double _finishIconSize = 18;
 
 /// 조작 줄 폭이 이보다 좁으면 시간 막대를 아랫줄로 내린다.
 const double _singleRowControlsMinWidth = 760;
@@ -217,7 +219,7 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
   int _index = 0;
 
   /// 지금 클립의 중심 차·둘레 차.
-  ReplayCar? _focus;
+  TimedCarPath? _focus;
   List<ReplayFieldCar> _field = const [];
 
   /// 재생 시각(세션 ms).
@@ -273,9 +275,15 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
     _field = [
       for (final car in clip.cars)
         if (car.carIndex != clip.focusCar)
-          (car: TimedCarPath(car), color: _colorOf(car.carIndex), label: widget.highlights.nameOf(car.carIndex)),
+          _fieldCar(car),
     ];
     _time.value = clip.startMs.toDouble();
+  }
+
+  ReplayFieldCar _fieldCar(HighlightCarTrack track) {
+    final path = TimedCarPath(track);
+    final name = widget.highlights.nameOf(track.carIndex);
+    return (car: path, color: _colorOf(track.carIndex), label: (t) => highlightCarLabel(name, path, t));
   }
 
   void _onTick(Duration elapsed) {
@@ -400,7 +408,7 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
             playerColor: _colorOf(clip.focusCar),
             ghostColor: AppColors.accent,
             field: _field,
-            playerLabel: highlights.nameOf(clip.focusCar),
+            playerLabel: (t) => highlightCarLabel(highlights.nameOf(clip.focusCar), _focus!, t),
             labelStyle: DefaultTextStyle.of(context).style,
           ),
         ),
@@ -428,7 +436,14 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
             valueListenable: _time,
             builder: (context, time, _) {
               final flag = activeRaceFlag(highlights.flags, time);
-              return flag == null ? const SizedBox.shrink() : Center(child: _FlagBanner(flag));
+              final finished = highlightFinished(clip, time);
+              return Column(
+                children: [
+                  if (flag != null) _FlagBanner(flag),
+                  if (flag != null && finished) const SizedBox(height: _bannerGap),
+                  if (finished) const _FinishBanner(),
+                ],
+              );
             },
           ),
         ),
@@ -508,6 +523,30 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
             ),
     );
   }
+}
+
+/// 피니시 배너: 결승 클립에서 결승선을 지난 뒤(체커기).
+class _FinishBanner extends StatelessWidget {
+  const _FinishBanner();
+
+  @override
+  Widget build(BuildContext context) => Container(
+        key: const ValueKey('highlights-finish'),
+        padding: _flagPadding,
+        decoration: BoxDecoration(
+          color: AppColors.replayDashPanel,
+          borderRadius: BorderRadius.circular(_overlayRadius),
+          border: Border.all(color: AppColors.replayHudText),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.sports_score, color: AppColors.replayHudText, size: _finishIconSize),
+            SizedBox(width: _bannerGap),
+            Text(kHighlightFinishLabel, style: TextStyle(color: AppColors.replayHudText, fontWeight: FontWeight.w800)),
+          ],
+        ),
+      );
 }
 
 /// 깃발 배너: 세이프티카·버추얼은 노랑, 적기는 빨강.
