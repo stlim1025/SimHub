@@ -38,9 +38,18 @@ const int _ersFlowWindowSamples = 2;
 
 const double _percent = 100;
 
+/// 3D 재생이 그리는 차 한 대(랩 재생기·하이라이트의 시간 경로).
+abstract interface class ReplayCar {
+  /// 경과 시간 [elapsedMs]의 상태.
+  ReplayFrame frameAt(double elapsedMs);
+
+  /// 경과 시간 [elapsedMs]의 진행 방향을 앞뒤 [lookM]만큼 넓게 본 값(카메라가 표본 흔들림을 따라 떨지 않게).
+  double headingAt(double elapsedMs, {required double lookM});
+}
+
 /// 위치가 있는 랩 트레이스를 시간으로 따라가는 재생기(순수 계산). [trace]는 `hasPositions`여야 한다.
 /// 표본은 거리 간격이고 표본마다 랩 시간이 있으므로(거리에 따라 단조 증가) 시간 → 거리를 이분 탐색으로 찾고 앞뒤 표본을 선형 보간한다.
-class LapReplay {
+class LapReplay implements ReplayCar {
   LapReplay(this.trace) : assert(trace.hasPositions, '위치가 있는 트레이스만 재생한다.');
 
   final LapTrace trace;
@@ -93,7 +102,12 @@ class LapReplay {
     return math.atan2(dz, dx);
   }
 
+  @override
+  double headingAt(double elapsedMs, {required double lookM}) =>
+      headingAtDistance(samplePositionAt(elapsedMs) * trace.resolutionM, lookM: lookM);
+
   /// 경과 시간 [elapsedMs]의 상태. 랩을 끝냈으면 결승점에 멈춰 있다([ReplayFrame.finished]).
+  @override
   ReplayFrame frameAt(double elapsedMs) {
     final position = samplePositionAt(elapsedMs);
     final distance = position * trace.resolutionM;

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_provider.dart';
+import '../domain/race_highlights.dart';
 import '../domain/session_display.dart';
 import '../domain/session_models.dart';
 
@@ -41,6 +42,16 @@ class SessionsRepository {
     try {
       final res = await _dio.get<Map<String, dynamic>>('/me/sessions/${Uri.encodeComponent(sessionId)}');
       return SessionDetail.fromJson(res.data!);
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// 내 레이스 세션의 하이라이트(내 하이라이트·레이스 하이라이트). 레이스가 아니거나 표본이 없으면 404 [ApiException].
+  Future<RaceHighlights> getHighlights(String sessionId) async {
+    try {
+      final res = await _dio.get<Map<String, dynamic>>('/me/sessions/${Uri.encodeComponent(sessionId)}/highlights');
+      return RaceHighlights.fromJson(res.data!);
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }

@@ -160,4 +160,9 @@ class AppColors {
   static const Color replayDashTime = Color(0xFF3DDC5A);
   static const Color replayDashSpeed = Color(0xFF2563EB);
   static const Color replayDashThrottle = Color(0xFF2DBE4E);
+
+  /// 하이라이트 깃발 배너: 세이프티카·버추얼(노랑, 글자 어둡게)·적기(빨강).
+  static const Color replayFlagYellow = Color(0xFFFACC15);
+  static const Color replayFlagYellowText = Color(0xFF1A1A1A);
+  static const Color replayFlagRed = Color(0xFFDC2626);
 }

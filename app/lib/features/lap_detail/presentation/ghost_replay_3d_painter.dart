@@ -103,6 +103,17 @@ const double _broadcastWallClearM = 25;
 /// 경사(차 앞뒤 기울기)를 잴 때 앞뒤로 보는 점 수.
 const int _slopeSamples = 2;
 
+/// 차 이름표: 노면 위 이 높이(m)에 붙이고, 카메라에서 [_labelMaxM]보다 먼 차는 달지 않는다.
+const double _labelLiftM = 1.6;
+const double _labelMaxM = 180;
+const double _labelFontSize = 11;
+const double _labelPaddingX = 6;
+const double _labelPaddingY = 2;
+const double _labelBarWidth = 3;
+const double _labelRadius = 3;
+const double _labelGapAbove = 4;
+const double _labelPanelOpacity = 0.85;
+
 /// 카메라마다: 눈 위치(차 기준 뒤·옆·위, m), 바라보는 곳(차 기준 앞·위, m), 세로 화각(도), 그리는 반경(m).
 typedef _CameraRig = ({double back, double side, double up, double lookAhead, double lookUp, double fovDegrees, double radiusM});
 
@@ -606,8 +617,12 @@ class ReplayTrack3d {
   }
 }
 
+/// 3D 재생에 함께 그리는 둘레 차 한 대: 움직임·몸체 색·이름표.
+typedef ReplayFieldCar = ({ReplayCar car, Color color, String label});
+
 /// 고스트 재생 3D 시점: [camera]로 서킷(높낮이·잔디·그래블·아스팔트·연석·흰 선·출발선·낮은 방호벽)과
 /// 로우폴리 차(고스트는 반투명)를 원근 투영해 그린다. 먼 것부터 칠하고(화가 알고리즘), [time]이 바뀌면 다시 그린다.
+/// 카메라는 [player]를 따라간다. [field]의 차도 함께 그리고, [playerLabel]·둘레 차 이름은 차 위에 이름표로 단다([labelStyle] 글꼴).
 class GhostReplay3dPainter extends CustomPainter {
   GhostReplay3dPainter({
     required this.player,
@@ -618,10 +633,13 @@ class GhostReplay3dPainter extends CustomPainter {
     required this.playerColor,
     required this.ghostColor,
     this.playerTyre,
+    this.field = const [],
+    this.playerLabel,
+    this.labelStyle,
   }) : super(repaint: time);
 
-  final LapReplay player;
-  final LapReplay? ghost;
+  final ReplayCar player;
+  final ReplayCar? ghost;
   final ReplayTrack3d track;
   final ReplayCamera camera;
   final ValueListenable<double> time;
@@ -630,6 +648,15 @@ class GhostReplay3dPainter extends CustomPainter {
 
   /// 내 차 타이어 옆 띠 색(컴파운드). null이면 띠 없이 고무색.
   final Color? playerTyre;
+
+  /// 함께 그리는 둘레 차(하이라이트).
+  final List<ReplayFieldCar> field;
+
+  /// 카메라가 따라가는 차의 이름표. null이면 달지 않는다.
+  final String? playerLabel;
+
+  /// 이름표 글꼴(앱 글꼴). null이면 기본 글꼴.
+  final TextStyle? labelStyle;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -642,7 +669,7 @@ class GhostReplay3dPainter extends CustomPainter {
     final frame = player.frameAt(elapsed);
     final spot = track.locate(Offset(frame.x, frame.z));
     final target = _V3(frame.x, spot.elevation, frame.z);
-    final heading = player.headingAtDistance(frame.distanceM, lookM: _cameraHeadingLookM);
+    final heading = player.headingAt(elapsed, lookM: _cameraHeadingLookM);
     final rig = _rigs[camera]!;
     final _View view;
     if (camera == ReplayCamera.broadcast) {
@@ -674,13 +701,21 @@ class GhostReplay3dPainter extends CustomPainter {
     // 차 둘레 바닥은 늘 그 차보다 먼저 칠한다(연석을 밟아 차가 비스듬할 때 바로 뒤 바닥이 바퀴를 덮지 않게).
     final ghostReplay = ghost;
     final ghostFrame = ghostReplay?.frameAt(elapsed);
+    final focus = Offset(frame.x, frame.z);
+    // 둘레 차는 그리는 반경 안의 것만(서킷도 그 안만 그린다).
+    final fieldFrames = [
+      for (final other in field)
+        if (other.car.frameAt(elapsed) case final f when (Offset(f.x, f.z) - focus).distance <= rig.radiusM)
+          (frame: f, color: other.color, label: other.label),
+    ];
     final cars = [
       if (ghostFrame != null)
         (at: Offset(ghostFrame.x, ghostFrame.z), item: _car(view, ghostFrame, ghostColor, opacity: kGhostCarOpacity)),
-      (at: Offset(frame.x, frame.z), item: _car(view, frame, playerColor, tyreMark: playerTyre)),
+      for (final other in fieldFrames) (at: Offset(other.frame.x, other.frame.z), item: _car(view, other.frame, other.color)),
+      (at: focus, item: _car(view, frame, playerColor, tyreMark: playerTyre)),
     ];
     final items = <_Item>[for (final car in cars) car.item];
-    _collectTrack(view, Offset(frame.x, frame.z), rig.radiusM, items, cars: [for (final c in cars) (at: c.at, depth: c.item.depth)]);
+    _collectTrack(view, focus, rig.radiusM, items, cars: [for (final c in cars) (at: c.at, depth: c.item.depth)]);
 
     final batch = _Batch();
     items.sort((a, b) => b.depth.compareTo(a.depth));
@@ -697,6 +732,48 @@ class GhostReplay3dPainter extends CustomPainter {
       }
     }
     batch.flush(canvas);
+
+    final label = playerLabel;
+    _paintLabels(canvas, view, [
+      for (final other in fieldFrames) (frame: other.frame, color: other.color, label: other.label),
+      if (label != null) (frame: frame, color: playerColor, label: label),
+    ]);
+  }
+
+  /// 차 위 이름표(팀 색 띠 + 이름): 먼 차부터 그려 가까운 차 이름표가 위에 온다. 카메라 뒤·너무 먼 차는 뺀다.
+  void _paintLabels(Canvas canvas, _View view, List<({ReplayFrame frame, Color color, String label})> cars) {
+    final placed = <({double distance, Offset at, Color color, String label})>[];
+    for (final car in cars) {
+      final spot = track.locate(Offset(car.frame.x, car.frame.z));
+      final anchor = _V3(car.frame.x, spot.elevation + _labelLiftM, car.frame.z);
+      final c = view.toCamera(anchor);
+      final distance = (anchor - view.eye).length;
+      if (c.z > -_nearM || distance > _labelMaxM) {
+        continue;
+      }
+      placed.add((distance: distance, at: view._project(c), color: car.color, label: car.label));
+    }
+    placed.sort((a, b) => b.distance.compareTo(a.distance));
+    final style = (labelStyle ?? const TextStyle()).copyWith(
+      fontSize: _labelFontSize,
+      fontWeight: FontWeight.w600,
+      color: AppColors.replayHudText,
+    );
+    for (final car in placed) {
+      final text = TextPainter(text: TextSpan(text: car.label, style: style), textDirection: TextDirection.ltr)..layout();
+      final width = _labelBarWidth + _labelPaddingX * 2 + text.width;
+      final height = text.height + _labelPaddingY * 2;
+      final box = Rect.fromLTWH(car.at.dx - width / 2, car.at.dy - height - _labelGapAbove, width, height);
+      final rounded = RRect.fromRectAndRadius(box, const Radius.circular(_labelRadius));
+      canvas
+        ..drawRRect(rounded, Paint()..color = AppColors.replayDashPanel.withValues(alpha: _labelPanelOpacity))
+        ..save()
+        ..clipRRect(rounded)
+        ..drawRect(Rect.fromLTWH(box.left, box.top, _labelBarWidth, height), Paint()..color = car.color)
+        ..restore();
+      text.paint(canvas, Offset(box.left + _labelBarWidth + _labelPaddingX, box.top + _labelPaddingY));
+      text.dispose();
+    }
   }
 
   /// 잔디로 채운 뒤 지평선 위를 하늘 그라데이션으로 칠한다(카메라는 기울지 않아 지평선은 수평).
@@ -1024,7 +1101,10 @@ class GhostReplay3dPainter extends CustomPainter {
       oldDelegate.time != time ||
       oldDelegate.playerColor != playerColor ||
       oldDelegate.ghostColor != ghostColor ||
-      oldDelegate.playerTyre != playerTyre;
+      oldDelegate.playerTyre != playerTyre ||
+      !identical(oldDelegate.field, field) ||
+      oldDelegate.playerLabel != playerLabel ||
+      oldDelegate.labelStyle != labelStyle;
 }
 
 /// 3차원 벡터(월드: X·Z 수평, Y 위).

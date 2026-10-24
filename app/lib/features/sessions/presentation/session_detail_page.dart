@@ -21,6 +21,7 @@ import 'engine_wear_card.dart';
 import 'final_classification_card.dart';
 import 'penalties_card.dart';
 import 'session_details_card.dart';
+import 'session_highlights_page.dart';
 import 'session_laps_card.dart';
 import 'tyre_stint_cards.dart';
 
@@ -29,6 +30,7 @@ const String _backToSessionsTooltip = '세션 목록';
 const String _backToSeasonTooltip = '시즌으로';
 const String _notFoundMessage = '찾을 수 없는 세션입니다.';
 const String _notFoundBackLabel = 'Sessions';
+const String _highlightsLabel = '하이라이트';
 
 /// 세션 이름을 알 수 없을 때(로딩 중·조회 실패)의 제목.
 const String _fallbackTitle = 'Session';
@@ -64,6 +66,9 @@ class SessionDetailPage extends ConsumerWidget {
           header: header,
           backTooltip: backSeasonId == null ? _backToSessionsTooltip : _backToSeasonTooltip,
           onBack: () => context.go(backSeasonId == null ? _sessionsPath : seasonLocation(backSeasonId)),
+          onHighlights: header != null && header.sessionType == 'Race' && header.hasFieldSamples
+              ? () => context.go(sessionHighlightsLocation(sessionId))
+              : null,
         ),
         const SizedBox(height: 16),
         detail.when(
@@ -90,11 +95,14 @@ class SessionDetailPage extends ConsumerWidget {
 
 /// ← + 국기 + 트랙 이름 + 세션 종류(`Qualifying 3`). 아직 모르면 `Session`.
 class _Header extends StatelessWidget {
-  const _Header({required this.header, required this.backTooltip, required this.onBack});
+  const _Header({required this.header, required this.backTooltip, required this.onBack, this.onHighlights});
 
   final SessionDetailHeader? header;
   final String backTooltip;
   final VoidCallback onBack;
+
+  /// 레이스 하이라이트 열기(모든 차 표본이 있는 레이스만). null이면 버튼 없음.
+  final VoidCallback? onHighlights;
 
   @override
   Widget build(BuildContext context) {
@@ -123,6 +131,13 @@ class _Header extends StatelessWidget {
             ],
           ),
         ),
+        if (onHighlights != null)
+          FilledButton.tonalIcon(
+            key: const ValueKey('session-highlights'),
+            onPressed: onHighlights,
+            icon: const Icon(Icons.movie_outlined),
+            label: const Text(_highlightsLabel),
+          ),
       ],
     );
   }

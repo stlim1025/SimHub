@@ -155,6 +155,10 @@ Future<GoRouter> _pumpPage(
     GoRoute(path: '/laps/:lapId', builder: (_, state) => Text('lap:${state.pathParameters['lapId']}')),
     GoRoute(path: '/sessions/:sessionId/setup', builder: (_, state) => Text('setup:${state.pathParameters['sessionId']}')),
     GoRoute(
+      path: '/sessions/:sessionId/highlights',
+      builder: (_, state) => Text('highlights:${state.pathParameters['sessionId']}'),
+    ),
+    GoRoute(
       path: '/seasons/:seasonId',
       builder: (_, state) => Text('season:${state.pathParameters['seasonId']}:${state.uri.queryParameters['tab']}'),
     ),
@@ -366,6 +370,22 @@ void main() {
         'compareTimeMs': '71157',
         'compareTeamColor': '#3671C6',
       });
+    });
+
+    testWidgets('모든 차 표본이 있는 레이스는 헤더의 하이라이트 버튼으로 하이라이트를 연다', (t) async {
+      final router = await _pumpPage(t, _repo(detailOf('d1', hasFieldSamples: true)));
+
+      await t.tap(find.byKey(const ValueKey('session-highlights')));
+      await t.pumpAndSettle();
+      expect(_location(router), '/sessions/d1/highlights');
+    });
+
+    testWidgets('표본이 없거나 레이스가 아니면 하이라이트 버튼이 없다', (t) async {
+      await _pumpPage(t, _repo(detailOf('d1')));
+      expect(find.byKey(const ValueKey('session-highlights')), findsNothing);
+
+      await _pumpPage(t, _repo(detailOf('d1', hasFieldSamples: true, sessionType: 'Qualifying', sessionKind: 'Qualifying1')));
+      expect(find.byKey(const ValueKey('session-highlights')), findsNothing);
     });
 
     testWidgets('표본이 없는 세션에는 비교 버튼이 없다', (t) async {

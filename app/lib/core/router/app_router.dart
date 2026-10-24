@@ -17,6 +17,7 @@ import '../../features/ranking/presentation/leaderboard_page.dart';
 import '../../features/seasons/presentation/season_detail_page.dart';
 import '../../features/seasons/presentation/seasons_page.dart';
 import '../../features/sessions/presentation/session_detail_page.dart';
+import '../../features/sessions/presentation/session_highlights_page.dart';
 import '../../features/sessions/presentation/session_setup_page.dart';
 import '../../features/sessions/presentation/sessions_page.dart';
 import '../../features/setups/domain/setups_display.dart';
@@ -116,6 +117,11 @@ final routerProvider = Provider<GoRouter>((ref) {
           _screen(
             '/sessions/:sessionId/setup',
             (state) => SessionSetupPage(sessionId: state.pathParameters['sessionId']!),
+          ),
+          // 레이스 하이라이트(모든 차 표본의 주요 장면). 뒤로 가기는 그 세션 상세로.
+          _screen(
+            '/sessions/:sessionId/highlights',
+            (state) => SessionHighlightsPage(sessionId: state.pathParameters['sessionId']!),
           ),
           _screen('/laps',(_) => const LapsPage()),
           _screen(
