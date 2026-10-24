@@ -38,7 +38,8 @@ public sealed record HighlightCarTrackDto(
     IReadOnlyList<int> Pit);
 
 /// <summary>
-/// 하이라이트 클립 하나: 장면 종류·구간(세션 ms)·장면 순간·중심 차(카메라가 따라감)·상대 차·중심 차의 랩, 그리고 그 둘레 차들의 움직임.
+/// 하이라이트 클립 하나: 장면 종류·구간(세션 ms)·장면 순간·중심 차(카메라가 따라감)·상대 차·중심 차의 랩, 그 둘레 차들의 움직임,
+/// 그리고 <see cref="RaceStandings.StepMs"/>마다의 순위표(중계 화면 왼쪽).
 /// </summary>
 public sealed record HighlightClipDto(
     string Kind,
@@ -48,7 +49,8 @@ public sealed record HighlightClipDto(
     int FocusCar,
     int? OtherCar,
     int Lap,
-    IReadOnlyList<HighlightCarTrackDto> Cars);
+    IReadOnlyList<HighlightCarTrackDto> Cars,
+    IReadOnlyList<HighlightStandingDto> Standings);
 
 /// <summary>
 /// 레이스 하이라이트(<c>GET /api/v1/me/sessions/{id}/highlights</c>): 트랙(형상을 불러올 때), 차 이름표, 깃발 구간,
@@ -198,6 +200,7 @@ public static class HighlightsBuilder
             scenes.Add(new Scene(HighlightKind.Finish, winnerCrossings[^1], winner, null, FinishScore, FinishBeforeMs, FinishAfterMs));
         }
 
+        var standings = new RaceStandings(timeline, trackLengthM, totalLaps, winner, crossings, retirements, pitPhases);
         var raceScenes = Pick(scenes, RaceClipLimit);
         var mineScenes = new List<Scene>();
         if (player is { } me)
@@ -220,8 +223,8 @@ public static class HighlightsBuilder
             totalLaps,
             cars,
             flagDtos,
-            mineScenes.Select(s => Clip(timeline, s, crossings, pitPhases)).ToList(),
-            raceScenes.Select(s => Clip(timeline, s, crossings, pitPhases)).ToList());
+            mineScenes.Select(s => Clip(timeline, s, crossings, pitPhases, standings)).ToList(),
+            raceScenes.Select(s => Clip(timeline, s, crossings, pitPhases, standings)).ToList());
     }
 
     /// <summary>추월: 추월함 표시와 같은 순간의 추월당함 표시를 짝짓는다. 피트 인·아웃 중·출발 장면 안·깃발 구간 안은 뺀다. 같은 두 차는 몇 초 안에 한 번.</summary>
@@ -440,7 +443,11 @@ public static class HighlightsBuilder
     }
 
     private static HighlightClipDto Clip(
-        RaceTimeline timeline, Scene scene, IReadOnlyDictionary<int, IReadOnlyList<int>> crossings, IReadOnlyDictionary<int, int[]> pitPhases)
+        RaceTimeline timeline,
+        Scene scene,
+        IReadOnlyDictionary<int, IReadOnlyList<int>> crossings,
+        IReadOnlyDictionary<int, int[]> pitPhases,
+        RaceStandings standings)
     {
         var from = Math.Max(timeline.StartMs, scene.TimeMs - scene.BeforeMs);
         var to = Math.Min(timeline.EndMs, scene.TimeMs + scene.AfterMs);
@@ -492,6 +499,7 @@ public static class HighlightsBuilder
         }
 
         var lap = 1 + crossings.GetValueOrDefault(scene.Focus, []).Count(t => t <= scene.TimeMs);
-        return new HighlightClipDto(scene.Kind.ToString(), from, to, scene.TimeMs, scene.Focus, scene.Other, lap, tracks);
+        return new HighlightClipDto(
+            scene.Kind.ToString(), from, to, scene.TimeMs, scene.Focus, scene.Other, lap, tracks, standings.Frames(from, to));
     }
 }

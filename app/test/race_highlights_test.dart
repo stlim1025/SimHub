@@ -38,6 +38,10 @@ Map<String, dynamic> _clipJson(String kind, int focus, {int? other, int startMs 
         _trackJson(focus, fromMs: startMs, toMs: endMs),
         if (other != null) _trackJson(other, fromMs: startMs, toMs: endMs, startRad: 0.1),
       ],
+      'standings': [
+        {'timeMs': startMs, 'lap': lap, 'cars': [4, 21, 2], 'gapMs': [0, 1234, null], 'lapsDown': [0, 0, 0], 'state': [0, 1, 0]},
+        {'timeMs': startMs + 3000, 'lap': lap, 'cars': [21, 4, 2], 'gapMs': [0, 800, 90000], 'lapsDown': [0, 0, 1], 'state': [2, 0, 3]},
+      ],
     };
 
 RaceHighlights _highlights({List<Map<String, dynamic>>? flags}) => RaceHighlights.fromJson({
@@ -216,6 +220,28 @@ void main() {
     });
   });
 
+  group('순위표', () {
+    test('프레임을 읽고, 시각마다 그 전 마지막 프레임을 고른다', () {
+      final clip = _highlights().mine[1];
+      expect(clip.standings, hasLength(2));
+      expect(clip.standingAt(19000)!.rows.first.carIndex, 4);           // 처음 전은 첫 프레임
+      expect(clip.standingAt(22000)!.rows.first.carIndex, 4);
+      expect(clip.standingAt(23500)!.rows.first.carIndex, 21);
+      expect(clip.standingAt(23500)!.rows.first.state, StandingState.finished);
+    });
+
+    test('이름은 세 글자, 간격은 Leader·+1.2·+1 LAP·빈 글자', () {
+      expect(standingAbbreviation('VERSTAPPEN'), 'VER');
+      expect(standingAbbreviation('GOMDOL SUPER'), 'GOM');
+      expect(standingAbbreviation('PÉREZ'), 'PÉR');
+      const row = (carIndex: 1, gapMs: 1234, lapsDown: 0, state: StandingState.running);
+      expect(standingGapText(row, leader: true), 'Leader');
+      expect(standingGapText(row, leader: false), '+1.2');
+      expect(standingGapText((carIndex: 1, gapMs: 90000, lapsDown: 2, state: StandingState.running), leader: false), '+2 LAPS');
+      expect(standingGapText((carIndex: 1, gapMs: null, lapsDown: 0, state: StandingState.running), leader: false), '');
+    });
+  });
+
   group('HighlightsPlayer', () {
     testWidgets('내 하이라이트부터 첫 장면 캡션과 장면 수를 보인다', (t) async {
       await _pumpPlayer(t, _highlights());
@@ -286,6 +312,17 @@ void main() {
       expect(find.descendant(of: find.byKey(const ValueKey('highlights-finish')), matching: find.text('피니시')), findsOneWidget);
       await t.tap(find.byKey(const ValueKey('highlights-play')));
       await t.pump();
+    });
+
+    testWidgets('왼쪽에 순위표: 랩, 순위·이름·간격, 피트 P', (t) async {
+      await _pumpPlayer(t, _highlights());
+
+      final tower = find.byKey(const ValueKey('highlights-standings'));
+      expect(find.descendant(of: tower, matching: find.text('LAP 3/39')), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const ValueKey('standing-row-4')), matching: find.text('Leader')), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const ValueKey('standing-row-21')), matching: find.text('+1.2')), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const ValueKey('standing-row-21')), matching: find.text('P')), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const ValueKey('standing-row-21')), matching: find.text('ME')), findsOneWidget);
     });
 
     testWidgets('묶음에 장면이 없으면 안내 문구', (t) async {

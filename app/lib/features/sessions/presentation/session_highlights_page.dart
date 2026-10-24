@@ -68,6 +68,24 @@ const double _captionOpacity = 0.85;
 const double _bannerGap = 6;
 const double _finishIconSize = 18;
 
+/// 왼쪽 순위표: 폭, 머리글·줄 높이, 글자 크기, 칸 폭, 팀 색 띠·P 칸 크기.
+const double _towerWidth = 158;
+
+/// 재생 화면 폭이 이보다 좁으면 순위표를 좁게(간격 칸 없이).
+const double _compactTowerMaxViewWidth = 600;
+const double _compactTowerWidth = 96;
+const double _towerHeaderHeight = 22;
+const double _towerRowHeight = 18;
+const double _towerFontSize = 11;
+const double _towerPositionWidth = 20;
+const double _towerNameWidth = 34;
+const double _towerBarWidth = 3;
+const double _towerBarHeight = 12;
+const double _towerMarkSize = 14;
+const double _towerGap = 4;
+const EdgeInsets _towerPadding = EdgeInsets.symmetric(horizontal: 6, vertical: 4);
+const double _towerFocusOpacity = 0.18;
+
 /// 조작 줄 폭이 이보다 좁으면 시간 막대를 아랫줄로 내린다.
 const double _singleRowControlsMinWidth = 760;
 
@@ -392,8 +410,14 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
         child: Center(child: Text(_emptyReelText, style: TextStyle(color: palette.textMuted))),
       );
 
-  Widget _view(BuildContext context, HighlightClip clip) {
+  Widget _view(BuildContext context, HighlightClip clip) => LayoutBuilder(builder: (context, box) => _viewSized(context, clip, box));
+
+  /// 재생 화면. 좁으면(폰) 순위표는 간격 칸 없이 좁게, 캡션은 남은 폭 안에서 줄을 바꾼다.
+  Widget _viewSized(BuildContext context, HighlightClip clip, BoxConstraints box) {
     final highlights = widget.highlights;
+    final compact = box.maxWidth < _compactTowerMaxViewWidth;
+    final towerWidth = clip.standings.isEmpty ? 0.0 : (compact ? _compactTowerWidth : _towerWidth);
+    final captionLeft = _overlayInset + (towerWidth == 0 ? 0 : towerWidth + _overlayInset);
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -412,9 +436,28 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
             labelStyle: DefaultTextStyle.of(context).style,
           ),
         ),
+        if (clip.standings.isNotEmpty)
+          Positioned(
+            left: _overlayInset,
+            top: _overlayInset,
+            bottom: _overlayInset,
+            width: towerWidth,
+            child: ValueListenableBuilder<double>(
+              valueListenable: _time,
+              builder: (context, time, _) => _StandingsTower(
+                compact: compact,
+                standing: clip.standingAt(time)!,
+                totalLaps: highlights.totalLaps,
+                highlights: highlights,
+                focusCar: clip.focusCar,
+                colorOf: _colorOf,
+              ),
+            ),
+          ),
         Positioned(
-          left: _overlayInset,
+          left: captionLeft,
           top: _overlayInset,
+          right: compact ? _overlayInset : null,
           child: Container(
             key: const ValueKey('highlights-caption'),
             padding: _captionPadding,
@@ -521,6 +564,108 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
                 scrub,
               ],
             ),
+    );
+  }
+}
+
+/// 중계 화면 왼쪽 순위표: 머리글 `LAP 12/39`, 줄마다 순위·팀 색 띠·세 글자 이름·간격(리더 `Leader`, `+1.2`, `+1 LAP`),
+/// 피트면 `P`, 피니시면 체커기, 리타이어면 `OUT`. 카메라가 따라가는 차의 줄은 밝게. 높이가 모자라면 들어가는 줄까지만.
+class _StandingsTower extends StatelessWidget {
+  const _StandingsTower({
+    required this.compact,
+    required this.standing,
+    required this.totalLaps,
+    required this.highlights,
+    required this.focusCar,
+    required this.colorOf,
+  });
+
+  /// 좁은 화면: 간격은 빼고 리타이어의 `OUT`만 보인다.
+  final bool compact;
+  final HighlightStanding standing;
+  final int totalLaps;
+  final RaceHighlights highlights;
+  final int focusCar;
+  final Color Function(int carIndex) colorOf;
+
+  static const TextStyle _text = TextStyle(
+    color: AppColors.replayHudText,
+    fontSize: _towerFontSize,
+    fontWeight: FontWeight.w700,
+  );
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, box) {
+          final fit = ((box.maxHeight - _towerHeaderHeight - _towerPadding.vertical) / _towerRowHeight).floor();
+          final rows = standing.rows.take(fit.clamp(0, standing.rows.length)).toList();
+          return Align(
+            alignment: Alignment.topLeft,
+            child: Container(
+              key: const ValueKey('highlights-standings'),
+              padding: _towerPadding,
+              decoration: BoxDecoration(
+                color: AppColors.replayDashPanel.withValues(alpha: _captionOpacity),
+                borderRadius: BorderRadius.circular(_overlayRadius),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(
+                    height: _towerHeaderHeight,
+                    child: Center(
+                      child: Text(
+                        'LAP ${standing.lap}${totalLaps > 0 ? '/$totalLaps' : ''}',
+                        style: _text.copyWith(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                  ),
+                  for (var i = 0; i < rows.length; i++) _row(i, rows[i]),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+
+  Widget _row(int index, HighlightStandingRow row) {
+    final muted = _text.copyWith(color: AppColors.replayHudMuted, fontWeight: FontWeight.w500);
+    final trailing = switch (row.state) {
+      StandingState.out => Text('OUT', style: muted),
+      _ => Text(standingGapText(row, leader: index == 0), style: muted),
+    };
+    final mark = switch (row.state) {
+      StandingState.pit => Container(
+          width: _towerMarkSize,
+          height: _towerMarkSize,
+          alignment: Alignment.center,
+          color: AppColors.replayHudText,
+          child: Text('P', style: _text.copyWith(color: AppColors.replayDashPanel, fontSize: _towerFontSize - 1)),
+        ),
+      StandingState.finished => const Icon(Icons.sports_score, size: _towerMarkSize, color: AppColors.replayHudText),
+      _ => const SizedBox(width: _towerMarkSize),
+    };
+    return Container(
+      key: ValueKey('standing-row-${row.carIndex}'),
+      height: _towerRowHeight,
+      color: row.carIndex == focusCar ? AppColors.replayHudText.withValues(alpha: _towerFocusOpacity) : null,
+      child: Row(
+        children: [
+          SizedBox(width: _towerPositionWidth, child: Text('${index + 1}', style: _text, textAlign: TextAlign.center)),
+          Container(width: _towerBarWidth, height: _towerBarHeight, color: colorOf(row.carIndex)),
+          const SizedBox(width: _towerGap),
+          SizedBox(width: _towerNameWidth, child: Text(standingAbbreviation(highlights.nameOf(row.carIndex)), style: _text)),
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: compact && row.state != StandingState.out ? const SizedBox.shrink() : trailing,
+            ),
+          ),
+          const SizedBox(width: _towerGap),
+          mark,
+        ],
+      ),
     );
   }
 }

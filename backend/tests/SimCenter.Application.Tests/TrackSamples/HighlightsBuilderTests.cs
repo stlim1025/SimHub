@@ -290,6 +290,47 @@ public sealed class HighlightsBuilderTests
     }
 
     [Fact]
+    public void Standings_OrderByProgress_WithGapsToTheLeader_PitAndRetirement()
+    {
+        // 1번이 2번보다 50m(1초) 앞. 2번은 20~35초 피트 레인(표본 없음), 3번은 30초에 리타이어.
+        var samples = Race(
+            new Dictionary<byte, double> { [1] = 60, [2] = 10, [3] = 5 },
+            absent: (car, t) => (car == 2 && t is > 21_000 and < 36_000) || (car == 3 && t > 30_000));
+        var timeline = RaceTimeline.Build([samples]);
+        var crossings = timeline.Cars.Keys.ToDictionary(c => c, c => timeline.CrossingsOf(c, TrackLength));
+        var standings = new RaceStandings(timeline, TrackLength, 5, winner: 1, crossings, [new RaceRetirement(3, 30_000)], new Dictionary<int, int[]>());
+
+        var early = standings.Frames(10_000, 10_000).Single();
+        Assert.Equal([1, 2, 3], early.Cars);
+        Assert.Equal(0, early.GapMs[0]);
+        Assert.InRange(early.GapMs[1]!.Value, 950, 1_050);       // 50m ÷ 50m/s
+        Assert.Equal(1, early.Lap);
+
+        var pit = standings.Frames(28_000, 28_000).Single();
+        Assert.Equal((int)StandingState.Pit, pit.State[pit.Cars.ToList().IndexOf(2)]);
+
+        var late = standings.Frames(40_000, 40_000).Single();
+        Assert.Equal(3, late.Cars[^1]);                           // 리타이어는 맨 아래
+        Assert.Equal((int)StandingState.Out, late.State[^1]);
+    }
+
+    [Fact]
+    public void Standings_CarsCrossingAfterTheWinnersLastLap_AreFinished()
+    {
+        // 5랩 레이스: 1번이 60초 안에 5번째로 결승선을 지나면 피니시, 뒤따르는 2번은 그 뒤 처음 지날 때 피니시.
+        var samples = Race(new Dictionary<byte, double> { [1] = 60, [2] = 10 }, toMs: 62_000);
+        var timeline = RaceTimeline.Build([samples]);
+        var crossings = timeline.Cars.Keys.ToDictionary(c => c, c => timeline.CrossingsOf(c, TrackLength));
+        var standings = new RaceStandings(timeline, TrackLength, 5, winner: 1, crossings, [], new Dictionary<int, int[]>());
+
+        var end = standings.Frames(62_000, 62_000).Single();
+
+        Assert.Equal([1, 2], end.Cars);
+        Assert.All(end.State, s => Assert.Equal((int)StandingState.Finished, s));
+        Assert.InRange(end.GapMs[1]!.Value, 950, 1_050);
+    }
+
+    [Fact]
     public void NoSamples_GivesEmptyReels()
     {
         var result = HighlightsBuilder.Build(Guid.Empty, Guid.Empty, "F1_25", 5, RaceTimeline.Build([]), TrackLength, Cars, [], []);

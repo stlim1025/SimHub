@@ -137,7 +137,52 @@ class HighlightCarTrack {
   }
 }
 
-/// 하이라이트 클립 하나: 장면 종류·구간(세션 ms)·장면 순간·중심 차(카메라가 따라감)·상대 차·중심 차의 랩, 그리고 둘레 차들.
+/// 순위표 칸 상태(서버 `StandingState` 값 순서).
+enum StandingState { running, pit, finished, out }
+
+/// 순위표 한 칸: 차, 리더와의 간격(ms, 리더 0, 모르면 null), 랩 뒤처짐, 상태.
+typedef HighlightStandingRow = ({int carIndex, int? gapMs, int lapsDown, StandingState state});
+
+/// 클립 안 한 순간의 순위표(칸 순서 = 순위)와 리더의 랩.
+class HighlightStanding {
+  const HighlightStanding({required this.timeMs, required this.lap, required this.rows});
+
+  final int timeMs;
+  final int lap;
+  final List<HighlightStandingRow> rows;
+
+  /// 열 길이가 다르면 null(그 프레임만 버린다).
+  static HighlightStanding? fromJsonOrNull(Map<String, dynamic> json) {
+    final time = jsonInt(json['timeMs']);
+    final cars = json['cars'];
+    final gaps = json['gapMs'];
+    final lapsDown = json['lapsDown'];
+    final states = json['state'];
+    if (time == null || cars is! List || gaps is! List || lapsDown is! List || states is! List) {
+      return null;
+    }
+    final n = cars.length;
+    if (gaps.length != n || lapsDown.length != n || states.length != n) {
+      return null;
+    }
+    StandingState stateOf(Object? v) {
+      final i = jsonInt(v) ?? 0;
+      return i >= 0 && i < StandingState.values.length ? StandingState.values[i] : StandingState.running;
+    }
+
+    return HighlightStanding(
+      timeMs: time,
+      lap: jsonInt(json['lap']) ?? 1,
+      rows: [
+        for (var i = 0; i < n; i++)
+          (carIndex: jsonInt(cars[i]) ?? -1, gapMs: jsonInt(gaps[i]), lapsDown: jsonInt(lapsDown[i]) ?? 0, state: stateOf(states[i])),
+      ],
+    );
+  }
+}
+
+/// 하이라이트 클립 하나: 장면 종류·구간(세션 ms)·장면 순간·중심 차(카메라가 따라감)·상대 차·중심 차의 랩, 둘레 차들,
+/// 그리고 몇백 ms마다의 순위표(시간 순).
 class HighlightClip {
   const HighlightClip({
     required this.kind,
@@ -148,6 +193,7 @@ class HighlightClip {
     required this.otherCar,
     required this.lap,
     required this.cars,
+    this.standings = const [],
   });
 
   final HighlightKind kind;
@@ -158,6 +204,22 @@ class HighlightClip {
   final int? otherCar;
   final int lap;
   final List<HighlightCarTrack> cars;
+  final List<HighlightStanding> standings;
+
+  /// [timeMs]의 순위표(그 시각 이전 마지막 프레임, 처음 전은 첫 프레임). 없으면 null.
+  HighlightStanding? standingAt(double timeMs) {
+    if (standings.isEmpty) {
+      return null;
+    }
+    var chosen = standings.first;
+    for (final frame in standings) {
+      if (frame.timeMs > timeMs) {
+        break;
+      }
+      chosen = frame;
+    }
+    return chosen;
+  }
 
   HighlightCarTrack? get focus => cars.where((c) => c.carIndex == focusCar).firstOrNull;
 
@@ -178,6 +240,7 @@ class HighlightClip {
       otherCar: jsonInt(json['otherCar']),
       lap: jsonInt(json['lap']) ?? 1,
       cars: jsonObjects(json['cars'], HighlightCarTrack.fromJsonOrNull),
+      standings: jsonObjects(json['standings'], HighlightStanding.fromJsonOrNull),
     );
     return clip.focus == null ? null : clip;
   }
@@ -251,6 +314,24 @@ const Map<RaceFlagKind, int> _flagPriority = {
   RaceFlagKind.safetyCar: 2,
   RaceFlagKind.redFlag: 3,
 };
+
+/// 순위표 이름: 글자만 남긴 앞 세 글자(대문자, `VERSTAPPEN` → `VER`, 순수 함수).
+String standingAbbreviation(String name) {
+  final letters = name.toUpperCase().replaceAll(RegExp(r'[^\p{L}]', unicode: true), '');
+  return letters.length <= 3 ? letters : letters.substring(0, 3);
+}
+
+/// 순위표 간격 글자: 리더 `Leader`, 랩 뒤처지면 `+1 LAP`·`+2 LAPS`, 그 밖 `+1.2`(초), 모르면 빈 글자(순수 함수).
+String standingGapText(HighlightStandingRow row, {required bool leader}) {
+  if (leader) {
+    return 'Leader';
+  }
+  if (row.lapsDown > 0) {
+    return '+${row.lapsDown} ${row.lapsDown == 1 ? 'LAP' : 'LAPS'}';
+  }
+  final gap = row.gapMs;
+  return gap == null ? '' : '+${(gap / 1000).toStringAsFixed(1)}';
+}
 
 /// 피트 표시 글자.
 const Map<HighlightPit, String> kHighlightPitLabels = {
