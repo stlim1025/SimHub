@@ -80,9 +80,9 @@ void main() {
       final state = packReplayFrame(
         track,
         [
-          (car: player, color: const Color(0xFFFF0000), opacity: 1),
-          (car: _HiddenCar(player), color: const Color(0xFF00FF00), opacity: 0.5),
-          (car: player, color: const Color(0xFF0000FF), opacity: 0.5),
+          (car: player, color: const Color(0xFFFF0000), opacity: 1, tyre: AppColors.tyreSoft),
+          (car: _HiddenCar(player), color: const Color(0xFF00FF00), opacity: 0.5, tyre: null),
+          (car: player, color: const Color(0xFF0000FF), opacity: 0.5, tyre: null),
         ],
         ReplayCamera.chase,
         elapsed,
@@ -101,6 +101,10 @@ void main() {
       expect(state[13], 1); // 첫 차 빨강
       expect(state[8 + kReplayFrameCarStride + 7], 1); // 둘째로 보이는 차 파랑
       expect(state[8 + kReplayFrameCarStride + 8], 0.5);
+      expect(state[17], closeTo(frame.steer, 1e-6));
+      expect(state[18], closeTo(frame.distanceM, 1e-2));
+      expect(state[19], closeTo(AppColors.tyreSoft.r, 1e-6));
+      expect(state[8 + kReplayFrameCarStride + 11], kReplayFrameNoTyre); // 고스트는 띠 없음
     });
 
     test('추격 카메라는 차 뒤 위에서 차 앞을 본다', () {
@@ -121,7 +125,7 @@ void main() {
         textDirection: TextDirection.ltr,
         child: ReplayThreeView(
           track: track,
-          cars: [(car: player, color: AppColors.accent, opacity: 1)],
+          cars: [(car: player, color: AppColors.accent, opacity: 1, tyre: null)],
           camera: ReplayCamera.chase,
           time: ValueNotifier<double>(0),
           fallback: const Text('fallback'),

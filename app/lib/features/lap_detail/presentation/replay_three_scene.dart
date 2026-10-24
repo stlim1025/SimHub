@@ -20,8 +20,11 @@ const double _edgeLineWidthM = 0.4;
 const int _cameraFields = 7;
 const int _headerFields = _cameraFields + 1;
 
-/// 차 한 대 칸 수: 기준점 XYZ, 진행 방향, 기울기, 몸체 색 RGB, 불투명도.
-const int kReplayFrameCarStride = 9;
+/// 차 한 대 칸 수: 기준점 XYZ, 진행 방향, 기울기, 몸체 색 RGB, 불투명도, 스티어, 달린 거리(바퀴 회전), 타이어 띠 색 RGB.
+const int kReplayFrameCarStride = 14;
+
+/// 타이어 띠 색을 모를 때 R 칸에 넣는 값(띠를 숨긴다).
+const double kReplayFrameNoTyre = -1;
 
 /// three.js에 넘기는 트랙 메시(삼각형 목록): 꼭짓점 위치 XYZ(월드, m)와 꼭짓점 색 RGB(0~1), 도로 밖 바닥 색.
 class ReplayTrackMesh {
@@ -39,8 +42,8 @@ class ReplayTrackMesh {
   int get vertexCount => positions.length ~/ 3;
 }
 
-/// 그릴 차 한 대: 움직임·몸체 색·불투명도(고스트는 반투명).
-typedef ReplaySceneCar = ({ReplayCar car, Color color, double opacity});
+/// 그릴 차 한 대: 움직임·몸체 색·불투명도(고스트는 반투명)·타이어 옆 띠 색(컴파운드, 모르면 null).
+typedef ReplaySceneCar = ({ReplayCar car, Color color, double opacity, Color? tyre});
 
 /// [track]을 three.js 메시로(순수 계산): 방호벽 사이 바닥, 그래블, 아스팔트, 흰 가장자리 선, 연석(빨강·흰색 번갈아),
 /// 방호벽, 피트 레인. 층마다 조금씩 띄워 겹친 면이 깜빡이지 않게 한다.
@@ -180,7 +183,9 @@ Float32List packReplayFrame(ReplayTrack3d track, List<ReplaySceneCar> cars, Repl
     ..[7] = visible.length.toDouble();
   for (var k = 0; k < visible.length; k++) {
     final car = visible[k];
-    final p = replayCarPose(track, car.car.frameAt(elapsedMs));
+    final frame = car.car.frameAt(elapsedMs);
+    final p = replayCarPose(track, frame);
+    final tyre = car.tyre;
     final o = _headerFields + k * kReplayFrameCarStride;
     out
       ..[o] = p.origin.x
@@ -191,7 +196,12 @@ Float32List packReplayFrame(ReplayTrack3d track, List<ReplaySceneCar> cars, Repl
       ..[o + 5] = car.color.r
       ..[o + 6] = car.color.g
       ..[o + 7] = car.color.b
-      ..[o + 8] = car.opacity;
+      ..[o + 8] = car.opacity
+      ..[o + 9] = frame.steer
+      ..[o + 10] = frame.distanceM
+      ..[o + 11] = tyre?.r ?? kReplayFrameNoTyre
+      ..[o + 12] = tyre?.g ?? 0
+      ..[o + 13] = tyre?.b ?? 0;
   }
   return out;
 }

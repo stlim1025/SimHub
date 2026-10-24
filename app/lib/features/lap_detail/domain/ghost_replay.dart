@@ -12,12 +12,14 @@ const double _minHeadingVectorM = 1e-6;
 
 /// 고스트 재생의 한 순간 한 랩의 상태.
 /// [heading]은 월드 X/Z 평면의 진행 방향(라디안, `atan2(dZ, dX)` — 화면 x = X, y = +Z 기준).
+/// [steer]는 −1(왼쪽 끝)~1(오른쪽 끝). + 쪽으로 꺾으면 [heading]이 커진다.
 typedef ReplayFrame = ({
   double x,
   double z,
   double heading,
   double distanceM,
   double speedKph,
+  double steer,
   int gear,
   int rpm,
   int throttle,
@@ -125,6 +127,7 @@ class LapReplay implements ReplayCar {
       heading: headingAtDistance(distance),
       distanceM: distance,
       speedKph: _lerpAt(trace.speedKph, position),
+      steer: _lerpAt(trace.steer, position) / _percent,
       gear: trace.gear[lower],
       rpm: _lerpAt(trace.rpm, position).round(),
       throttle: _lerpAt(trace.throttle, position).round(),

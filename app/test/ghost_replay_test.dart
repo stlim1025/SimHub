@@ -101,6 +101,25 @@ void main() {
       expect(frame.finished, isFalse);
     });
 
+    test('스티어(−100~100)를 −1~1로 보간한다', () {
+      final base = _positionedTrace('l1');
+      final trace = LapTrace(
+        lapId: base.lapId,
+        resolutionM: base.resolutionM,
+        timeMs: base.timeMs,
+        speedKph: base.speedKph,
+        throttle: base.throttle,
+        brake: base.brake,
+        steer: [for (var i = 0; i < base.length; i++) i == 1 ? 60 : 0],
+        gear: base.gear,
+        rpm: base.rpm,
+        worldPosX: base.worldPosX,
+        worldPosZ: base.worldPosZ,
+      );
+
+      expect(LapReplay(trace).frameAt(150).steer, closeTo(0.3, 1e-9));
+    });
+
     test('같은 시간이 이어지는 표본도 0으로 나누지 않는다', () {
       final trace = _positionedTrace('l1', count: 4);
       final stalled = LapTrace(

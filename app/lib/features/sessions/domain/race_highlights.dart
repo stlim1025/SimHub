@@ -512,6 +512,7 @@ class TimedCarPath implements ReplayCar {
       heading: _headingAtDistance(distance, kReplayHeadingLookM),
       distanceM: distance,
       speedKph: _lerp(track.speedKph, position),
+      steer: 0,
       gear: track.gear[position.floor()],
       rpm: 0,
       throttle: _lerp(track.throttle, position).round(),

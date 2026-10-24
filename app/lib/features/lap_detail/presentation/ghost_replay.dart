@@ -272,8 +272,8 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
     return ReplayThreeView(
       track: _track3d ??= ReplayTrack3d.build(_circuit),
       cars: [
-        (car: _player, color: playerColor, opacity: 1),
-        if (ghost != null) (car: ghost, color: ghostColor, opacity: kGhostCarOpacity),
+        (car: _player, color: playerColor, opacity: 1, tyre: _playerTyre),
+        if (ghost != null) (car: ghost, color: ghostColor, opacity: kGhostCarOpacity, tyre: null),
       ],
       camera: camera,
       time: _time,
