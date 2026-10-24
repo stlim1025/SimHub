@@ -98,24 +98,47 @@ public sealed class RaceTimeline
             : new RaceTimeline(cars, kept[0].Sample.TimeMs, kept[^1].Sample.TimeMs);
     }
 
-    /// <summary>그 차가 결승선을 지난 시각들(랩 거리가 트랙 길이 절반 넘게 줄어든 곳의 뒤 표본).</summary>
+    /// <summary>
+    /// 그 차가 결승선을 지난 시각들(랩 거리가 트랙 길이 절반 넘게 줄어든 곳의 뒤 표본). 앞서 랩 앞쪽 절반을 지난 적이 있어야 센다 —
+    /// 그리드(출발선 뒤, 랩 끝 쪽 거리)에서 출발선을 처음 넘는 것은 랩을 끝낸 것이 아니다.
+    /// </summary>
     public IReadOnlyList<int> CrossingsOf(int car, double trackLengthM)
     {
         var crossings = new List<int>();
-        if (!Cars.TryGetValue(car, out var samples))
+        if (!Cars.TryGetValue(car, out var samples) || samples.Count == 0)
         {
             return crossings;
         }
 
+        var half = trackLengthM / 2;
+        var lapStarted = samples[0].LapDistanceM < half;
         for (var k = 1; k < samples.Count; k++)
         {
-            if (samples[k - 1].LapDistanceM - samples[k].LapDistanceM > trackLengthM / 2)
+            if (samples[k - 1].LapDistanceM - samples[k].LapDistanceM > half)
             {
-                crossings.Add(samples[k].TimeMs);
+                if (lapStarted)
+                {
+                    crossings.Add(samples[k].TimeMs);
+                }
+
+                lapStarted = true;
+            }
+            else if (samples[k].LapDistanceM < half)
+            {
+                lapStarted = true;
             }
         }
 
         return crossings;
+    }
+
+    /// <summary>[cars]의 표본(차마다 시간 순)으로 타임라인을 만든다(그리드를 다시 만든 뒤 등).</summary>
+    public static RaceTimeline FromCars(IReadOnlyDictionary<int, IReadOnlyList<RaceSample>> cars)
+    {
+        var all = cars.Values.Where(s => s.Count > 0).ToList();
+        return all.Count == 0
+            ? new RaceTimeline(cars, 0, 0)
+            : new RaceTimeline(cars, all.Min(s => s[0].TimeMs), all.Max(s => s[^1].TimeMs));
     }
 
     /// <summary>그 차의 [timeMs]에 가장 가까운 표본(없으면 null).</summary>

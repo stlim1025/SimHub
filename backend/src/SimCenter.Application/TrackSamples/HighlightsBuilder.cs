@@ -20,7 +20,10 @@ public sealed record HighlightCarDto(int CarIndex, string Name, string TeamColor
 /// <summary>깃발 구간(세션 시간 ms).</summary>
 public sealed record HighlightFlagDto(string Kind, int FromMs, int ToMs);
 
-/// <summary>클립 안 차 한 대의 움직임(같은 칸 = 같은 순간, 시간은 세션 ms).</summary>
+/// <summary>
+/// 클립 안 차 한 대의 움직임(같은 칸 = 같은 순간, 시간은 세션 ms). <c>Pit</c>은 피트 인(1, 박스에 서기 전)·피트 아웃(2, 박스를 떠난 뒤)·아님(0).
+/// 표본 사이가 몇 초씩 비면 그 사이 차는 피트 레인에 있었다(옛 에이전트는 피트 레인 표본을 남기지 않았다).
+/// </summary>
 public sealed record HighlightCarTrackDto(
     int CarIndex,
     IReadOnlyList<int> TimeMs,
@@ -31,7 +34,8 @@ public sealed record HighlightCarTrackDto(
     IReadOnlyList<int> Gear,
     IReadOnlyList<int> Throttle,
     IReadOnlyList<int> Brake,
-    IReadOnlyList<int> Lap);
+    IReadOnlyList<int> Lap,
+    IReadOnlyList<int> Pit);
 
 /// <summary>
 /// 하이라이트 클립 하나: 장면 종류·구간(세션 ms)·장면 순간·중심 차(카메라가 따라감)·상대 차·중심 차의 랩, 그리고 그 둘레 차들의 움직임.
@@ -73,6 +77,14 @@ public static class HighlightsBuilder
 
     /// <summary>출발 장면 길이(이 안의 추월은 출발 장면에 맡긴다).</summary>
     private const int StartWindowMs = 18_000;
+
+    /// <summary>피트: 박스에 선 것으로 볼 속도, 표본이 이만큼(ms) 비면 그 사이 피트 레인(옛 에이전트), 그 앞뒤 이만큼(ms)을 피트 인·아웃으로 표시.</summary>
+    private const int StoppedKph = 5;
+    private const int PitGapMs = 8_000;
+    private const int PitMarkMs = 5_000;
+    private const int PitNone = 0;
+    private const int PitIn = 1;
+    private const int PitOut = 2;
 
     /// <summary>추월한 차·당한 차 표시를 짝지을 시간 차·같은 두 차의 장면을 하나로 볼 간격.</summary>
     private const int PairMs = 400;
@@ -130,7 +142,8 @@ public static class HighlightsBuilder
         double trackLengthM,
         IReadOnlyList<HighlightCarDto> cars,
         IReadOnlyList<RaceFlagPeriod> flags,
-        IReadOnlyList<RaceRetirement> retirements)
+        IReadOnlyList<RaceRetirement> retirements,
+        int? lightsOutMs = null)
     {
         var flagDtos = flags.Select(f => new HighlightFlagDto(f.Kind.ToString(), f.FromMs, f.ToMs)).ToList();
         if (timeline.Cars.Count == 0)
@@ -146,12 +159,17 @@ public static class HighlightsBuilder
         var scenes = new List<Scene>();
 
         // 출발: 레이스 첫 표본부터. 중심 = 출발 몇 초 뒤 가장 앞선 차(내 하이라이트는 내 차).
-        var start = timeline.StartMs;
+        // 소등 시각을 알면 그 몇 초 전(그리드에 선 모습)부터.
+        var start = lightsOutMs ?? timeline.StartMs;
         var leaderAtStart = LeaderAt(timeline, start + StartWindowMs / 2, crossings) ?? timeline.Cars.Keys.First();
-        var startScene = new Scene(HighlightKind.Start, start, leaderAtStart, null, StartScore, 0, StartWindowMs);
+        var startScene = new Scene(
+            HighlightKind.Start, start, leaderAtStart, null, StartScore, lightsOutMs is null ? 0 : RaceGrid.HoldMs, StartWindowMs);
         scenes.Add(startScene);
 
-        scenes.AddRange(Overtakes(timeline, flags, start, position, Rank));
+        // 차마다 표본별 피트 인·아웃(추월 거르기·클립에 싣기).
+        var pitPhases = timeline.Cars.ToDictionary(kv => kv.Key, kv => PitPhases(kv.Value));
+        bool Pitting(int car, int timeMs) => pitPhases[car][IndexAt(timeline.Cars[car], timeMs)] != PitNone;
+        scenes.AddRange(Overtakes(timeline, flags, start, position, Rank, Pitting));
         scenes.AddRange(Contacts(timeline, player, Rank));
 
         foreach (var retirement in retirements)
@@ -202,27 +220,27 @@ public static class HighlightsBuilder
             totalLaps,
             cars,
             flagDtos,
-            mineScenes.Select(s => Clip(timeline, s, crossings)).ToList(),
-            raceScenes.Select(s => Clip(timeline, s, crossings)).ToList());
+            mineScenes.Select(s => Clip(timeline, s, crossings, pitPhases)).ToList(),
+            raceScenes.Select(s => Clip(timeline, s, crossings, pitPhases)).ToList());
     }
 
-    /// <summary>추월: 추월함 표시와 같은 순간의 추월당함 표시를 짝짓는다. 피트 레인·출발 장면 안·깃발 구간 안은 뺀다. 같은 두 차는 몇 초 안에 한 번.</summary>
+    /// <summary>추월: 추월함 표시와 같은 순간의 추월당함 표시를 짝짓는다. 피트 인·아웃 중·출발 장면 안·깃발 구간 안은 뺀다. 같은 두 차는 몇 초 안에 한 번.</summary>
     private static IEnumerable<Scene> Overtakes(
         RaceTimeline timeline, IReadOnlyList<RaceFlagPeriod> flags, int start, IReadOnlyDictionary<int, int> position,
-        Func<int, double> rank)
+        Func<int, double> rank, Func<int, int, bool> pitting)
     {
         var overtook = Marks(timeline, s => (s.Flags2 & RaceSample.OvertookFlag) != 0);
         var overtaken = Marks(timeline, s => (s.Flags2 & RaceSample.OvertakenFlag) != 0);
         var last = new Dictionary<(int, int), int>();
         foreach (var (time, car, sample) in overtook)
         {
-            if (time < start + StartWindowMs || sample.InPit || flags.Any(f => time >= f.FromMs && time <= f.ToMs))
+            if (time < start + StartWindowMs || sample.InPit || pitting(car, time) || flags.Any(f => time >= f.FromMs && time <= f.ToMs))
             {
                 continue;
             }
 
             var victim = overtaken
-                .Where(o => o.Car != car && Math.Abs(o.Time - time) <= PairMs && !o.Sample.InPit
+                .Where(o => o.Car != car && Math.Abs(o.Time - time) <= PairMs && !o.Sample.InPit && !pitting(o.Car, o.Time)
                             && Distance(o.Sample, sample) <= OvertakeMaxGapM)
                 .OrderBy(o => Math.Abs(o.Sample.LapDistanceM - sample.LapDistanceM))
                 .Select(o => (int?)o.Car)
@@ -338,7 +356,91 @@ public static class HighlightsBuilder
     private static double Distance(RaceSample a, RaceSample b)
         => Math.Sqrt(Math.Pow(a.X - b.X, 2) + Math.Pow(a.Z - b.Z, 2));
 
-    private static HighlightClipDto Clip(RaceTimeline timeline, Scene scene, IReadOnlyDictionary<int, IReadOnlyList<int>> crossings)
+    /// <summary>
+    /// 표본마다 피트 인·아웃. 피트 상태가 실린 표본(새 에이전트)은 박스에 서기 전 = 인, 선 뒤 = 아웃(서지 않고 지나가면 절반씩).
+    /// 표본이 [PitGapMs] 넘게 빈 곳(옛 에이전트: 피트 레인 표본 없음)은 빈 구간 앞 [PitMarkMs] = 인, 뒤 = 아웃.
+    /// </summary>
+    private static int[] PitPhases(IReadOnlyList<RaceSample> samples)
+    {
+        var phases = new int[samples.Count];
+        for (var i = 0; i < samples.Count;)
+        {
+            if (!samples[i].InPit)
+            {
+                i++;
+                continue;
+            }
+
+            var end = i;
+            while (end < samples.Count && samples[end].InPit)
+            {
+                end++;
+            }
+
+            var stop = -1;
+            for (var k = i; k < end && stop < 0; k++)
+            {
+                if (samples[k].SpeedKph < StoppedKph)
+                {
+                    stop = k;
+                }
+            }
+
+            var turn = stop >= 0 ? stop : (i + end) / 2;
+            for (var k = i; k < end; k++)
+            {
+                phases[k] = k < turn ? PitIn : PitOut;
+            }
+
+            i = end;
+        }
+
+        for (var k = 0; k + 1 < samples.Count; k++)
+        {
+            var before = samples[k].TimeMs;
+            var after = samples[k + 1].TimeMs;
+            if (after - before < PitGapMs)
+            {
+                continue;
+            }
+
+            for (var j = k; j >= 0 && samples[j].TimeMs >= before - PitMarkMs; j--)
+            {
+                phases[j] = phases[j] == PitNone ? PitIn : phases[j];
+            }
+
+            for (var j = k + 1; j < samples.Count && samples[j].TimeMs <= after + PitMarkMs; j++)
+            {
+                phases[j] = phases[j] == PitNone ? PitOut : phases[j];
+            }
+        }
+
+        return phases;
+    }
+
+    /// <summary>[samples]에서 [timeMs] 이상인 첫 표본(없으면 마지막).</summary>
+    private static int IndexAt(IReadOnlyList<RaceSample> samples, int timeMs)
+    {
+        var low = 0;
+        var high = samples.Count - 1;
+        while (low < high)
+        {
+            var mid = (low + high) / 2;
+            if (samples[mid].TimeMs < timeMs)
+            {
+                low = mid + 1;
+            }
+            else
+            {
+                high = mid;
+            }
+        }
+
+        return low;
+    }
+
+    private static HighlightClipDto Clip(
+        RaceTimeline timeline, Scene scene, IReadOnlyDictionary<int, IReadOnlyList<int>> crossings, IReadOnlyDictionary<int, int[]> pitPhases)
     {
         var from = Math.Max(timeline.StartMs, scene.TimeMs - scene.BeforeMs);
         var to = Math.Min(timeline.EndMs, scene.TimeMs + scene.AfterMs);
@@ -355,12 +457,17 @@ public static class HighlightsBuilder
                 continue;
             }
 
+            var phases = pitPhases[car];
             var window = new List<RaceSample>();
-            foreach (var sample in samples.Where(s => s.TimeMs >= from && s.TimeMs <= to))
+            var pit = new List<int>();
+            for (var i = 0; i < samples.Count; i++)
             {
-                if (window.Count == 0 || sample.TimeMs - window[^1].TimeMs >= ClipSampleStepMs)
+                var sample = samples[i];
+                if (sample.TimeMs >= from && sample.TimeMs <= to
+                    && (window.Count == 0 || sample.TimeMs - window[^1].TimeMs >= ClipSampleStepMs))
                 {
                     window.Add(sample);
+                    pit.Add(phases[i]);
                 }
             }
 
@@ -380,7 +487,8 @@ public static class HighlightsBuilder
                 window.Select(s => (int)s.Gear).ToList(),
                 window.Select(s => (int)s.Throttle).ToList(),
                 window.Select(s => (int)s.Brake).ToList(),
-                window.Select(s => 1 + carCrossings.Count(t => t <= s.TimeMs)).ToList()));
+                window.Select(s => 1 + carCrossings.Count(t => t <= s.TimeMs)).ToList(),
+                pit));
         }
 
         var lap = 1 + crossings.GetValueOrDefault(scene.Focus, []).Count(t => t <= scene.TimeMs);

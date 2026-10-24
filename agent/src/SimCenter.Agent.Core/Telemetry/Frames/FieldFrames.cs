@@ -23,7 +23,7 @@ public sealed record FieldLapStatesFrame(
     IReadOnlyList<FieldLapState> Cars) : ITelemetryFrame;
 
 /// <summary>
-/// 차 한 대의 랩 상태. <paramref name="IsOnTrack"/>은 매퍼가 정한다(달리는 중 · 피트 아님 · 차고 아님).
+/// 차 한 대의 랩 상태. <paramref name="IsOnTrack"/>은 매퍼가 정한다(달리는 중 · 차고 아님 — 피트 레인은 포함).
 /// <paramref name="Status"/>는 그대로 표본에 싣는 게임 원시 상태 묶음이다(뜻은 매퍼와 계약 문서가 정한다).
 /// </summary>
 /// <param name="LapDistanceM">현재 랩에서 달린 거리(m). 출발선을 지나기 전에는 음수일 수 있다.</param>

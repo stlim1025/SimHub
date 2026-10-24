@@ -150,7 +150,8 @@ public sealed class TrackSampleCollector : ITelemetryAnalyzer
             var overtakeFlags = _pendingOvertakes.GetValueOrDefault(car);
 
             var lap = lapStates.Cars[car];
-            if (!lap.IsOnTrack || lap.LapDistanceM < 0 || !(isBase || surfaceChanged || impact || collided || overtakeFlags != 0))
+            if (!lap.IsOnTrack || LapDistance(lap.LapDistanceM) is not { } lapDistance
+                               || !(isBase || surfaceChanged || impact || collided || overtakeFlags != 0))
             {
                 continue;
             }
@@ -164,7 +165,7 @@ public sealed class TrackSampleCollector : ITelemetryAnalyzer
             var drs = At(surfaces.DrsOpen, car) ? TrackSampleEncoder.DrsFlag : 0;
             samples.Add(new TrackSample(
                 (byte)car,
-                lap.LapDistanceM,
+                lapDistance,
                 position.X,
                 position.Z,
                 surface,
@@ -200,6 +201,22 @@ public sealed class TrackSampleCollector : ITelemetryAnalyzer
         return TrackSampleEncoder.RawSize(_buffer.Count, _bufferedSamples) >= RawChunkBytes
             ? Flush(isLast: false)
             : Array.Empty<TelemetryEvent>();
+    }
+
+    /// <summary>
+    /// 표본에 싣는 랩 거리. 출발선을 처음 지나기 전(그리드·피트 출구 뒤)은 게임이 음수로 주므로 트랙 길이 + 그 값(= 지난 랩 끝 쪽)으로 싣는다.
+    /// 트랙 길이를 모르거나 그래도 음수면 null(싣지 않는다).
+    /// </summary>
+    private float? LapDistance(float gameLapDistanceM)
+    {
+        if (gameLapDistanceM >= 0)
+        {
+            return gameLapDistanceM;
+        }
+
+        return _session?.TrackLengthM is > 0 and var length && length + gameLapDistanceM >= 0
+            ? length + gameLapDistanceM
+            : null;
     }
 
     /// <summary>목록의 칸 값(목록이 없거나 짧으면 기본값).</summary>

@@ -45,6 +45,56 @@ public sealed class TrackGeometryBuilderTests
     }
 
     [Fact]
+    public void Build_PitLaneSamples_AreLeftOutOfTheRoad_AndMakeThePitLaneFromEntryToExit()
+    {
+        // 차 2대가 레이싱 라인(반지름 100)을 돌고, 3번 차는 피트 레인(바깥 12m)을 달린다 — 피트 레인이 출발선을 넘는다(590m → 40m).
+        const byte pitting = 1 << 3; // pitStatus = 1
+        var frames = new List<Sample[]>();
+        for (var d = 0.0; d < LapLength; d += 2)
+        {
+            var angle = d / Radius;
+            var cars = new List<Sample>
+            {
+                new(0, d, Radius * Math.Cos(angle), Radius * Math.Sin(angle)),
+                new(1, d, (Radius + 1) * Math.Cos(angle), (Radius + 1) * Math.Sin(angle)),
+            };
+            if (d >= 590 || d <= 40)
+            {
+                for (var copy = 0; copy < 3; copy++)
+                {
+                    cars.Add(new Sample((byte)(3 + copy), d, (Radius + 12) * Math.Cos(angle), (Radius + 12) * Math.Sin(angle), SpeedKph: 80, Status: pitting));
+                }
+            }
+
+            frames.Add([.. cars]);
+        }
+
+        var geometry = TrackGeometryBuilder.Build([TrackSampleDecoder.Decode(Encode(frames), format: 5)])!;
+
+        Assert.InRange(geometry.BandRightM[2], 0, 2);           // 10m: 피트 레인 차가 도로 띠를 넓히지 않는다
+        Assert.NotNull(geometry.PitX);
+        // 입구(590m)부터 출구(40m)까지(칸 반올림만큼 어긋날 수 있다).
+        double DistanceToPitLaneAt(int index, double lapDistance)
+            => Math.Sqrt(Math.Pow(geometry.PitX![index] - (Radius + 12) * Math.Cos(lapDistance / Radius), 2)
+                         + Math.Pow(geometry.PitZ![index] - (Radius + 12) * Math.Sin(lapDistance / Radius), 2));
+        Assert.InRange(DistanceToPitLaneAt(0, 590), 0, 3);
+        Assert.InRange(DistanceToPitLaneAt(geometry.PitX!.Length - 1, 40), 0, 3);
+    }
+
+    [Fact]
+    public void Build_WithoutPitLaneSamples_HasNoPitLane()
+    {
+        var frames = new List<Sample[]>();
+        for (var d = 0.0; d < LapLength; d += 2)
+        {
+            var angle = d / Radius;
+            frames.Add([new Sample(0, d, Radius * Math.Cos(angle), Radius * Math.Sin(angle))]);
+        }
+
+        Assert.Null(TrackGeometryBuilder.Build([TrackSampleDecoder.Decode(Encode(frames), format: 5)])!.PitX);
+    }
+
+    [Fact]
     public void Build_LineBandKerbsAndHeight_FromAllCars()
     {
         // 차 3대가 2m마다 표본: 0번은 반지름 100(레이싱 라인), 1번은 안쪽 2m(왼쪽), 2번은 바깥 1.5m(오른쪽).

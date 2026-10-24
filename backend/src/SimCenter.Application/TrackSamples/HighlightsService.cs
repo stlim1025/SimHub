@@ -91,10 +91,19 @@ public sealed class HighlightsService : IHighlightsService
         var player = cars.FirstOrDefault(c => c.IsPlayer)?.CarIndex;
 
         var laps = await _sessionDetail.GetMySessionLapsAsync(userId, session.GameCode, session.TrackId, session.SessionKey, cancellationToken);
+        var playerCrossings = player is { } me ? timeline.CrossingsOf(me, length) : [];
         var (flags, retirements) = RaceControlEvents.Build(
             laps.Select(l => new PlayerLapEvents(l.LapNumber, l.LapTimeMs, l.SnapshotDetails)).ToList(),
-            player is { } me ? timeline.CrossingsOf(me, length) : [],
+            playerCrossings,
             timeline.EndMs);
+
+        // 소등 = 내 1랩 끝 − 1랩 시간. 알면 그리드 표본(옛 에이전트는 없다)을 다시 만든다.
+        var firstLap = laps.LastOrDefault(l => l.LapNumber == 1);
+        int? lightsOutMs = firstLap is not null && playerCrossings.Count > 0 ? playerCrossings[0] - firstLap.LapTimeMs : null;
+        if (lightsOutMs is { } lightsOut)
+        {
+            timeline = RaceGrid.Fill(timeline, lightsOut, length);
+        }
 
         // 리타이어 이벤트를 못 받은 리타이어 차는 표본이 끊긴 곳에서 멈춘 것으로.
         var allRetirements = retirements.ToList();
@@ -113,7 +122,8 @@ public sealed class HighlightsService : IHighlightsService
             }
         }
 
-        return HighlightsBuilder.Build(session.Id, session.TrackId, session.GameCode, session.TotalLaps, timeline, length, cars, flags, allRetirements);
+        return HighlightsBuilder.Build(
+            session.Id, session.TrackId, session.GameCode, session.TotalLaps, timeline, length, cars, flags, allRetirements, lightsOutMs);
     }
 
     /// <summary>순위표 없는 앞 조각 중 시간이 이어지는 것을 차례로 [parts] 앞에 붙인다.</summary>

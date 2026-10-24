@@ -9,7 +9,7 @@ internal static class TrackSamplePayloads
     /// <summary>합성 표본 한 개(계약 단위 그대로).</summary>
     internal sealed record Sample(
         byte Car, double DistanceM, double X, double Z, ushort Surface = 0, ushort SpeedKph = 200, double Y = 0,
-        sbyte Steer = 0, ushort Rpm = 0, ushort ErsKj = 0);
+        sbyte Steer = 0, ushort Rpm = 0, ushort ErsKj = 0, byte Status = 0);
 
     /// <summary>계약(<c>shared/schema/track_samples_chunk.json</c>) format 5 그대로 열 배치 → gzip.</summary>
     internal static byte[] Encode(IReadOnlyList<Sample[]> frames, int frameTimeMs = 0)
@@ -48,7 +48,7 @@ internal static class TrackSamplePayloads
         samples.ForEach(s => Int32((int)Math.Round(s.X / 0.1)));
         samples.ForEach(s => Int32((int)Math.Round(s.Z / 0.1)));
         samples.ForEach(s => UInt16(s.Surface));
-        samples.ForEach(_ => Byte(0));             // 상태
+        samples.ForEach(s => Byte(s.Status));      // 상태
         samples.ForEach(_ => Byte(0));             // 횡 G
         samples.ForEach(_ => Byte(0));             // 종 G
         samples.ForEach(s => UInt16(s.SpeedKph));

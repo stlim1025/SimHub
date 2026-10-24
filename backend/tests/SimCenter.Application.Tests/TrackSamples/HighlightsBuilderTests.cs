@@ -17,8 +17,13 @@ public sealed class HighlightsBuilderTests
     /// <summary>표본 하나에 얹을 표시(상태 비트·표시 비트 2·그 순간부터의 손상).</summary>
     private sealed record Mark(int TimeMs, byte Car, byte Status = 0, byte Flags2 = 0, byte Damage = 0);
 
-    /// <summary>[offsets]의 차들이 같은 속도로 [fromMs]~[toMs] 달린다. 차마다 출발 위치만 다르다(m, 출발선 앞).</summary>
-    private static DecodedTrackSamples Race(IReadOnlyDictionary<byte, double> offsets, int fromMs = 0, int toMs = RaceMs, params Mark[] marks)
+    /// <summary>
+    /// [offsets]의 차들이 같은 속도로 [fromMs]~[toMs] 달린다. 차마다 출발 위치만 다르다(m, 출발선 앞).
+    /// [absent]가 참인 (차, 시각)은 표본을 넣지 않고(피트 레인·출발 전), [statusAt]은 표시가 없는 표본의 상태 비트.
+    /// </summary>
+    private static DecodedTrackSamples Race(
+        IReadOnlyDictionary<byte, double> offsets, int fromMs = 0, int toMs = RaceMs, Func<byte, int, bool>? absent = null,
+        Func<byte, int, byte>? statusAt = null, params Mark[] marks)
     {
         var time = new List<int>();
         var car = new List<byte>();
@@ -32,6 +37,11 @@ public sealed class HighlightsBuilderTests
         {
             foreach (var (index, offset) in offsets)
             {
+                if (absent?.Invoke(index, t) == true)
+                {
+                    continue;
+                }
+
                 var lapDistance = (offset + SpeedMps * t / 1000.0) % TrackLength;
                 var angle = lapDistance / Radius;
                 var mark = marks.FirstOrDefault(m => m.Car == index && m.TimeMs == t);
@@ -40,7 +50,7 @@ public sealed class HighlightsBuilderTests
                 distance.Add((float)lapDistance);
                 x.Add((float)(Radius * Math.Cos(angle)));
                 z.Add((float)(Radius * Math.Sin(angle)));
-                status.Add(mark?.Status ?? 0);
+                status.Add(mark?.Status ?? statusAt?.Invoke(index, t) ?? 0);
                 flags2.Add(mark?.Flags2 ?? 0);
                 damage.Add(marks.Where(m => m.Car == index && m.TimeMs <= t).Select(m => m.Damage).DefaultIfEmpty((byte)0).Max());
             }
@@ -195,6 +205,88 @@ public sealed class HighlightsBuilderTests
         Assert.True(track.TimeMs.Zip(track.TimeMs.Skip(1)).All(p => p.Second - p.First >= 200));
         Assert.Equal(track.TimeMs.Count, track.X.Count);
         Assert.Equal(track.TimeMs.Count, track.Lap.Count);
+    }
+
+    [Fact]
+    public void Timeline_FirstCrossFromTheGrid_IsNotALap()
+    {
+        // 출발선 뒤 50m(그리드)에서 출발: 랩 거리 550m → 0m를 처음 넘는 것은 랩 끝이 아니다.
+        var timeline = RaceTimeline.Build([Race(new Dictionary<byte, double> { [1] = TrackLength - 50 })]);
+
+        var crossings = timeline.CrossingsOf(1, TrackLength);
+
+        Assert.Equal(13_000, crossings[0]);              // 50m + 한 바퀴 = 13초
+    }
+
+    [Fact]
+    public void Grid_IsRebuilt_FromTheFirstSamplesAfterLightsOut()
+    {
+        // 소등 0초. 옛 에이전트처럼 출발선을 넘기 전 표본이 없다: 1번은 1초, 2번은 2초에 출발선(랩 거리 0)을 넘는다.
+        var samples = Race(
+            new Dictionary<byte, double> { [1] = -50, [2] = -100 },
+            absent: (car, t) => (car == 1 && t < 1_000) || (car == 2 && t < 2_000));
+        var timeline = RaceTimeline.Build([samples]);
+
+        var filled = RaceGrid.Fill(timeline, lightsOutMs: 0, TrackLength);
+
+        Assert.Equal(-RaceGrid.HoldMs, filled.StartMs);
+        var first = filled.SampleAt(1, -1_000)!.Value;
+        var second = filled.SampleAt(2, -1_000)!.Value;
+        Assert.Equal(0, first.SpeedKph);                 // 소등 전에는 그리드에 서 있다
+        Assert.Equal(0, second.SpeedKph);
+        Assert.InRange(TrackLength - first.LapDistanceM, 20, 30);    // 50m/s × 1초 ÷ 2 = 25m 뒤
+        Assert.InRange(TrackLength - second.LapDistanceM, 45, 55);   // 50m/s × 2초 ÷ 2 = 50m 뒤
+        var gap = Math.Sqrt(Math.Pow(first.X - second.X, 2) + Math.Pow(first.Z - second.Z, 2));
+        Assert.InRange(gap, 25, 27);                     // 앞뒤 25m + 좌우 엇갈림
+        Assert.True(filled.SampleAt(1, 500)!.Value.SpeedKph > 0);    // 소등 뒤 출발
+        Assert.Equal(1_000, filled.Cars[1].First(s => s.TimeMs >= 1_000).TimeMs);   // 실제 표본은 그대로 이어진다
+    }
+
+    [Fact]
+    public void StartClip_BeginsOnTheGrid_WhenLightsOutIsKnown()
+    {
+        var result = HighlightsBuilder.Build(
+            Guid.Empty, Guid.Empty, "F1_25", 5, RaceTimeline.Build([Race(new Dictionary<byte, double> { [1] = 30, [Player] = 20 }, fromMs: -5_000)]),
+            TrackLength, Cars, [], [], lightsOutMs: 0);
+
+        Assert.Equal(-RaceGrid.HoldMs, result.Race[0].StartMs);
+        Assert.Equal(0, result.Race[0].EventMs);
+    }
+
+    [Fact]
+    public void PitStop_MissingSamples_AreMarkedPitInBeforeAndPitOutAfter()
+    {
+        // 2번 차는 21~36초에 피트 레인(옛 에이전트: 표본 없음). 19초에 1번과 부딪힌다.
+        var samples = Race(
+            new Dictionary<byte, double> { [1] = 30, [2] = 25 },
+            absent: (car, t) => car == 2 && t is > 21_000 and < 36_000,
+            marks: [new Mark(19_000, 1, Status: RaceSample.CollisionFlag), new Mark(19_000, 2, Status: RaceSample.CollisionFlag)]);
+
+        var clip = Assert.Single(Build(samples).Race, c => c.Kind == nameof(HighlightKind.Collision));
+        var car2 = clip.Cars.Single(c => c.CarIndex == 2);
+
+        Assert.Equal(0, car2.Pit[car2.TimeMs.ToList().IndexOf(15_000)]);
+        Assert.Equal(1, car2.Pit[car2.TimeMs.ToList().IndexOf(17_000)]);    // 표본이 끊기기 5초 안 = 피트 인
+        Assert.Equal(1, car2.Pit[car2.TimeMs.ToList().IndexOf(21_000)]);
+    }
+
+    [Fact]
+    public void PitStop_WithPitStatus_IsPitInUntilTheCarStops_ThenPitOut()
+    {
+        // 새 에이전트: 피트 레인 표본에 pitStatus가 실린다. 3번 차는 40~50초 피트 레인, 그 안 45초 표본에서 선다(속도 0).
+        const byte pitting = 1 << 3;
+        var samples = Race(
+            new Dictionary<byte, double> { [1] = 30, [3] = 25 },
+            statusAt: (car, t) => car == 3 && t is >= 40_000 and <= 50_000 ? pitting : (byte)0,
+            marks: [new Mark(47_000, 1, Status: RaceSample.CollisionFlag), new Mark(47_000, 3, Status: RaceSample.CollisionFlag | pitting)]);
+        var stopped = samples with { SpeedKph = samples.SpeedKph!.Select((v, i) => samples.CarIndex[i] == 3 && samples.TimeMs[i] == 45_000 ? (ushort)0 : v).ToArray() };
+
+        var clip = Assert.Single(Build(stopped).Race, c => c.Kind == nameof(HighlightKind.Collision));
+        var car3 = clip.Cars.Single(c => c.CarIndex == 3);
+
+        Assert.Equal(1, car3.Pit[car3.TimeMs.ToList().IndexOf(42_000)]);
+        Assert.Equal(2, car3.Pit[car3.TimeMs.ToList().IndexOf(46_000)]);
+        Assert.Equal(0, car3.Pit[car3.TimeMs.ToList().IndexOf(51_000)]);
     }
 
     [Fact]

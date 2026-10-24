@@ -53,9 +53,9 @@ public sealed partial class F1PacketMapper
         for (var i = 0; i < laps.Length; i++)
         {
             var lap = laps[i];
+            // 피트 레인을 달리는 차도 싣는다(리플레이가 피트 인·아웃을 그리게) — 피트 상태는 상태 비트에 실린다.
             var isOnTrack = lap.ResultStatus == F1Enums.ResultStatus.Active
-                            && lap.DriverStatus != F1Enums.DriverStatus.InGarage
-                            && lap.PitStatus == F1Enums.PitStatus.None;
+                            && lap.DriverStatus != F1Enums.DriverStatus.InGarage;
             var status = (byte)(((int)lap.DriverStatus & DriverStatusMask) | (((int)lap.PitStatus & PitStatusMask) << PitStatusShift));
             states[i] = new FieldLapState(lap.LapDistance, isOnTrack, status);
         }

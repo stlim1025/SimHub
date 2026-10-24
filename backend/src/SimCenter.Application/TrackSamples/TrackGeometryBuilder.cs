@@ -8,6 +8,7 @@ namespace SimCenter.Application.TrackSamples;
 /// <param name="Y">높이(m). 높이 열이 있는 표본이 없으면 null.</param>
 /// <param name="BandLeftM">레이싱 라인에서 왼쪽(진행 방향 기준 법선 (−sin, cos))으로 차들이 달린 끝(m, 0 이상).</param>
 /// <param name="BandRightM">오른쪽 끝(m, 0 이상).</param>
+/// <param name="PitX">피트 레인 선(피트 입구 → 출구 순, 피트 레인 표본의 칸별 중앙값). 피트 레인 표본이 모자라면 null.</param>
 public sealed record TrackGeometry(
     double ResolutionM,
     int SampleCount,
@@ -17,9 +18,15 @@ public sealed record TrackGeometry(
     double[] BandLeftM,
     double[] BandRightM,
     bool[] KerbLeft,
-    bool[] KerbRight);
+    bool[] KerbRight,
+    double[]? PitX = null,
+    double[]? PitZ = null,
+    double[]? PitY = null);
 
-/// <summary>모든 차 표본 → 트랙 형상(순수 계산). 서킷은 닫혀 있다고 본다(마지막 칸 다음 = 첫 칸).</summary>
+/// <summary>
+/// 모든 차 표본 → 트랙 형상(순수 계산). 서킷은 닫혀 있다고 본다(마지막 칸 다음 = 첫 칸).
+/// 피트 레인에 있는 표본(상태 비트의 pitStatus ≠ 0)은 도로에서 빼고 피트 레인 선으로 따로 모은다.
+/// </summary>
 public static class TrackGeometryBuilder
 {
     public const double ResolutionM = 5;
@@ -47,6 +54,15 @@ public static class TrackGeometryBuilder
     private const int SurfaceBits = 4;
     private const int SurfaceMask = 0xF;
 
+    /// <summary>상태 비트의 pitStatus(bit3~4).</summary>
+    private const int PitStatusShift = 3;
+    private const int PitStatusMask = 0x3;
+
+    /// <summary>피트 레인 선: 이보다 느린 표본(박스에 선 차)은 빼고, 표본이 이만큼 있는 칸만 쓰고, 칸이 이만큼 안 되면 만들지 않는다.</summary>
+    private const int MinPitSpeedKph = 10;
+    private const int MinPitBinSamples = 3;
+    private const int MinPitBins = 10;
+
     private readonly record struct Point(double X, double Z, double? Y, bool Paved, bool Rumble);
 
     /// <summary>표본이 모자라면(칸의 절반 미만) null.</summary>
@@ -60,11 +76,23 @@ public static class TrackGeometryBuilder
 
         var n = (int)Math.Round(maxDistance / ResolutionM) + 1;
         var bins = Enumerable.Range(0, n).Select(_ => new List<Point>()).ToArray();
+        var pitBins = Enumerable.Range(0, n).Select(_ => new List<Point>()).ToArray();
         var sampleCount = 0;
         foreach (var chunk in chunks)
         {
             for (var i = 0; i < chunk.Count; i++)
             {
+                if (((chunk.Status[i] >> PitStatusShift) & PitStatusMask) != 0)
+                {
+                    if (chunk.SpeedKph is not { } pitSpeed || pitSpeed[i] >= MinPitSpeedKph)
+                    {
+                        pitBins[(int)Math.Round(chunk.LapDistanceM[i] / ResolutionM) % n]
+                            .Add(new Point(chunk.X[i], chunk.Z[i], chunk.Y?[i], true, false));
+                    }
+
+                    continue;
+                }
+
                 if (chunk.SpeedKph is { } speed && speed[i] < MinSpeedKph)
                 {
                     continue;
@@ -152,7 +180,45 @@ public static class TrackGeometryBuilder
             bandRight[k] = Math.Max(0, -offsets[(int)(offsets.Count * (1 - BandPercentile))]);
         }
 
-        return new TrackGeometry(ResolutionM, sampleCount, lineX, lineZ, heightsOut, bandLeft, bandRight, kerbLeft, kerbRight);
+        var pit = PitLane(pitBins);
+        return new TrackGeometry(
+            ResolutionM, sampleCount, lineX, lineZ, heightsOut, bandLeft, bandRight, kerbLeft, kerbRight, pit?.X, pit?.Z, pit?.Y);
+    }
+
+    /// <summary>
+    /// 피트 레인 표본 칸 → 피트 입구에서 출구로 가는 선. 칸은 랩 거리 순이고 피트 레인이 출발선을 넘을 수 있어(모나코),
+    /// 표본 칸 사이 가장 긴 빈 구간 바로 뒤를 피트 입구로 본다.
+    /// </summary>
+    private static (double[] X, double[] Z, double[]? Y)? PitLane(List<Point>[] bins)
+    {
+        var n = bins.Length;
+        var used = Enumerable.Range(0, n).Where(k => bins[k].Count >= MinPitBinSamples).ToList();
+        if (used.Count < MinPitBins)
+        {
+            return null;
+        }
+
+        var start = 0;
+        var longestGap = -1;
+        for (var j = 0; j < used.Count; j++)
+        {
+            var next = used[(j + 1) % used.Count];
+            var gap = (next - used[j] + n) % n;
+            if (gap > longestGap)
+            {
+                longestGap = gap;
+                start = (j + 1) % used.Count;
+            }
+        }
+
+        var ordered = Enumerable.Range(0, used.Count).Select(j => bins[used[(start + j) % used.Count]]).ToList();
+        var x = Smooth(ordered.Select(b => Median(b.Select(p => p.X))).ToArray(), closed: false);
+        var z = Smooth(ordered.Select(b => Median(b.Select(p => p.Z))).ToArray(), closed: false);
+        var hasHeights = ordered.All(b => b.Any(p => p.Y.HasValue));
+        var y = hasHeights
+            ? Smooth(ordered.Select(b => Median(b.Where(p => p.Y.HasValue).Select(p => p.Y!.Value))).ToArray(), closed: false)
+            : null;
+        return (x, z, y);
     }
 
     private static (bool Paved, bool Rumble) Wheels(ushort packed)
@@ -200,19 +266,21 @@ public static class TrackGeometryBuilder
         return filled;
     }
 
-    private static double[] Smooth(double[] values)
+    /// <summary>이동 평균. 닫힌 선은 끝과 처음이 이어지고, 열린 선(피트 레인)은 끝에 가까울수록 반폭을 줄여 양 끝 점은 그대로 둔다.</summary>
+    private static double[] Smooth(double[] values, bool closed = true)
     {
         var n = values.Length;
         var smoothed = new double[n];
         for (var k = 0; k < n; k++)
         {
+            var half = closed ? LineSmoothBins : Math.Min(LineSmoothBins, Math.Min(k, n - 1 - k));
             var sum = 0.0;
-            for (var j = -LineSmoothBins; j <= LineSmoothBins; j++)
+            for (var j = -half; j <= half; j++)
             {
                 sum += values[(k + j + n) % n];
             }
 
-            smoothed[k] = sum / (LineSmoothBins * 2 + 1);
+            smoothed[k] = sum / (half * 2 + 1);
         }
 
         return smoothed;

@@ -9,6 +9,7 @@ namespace SimCenter.Application.TrackSamples;
 /// X·Z는 레이싱 라인(차들이 달린 위치의 중앙값), 띠는 그 선에서 차들이 달린 왼쪽·오른쪽 끝(m), 연석은 그 쪽을 밟은 적이 있는지.
 /// </summary>
 /// <param name="Y">높이(m). 높이를 모으지 못했으면 null.</param>
+/// <param name="PitX">피트 레인 선(입구 → 출구, 월드 X·Z·높이). 피트 레인 표본이 모자라면 셋 다 null.</param>
 public sealed record TrackGeometryResponse(
     Guid TrackId,
     string GameCode,
@@ -21,7 +22,10 @@ public sealed record TrackGeometryResponse(
     IReadOnlyList<double> BandLeftM,
     IReadOnlyList<double> BandRightM,
     IReadOnlyList<bool> KerbLeft,
-    IReadOnlyList<bool> KerbRight);
+    IReadOnlyList<bool> KerbRight,
+    IReadOnlyList<double>? PitX = null,
+    IReadOnlyList<double>? PitZ = null,
+    IReadOnlyList<double>? PitY = null);
 
 /// <summary>모든 오프라인 세션의 전체 차 표본으로 트랙 형상을 만든다.</summary>
 public interface ITrackGeometryService
@@ -76,7 +80,10 @@ public sealed class TrackGeometryService : ITrackGeometryService
             Round(geometry.BandLeftM),
             Round(geometry.BandRightM),
             geometry.KerbLeft,
-            geometry.KerbRight);
+            geometry.KerbRight,
+            geometry.PitX is null ? null : Round(geometry.PitX),
+            geometry.PitZ is null ? null : Round(geometry.PitZ),
+            geometry.PitY is null ? null : Round(geometry.PitY));
     }
 
     private static double[] Round(double[] values) => Array.ConvertAll(values, v => Math.Round(v, Digits));

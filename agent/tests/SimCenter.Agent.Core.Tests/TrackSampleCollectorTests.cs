@@ -168,16 +168,39 @@ public class TrackSampleCollectorTests
     }
 
     [Fact]
-    public void CarsOffTrack_OrBeforeTheLine_AreSkipped()
+    public void CarsInTheGarage_AreSkipped()
     {
         _sut.Process(Session());
         Tick(0, 0, onTrack: [true, false, true]);
-        Tick(1, 100, lapDistance: -5);
 
         var chunk = End(_sut);
 
         Assert.Equal(1, chunk.FrameCount);
         Assert.Equal(Cars - 1, chunk.SampleCount);
+    }
+
+    [Fact]
+    public void CarsBeforeTheLine_OnTheGrid_AreRecordedAtTheEndOfTheLap()
+    {
+        _sut.Process(Session());
+        Tick(0, 0, lapDistance: -50);
+
+        var samples = Decode(End(_sut).Data).Samples;
+
+        Assert.Equal(Cars, samples.Count);
+        Assert.Equal((4361 - 50) * 4, samples[0].LapDistanceQuarterM);    // 트랙 길이 + (−50m), 0.25m 단위
+    }
+
+    [Fact]
+    public void CarsBeforeTheLine_WithoutTrackLength_AreSkipped()
+    {
+        _sut.Process(new SessionFrame(SessionRef, TrackId, SessionType.Race, PacketFormat: 2025, IsNetworkGame: false));
+        Tick(0, 0, lapDistance: 100);
+        Tick(1, 100, lapDistance: -5);
+
+        var chunk = End(_sut);
+
+        Assert.Equal(1, chunk.FrameCount);
     }
 
     [Theory]
