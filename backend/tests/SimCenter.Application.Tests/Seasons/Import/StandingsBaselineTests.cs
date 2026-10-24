@@ -34,6 +34,63 @@ public sealed class StandingsBaselineTests
         Assert.Equal(2, standings.Drivers.Count);
     }
 
+    /// <summary>
+    /// 기준선 = 1주말(가져온 세션) 뒤 순위표. 2주말 레이스는 가져오기 전에 기록됐지만(시각 2h ≤ 가져온 시각 3h)
+    /// 넣으면 피아스트리가 기준선을 넘으므로 기준선에 없다고 보고 더한다(순위표를 찍은 뒤 레이스를 하고 가져온 경우).
+    /// </summary>
+    [Fact]
+    public void Recorded_race_before_import_that_overshoots_the_baseline_is_added()
+    {
+        var snapshot = Snapshot(null,
+            new ImportedDriverPoints("Oscar PIASTRI", 25, false),
+            new ImportedDriverPoints("Lando NORRIS", 18, false),
+            new ImportedDriverPoints("You", 15, true));
+
+        var standings = StandingsCalculator.Calculate(SeasonSessionSelector.Select(
+            [
+                Row(1, 1, "name:OSCAR PIASTRI#", 1, 25, name: "Oscar PIASTRI") with { IsImported = true },
+                Row(1, 1, "name:LANDO NORRIS#", 2, 18, name: "Lando NORRIS") with { IsImported = true },
+                Row(1, 1, "player", 3, 15, isPlayer: true, isAi: false, name: "GOM") with { IsImported = true },
+                Row(2, 2, "driver:112", 1, 25, hours: 2, name: "PIASTRI"),
+                Row(2, 2, "driver:54", 2, 18, hours: 2, name: "NORRIS"),
+                Row(2, 2, "player", 3, 15, hours: 2, isPlayer: true, isAi: false, name: "GOM"),
+            ]), GameCode, snapshot, importedAt: At(3));
+
+        Assert.Equal([("PIASTRI", 50), ("NORRIS", 36), ("GOM", 30)], standings.Drivers.Select(d => (d.Name, d.Points)));
+    }
+
+    /// <summary>가져오기 전에 기록된 세션이 기준선과 맞으면(가져온 세션만으론 모자람) 이미 들어 있다고 보고 더하지 않는다.</summary>
+    [Fact]
+    public void Recorded_race_before_import_that_fills_the_baseline_is_covered()
+    {
+        var snapshot = Snapshot(null, new ImportedDriverPoints("Oscar PIASTRI", 50, false));
+
+        var standings = StandingsCalculator.Calculate(SeasonSessionSelector.Select(
+            [
+                Row(1, 1, "name:OSCAR PIASTRI#", 1, 25, name: "Oscar PIASTRI") with { IsImported = true },
+                Row(2, 2, "driver:112", 1, 25, hours: 2, name: "PIASTRI"),
+                Row(3, 3, "driver:112", 2, 18, hours: 5, name: "PIASTRI"),
+            ]), GameCode, snapshot, importedAt: At(3));
+
+        // 2주말(가져오기 전)은 기준선에 들어 있고, 3주말(가져온 뒤)만 더한다.
+        Assert.Equal(68, Assert.Single(standings.Drivers).Points);
+    }
+
+    /// <summary>가져온 뒤에 기록된 세션은 점수가 기준선과 맞아도 기준선에 넣지 않는다.</summary>
+    [Fact]
+    public void Recorded_race_after_import_is_never_covered()
+    {
+        var snapshot = Snapshot(null, new ImportedDriverPoints("Oscar PIASTRI", 50, false));
+
+        var standings = StandingsCalculator.Calculate(SeasonSessionSelector.Select(
+            [
+                Row(1, 1, "name:OSCAR PIASTRI#", 1, 25, name: "Oscar PIASTRI") with { IsImported = true },
+                Row(2, 2, "driver:112", 1, 25, hours: 5, name: "PIASTRI"),
+            ]), GameCode, snapshot, importedAt: At(3));
+
+        Assert.Equal(75, Assert.Single(standings.Drivers).Points);
+    }
+
     [Fact]
     public void Unmatched_baseline_drivers_appear_without_records()
     {

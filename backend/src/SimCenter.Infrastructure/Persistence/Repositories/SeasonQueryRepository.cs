@@ -82,13 +82,8 @@ public sealed class SeasonQueryRepository : ISeasonQueryRepository
             where session.SeasonId != null
                 && session.RaceWeekendId != null
                 && ids.Contains(session.SeasonId.Value)
-            // 가져온 시즌(docs/15 §12, D-55): 가져온 세션과 가져오기 전에 기록된(옮긴) 세션의 점수는 가져온 스탠딩에 이미 들어 있다.
-            select new
-            {
-                result,
-                session,
-                coveredByBaseline = session.IsImported || (season.ImportedAt != null && session.ClassifiedAt <= season.ImportedAt),
-            };
+            // 가져온 시즌(docs/15 §12, D-55): 기록 세션 중 가져온 스탠딩에 이미 든 것은 계산기가 점수로 정한다(BaselineCoverage).
+            select new { result, session };
 
         if (scoringRowsOnly)
         {
@@ -115,7 +110,7 @@ public sealed class SeasonQueryRepository : ISeasonQueryRepository
                 x.result.Position,
                 x.result.ResultStatus,
                 x.result.Points,
-                x.coveredByBaseline,
+                x.session.IsImported,
                 x.session.AiDifficulty,
                 x.result.TeamName))
             .ToListAsync(cancellationToken);

@@ -153,7 +153,7 @@ public sealed class SeasonImportApiE2ETests : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task Sessions_recorded_before_import_are_not_counted_twice()
+    public async Task Race_recorded_before_import_but_missing_from_ingame_table_is_added_once()
     {
         var (client, connection) = await SeedMiamiQualifyingAsync();
         await using var _ = connection;
@@ -165,11 +165,12 @@ public sealed class SeasonImportApiE2ETests : IClassFixture<ApiFactory>
         var seasonId = await ImportAsync(client, All);
         var detail = await GetOkAsync(client, $"{SeasonsUrl}/{seasonId}");
 
-        // 가져오기 전에 끝난 마이애미 레이스(19점)는 인게임 TOT(75)에 들어 있다고 본다.
+        // 인게임 표는 SAU(5라운드)까지라 가져오기 전에 끝난 마이애미 레이스(19점)가 TOT(75)에 없다 — 넣으면 기준선을 넘는다.
+        // 그래서 한 번만 더한다(BaselineCoverage). 미리보기도 같다.
         var me = detail.GetProperty("standings").GetProperty("drivers").EnumerateArray().Single(d => d.GetProperty("isPlayer").GetBoolean());
-        Assert.Equal(75, me.GetProperty("points").GetInt32());
+        Assert.Equal(94, me.GetProperty("points").GetInt32());
         var previewMe = preview.GetProperty("drivers").EnumerateArray().Single(d => d.GetProperty("isPlayer").GetBoolean());
-        Assert.Equal(75, previewMe.GetProperty("points").GetInt32());
+        Assert.Equal(94, previewMe.GetProperty("points").GetInt32());
         Assert.Equal(4, preview.GetProperty("linkCandidate").GetProperty("sessions").GetArrayLength());
     }
 
@@ -193,7 +194,8 @@ public sealed class SeasonImportApiE2ETests : IClassFixture<ApiFactory>
         var detail = await GetOkAsync(client, $"{SeasonsUrl}/{seasonId}");
         Assert.Equal([1, 2, 3, 4, 5, 6], Rounds(detail));
         var drivers = detail.GetProperty("standings").GetProperty("drivers");
-        Assert.Equal(93, drivers[0].GetProperty("points").GetInt32());
+        // 노리스 = 인게임 TOT 93 + 표에 없는 마이애미 레이스 1점.
+        Assert.Equal(94, drivers[0].GetProperty("points").GetInt32());
         var miami = detail.GetProperty("rounds").EnumerateArray().Single(r => r.GetProperty("round").GetInt32() == 6);
         Assert.Equal(4, miami.GetProperty("sessions").GetArrayLength());
 

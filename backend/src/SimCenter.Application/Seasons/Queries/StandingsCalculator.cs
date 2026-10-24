@@ -15,7 +15,8 @@ namespace SimCenter.Application.Seasons.Queries;
 /// </list>
 /// <para>
 /// <b>가져온 시즌</b>(docs/15 §12, D-55, <c>imported</c>가 있을 때): 드라이버 점수 = 가져온 포인트 + 가져온 것이 아닌 세션의 점수
-/// (가져온 세션의 점수는 기준선에 이미 들어 있다). 기준선 드라이버는 <see cref="DriverAliasing"/>로 기록된 드라이버와 묶고,
+/// (가져온 세션의 점수는 기준선에 이미 들어 있다). 기록 세션 중 기준선에 이미 든 것은 <see cref="BaselineCoverage"/>가 점수로 정한다.
+/// 기준선 드라이버는 <see cref="DriverAliasing"/>로 기록된 드라이버와 묶고,
 /// 못 맞춘 기준선 드라이버는 기록 없이(기준선의 팀) 오른다. 컨스트럭터 = 가져온 컨스트럭터 기준값 + 가져온 것이 아닌 행의 팀별 점수,
 /// 기준값이 없으면(F1Laps 요약만) 드라이버의 최신 팀별 합 — 팀을 모르는 드라이버는 컨스트럭터에서 빠진다.
 /// </para>
@@ -26,8 +27,9 @@ public static class StandingsCalculator
     private const int PodiumPositions = 3;
     private const string ImportedDriverKeyPrefix = "imported:";
 
+    /// <param name="importedAt">가져온 시각(UTC). 기준선이 어느 기록 세션까지 담았는지 점수로 가리지 못할 때만 쓴다(<see cref="BaselineCoverage"/>).</param>
     public static SeasonStandings Calculate(
-        SeasonSelection selection, string gameCode, ImportedSeasonSnapshot? imported = null)
+        SeasonSelection selection, string gameCode, ImportedSeasonSnapshot? imported = null, DateTime? importedAt = null)
     {
         ArgumentNullException.ThrowIfNull(selection);
         ArgumentNullException.ThrowIfNull(gameCode);
@@ -35,6 +37,7 @@ public static class StandingsCalculator
         if (imported is { Drivers.Count: > 0 })
         {
             var aliased = DriverAliasing.Apply(selection, imported.Drivers, out var keyByEntry);
+            aliased = aliased with { CountedRows = BaselineCoverage.Mark(aliased.CountedRows, imported.Drivers, keyByEntry, importedAt) };
             var rows = aliased.CountedRows.Where(IsScoringRow).ToList();
             var drivers = BuildDrivers(aliased, rows, new Baseline(imported.Drivers, keyByEntry));
             var constructors = imported.Constructors is { Count: > 0 } teams

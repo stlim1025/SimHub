@@ -94,7 +94,7 @@ public sealed class SeasonQueryService : ISeasonQueryService
 
         // 가져온 시즌(docs/15 §12, D-55)은 가져온 스탠딩이 기준선이다.
         var imported = ImportedSeasonSnapshot.TryRead(season.ImportedStandings);
-        return (selection, StandingsCalculator.Calculate(selection, season.GameCode, imported));
+        return (selection, StandingsCalculator.Calculate(selection, season.GameCode, imported, season.ImportedAt));
     }
 
     // ---- 매핑: 요약 ----

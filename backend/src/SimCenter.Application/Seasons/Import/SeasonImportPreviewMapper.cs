@@ -110,7 +110,8 @@ public static class SeasonImportPreviewMapper
 
     private static SeasonStandings Standings(SeasonImportGraph graph)
     {
-        // 옮길 기록 세션은 가져오기 전에 끝난 세션이라 점수가 기준선에 들어 있다(조회의 ClassifiedAt ≤ ImportedAt와 같다).
+        // 옮길 기록 세션 중 기준선에 이미 든 것은 조회와 같이 점수로 정한다(BaselineCoverage). 모두 가져오기 전에 끝났으므로
+        // 점수로 가리지 못하면 모두 들어 있다고 본다(가져온 시각 = 무한대).
         var rows = graph.Sessions.Select(s => (Session: s, WeekendId: s.RaceWeekendId!.Value))
             .Concat(graph.Attachments.Select(a => (a.Session, WeekendId: a.Weekend.Id)))
             .SelectMany(x => x.Session.Results.Where(r => !r.IsDeleted).Select(r => new SeasonResultRow(
@@ -129,10 +130,10 @@ public static class SeasonImportPreviewMapper
                 r.Position,
                 r.ResultStatus,
                 r.Points,
-                IsImported: true,
+                IsImported: x.Session.IsImported,
                 TeamName: r.TeamName)))
             .ToList();
 
-        return StandingsCalculator.Calculate(SeasonSessionSelector.Select(rows), graph.Season.GameCode, graph.Snapshot);
+        return StandingsCalculator.Calculate(SeasonSessionSelector.Select(rows), graph.Season.GameCode, graph.Snapshot, DateTime.MaxValue);
     }
 }
