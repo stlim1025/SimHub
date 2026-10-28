@@ -134,6 +134,9 @@ class _AnalysisTabState extends ConsumerState<AnalysisTab> {
                     playerSectors: lap.sectors,
                     referenceSectors: referenceTrace == null ? const [] : traces.comparison?.sectors ?? const [],
                     playerTyreCompound: visualCompoundName(detail.car?.visualTyreCompound),
+                    referenceTyreCompound: referenceTrace == null || traces.otherCar
+                        ? null
+                        : visualCompoundName(traces.comparison?.visualTyreCompound),
                     realTrack: ref.watch(trackWidthsProvider).valueOrNull?[lap.trackName],
                     trackSamples:
                         ref.watch(trackGeometryProvider((trackId: detail.trackId, gameCode: lap.gameCode))).valueOrNull,

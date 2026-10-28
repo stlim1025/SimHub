@@ -190,5 +190,6 @@ public sealed class LapQueryRepository : ILapQueryRepository
                 .OrderBy(s => s.SectorNumber)
                 .Select(s => new LapSectorDto(s.SectorNumber, s.SectorTimeMs))
                 .ToList(),
-            l.UserId));
+            l.UserId,
+            l.Snapshot == null ? null : l.Snapshot.VisualTyreCompound));
 }

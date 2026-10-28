@@ -679,6 +679,7 @@ class GhostReplay3dPainter extends CustomPainter {
     required this.playerColor,
     required this.ghostColor,
     this.playerTyre,
+    this.ghostTyre,
     this.field = const [],
     this.playerLabel,
     this.labelStyle,
@@ -694,6 +695,9 @@ class GhostReplay3dPainter extends CustomPainter {
 
   /// 내 차 타이어 옆 띠 색(컴파운드). null이면 띠 없이 고무색.
   final Color? playerTyre;
+
+  /// 고스트 타이어 옆 띠 색(비교 랩 컴파운드). 모르면 null.
+  final Color? ghostTyre;
 
   /// 함께 그리는 둘레 차(하이라이트).
   final List<ReplayFieldCar> field;
@@ -733,7 +737,7 @@ class GhostReplay3dPainter extends CustomPainter {
     ];
     final cars = [
       if (ghostFrame != null)
-        (at: Offset(ghostFrame.x, ghostFrame.z), item: _car(view, ghostFrame, ghostColor, opacity: kGhostCarOpacity)),
+        (at: Offset(ghostFrame.x, ghostFrame.z), item: _car(view, ghostFrame, ghostColor, opacity: kGhostCarOpacity, tyreMark: ghostTyre)),
       for (final other in fieldFrames) (at: Offset(other.frame.x, other.frame.z), item: _car(view, other.frame, other.color)),
       (at: focus, item: _car(view, frame, playerColor, tyreMark: playerTyre)),
     ];
@@ -1131,6 +1135,7 @@ class GhostReplay3dPainter extends CustomPainter {
       oldDelegate.playerColor != playerColor ||
       oldDelegate.ghostColor != ghostColor ||
       oldDelegate.playerTyre != playerTyre ||
+      oldDelegate.ghostTyre != ghostTyre ||
       !identical(oldDelegate.field, field) ||
       oldDelegate.playerLabel != playerLabel ||
       oldDelegate.labelStyle != labelStyle;

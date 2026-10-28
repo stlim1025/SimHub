@@ -93,6 +93,7 @@ class GhostReplay extends StatefulWidget {
     this.playerSectors = const [],
     this.referenceSectors = const [],
     this.playerTyreCompound,
+    this.referenceTyreCompound,
     this.realTrack,
     this.trackSamples,
     this.estimatedTrackWidthM,
@@ -121,6 +122,9 @@ class GhostReplay extends StatefulWidget {
 
   /// 이 랩 타이어(보이는 컴파운드 이름 `Soft`·`Medium`…). 차 타이어에 컴파운드 색을 칠한다. 모르면(비교 랩도) 띠 없음.
   final String? playerTyreCompound;
+
+  /// 비교 랩 타이어(보이는 컴파운드 이름). 고스트 차 타이어 색·HUD에 쓴다. 모르면 띠 없음.
+  final String? referenceTyreCompound;
 
   /// 이 트랙의 실측 서킷(중심선·폭). 없거나 주행선에 맞지 않으면 주행 기록으로 추정한 모양을 그린다.
   final TrackWidthProfile? realTrack;
@@ -324,6 +328,7 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
                         thisLapLabel: widget.thisLapLabel,
                         referenceLabel: widget.referenceLabel,
                         tyreCompound: widget.playerTyreCompound,
+                        referenceTyreCompound: widget.referenceTyreCompound,
                       ),
                     ),
                     ValueListenableBuilder<double>(
@@ -360,7 +365,7 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
       track: _track3d ??= ReplayTrack3d.build(_circuit),
       cars: [
         (car: _player, color: playerColor, opacity: 1, tyre: (_) => _playerTyre),
-        if (ghost != null) (car: ghost, color: ghostColor, opacity: kGhostCarOpacity, tyre: null),
+        if (ghost != null) (car: ghost, color: ghostColor, opacity: kGhostCarOpacity, tyre: (_) => _ghostTyre),
       ],
       camera: camera,
       time: _time,
@@ -380,6 +385,7 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
         playerColor: playerColor,
         ghostColor: ghostColor,
         playerTyre: _playerTyre,
+        ghostTyre: _ghostTyre,
       );
     }
     return GhostReplay3dPainter(
@@ -391,7 +397,14 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
       playerColor: playerColor,
       ghostColor: ghostColor,
       playerTyre: _playerTyre,
+      ghostTyre: _ghostTyre,
     );
+  }
+
+  /// 비교 랩 타이어 컴파운드 색. 모르면 null.
+  Color? get _ghostTyre {
+    final compound = widget.referenceTyreCompound;
+    return compound == null ? null : tyreColorOf(compound);
   }
 
   /// 이 랩 타이어 컴파운드 색. 모르면 null.

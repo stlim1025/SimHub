@@ -111,6 +111,7 @@ class TelemetryTab extends ConsumerWidget {
                   ? (otherCarColor == null ? null : LapTeam(name: otherCarName, color: otherCarColor))
                   : comparison?.team,
               playerTyreCompound: visualCompoundName(detail.car?.visualTyreCompound),
+              referenceTyreCompound: otherCar ? null : visualCompoundName(comparison?.visualTyreCompound),
               realTrack: ref.watch(trackWidthsProvider).valueOrNull?[lap.trackName],
               trackSamples: ref.watch(trackGeometryProvider((trackId: detail.trackId, gameCode: lap.gameCode))).valueOrNull,
               estimatedTrackWidthM: kEstimatedTrackWidthsM[lap.trackName],
@@ -174,6 +175,7 @@ class TelemetryCharts extends StatefulWidget {
     this.playerTeam,
     this.referenceTeam,
     this.playerTyreCompound,
+    this.referenceTyreCompound,
     this.realTrack,
     this.trackSamples,
     this.estimatedTrackWidthM,
@@ -205,6 +207,9 @@ class TelemetryCharts extends StatefulWidget {
   /// 고스트 재생 서킷에 쓰는 이 트랙의 실측 중심선·폭. 없으면 주행 기록으로 추정한다.
   /// 이 랩 타이어(보이는 컴파운드 이름, 고스트 재생 차 타이어 색). 모르면 null.
   final String? playerTyreCompound;
+
+  /// 비교 랩 타이어(보이는 컴파운드 이름). 모르면 null.
+  final String? referenceTyreCompound;
 
   final TrackWidthProfile? realTrack;
 
@@ -330,6 +335,7 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
                 playerSectors: widget.sectors,
                 referenceSectors: widget.reference == null ? const [] : widget.referenceSectors,
                 playerTyreCompound: widget.playerTyreCompound,
+                referenceTyreCompound: widget.reference == null ? null : widget.referenceTyreCompound,
                 realTrack: widget.realTrack,
                 trackSamples: widget.trackSamples,
                 estimatedTrackWidthM: widget.estimatedTrackWidthM,

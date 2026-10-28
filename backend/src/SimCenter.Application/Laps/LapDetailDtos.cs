@@ -102,7 +102,8 @@ public sealed record LapComparisonDto(
     string? DisplayName,
     TeamRefDto? Team,
     string SessionType,
-    IReadOnlyList<string> AppliedFilters);
+    IReadOnlyList<string> AppliedFilters,
+    int? VisualTyreCompound = null);
 
 /// <summary>
 /// 랩 트레이스(<c>GET /me/laps/{lapId}/trace</c>, 15 §4.2): 거리 <see cref="ResolutionM"/>m 간격 표본 7채널, 모두 <see cref="SampleCount"/> 길이.

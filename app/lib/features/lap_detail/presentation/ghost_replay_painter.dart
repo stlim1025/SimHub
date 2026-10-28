@@ -178,6 +178,7 @@ class GhostReplayPainter extends CustomPainter {
     required this.playerColor,
     required this.ghostColor,
     this.playerTyre,
+    this.ghostTyre,
   }) : super(repaint: time);
 
   final LapReplay player;
@@ -193,6 +194,9 @@ class GhostReplayPainter extends CustomPainter {
 
   /// 내 차 타이어 컴파운드 색. null이면 테두리 없음.
   final Color? playerTyre;
+
+  /// 고스트 타이어 옆 띠 색(비교 랩 컴파운드). 모르면 null.
+  final Color? ghostTyre;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -224,6 +228,7 @@ class GhostReplayPainter extends CustomPainter {
         opacity: kGhostCarOpacity,
         outline: AppColors.replayRoadEdge.withValues(alpha: _ghostOutlineOpacity),
         outlineWidth: _ghostOutlineWidthM,
+        tyre: ghostTyre,
       );
     }
     _paintCar(canvas, frame, body: playerColor, outline: AppColors.replayCarDark, tyre: playerTyre);
@@ -287,5 +292,6 @@ class GhostReplayPainter extends CustomPainter {
       oldDelegate.time != time ||
       oldDelegate.playerColor != playerColor ||
       oldDelegate.ghostColor != ghostColor ||
-      oldDelegate.playerTyre != playerTyre;
+      oldDelegate.playerTyre != playerTyre ||
+      oldDelegate.ghostTyre != ghostTyre;
 }

@@ -233,6 +233,7 @@ class ComparisonLap {
     this.team,
     this.sessionType,
     this.appliedFilters = const {},
+    this.visualTyreCompound,
   });
 
   final String lapId;
@@ -245,6 +246,9 @@ class ComparisonLap {
   final String? displayName;
   final LapTeam? team;
   final String? sessionType;
+
+  /// 비교 랩이 끝날 때 끼고 있던 보이는 컴파운드(게임 원래 번호, [CarSnapshot.visualTyreCompound]와 같다). 모르면 null.
+  final int? visualTyreCompound;
 
   /// 서버가 실제로 적용한 필터(이 랩의 값을 모르면 빠진다).
   final Set<LapCompareFilter> appliedFilters;
@@ -275,6 +279,7 @@ class ComparisonLap {
       displayName: _stringOrNull(map['displayName']),
       team: LapTeam.fromJsonOrNull(map['team']),
       sessionType: _stringOrNull(map['sessionType']),
+      visualTyreCompound: _intOrNull(map['visualTyreCompound']),
       appliedFilters: {
         if (rawFilters is List)
           for (final filter in rawFilters) ?LapCompareFilter.parse(filter),

@@ -90,6 +90,7 @@ class GhostReplayHud extends StatelessWidget {
     required this.thisLapLabel,
     required this.referenceLabel,
     this.tyreCompound,
+    this.referenceTyreCompound,
   });
 
   final double elapsedMs;
@@ -105,6 +106,9 @@ class GhostReplayHud extends StatelessWidget {
 
   /// 이 랩 타이어(보이는 컴파운드 이름). 모르면 표시하지 않는다.
   final String? tyreCompound;
+
+  /// 비교 랩 타이어(보이는 컴파운드 이름). 모르면 표시하지 않는다.
+  final String? referenceTyreCompound;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -173,7 +177,7 @@ class GhostReplayHud extends StatelessWidget {
     required bool isPlayer,
   }) {
     final gap = gapMs;
-    final compound = isPlayer ? tyreCompound : null;
+    final compound = isPlayer ? tyreCompound : referenceTyreCompound;
     final battery = frame.batteryPercent;
     final flow = frame.ersFlowKw;
     return Container(
