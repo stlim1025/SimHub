@@ -55,9 +55,13 @@ class ReplayThreeView extends StatefulWidget {
     required this.time,
     required this.fallback,
     this.overlay,
+    this.grid,
   });
 
   final ReplayTrack3d track;
+
+  /// 실제 출발 그리드 칸(모르면 null — 출발선 뒤로 일정한 간격으로 그린다).
+  final List<ReplayGridSlot>? grid;
   final List<ReplaySceneCar> cars;
   final ReplayCamera camera;
   final ValueListenable<double> time;
@@ -87,7 +91,7 @@ class _ReplayThreeViewState extends State<ReplayThreeView> {
       oldWidget.time.removeListener(_render);
       widget.time.addListener(_render);
     }
-    if (!identical(oldWidget.track, widget.track)) {
+    if (!identical(oldWidget.track, widget.track) || !identical(oldWidget.grid, widget.grid)) {
       _sendTrack();
     }
     _render();
@@ -131,7 +135,7 @@ class _ReplayThreeViewState extends State<ReplayThreeView> {
     if (scene == null) {
       return;
     }
-    final mesh = buildReplayTrackMesh(widget.track);
+    final mesh = buildReplayTrackMesh(widget.track, grid: widget.grid);
     final ground = mesh.groundColor;
     scene.setTrack(
       [for (final l in mesh.layers) l.surface.index.toJS].toJS,

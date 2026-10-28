@@ -17,9 +17,13 @@ class ReplayThreeView extends StatelessWidget {
     required this.time,
     required this.fallback,
     this.overlay,
+    this.grid,
   });
 
   final ReplayTrack3d track;
+
+  /// 실제 출발 그리드 칸(모르면 null).
+  final List<ReplayGridSlot>? grid;
   final List<ReplaySceneCar> cars;
   final ReplayCamera camera;
   final ValueListenable<double> time;

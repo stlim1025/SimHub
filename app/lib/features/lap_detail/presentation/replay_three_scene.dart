@@ -35,6 +35,9 @@ const double _gridLegLengthM = 1.2;
 const double _gridLegWidthM = 0.15;
 const double _gridSideRatio = 0.45;
 
+/// 실제 출발 위치로 칸을 그릴 때 앞 가로선을 차 기준점에서 앞으로 띄우는 거리(m, 앞바퀴 바로 앞).
+const double _gridBarAheadM = 2.1;
+
 /// 방호벽 위 펜스 높이(m).
 const double _fenceHeightM = 2.6;
 
@@ -97,6 +100,9 @@ class ReplayTrackMesh {
 /// 그릴 차 한 대: 움직임·몸체 색·불투명도(고스트는 반투명)·타이어 옆 띠 색(컴파운드, 모르면 null).
 typedef ReplaySceneCar = ({ReplayCar car, Color color, double opacity, Color? tyre});
 
+/// 실제 출발 그리드 한 칸: 소등 전 차 기준점(월드 X·Z, m)과 진행 방향(라디안, 차 자세와 같은 기준).
+typedef ReplayGridSlot = ({double x, double z, double heading});
+
 /// 메시 꼭짓점 하나: 월드 위치와 무늬 좌표(m).
 typedef _Vertex = ({double x, double y, double z, double u, double v});
 
@@ -109,8 +115,11 @@ class _LayerBuilder {
   final uvs = <double>[];
   final colors = <double>[];
 
+  /// 네 꼭짓점 사각형. 바닥 면은 한쪽 면만 그리므로(three.js 앞면 = 위에서 볼 때 반시계) 법선이 아래를 향하면 순서를 뒤집는다 —
+  /// 왼쪽·오른쪽 가장자리를 같은 순서로 쌓아도 양쪽 다 보이게.
   void quad(_Vertex a, _Vertex b, _Vertex c, _Vertex d, Color color) {
-    for (final p in [a, b, c, a, c, d]) {
+    final normalY = (b.z - a.z) * (c.x - a.x) - (b.x - a.x) * (c.z - a.z);
+    for (final p in normalY < 0 ? [a, c, b, a, d, c] : [a, b, c, a, c, d]) {
       positions
         ..add(p.x)
         ..add(p.y)
@@ -136,7 +145,8 @@ class _LayerBuilder {
 /// [track]을 three.js 메시로(순수 계산): 방호벽 사이 바닥(잔디), 그래블, 아스팔트, 흰 가장자리 선·출발선, 연석(살짝 솟은 단면),
 /// 방호벽, 그 위 펜스, 피트 레인. 층마다 조금씩 띄워 겹친 면이 깜빡이지 않게 한다.
 /// 무늬 좌표 U는 중심선을 따라 잰 거리, V는 중심선에서 잰 옆 거리(벽·펜스는 높이)라 무늬가 길을 따라 흐른다.
-ReplayTrackMesh buildReplayTrackMesh(ReplayTrack3d track) {
+/// 출발 그리드는 [grid](실제 출발 위치)가 있으면 그 자리에, 없으면 출발선 뒤로 일정한 간격으로 그린다.
+ReplayTrackMesh buildReplayTrackMesh(ReplayTrack3d track, {List<ReplayGridSlot>? grid}) {
   final circuit = track.circuit;
   final center = circuit.center;
   final n = center.length;
@@ -275,17 +285,11 @@ ReplayTrackMesh buildReplayTrackMesh(ReplayTrack3d track) {
     );
   }
 
-  // 출발 그리드: 출발선 뒤로 좌우 번갈아 칸마다 앞 가로선과 뒤로 뻗은 옆 다리 두 개(ㄷ 모양).
-  final lapLength = circuit.closed ? along[n - 1] + (center[0] - center[n - 1]).distance : along[n - 1];
-  for (var k = 0; k < _gridSlots; k++) {
-    final spot = _pointAlong(circuit, along, lapLength, along[start] - _gridFirstSlotM - k * _gridSlotGapM);
-    if (spot == null) {
-      break;
-    }
-    final (:i, :at, :forward, :leftward, :halfWidth) = spot;
-    final slot = at + leftward * (halfWidth * _gridSideRatio * (k.isEven ? 1 : -1));
-    final u = along[i];
-    _Vertex g(Offset p) => (x: p.dx, y: circuit.elevations[i] + _edgeLineLiftM, z: p.dy, u: u, v: 0);
+  // 출발 그리드 칸 하나: 앞 가로선 가운데 [bar], 진행 방향 [forward]. 앞 가로선과 뒤로 뻗은 옆 다리 두 개(ㄷ 모양).
+  // 높이는 차를 올리는 노면 높이와 같은 방식으로 꼭짓점마다 잰다(오르내리는 곳에서 아스팔트 밑으로 묻히지 않게).
+  void gridSlot(Offset bar, Offset forward) {
+    final leftward = Offset(forward.dy, -forward.dx);
+    _Vertex g(Offset p) => (x: p.dx, y: track.locate(p).elevation + _edgeLineLiftM, z: p.dy, u: 0, v: 0);
     void strip(Offset from, Offset to, double width) {
       final d = to - from;
       final side = Offset(-d.dy, d.dx) / d.distance * (width / 2);
@@ -293,10 +297,29 @@ ReplayTrackMesh buildReplayTrackMesh(ReplayTrack3d track) {
     }
 
     const halfBar = _gridBarWidthM / 2;
-    strip(slot - leftward * halfBar, slot + leftward * halfBar, _gridBarDepthM);
+    strip(bar - leftward * halfBar, bar + leftward * halfBar, _gridBarDepthM);
     for (final s in const [1.0, -1.0]) {
-      final end = slot + leftward * (s * (halfBar - _gridLegWidthM / 2));
+      final end = bar + leftward * (s * (halfBar - _gridLegWidthM / 2));
       strip(end, end - forward * _gridLegLengthM, _gridLegWidthM);
+    }
+  }
+
+  if (grid != null && grid.isNotEmpty) {
+    // 실제 출발 위치를 알면 차마다 그 자리에, 앞 가로선은 앞바퀴 바로 앞에.
+    for (final slot in grid) {
+      final forward = Offset(math.cos(slot.heading), math.sin(slot.heading));
+      gridSlot(Offset(slot.x, slot.z) + forward * _gridBarAheadM, forward);
+    }
+  } else {
+    // 모르면 출발선 뒤로 좌우 번갈아 일정한 간격으로.
+    final lapLength = circuit.closed ? along[n - 1] + (center[0] - center[n - 1]).distance : along[n - 1];
+    for (var k = 0; k < _gridSlots; k++) {
+      final spot = _pointAlong(circuit, along, lapLength, along[start] - _gridFirstSlotM - k * _gridSlotGapM);
+      if (spot == null) {
+        break;
+      }
+      final (i: _, :at, :forward, :leftward, :halfWidth) = spot;
+      gridSlot(at + leftward * (halfWidth * _gridSideRatio * (k.isEven ? 1 : -1)), forward);
     }
   }
 

@@ -88,6 +88,9 @@ public static class HighlightsBuilder
     private const int PitIn = 1;
     private const int PitOut = 2;
 
+    /// <summary>두 차 가운데 하나라도 피트 인·아웃 표시가 이 앞뒤(ms) 안에 있으면 그 추월은 피트 출입으로 순위만 바뀐 것으로 본다(합류·진입 직전 추월 포함).</summary>
+    private const int PitOvertakeMarginMs = 8_000;
+
     /// <summary>추월한 차·당한 차 표시를 짝지을 시간 차·같은 두 차의 장면을 하나로 볼 간격.</summary>
     private const int PairMs = 400;
     private const int SamePairMergeMs = 12_000;
@@ -168,9 +171,23 @@ public static class HighlightsBuilder
             HighlightKind.Start, start, leaderAtStart, null, StartScore, lightsOutMs is null ? 0 : RaceGrid.HoldMs, StartWindowMs);
         scenes.Add(startScene);
 
-        // 차마다 표본별 피트 인·아웃(추월 거르기·클립에 싣기).
+        // 차마다 표본별 피트 인·아웃(추월 거르기·클립에 싣기). 추월은 그 순간 앞뒤로 피트 표시가 있으면 뺀다.
         var pitPhases = timeline.Cars.ToDictionary(kv => kv.Key, kv => PitPhases(kv.Value));
-        bool Pitting(int car, int timeMs) => pitPhases[car][IndexAt(timeline.Cars[car], timeMs)] != PitNone;
+        bool Pitting(int car, int timeMs)
+        {
+            var samples = timeline.Cars[car];
+            var phases = pitPhases[car];
+            for (var i = IndexAt(samples, timeMs - PitOvertakeMarginMs); i < samples.Count && samples[i].TimeMs <= timeMs + PitOvertakeMarginMs; i++)
+            {
+                if (phases[i] != PitNone)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         scenes.AddRange(Overtakes(timeline, flags, start, position, Rank, Pitting));
         scenes.AddRange(Contacts(timeline, player, Rank));
 
@@ -238,6 +255,13 @@ public static class HighlightsBuilder
         foreach (var (time, car, sample) in overtook)
         {
             if (time < start + StartWindowMs || sample.InPit || pitting(car, time) || flags.Any(f => time >= f.FromMs && time <= f.ToMs))
+            {
+                continue;
+            }
+
+            // 추월당한 차가 피트에 드나드는 중이었으면(짝 후보 중 가장 가까운 차 기준) 진짜 추월이 아니다.
+            if (overtaken.Any(o => o.Car != car && Math.Abs(o.Time - time) <= PairMs && Distance(o.Sample, sample) <= OvertakeMaxGapM
+                                   && (o.Sample.InPit || pitting(o.Car, o.Time))))
             {
                 continue;
             }

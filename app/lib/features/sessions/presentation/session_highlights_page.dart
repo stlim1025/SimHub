@@ -17,6 +17,7 @@ import '../../lap_detail/domain/lap_detail_models.dart';
 import '../../lap_detail/presentation/ghost_replay.dart';
 import '../../lap_detail/presentation/ghost_replay_3d_painter.dart';
 import '../../lap_detail/presentation/replay_circuit.dart';
+import '../../lap_detail/presentation/replay_three_scene.dart';
 import '../../lap_detail/presentation/replay_three_view.dart';
 import '../../tracks/application/track_widths_provider.dart';
 import '../../tracks/application/tracks_providers.dart';
@@ -74,6 +75,37 @@ const double _singleRowControlsMinWidth = 760;
 /// 재생 화면 폭이 이보다 넓으면 큰 화면 높이.
 const double _wideViewMinWidth = 700;
 const double _microsecondsPerMs = 1000;
+
+/// 출발 클립 첫 순간 이만큼(ms) 뒤까지 이 거리(m) 안에 머문 차를 그리드에 선 차로 본다.
+const double _gridStillMs = 1000;
+const double _gridStillM = 0.5;
+
+/// 출발 클립(소등 전 그리드부터 시작할 때)에서 서 있는 차들의 자리 = 실제 그리드 칸. 하나도 없으면 null.
+List<ReplayGridSlot>? _startGrid(RaceHighlights highlights) {
+  final slots = <int, ReplayGridSlot>{};
+  for (final clip in [...highlights.race, ...highlights.mine]) {
+    if (clip.kind != HighlightKind.start) {
+      continue;
+    }
+    final t = clip.startMs.toDouble();
+    for (final track in clip.cars) {
+      if (slots.containsKey(track.carIndex)) {
+        continue;
+      }
+      final path = TimedCarPath(track);
+      if (!path.visibleAt(t)) {
+        continue;
+      }
+      final now = path.frameAt(t);
+      final later = path.frameAt(t + _gridStillMs);
+      if ((Offset(now.x, now.z) - Offset(later.x, later.z)).distance > _gridStillM) {
+        continue;
+      }
+      slots[track.carIndex] = (x: now.x, z: now.z, heading: now.heading);
+    }
+  }
+  return slots.isEmpty ? null : slots.values.toList();
+}
 
 /// 레이스 하이라이트 화면: 내 하이라이트·레이스 하이라이트 두 묶음을 3D로 이어 재생한다.
 /// 차 위에는 드라이버 이름, 세이프티카·버추얼·적기 구간에는 깃발 배너를 띄운다.
@@ -214,6 +246,7 @@ class HighlightsPlayer extends StatefulWidget {
 
 class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerProviderStateMixin {
   late final ReplayTrack3d _track = ReplayTrack3d.build(_buildCircuit());
+  late final List<ReplayGridSlot>? _grid = _startGrid(widget.highlights);
   late HighlightReel _reel = widget.highlights.mine.isEmpty ? HighlightReel.race : HighlightReel.mine;
   ReplayCamera _camera = ReplayCamera.chase;
   int _index = 0;
@@ -413,6 +446,7 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
     }
     return ReplayThreeView(
       track: _track,
+      grid: _grid,
       cars: [
         (car: focus, color: focusColor, opacity: 1, tyre: null),
         for (final other in _field) (car: other.car, color: other.color, opacity: 1, tyre: null),

@@ -28,6 +28,18 @@ LapTrace _circleLap() {
   );
 }
 
+/// [layer]의 [vertex]번 꼭짓점부터 사각형 하나(삼각형 둘, 6꼭짓점)의 가운데(수평 X·Z).
+Offset _quadCenter(ReplayTrackLayer layer, int vertex) {
+  final p = layer.positions;
+  var x = 0.0;
+  var z = 0.0;
+  for (var k = 0; k < 6; k++) {
+    x += p[(vertex + k) * 3];
+    z += p[(vertex + k) * 3 + 2];
+  }
+  return Offset(x / 6, z / 6);
+}
+
 /// 늘 숨는 차(기록이 끊긴 구간을 흉내 낸다).
 class _HiddenCar implements ReplayCar {
   _HiddenCar(this.inner);
@@ -80,16 +92,35 @@ void main() {
 
       expect(line.vertexCount, withoutGrid + 22 * 3 * 6);
       // 첫 두 칸의 가로선 가운데는 중심선 양쪽에 있다(옆 거리 부호가 다르다).
-      Offset barCenter(int slot) {
-        final o = (withoutGrid + slot * 3 * 6) * 3;
-        final p = line.positions;
-        return Offset((p[o] + p[o + 3] + p[o + 6] + p[o + 15]) / 4, (p[o + 2] + p[o + 5] + p[o + 8] + p[o + 17]) / 4);
-      }
-
-      final first = barCenter(0).distance;
-      final second = barCenter(1).distance;
+      final first = _quadCenter(line, withoutGrid + 0 * 3 * 6).distance;
+      final second = _quadCenter(line, withoutGrid + 1 * 3 * 6).distance;
       expect(first, isNot(closeTo(100, 0.5)));
       expect((first - 100).sign, isNot((second - 100).sign));
+    });
+
+    test('실제 출발 위치를 주면 차마다 그 앞바퀴 바로 앞에 칸을 노면 높이로 그린다', () {
+      const withoutGrid = 6;
+      final line = buildReplayTrackMesh(track, grid: [(x: 100, z: 0, heading: math.pi / 2)]).layer(ReplaySurface.line)!;
+
+      expect(line.vertexCount, withoutGrid + 3 * 6);
+      final bar = _quadCenter(line, withoutGrid);
+      expect(bar.dx, closeTo(100, 0.01));
+      expect(bar.dy, closeTo(2.1, 0.01));
+      expect(line.positions[withoutGrid * 3 + 1], closeTo(track.locate(bar).elevation + 0.05, 1e-3));
+    });
+
+    test('바닥 면(잔디·그래블·아스팔트·선·연석)은 왼쪽·오른쪽 모두 위를 향한다(한쪽 면만 그리므로 뒤집히면 안 보인다)', () {
+      for (final surface in [ReplaySurface.ground, ReplaySurface.gravel, ReplaySurface.asphalt, ReplaySurface.line, ReplaySurface.kerb]) {
+        final layer = mesh.layer(surface);
+        if (layer == null) {
+          continue;
+        }
+        final p = layer.positions;
+        for (var o = 0; o < p.length; o += 9) {
+          final normalY = (p[o + 5] - p[o + 2]) * (p[o + 6] - p[o]) - (p[o + 3] - p[o]) * (p[o + 8] - p[o + 2]);
+          expect(normalY, greaterThanOrEqualTo(0), reason: '${surface.name} triangle ${o ~/ 9}');
+        }
+      }
     });
 
     test('아스팔트 무늬 좌표: U는 중심선을 따라 늘고, V는 옆 거리(왼쪽 +, 오른쪽 −)', () {

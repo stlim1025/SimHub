@@ -147,6 +147,25 @@ public sealed class HighlightsBuilderTests
     }
 
     [Fact]
+    public void Overtake_RightBeforeOrAfterAPitStop_IsIgnored()
+    {
+        // 1번 차가 33~40초 피트 레인(새 에이전트 pitStatus) — 30초 추월(진입 직전)과 44초 추월(합류 직후) 모두 피트 때문이다.
+        const byte pitting = 1 << 3;
+        var samples = Race(
+            new Dictionary<byte, double> { [1] = 30, [2] = 20 },
+            statusAt: (car, t) => car == 1 && t is >= 33_000 and <= 40_000 ? pitting : (byte)0,
+            marks:
+            [
+                new Mark(30_000, 2, Flags2: RaceSample.OvertookFlag), new Mark(30_000, 1, Flags2: RaceSample.OvertakenFlag),
+                new Mark(44_000, 1, Flags2: RaceSample.OvertookFlag), new Mark(44_000, 2, Flags2: RaceSample.OvertakenFlag),
+            ]);
+
+        var result = Build(samples);
+
+        Assert.DoesNotContain(result.Race, c => c.Kind == nameof(HighlightKind.Overtake));
+    }
+
+    [Fact]
     public void Collision_WithPlayer_IsInBothReels_FocusedOnPlayerInMine()
     {
         var samples = Race(
