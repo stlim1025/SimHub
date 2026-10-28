@@ -55,12 +55,15 @@ abstract interface class ReplayCar {
 /// 위치가 있는 랩 트레이스를 시간으로 따라가는 재생기(순수 계산). [trace]는 `hasPositions`여야 한다.
 /// 표본은 거리 간격이고 표본마다 랩 시간이 있으므로(거리에 따라 단조 증가) 시간 → 거리를 이분 탐색으로 찾고 앞뒤 표본을 선형 보간한다.
 class LapReplay implements ReplayCar {
-  LapReplay(this.trace) : assert(trace.hasPositions, '위치가 있는 트레이스만 재생한다.');
+  LapReplay(this.trace, {this.timeOffsetMs = 0}) : assert(trace.hasPositions, '위치가 있는 트레이스만 재생한다.');
 
   final LapTrace trace;
 
-  /// 랩을 다 도는 데 걸린 시간(ms) = 마지막 표본의 시간.
-  int get durationMs => trace.timeMs.last;
+  /// 재생 시계에 더해 이 랩의 시간으로 읽는 값(ms). 고스트를 어느 지점에서 이 랩과 나란히 다시 출발시킬 때 쓴다(기본 0 = 같은 랩 시계).
+  final double timeOffsetMs;
+
+  /// 재생 시계로 본 이 랩이 끝나는 시각(ms) = 마지막 표본의 시간 − [timeOffsetMs].
+  int get durationMs => (trace.timeMs.last - timeOffsetMs).round();
 
   /// 경과 시간 [elapsedMs]의 표본 위치(소수 표본 번호, 0 ~ length−1). 시작 전은 0, 끝난 뒤는 마지막 표본.
   double samplePositionAt(double elapsedMs) {
@@ -109,7 +112,7 @@ class LapReplay implements ReplayCar {
 
   @override
   double headingAt(double elapsedMs, {required double lookM}) =>
-      headingAtDistance(samplePositionAt(elapsedMs) * trace.resolutionM, lookM: lookM);
+      headingAtDistance(samplePositionAt(elapsedMs + timeOffsetMs) * trace.resolutionM, lookM: lookM);
 
   @override
   bool visibleAt(double elapsedMs) => true;
@@ -117,7 +120,7 @@ class LapReplay implements ReplayCar {
   /// 경과 시간 [elapsedMs]의 상태. 랩을 끝냈으면 결승점에 멈춰 있다([ReplayFrame.finished]).
   @override
   ReplayFrame frameAt(double elapsedMs) {
-    final position = samplePositionAt(elapsedMs);
+    final position = samplePositionAt(elapsedMs + timeOffsetMs);
     final distance = position * trace.resolutionM;
     final lower = position.floor();
     final point = positionAtDistance(distance);
@@ -132,7 +135,7 @@ class LapReplay implements ReplayCar {
       rpm: _lerpAt(trace.rpm, position).round(),
       throttle: _lerpAt(trace.throttle, position).round(),
       brake: _lerpAt(trace.brake, position).round(),
-      finished: elapsedMs >= durationMs,
+      finished: elapsedMs + timeOffsetMs >= trace.timeMs.last,
       batteryPercent: trace.hasErs ? (_lerpAt(trace.ersStoreJ, position) / kErsStoreMaxJ * _percent).clamp(0.0, _percent) : null,
       ersFlowKw: trace.hasErs ? _ersFlowKwAt(lower) : null,
     );

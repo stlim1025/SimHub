@@ -226,10 +226,30 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
     }
   }
 
-  /// 이 랩이 [distanceM](랩 거리)에 있던 순간으로 옮긴다(트레이스 밖이면 처음·끝).
+  /// 이 랩이 [distanceM](랩 거리)에 있던 순간으로 옮기고, 고스트도 같은 지점에서 나란히 다시 출발시킨다
+  /// (두 랩이 그 지점에 닿은 시간 차만큼 고스트 시계를 맞춘다). 트레이스 밖이면 처음·끝.
   void _seekToDistance(double distanceM) {
     final d = distanceM.clamp(0.0, widget.trace.lengthM);
-    _seek((interpolateTimeMs(widget.trace, d) ?? 0).clamp(0.0, _durationMs.toDouble()));
+    final playerMs = interpolateTimeMs(widget.trace, d) ?? 0;
+    final reference = widget.reference;
+    final referenceMs = reference == null ? null : interpolateTimeMs(reference, d);
+    _alignGhost(referenceMs == null ? 0 : referenceMs - playerMs);
+    _seek(playerMs.clamp(0.0, _durationMs.toDouble()));
+  }
+
+  /// 고스트 시계 보정([LapReplay.timeOffsetMs])을 바꾼다. 0이면 두 랩이 같은 랩 시계로 달린다.
+  void _alignGhost(double offsetMs) {
+    final ghost = _ghost;
+    if (ghost == null || ghost.timeOffsetMs == offsetMs) {
+      return;
+    }
+    setState(() => _ghost = LapReplay(ghost.trace, timeOffsetMs: offsetMs));
+  }
+
+  /// 재생 막대를 직접 옮기면 고스트도 같은 랩 시계로 돌아간다.
+  void _scrub(double elapsedMs) {
+    _alignGhost(0);
+    _seek(elapsedMs);
   }
 
   /// 코너 태그를 누르면: 그 코너 시작 [kReplayCornerLeadM] 앞에서.
@@ -261,14 +281,14 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
         return;
       }
       if (_time.value >= _durationMs) {
-        _seek(0);
+        _scrub(0);
       }
       _lastTick = Duration.zero;
       _ticker.start();
     });
   }
 
-  void _restart() => _seek(0);
+  void _restart() => _scrub(0);
 
   @override
   Widget build(BuildContext context) {
@@ -386,7 +406,9 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
     if (ghost == null) {
       return null;
     }
-    return replayGapMs(_player.trace, ghost.trace, _player.frameAt(elapsedMs).distanceM);
+    // 고스트를 어느 지점에서 다시 출발시켰으면 그 지점부터 벌어진 차이만.
+    final gap = replayGapMs(_player.trace, ghost.trace, _player.frameAt(elapsedMs).distanceM);
+    return gap == null ? null : gap + ghost.timeOffsetMs;
   }
 
   /// 재생·처음부터·배속·시점, 그리고 시간 막대. 폭이 좁으면 버튼을 줄 바꿔 감싸고 시간 막대를 아랫줄에 둔다.
@@ -430,7 +452,7 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
         inactiveColor: palette.border,
         // 막대 끝을 정해 둔 여백에 맞춰 코너 태그가 같은 자리에 선다.
         padding: const EdgeInsets.symmetric(horizontal: _scrubInset),
-        onChanged: _seek,
+        onChanged: _scrub,
       ),
     );
     final scrub = widget.corners.isEmpty

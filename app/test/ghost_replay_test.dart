@@ -497,6 +497,45 @@ void main() {
       expect(cursor.value, closeTo(190, 0.5));
     });
 
+    testWidgets('코너로 옮기면 고스트가 그 지점에서 나란히 다시 출발하고, 막대를 직접 옮기면 랩 시계로 돌아간다', (t) async {
+      t.view
+        ..physicalSize = const Size(1000, 1400)
+        ..devicePixelRatio = 1;
+      addTearDown(t.view.reset);
+      final seek = GhostReplaySeek();
+      await t.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: GhostReplay(
+              trace: _player,
+              reference: _reference,
+              cursor: ValueNotifier<double?>(null),
+              units: UnitSystem.metric,
+              height: 300,
+              thisLapLabel: '이 랩',
+              referenceLabel: '내 최고 랩',
+              seek: seek,
+            ),
+          ),
+        ),
+      ));
+
+      // 150m: 이 랩 3.0초, 비교 랩 2.7초 — 같은 랩 시계면 0.3초 뒤처져 있다.
+      seek.seekToDistance(150);
+      await t.pump();
+      expect(_textOf(t, 'ghost-replay-gap'), formatReplayGap(0));
+
+      t.widget<Slider>(find.byKey(const ValueKey('ghost-replay-scrub'))).onChanged!(3000);
+      await t.pump();
+      expect(_textOf(t, 'ghost-replay-gap'), formatReplayGap(300));
+    });
+
+    test('LapReplay 시계 보정: 보정만큼 앞선 시간의 자리를 보인다', () {
+      final shifted = LapReplay(_reference, timeOffsetMs: 450);
+      expect(shifted.frameAt(0).distanceM, closeTo(LapReplay(_reference).frameAt(450).distanceM, 1e-9));
+      expect(shifted.durationMs, _reference.timeMs.last - 450);
+    });
+
     testWidgets('375px 폭에서도 HUD·조작 줄이 넘치지 않는다', (t) async {
       await _pumpCharts(t, trace: _player, reference: _reference, size: const Size(375, 2400));
 

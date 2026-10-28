@@ -92,9 +92,10 @@ List<String> ersFeedbackLines(ErsAnalysis ers, {AnalysisFocus focus = AnalysisFo
     '랩 시작 ${_pct(ers.startFraction)} → 끝 ${_pct(ers.endFraction)}'
         '${refStart == null || refEnd == null ? '' : ' (기준 ${_pct(refStart)} → ${_pct(refEnd)})'}',
     if (ers.emptyAtM != null)
-      '${ers.emptyNear?.label ?? '출발 직후'} 지나서 배터리가 바닥났어요 → 앞에서 배포를 아껴 나눠 쓰세요',
+      '${ers.emptyNear?.label ?? '출발 직후'} 지나서 배터리가 바닥났어요 → 앞 구간에서 배터리를 아껴 랩 전체에 나눠 쓰세요',
     for (final s in ers.underusedStraights)
-      '${_straightName(s)} 직선에서 배터리를 ${_kj(-s.deployDiffJ!)} 덜 써 ${formatDeltaSeconds(s.lossS!)} 잃었어요 → 이 직선에 배포하세요',
+      '${_straightName(s)} 직선에서 기준 랩보다 배터리를 ${_kj(-s.deployDiffJ!)} 덜 써 ${formatDeltaSeconds(s.lossS!)} 잃었어요 '
+            '→ 이 직선에서는 배터리를 더 쓰세요(ERS 모드를 올리거나 오버테이크 버튼)',
   ];
   if (focus != AnalysisFocus.battery || ers.straights.isEmpty) {
     return lines;
@@ -103,11 +104,11 @@ List<String> ersFeedbackLines(ErsAnalysis ers, {AnalysisFocus focus = AnalysisFo
   final best = ers.straights.reduce((a, b) => a.lengthM / a.entryKph >= b.lengthM / b.entryKph ? a : b);
   for (final s in ers.straights) {
     if (!identical(s, best) && s.deployJ >= _notableDeployJ && (s.lengthM < _shortStraightM || s.entryKph >= _fastEntryKph)) {
-      lines.add('${_straightName(s)} 직선(${_meters(s.lengthM)}, ${s.entryKph.round()}km/h에서 시작)에 ${_kj(s.deployJ)}를 써요 '
+      lines.add('${_straightName(s)} 직선(${_meters(s.lengthM)}, ${s.entryKph.round()}km/h에서 시작)에서 배터리를 ${_kj(s.deployJ)} 써요 '
           '→ 짧거나 이미 빠른 구간이라 효과가 작아요, 아껴서 ${_straightName(best)} 직선에 쓰세요');
     }
   }
-  lines.add('배포는 ${_straightName(best)} 직선(${_meters(best.lengthM)}, ${best.entryKph.round()}km/h에서 시작)이 가장 효과적이에요 '
+  lines.add('배터리는 ${_straightName(best)} 직선(${_meters(best.lengthM)}, ${best.entryKph.round()}km/h에서 시작)에서 쓰는 게 가장 효과적이에요 '
       '— 느린 탈출에서 긴 직선으로 나갈 때 시간 이득이 커요');
   final netUse = ers.startFraction - ers.endFraction;
   final refNet = refStart == null || refEnd == null ? null : refStart - refEnd;

@@ -165,7 +165,7 @@ void main() {
     final straight = ers.straights.single; // 코너 뒤 ~ 결승선 + 출발선 ~ 코너 앞
     expect(straight.lengthM, closeTo(1000 - (straight.after!.endM - straight.before!.startM), 1));
     expect(straight.entryKph, lessThan(150));
-    expect(ersFeedbackLines(ers, focus: AnalysisFocus.battery).last, startsWith('배포는 T1–T1 직선'));
+    expect(ersFeedbackLines(ers, focus: AnalysisFocus.battery).last, startsWith('배터리는 T1–T1 직선'));
     expect(ersFeedbackLines(ers), hasLength(1)); // 최대 속도 기준은 잔량만
   });
 
