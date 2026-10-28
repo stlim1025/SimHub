@@ -8,7 +8,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:simcenter_app/core/theme/app_colors.dart';
 import 'package:simcenter_app/features/auth/domain/user_preferences.dart';
 import 'package:simcenter_app/features/lap_detail/domain/ghost_replay.dart';
+import 'package:simcenter_app/features/lap_detail/domain/lap_corners.dart';
 import 'package:simcenter_app/features/lap_detail/domain/lap_detail_models.dart';
+import 'package:simcenter_app/features/lap_detail/presentation/ghost_replay.dart' show GhostReplay, GhostReplaySeek, kReplayCornerLeadM;
 import 'package:simcenter_app/features/lap_detail/presentation/ghost_replay_3d_painter.dart';
 import 'package:simcenter_app/features/lap_detail/presentation/ghost_replay_painter.dart';
 import 'package:simcenter_app/features/lap_detail/presentation/replay_circuit.dart';
@@ -457,6 +459,42 @@ void main() {
       await t.tap(find.byKey(const ValueKey('ghost-replay-restart')));
       await t.pump();
       expect(_textOf(t, 'ghost-replay-elapsed'), '0:00.000');
+    });
+
+    testWidgets('재생 막대 아래 코너 태그를 누르거나 밖에서 옮기면 그 코너 조금 앞으로 간다', (t) async {
+      t.view
+        ..physicalSize = const Size(1000, 1400)
+        ..devicePixelRatio = 1;
+      addTearDown(t.view.reset);
+      final cursor = ValueNotifier<double?>(null);
+      final seek = GhostReplaySeek();
+      // 200m 랩(50m/s): T1은 150m, 코너 앞 [kReplayCornerLeadM]만큼 앞(30m)에서 시작한다.
+      const corner = LapCorner(number: 1, startM: 150, endM: 180, direction: CornerDirection.right);
+      await t.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: GhostReplay(
+              trace: _player,
+              reference: null,
+              cursor: cursor,
+              units: UnitSystem.metric,
+              height: 300,
+              thisLapLabel: '이 랩',
+              referenceLabel: '',
+              corners: const [corner],
+              seek: seek,
+            ),
+          ),
+        ),
+      ));
+
+      await t.tap(find.byKey(const ValueKey('ghost-replay-corner-T1')));
+      await t.pump();
+      expect(cursor.value, closeTo(150 - kReplayCornerLeadM, 0.5));
+
+      seek.seekToDistance(190);
+      await t.pump();
+      expect(cursor.value, closeTo(190, 0.5));
     });
 
     testWidgets('375px 폭에서도 HUD·조작 줄이 넘치지 않는다', (t) async {

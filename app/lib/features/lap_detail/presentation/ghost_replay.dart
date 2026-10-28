@@ -11,6 +11,7 @@ import '../../tracks/domain/track_width_profile.dart';
 import '../domain/ghost_replay.dart';
 import '../domain/lap_corners.dart';
 import '../domain/lap_detail_models.dart';
+import '../domain/telemetry_math.dart';
 import '../../sessions/presentation/tyre_stints_view.dart';
 import 'ghost_replay_3d_painter.dart';
 import 'ghost_replay_hud.dart';
@@ -31,6 +32,27 @@ const EdgeInsets _cardPadding = EdgeInsets.all(16);
 const double _viewRadius = 8;
 const double _controlsGap = 12;
 const double _controlSpacing = 8;
+
+/// 재생 막대 좌우 여백(막대 끝 = 이 여백 안쪽, 코너 태그가 같은 자리에 선다)·코너 태그 줄 높이·글자 크기·태그 사이 최소 간격.
+const double _scrubInset = 12;
+const double _cornerTagHeight = 16;
+const double _cornerTagFontSize = 10;
+const double _cornerTagMinGap = 22;
+
+/// 코너로 옮길 때 코너 시작보다 이만큼(m) 앞에서 재생한다(브레이킹부터 보이게).
+const double kReplayCornerLeadM = 120;
+
+/// 고스트 재생을 밖에서 옮기는 손잡이: [seekToDistance]를 부르면 이 랩이 그 랩 거리(m)에 있던 순간으로 옮긴다.
+class GhostReplaySeek extends ChangeNotifier {
+  double? _distanceM;
+
+  double? get distanceM => _distanceM;
+
+  void seekToDistance(double distanceM) {
+    _distanceM = distanceM;
+    notifyListeners();
+  }
+}
 
 /// 지금 코너 이름표의 위 여백.
 const double _cornerBadgeInset = 10;
@@ -76,6 +98,7 @@ class GhostReplay extends StatefulWidget {
     this.estimatedTrackWidthM,
     this.streetCircuit = false,
     this.corners = const [],
+    this.seek,
   });
 
   final LapTrace trace;
@@ -111,8 +134,11 @@ class GhostReplay extends StatefulWidget {
   /// 시가지 서킷인지(그래블 없이 도로 바로 옆에 벽).
   final bool streetCircuit;
 
-  /// 이 랩에서 찾은 코너. 재생 중 지금 코너 이름을 화면 위 가운데에 띄운다.
+  /// 이 랩에서 찾은 코너. 재생 중 지금 코너 이름을 화면 위 가운데에 띄우고, 재생 막대 아래에 코너 태그를 단다(누르면 그 코너로).
   final List<LapCorner> corners;
+
+  /// 밖에서 재생 위치를 옮기는 손잡이(분석 탭의 코너 줄). 없으면 null.
+  final GhostReplaySeek? seek;
 
   @override
   State<GhostReplay> createState() => _GhostReplayState();
@@ -141,11 +167,16 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
   void initState() {
     super.initState();
     _setUp();
+    widget.seek?.addListener(_onExternalSeek);
   }
 
   @override
   void didUpdateWidget(GhostReplay oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.seek, widget.seek)) {
+      oldWidget.seek?.removeListener(_onExternalSeek);
+      widget.seek?.addListener(_onExternalSeek);
+    }
     if (!identical(oldWidget.trace, widget.trace) ||
         !identical(oldWidget.reference, widget.reference) ||
         !identical(oldWidget.realTrack, widget.realTrack) ||
@@ -182,10 +213,27 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
 
   @override
   void dispose() {
+    widget.seek?.removeListener(_onExternalSeek);
     _ticker.dispose();
     _time.dispose();
     super.dispose();
   }
+
+  void _onExternalSeek() {
+    final distance = widget.seek?.distanceM;
+    if (distance != null) {
+      _seekToDistance(distance);
+    }
+  }
+
+  /// 이 랩이 [distanceM](랩 거리)에 있던 순간으로 옮긴다(트레이스 밖이면 처음·끝).
+  void _seekToDistance(double distanceM) {
+    final d = distanceM.clamp(0.0, widget.trace.lengthM);
+    _seek((interpolateTimeMs(widget.trace, d) ?? 0).clamp(0.0, _durationMs.toDouble()));
+  }
+
+  /// 코너 태그를 누르면: 그 코너 시작 [kReplayCornerLeadM] 앞에서.
+  void _seekToCorner(LapCorner corner) => _seekToDistance(corner.startM - kReplayCornerLeadM);
 
   void _onTick(Duration elapsed) {
     final deltaMs = (elapsed - _lastTick).inMicroseconds / _microsecondsPerMs;
@@ -372,7 +420,7 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
       onSelected: (camera) => setState(() => _camera = camera),
       segmentKeyOf: (camera) => ValueKey('ghost-replay-view-${camera?.name ?? '2d'}'),
     );
-    final scrub = ValueListenableBuilder<double>(
+    final slider = ValueListenableBuilder<double>(
       valueListenable: _time,
       builder: (context, elapsed, _) => Slider(
         key: const ValueKey('ghost-replay-scrub'),
@@ -380,9 +428,18 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
         max: _durationMs.toDouble(),
         activeColor: AppColors.accent,
         inactiveColor: palette.border,
+        // 막대 끝을 정해 둔 여백에 맞춰 코너 태그가 같은 자리에 선다.
+        padding: const EdgeInsets.symmetric(horizontal: _scrubInset),
         onChanged: _seek,
       ),
     );
+    final scrub = widget.corners.isEmpty
+        ? slider
+        : Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [slider, _cornerTags(palette)],
+          );
     return LayoutBuilder(
       builder: (context, box) => box.maxWidth >= _singleRowControlsMinWidth
           ? Row(
@@ -408,6 +465,45 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
                 scrub,
               ],
             ),
+    );
+  }
+
+  /// 재생 막대 아래 코너 태그 줄: 이 랩이 코너에 들어선 시각 자리에 `T7`. 서로 가까우면 앞 태그만 쓴다. 누르면 그 코너로.
+  Widget _cornerTags(AppPalette palette) {
+    final duration = _durationMs.toDouble();
+    final style = TextStyle(fontSize: _cornerTagFontSize, color: palette.textMuted, fontWeight: FontWeight.w600);
+    return SizedBox(
+      height: _cornerTagHeight,
+      child: LayoutBuilder(
+        builder: (context, box) {
+          final width = box.maxWidth - 2 * _scrubInset;
+          final tags = <Widget>[];
+          var lastX = double.negativeInfinity;
+          for (final corner in widget.corners) {
+            final time = interpolateTimeMs(widget.trace, corner.startM);
+            if (time == null || duration <= 0) {
+              continue;
+            }
+            final x = _scrubInset + width * (time / duration).clamp(0.0, 1.0);
+            if (x - lastX < _cornerTagMinGap) {
+              continue;
+            }
+            lastX = x;
+            tags.add(Positioned(
+              left: x - _cornerTagMinGap / 2,
+              width: _cornerTagMinGap,
+              top: 0,
+              bottom: 0,
+              child: InkWell(
+                key: ValueKey('ghost-replay-corner-${corner.label}'),
+                onTap: () => _seekToCorner(corner),
+                child: Center(child: Text(corner.label, style: style, maxLines: 1, softWrap: false)),
+              ),
+            ));
+          }
+          return Stack(clipBehavior: Clip.none, children: tags);
+        },
+      ),
     );
   }
 }
