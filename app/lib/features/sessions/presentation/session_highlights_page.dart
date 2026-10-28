@@ -13,10 +13,12 @@ import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/page_loading_bar.dart';
 import '../../lap_detail/application/lap_detail_providers.dart';
 import '../../lap_detail/domain/ghost_replay.dart';
+import '../../lap_detail/domain/lap_corners.dart';
 import '../../lap_detail/domain/lap_detail_models.dart';
 import '../../lap_detail/presentation/ghost_replay.dart';
 import '../../lap_detail/presentation/ghost_replay_3d_painter.dart';
 import '../../lap_detail/presentation/replay_circuit.dart';
+import '../../lap_detail/presentation/replay_corner_badge.dart';
 import '../../lap_detail/presentation/replay_three_scene.dart';
 import '../../lap_detail/presentation/replay_three_view.dart';
 import '../../tracks/application/track_widths_provider.dart';
@@ -246,6 +248,9 @@ class HighlightsPlayer extends StatefulWidget {
 class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerProviderStateMixin {
   late final ReplayTrack3d _track = ReplayTrack3d.build(_buildCircuit());
   late final List<ReplayGridSlot>? _grid = _startGrid(widget.highlights);
+
+  /// 내 랩 주행선에서 찾은 코너(중심 차의 지금 코너 이름표).
+  late final List<LapCorner> _corners = detectLapCorners(widget.trace);
   late HighlightReel _reel = widget.highlights.mine.isEmpty ? HighlightReel.race : HighlightReel.mine;
   ReplayCamera _camera = ReplayCamera.chase;
   int _index = 0;
@@ -553,8 +558,23 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
             },
           ),
         ),
+        Positioned(
+          top: _overlayInset,
+          right: _overlayInset,
+          child: ValueListenableBuilder<double>(
+            valueListenable: _time,
+            builder: (context, time, _) => ReplayCornerBadge(corner: _cornerOf(_focus!, time)),
+          ),
+        ),
       ],
     );
+  }
+
+  /// 중심 차의 지금 코너: 그 위치에서 가장 가까운 내 랩 지점이 든 코너.
+  LapCorner? _cornerOf(TimedCarPath car, double time) {
+    final frame = car.frameAt(time);
+    final distance = nearestLapDistance(widget.trace, frame.x, frame.z);
+    return distance == null ? null : cornerAt(_corners, distance);
   }
 
   Widget _controls(AppPalette palette) {

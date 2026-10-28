@@ -19,13 +19,16 @@ import '../../tracks/application/tracks_providers.dart';
 import '../../tracks/domain/track_sample_geometry.dart';
 import '../../tracks/domain/track_width_profile.dart';
 import '../application/lap_detail_providers.dart';
+import '../domain/lap_analysis.dart';
 import '../domain/lap_compare.dart';
+import '../domain/lap_corners.dart';
 import '../domain/lap_detail_display.dart';
 import '../domain/lap_detail_models.dart';
 import '../domain/telemetry_channels.dart';
 import '../domain/telemetry_math.dart';
 import 'compare_controls.dart';
 import 'ghost_replay.dart';
+import 'lap_analysis_card.dart';
 import 'lap_time_cards.dart';
 import 'telemetry_chart.dart';
 import 'track_map.dart';
@@ -233,6 +236,16 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
     final reference = widget.reference;
     final maxDistanceM = math.max(trace.lengthM, reference?.lengthM ?? 0);
     final referenceTime = widget.referenceLapTimeMs;
+    final corners = detectLapCorners(trace);
+    // 비교 랩이 있으면 코너별로 맞대어 잃은 곳·이유를 짚는다. 누른 코너로 재생 막대·지도 점을 옮긴다.
+    final analysisCard = reference == null || corners.isEmpty
+        ? null
+        : LapAnalysisCard(
+            analysis: analyzeLap(trace, reference, corners),
+            referenceLabel: widget.referenceLabel,
+            units: widget.units,
+            onSelect: (corner) => _playhead.value = corner.startM,
+          );
 
     // 값이 없는 랩(ERS 채널이 없는 옛 기록 등)은 그 선을 빼고, 두 랩 모두 없으면 그래프를 그리지 않는다.
     Widget? channelChart(TelemetryChannel channel) {
@@ -278,6 +291,7 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
                   ? null
                   : '${widget.referenceLabel} ${formatLapTime(referenceTime)}',
               cursor: _shown,
+              corners: corners,
             ),
             for (final chart in charts) ...[const SizedBox(height: _chartGap), chart],
           ],
@@ -286,7 +300,13 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
     );
     // 고스트 재생(이 랩에 위치가 있을 때만) → 그래프 카드.
     Widget mainColumn(double replayHeight) => !trace.hasPositions
-        ? chartsCard
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (analysisCard != null) ...[analysisCard, const SizedBox(height: _panelGap)],
+              chartsCard,
+            ],
+          )
         : Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -307,8 +327,10 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
                 trackSamples: widget.trackSamples,
                 estimatedTrackWidthM: widget.estimatedTrackWidthM,
                 streetCircuit: widget.streetCircuit,
+                corners: corners,
               ),
               const SizedBox(height: _panelGap),
+              if (analysisCard != null) ...[analysisCard, const SizedBox(height: _panelGap)],
               chartsCard,
             ],
           );
@@ -549,13 +571,14 @@ class _MiniMapExpandButton extends StatelessWidget {
   }
 }
 
-/// 범례: 이 랩(강조색)·내 최고 랩(청록)과 각 랩타임, 십자선이 있으면 그 거리.
+/// 범례: 이 랩(강조색)·내 최고 랩(청록)과 각 랩타임, 십자선이 있으면 그 거리(코너 안이면 코너 이름도).
 class _Legend extends StatelessWidget {
-  const _Legend({required this.thisLapText, required this.referenceText, required this.cursor});
+  const _Legend({required this.thisLapText, required this.referenceText, required this.cursor, this.corners = const []});
 
   final String thisLapText;
   final String? referenceText;
   final ValueNotifier<double?> cursor;
+  final List<LapCorner> corners;
 
   @override
   Widget build(BuildContext context) {
@@ -582,7 +605,10 @@ class _Legend extends StatelessWidget {
           builder: (context, distance, _) => distance == null
               ? const SizedBox.shrink()
               : Text(
-                  formatDistance(distance),
+                  switch (cornerAt(corners, distance)) {
+                    final corner? => '${formatDistance(distance)} · ${corner.label}',
+                    null => formatDistance(distance),
+                  },
                   key: const ValueKey('telemetry-cursor-distance'),
                   style: TextStyle(color: palette.textMuted),
                 ),

@@ -9,12 +9,14 @@ import '../../laps/domain/lap_models.dart';
 import '../../tracks/domain/track_sample_geometry.dart';
 import '../../tracks/domain/track_width_profile.dart';
 import '../domain/ghost_replay.dart';
+import '../domain/lap_corners.dart';
 import '../domain/lap_detail_models.dart';
 import '../../sessions/presentation/tyre_stints_view.dart';
 import 'ghost_replay_3d_painter.dart';
 import 'ghost_replay_hud.dart';
 import 'ghost_replay_painter.dart';
 import 'replay_circuit.dart';
+import 'replay_corner_badge.dart';
 import 'replay_three_view.dart';
 
 /// 재생 화면 높이(넓은 화면·좁은 화면).
@@ -29,6 +31,9 @@ const EdgeInsets _cardPadding = EdgeInsets.all(16);
 const double _viewRadius = 8;
 const double _controlsGap = 12;
 const double _controlSpacing = 8;
+
+/// 지금 코너 이름표의 위 여백.
+const double _cornerBadgeInset = 10;
 
 /// 조작 줄 폭이 이보다 좁으면 시간 막대를 아랫줄로 내리고 버튼은 줄을 바꿔 감싼다.
 const double _singleRowControlsMinWidth = 760;
@@ -70,6 +75,7 @@ class GhostReplay extends StatefulWidget {
     this.trackSamples,
     this.estimatedTrackWidthM,
     this.streetCircuit = false,
+    this.corners = const [],
   });
 
   final LapTrace trace;
@@ -104,6 +110,9 @@ class GhostReplay extends StatefulWidget {
 
   /// 시가지 서킷인지(그래블 없이 도로 바로 옆에 벽).
   final bool streetCircuit;
+
+  /// 이 랩에서 찾은 코너. 재생 중 지금 코너 이름을 화면 위 가운데에 띄운다.
+  final List<LapCorner> corners;
 
   @override
   State<GhostReplay> createState() => _GhostReplayState();
@@ -247,6 +256,16 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
                         thisLapLabel: widget.thisLapLabel,
                         referenceLabel: widget.referenceLabel,
                         tyreCompound: widget.playerTyreCompound,
+                      ),
+                    ),
+                    ValueListenableBuilder<double>(
+                      valueListenable: _time,
+                      builder: (context, elapsed, _) => Align(
+                        alignment: Alignment.topCenter,
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: _cornerBadgeInset),
+                          child: ReplayCornerBadge(corner: cornerAt(widget.corners, _player.frameAt(elapsed).distanceM)),
+                        ),
                       ),
                     ),
                   ],
