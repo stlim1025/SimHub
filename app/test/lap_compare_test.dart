@@ -96,6 +96,17 @@ void main() {
     });
   });
 
+  group('레이스 기본 비교', () {
+    test('비교 쿼리가 없을 때만 레이스 기본(같은 세션 종류)으로 바꾸고, Same tyre 필터는 주소로 오간다', () {
+      expect(LapCompareSelection.hasQuery(const {}), isFalse);
+      expect(LapCompareSelection.hasQuery(const {'tab': 'telemetry'}), isFalse);
+      expect(LapCompareSelection.hasQuery(const {'compare': 'best'}), isTrue);
+      expect(LapCompareSelection.hasQuery(const {'sameTyre': 'true'}), isTrue);
+      expect(LapCompareSelection.raceDefaults.toQuery(), {'sameSessionType': 'true'});
+      expect(LapCompareSelection.fromQuery(const {'sameTyre': 'true'}).filters, {LapCompareFilter.sameTyre});
+    });
+  });
+
   group('주소', () {
     test('lapDetailLocation은 탭과 비교 쿼리를 함께 싣는다(기본은 빼고)', () {
       expect(lapDetailLocation('l1', compare: LapCompareSelection.defaults), '/laps/l1');

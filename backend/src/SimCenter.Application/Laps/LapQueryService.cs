@@ -183,10 +183,16 @@ public sealed class LapQueryService : ILapQueryService
             applied.Add(LapComparisonFilters.SameAssists);
         }
 
+        var compound = request.SameTyre ? lap.VisualTyreCompound : null;
+        if (compound is not null)
+        {
+            applied.Add(LapComparisonFilters.SameTyre);
+        }
+
         var scope = request.Kind == LapComparisonKind.Leaderboard
             ? LapComparisonScope.LeaderboardEligible
             : LapComparisonScope.MineValid;
-        return (new LapComparisonCriteria(scope, userId, lap.TrackId, lap.GameCode, teamId, sessionType, assistFilter), applied);
+        return (new LapComparisonCriteria(scope, userId, lap.TrackId, lap.GameCode, teamId, sessionType, assistFilter, compound), applied);
     }
 
     /// <summary>비교 DTO. 남의 랩이면 주인 이름을 랭킹과 같은 규칙으로(D-39, 행이 없으면 익명).</summary>

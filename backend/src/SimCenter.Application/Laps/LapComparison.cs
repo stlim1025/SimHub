@@ -27,7 +27,8 @@ public sealed record LapComparisonRequest(
     Guid? CompareLapId = null,
     bool SameTeam = false,
     bool SameSessionType = false,
-    bool SameAssists = false)
+    bool SameAssists = false,
+    bool SameTyre = false)
 {
     public static readonly LapComparisonRequest Default = new(LapComparisonKind.Best);
 }
@@ -46,6 +47,9 @@ public static class LapComparisonFilters
     public const string SameTeam = "sameTeam";
     public const string SameSessionType = "sameSessionType";
     public const string SameAssists = "sameAssists";
+
+    /// <summary>같은 보이는 컴파운드(랩 끝 스냅샷)의 랩만 — 레이스 랩을 같은 타이어끼리 비교한다.</summary>
+    public const string SameTyre = "sameTyre";
 }
 
 /// <summary>
@@ -80,7 +84,8 @@ public sealed record LapComparisonCriteria(
     string GameCode,
     int? TeamId = null,
     SessionType? SessionType = null,
-    LapAssistValues? Assists = null);
+    LapAssistValues? Assists = null,
+    int? VisualTyreCompound = null);
 
 /// <summary>남의 랩 주인의 이름 공개 설정(D-39). 리포지토리 → 서비스.</summary>
 public sealed record LapDriverRow(string DisplayName, bool ShowOnLeaderboard);

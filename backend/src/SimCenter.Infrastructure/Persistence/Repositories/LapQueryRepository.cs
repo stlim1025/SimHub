@@ -68,6 +68,11 @@ public sealed class LapQueryRepository : ILapQueryRepository
             query = query.Where(l => l.Snapshot != null && l.Snapshot.TeamId == teamId);
         }
 
+        if (criteria.VisualTyreCompound is { } compound)
+        {
+            query = query.Where(l => l.Snapshot != null && l.Snapshot.VisualTyreCompound == compound);
+        }
+
         if (criteria.Assists is { } assists)
         {
             query = WhereSameAssists(query, assists);

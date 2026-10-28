@@ -39,7 +39,7 @@ public sealed class MeController(IRankingService rankingService, ILapQueryServic
     /// <summary>
     /// 내 랩 상세(스냅샷·어시스트·비교 대상·세션 연결, D-46·D-51). 남의 랩이거나 없으면 404.
     /// compare=best(기본)|leaderboard|lap|none, compare=lap이면 compareLapId 필수.
-    /// sameTeam·sameSessionType·sameAssists = best·leaderboard를 고를 때만 쓰는 필터(기본 false).
+    /// sameTeam·sameSessionType·sameAssists·sameTyre = best·leaderboard를 고를 때만 쓰는 필터(기본 false). sameTyre = 같은 보이는 컴파운드.
     /// </summary>
     [HttpGet("laps/{lapId:guid}")]
     [ProducesResponseType(typeof(LapDetailResponse), StatusCodes.Status200OK)]
@@ -51,10 +51,11 @@ public sealed class MeController(IRankingService rankingService, ILapQueryServic
         [FromQuery] Guid? compareLapId = null,
         [FromQuery] bool sameTeam = false,
         [FromQuery] bool sameSessionType = false,
+        [FromQuery] bool sameTyre = false,
         [FromQuery] bool sameAssists = false,
         CancellationToken cancellationToken = default)
     {
-        var comparison = new LapComparisonRequest(compare, compareLapId, sameTeam, sameSessionType, sameAssists);
+        var comparison = new LapComparisonRequest(compare, compareLapId, sameTeam, sameSessionType, sameAssists, sameTyre);
         return Ok(await lapQueryService.GetMyLapAsync(User.GetRequiredUserId(), lapId, comparison, cancellationToken));
     }
 

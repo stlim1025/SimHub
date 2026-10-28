@@ -39,6 +39,7 @@ const double _titleFlagSize = 28;
 const double _titleGap = 10;
 const double _titleFontSize = 22;
 const double _sectionGap = 16;
+const String _raceSessionType = 'Race';
 const double _reloadBarHeight = 2;
 const double _shareIconSize = 18;
 const EdgeInsets _tabLabelPadding = EdgeInsets.symmetric(horizontal: 8);
@@ -55,7 +56,13 @@ const Map<String, String> _tabLabels = {
 /// + "Compare with ▾"·"Filter by ▾"(D-51). 탭·비교 선택은 주소 쿼리와 동기화된다(모르는 값은 기본).
 /// 남의 것이거나 없는 랩이면 404 상태.
 class LapDetailPage extends ConsumerStatefulWidget {
-  const LapDetailPage({super.key, required this.lapId, this.tab, this.compare = LapCompareSelection.defaults});
+  const LapDetailPage({
+    super.key,
+    required this.lapId,
+    this.tab,
+    this.compare = LapCompareSelection.defaults,
+    this.compareExplicit = true,
+  });
 
   final String lapId;
 
@@ -64,6 +71,9 @@ class LapDetailPage extends ConsumerStatefulWidget {
 
   /// 주소의 비교 선택(`compare`·`compareLapId`·필터).
   final LapCompareSelection compare;
+
+  /// 주소에 비교 선택이 적혀 있었는지. 아니면 레이스 랩은 [LapCompareSelection.raceDefaults]로 바꿔 연다.
+  final bool compareExplicit;
 
   @override
   ConsumerState<LapDetailPage> createState() => _LapDetailPageState();
@@ -74,6 +84,9 @@ class _LapDetailPageState extends ConsumerState<LapDetailPage> with SingleTicker
 
   /// 비교 선택을 바꿔 다시 불러오는 동안 보일 직전 상세(같은 랩일 때만).
   LapDetail? _lastLoaded;
+
+  /// 레이스 랩 기본 비교로 한 번 바꿨는지(다시 바꾸지 않는다).
+  bool _raceDefaultApplied = false;
 
   String get _tab => normalizeLapTab(widget.tab);
 
@@ -153,6 +166,7 @@ class _LapDetailPageState extends ConsumerState<LapDetailPage> with SingleTicker
     final fresh = detail.valueOrNull;
     if (fresh != null) {
       _lastLoaded = fresh;
+      _applyRaceDefault(fresh);
     }
     final stale = _lastLoaded?.lap.lapId == widget.lapId ? _lastLoaded : null;
     final shown = fresh ?? (detail.isLoading ? stale : null);
@@ -190,6 +204,22 @@ class _LapDetailPageState extends ConsumerState<LapDetailPage> with SingleTicker
           ),
       ],
     );
+  }
+
+  /// 비교를 고르지 않고 연 레이스 랩은 같은 세션 종류(레이스)의 최고 랩과 비교하도록 주소를 바꾼다(한 번만).
+  void _applyRaceDefault(LapDetail detail) {
+    if (_raceDefaultApplied ||
+        widget.compareExplicit ||
+        widget.compare != LapCompareSelection.defaults ||
+        detail.lap.sessionType != _raceSessionType) {
+      return;
+    }
+    _raceDefaultApplied = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _navigate(compare: LapCompareSelection.raceDefaults);
+      }
+    });
   }
 
   static bool _isNotFound(Object error) => error is ApiException && error.statusCode == _httpNotFound;

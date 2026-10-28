@@ -33,6 +33,7 @@ const Map<LapCompareFilter, String> kCompareFilterLabels = {
   LapCompareFilter.sameTeam: 'Same team',
   LapCompareFilter.sameSessionType: 'Same session type',
   LapCompareFilter.sameAssists: 'Same assists',
+  LapCompareFilter.sameTyre: 'Same tyre',
 };
 
 /// 버튼 글자: `Compare with: Leaderboard best lap`, 비교 안 함이면 `Don't compare lap`.

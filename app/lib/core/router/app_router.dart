@@ -137,6 +137,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               lapId: state.pathParameters['lapId']!,
               tab: state.uri.queryParameters['tab'],
               compare: LapCompareSelection.fromQuery(state.uri.queryParameters),
+              compareExplicit: LapCompareSelection.hasQuery(state.uri.queryParameters),
             ),
           ),
           // 랩 셋업(랩 상세 Lap Details 카드의 View Setup) — 셋업 값과 셋업 진단. 뒤로 가기는 그 랩 상세로.

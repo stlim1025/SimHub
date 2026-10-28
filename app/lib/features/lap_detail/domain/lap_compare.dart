@@ -28,7 +28,10 @@ enum LapCompareKind {
 enum LapCompareFilter {
   sameTeam('sameTeam'),
   sameSessionType('sameSessionType'),
-  sameAssists('sameAssists');
+  sameAssists('sameAssists'),
+
+  /// 같은 보이는 컴파운드(랩 끝 타이어)의 랩만.
+  sameTyre('sameTyre');
 
   const LapCompareFilter(this.wire);
 
@@ -90,6 +93,19 @@ class LapCompareSelection {
         );
 
   static const LapCompareSelection defaults = LapCompareSelection();
+
+  /// 레이스 랩을 비교 지정 없이 열 때의 기본: 같은 세션 종류(레이스)의 내 최고 랩 —
+  /// 연료가 가볍고 새 타이어인 퀄리·타임 트라이얼 랩과 비교하면 차이가 너무 커서다.
+  static const LapCompareSelection raceDefaults = LapCompareSelection(filters: {LapCompareFilter.sameSessionType});
+
+  /// 주소에 비교 선택 쿼리(종류·랩 ID·다른 차·필터)가 하나라도 있는지.
+  static bool hasQuery(Map<String, String> query) => [
+        kCompareQuery,
+        kCompareLapIdQuery,
+        kCompareSessionQuery,
+        kCompareCarQuery,
+        for (final filter in LapCompareFilter.values) filter.wire,
+      ].any(query.containsKey);
 
   final LapCompareKind kind;
 
