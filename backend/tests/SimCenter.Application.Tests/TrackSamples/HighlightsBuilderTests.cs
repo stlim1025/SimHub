@@ -121,6 +121,52 @@ public sealed class HighlightsBuilderTests
     }
 
     [Fact]
+    public void OvertakeClip_RunsThroughTheNextBrakingZone_UntilTheCarsAccelerateAgain()
+    {
+        // 30초 추월, 33~36초 두 차 모두 브레이킹, 36~37초 코너(브레이크·스로틀 0), 37초부터 다시 가속.
+        var samples = Pedals(
+            Race(
+                new Dictionary<byte, double> { [1] = 30, [2] = 20 },
+                marks: [new Mark(30_000, 2, Flags2: RaceSample.OvertookFlag), new Mark(30_000, 1, Flags2: RaceSample.OvertakenFlag)]),
+            t => t switch
+            {
+                >= 33_000 and < 36_000 => (Throttle: 0, Brake: 80),
+                >= 36_000 and < 37_000 => (Throttle: 0, Brake: 0),
+                _ => (Throttle: 100, Brake: 0),
+            });
+
+        var clip = Assert.Single(Build(samples).Race, c => c.Kind == nameof(HighlightKind.Overtake));
+
+        Assert.Equal(39_000, clip.EndMs);                 // 가속 37초 + 2초
+    }
+
+    [Fact]
+    public void OvertakeClip_WithoutBraking_KeepsTheShortEnd_AndAQuickRePassExtendsIt()
+    {
+        // 30초 2번이 1번을 추월, 36초 1번이 되찾는다(같은 두 차, 12초 안) — 한 장면으로 되찾기까지.
+        var samples = Race(
+            new Dictionary<byte, double> { [1] = 30, [2] = 20 },
+            marks:
+            [
+                new Mark(30_000, 2, Flags2: RaceSample.OvertookFlag), new Mark(30_000, 1, Flags2: RaceSample.OvertakenFlag),
+                new Mark(36_000, 1, Flags2: RaceSample.OvertookFlag), new Mark(36_000, 2, Flags2: RaceSample.OvertakenFlag),
+            ]);
+
+        var clip = Assert.Single(Build(samples).Race, c => c.Kind == nameof(HighlightKind.Overtake));
+
+        Assert.Equal(30_000, clip.EventMs);
+        Assert.Equal(39_000, clip.EndMs);                 // 되찾은 36초 + 기본 3초
+    }
+
+    /// <summary>[samples]의 모든 차 스로틀·브레이크를 시각마다 [pedals]로.</summary>
+    private static DecodedTrackSamples Pedals(DecodedTrackSamples samples, Func<int, (int Throttle, int Brake)> pedals)
+        => samples with
+        {
+            Throttle = samples.TimeMs.Select(t => (byte)pedals(t).Throttle).ToArray(),
+            Brake = samples.TimeMs.Select(t => (byte)pedals(t).Brake).ToArray(),
+        };
+
+    [Fact]
     public void Overtake_FlagsOnFarApartCars_AreIgnored()
     {
         var samples = Race(

@@ -134,6 +134,16 @@ public static class HighlightsBuilder
     /// <summary>클립 길이(장면 순간 앞·뒤 ms).</summary>
     private const int OvertakeBeforeMs = 7_000;
     private const int OvertakeAfterMs = 3_000;
+
+    /// <summary>
+    /// 추월 클립 끝: 추월 뒤 [OvertakeBrakeLookMs] 안에 두 차 가운데 하나가 브레이크를 밟으면([BrakingPct] 이상) 그 코너를 빠져나와
+    /// 다시 가속할 때(브레이크 0·스로틀 [ExitThrottlePct] 이상) + [ExitMarginMs]까지 보여 준다 — 브레이킹 존에서 끊기지 않게. 최대 [OvertakeMaxAfterMs].
+    /// </summary>
+    private const int OvertakeBrakeLookMs = 8_000;
+    private const int OvertakeMaxAfterMs = 14_000;
+    private const int BrakingPct = 30;
+    private const int ExitThrottlePct = 80;
+    private const int ExitMarginMs = 2_000;
     private const int ContactBeforeMs = 6_000;
     private const int ContactAfterMs = 5_000;
     private const int RetirementBeforeMs = 8_000;
@@ -254,14 +264,19 @@ public static class HighlightsBuilder
             raceScenes.Select(s => Clip(timeline, s, crossings, pitPhases, standings)).ToList());
     }
 
-    /// <summary>추월: 추월함 표시와 같은 순간의 추월당함 표시를 짝짓는다. 피트 인·아웃 중·출발 장면 안·깃발 구간 안은 뺀다. 같은 두 차는 몇 초 안에 한 번.</summary>
-    private static IEnumerable<Scene> Overtakes(
+    /// <summary>
+    /// 추월: 추월함 표시와 같은 순간의 추월당함 표시를 짝짓는다. 피트 인·아웃 중·출발 장면 안·깃발 구간 안은 뺀다.
+    /// 같은 두 차는 몇 초 안에 한 번 — 그 안의 재추월·되찾기는 앞 장면을 늘려 함께 보여 준다.
+    /// </summary>
+    private static List<Scene> Overtakes(
         RaceTimeline timeline, IReadOnlyList<RaceFlagPeriod> flags, int start, IReadOnlyDictionary<int, int> position,
         Func<int, double> rank, Func<int, int, bool> pitting)
     {
         var overtook = Marks(timeline, s => (s.Flags2 & RaceSample.OvertookFlag) != 0);
         var overtaken = Marks(timeline, s => (s.Flags2 & RaceSample.OvertakenFlag) != 0);
         var last = new Dictionary<(int, int), int>();
+        var scenes = new List<Scene>();
+        var sceneOf = new Dictionary<(int, int), int>();
         foreach (var (time, car, sample) in overtook)
         {
             if (time < start + StartWindowMs || sample.InPit || pitting(car, time) || flags.Any(f => time >= f.FromMs && time <= f.ToMs))
@@ -288,16 +303,54 @@ public static class HighlightsBuilder
             }
 
             var pair = (Math.Min(car, other), Math.Max(car, other));
+            var after = OvertakeAfter(timeline, time, car, other);
             if (last.TryGetValue(pair, out var previous) && time - previous < SamePairMergeMs)
             {
+                var index = sceneOf[pair];
+                var merged = scenes[index];
+                scenes[index] = merged with { AfterMs = Math.Max(merged.AfterMs, time - merged.TimeMs + after) };
                 continue;
             }
 
             last[pair] = time;
+            sceneOf[pair] = scenes.Count;
             var lead = position.TryGetValue(other, out var p) && p == 1 ? LeadBonus : 0;
-            yield return new Scene(HighlightKind.Overtake, time, car, other,
-                OvertakeScore + rank(car) + lead, OvertakeBeforeMs, OvertakeAfterMs);
+            scenes.Add(new Scene(HighlightKind.Overtake, time, car, other,
+                OvertakeScore + rank(car) + lead, OvertakeBeforeMs, after));
         }
+
+        return scenes;
+    }
+
+    /// <summary>추월 순간 뒤 클립 길이(ms): 다음 브레이킹 존을 빠져나올 때까지, 브레이킹이 없으면(옛 표본 포함) 기본 길이.</summary>
+    private static int OvertakeAfter(RaceTimeline timeline, int time, int car, int other)
+    {
+        var end = time + OvertakeAfterMs;
+        foreach (var c in new[] { car, other })
+        {
+            var samples = timeline.Cars[c];
+            var i = IndexAt(samples, time);
+            while (i < samples.Count && samples[i].TimeMs <= time + OvertakeBrakeLookMs && samples[i].Brake < BrakingPct)
+            {
+                i++;
+            }
+
+            if (i == samples.Count || samples[i].TimeMs > time + OvertakeBrakeLookMs)
+            {
+                continue;
+            }
+
+            while (i < samples.Count && samples[i].TimeMs <= time + OvertakeMaxAfterMs
+                   && !(samples[i].Brake == 0 && samples[i].Throttle >= ExitThrottlePct))
+            {
+                i++;
+            }
+
+            var exit = i < samples.Count ? samples[i].TimeMs : samples[^1].TimeMs;
+            end = Math.Max(end, exit + ExitMarginMs);
+        }
+
+        return Math.Min(end, time + OvertakeMaxAfterMs) - time;
     }
 
     /// <summary>
