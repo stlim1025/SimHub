@@ -57,10 +57,10 @@ String? _gripLimitedText(CornerFactor factor, UnitSystem units) {
       '최대 브레이크 압력이 ${n.round()}%p 낮아요 → 그립이 줄어 락업을 피하려면 자연스러워요, 대신 조금 더 길게 밟으세요',
     CornerFactorKind.slowerApex => '코너 최저속도가 ${_speed(n, units)} 낮아요 → 줄어든 그립 탓이 커요, 라인을 넓게 써 속도를 지키세요',
     CornerFactorKind.throttleLift =>
-      '탈출에서 스로틀을 ${n.round()}%p 떼요 → 닳은 뒷타이어가 미끄러지는 거예요, 핸들을 다 푼 뒤 천천히 여세요',
+      '탈출에서 스로틀을 ${n.round()}%p 떼요 → 닳은 뒷타이어가 미끄러지는 거예요, 꺾은 핸들을 다 푼 뒤 스로틀을 천천히 밟으세요',
     CornerFactorKind.partialThrottle =>
-      '기준 랩이 풀 스로틀인 곳에서 ${_meters(n)} 덜 밟아요 → 뒷타이어 그립이 모자라 그래요, 휠스핀 없이 여는 게 우선이에요',
-    CornerFactorKind.throttleLater => '풀 스로틀이 ${_meters(n)} 늦어요 → 그립이 줄어 늦게 여는 건 어쩔 수 없어요',
+      '기준 랩이 풀 스로틀인 곳에서 ${_meters(n)} 덜 밟아요 → 뒷타이어 그립이 모자라 그래요, 휠스핀이 나지 않게 조금씩 밟는 게 우선이에요',
+    CornerFactorKind.throttleLater => '풀 스로틀이 ${_meters(n)} 늦어요 → 그립이 줄어 스로틀을 늦게 밟는 건 어쩔 수 없어요',
     CornerFactorKind.slowerExit => '탈출 속도가 ${_speed(n, units)} 낮아요 → 그립이 줄어든 만큼은 어쩔 수 없어요',
     CornerFactorKind.slowerThrough => '구간 평균 속도가 ${_speed(n, units)} 낮아요 → 그립이 줄어든 만큼은 어쩔 수 없어요',
     _ => null,
@@ -90,7 +90,7 @@ String cornerFactorText(CornerFactor factor, UnitSystem units, {bool gripLimited
       '에이펙스를 ${n.toStringAsFixed(1)}m 더 안쪽으로 깎아요 → 연석을 과하게 타 속도를 잃었을 수 있어요',
     CornerFactorKind.slowerApex => '코너 최저속도가 ${_speed(n, units)} 낮아요 → 진입 속도를 더 가져가세요',
     CornerFactorKind.throttleLift =>
-      '탈출에서 스로틀을 일찍 열었다가 ${n.round()}%p 떼요 → 휠스핀·오버스티어, 더 점진적으로 여세요',
+      '탈출에서 스로틀을 일찍 밟았다가 ${n.round()}%p 떼요 → 휠스핀·오버스티어, 핸들을 풀어 가며 스로틀을 조금씩 더 밟으세요',
     CornerFactorKind.partialThrottle => '기준 랩이 풀 스로틀인 곳에서 ${_meters(n)} 덜 밟아요 → 더 과감하게 밟으세요',
     CornerFactorKind.throttleLater => '풀 스로틀이 ${_meters(n)} 늦어요 → 에이펙스 뒤 더 빨리 가속하세요',
     CornerFactorKind.slowerExit => '탈출 속도가 ${_speed(n, units)} 낮아요',
@@ -101,7 +101,7 @@ String cornerFactorText(CornerFactor factor, UnitSystem units, {bool gripLimited
     CornerFactorKind.brakingWhileTurning =>
       '크게 꺾은 채 강하게 ${_meters(n)} 브레이크를 밟아요 → 앞타이어 락업·플랫스팟 위험, 직선에서 더 많이 감속하세요',
     CornerFactorKind.throttleWhileTurning =>
-      '크게 꺾은 채 ${_meters(n)} 풀 스로틀을 밟아요 → 뒷타이어 휠스핀·과열, 핸들을 풀면서 스로틀을 여세요',
+      '크게 꺾은 채 ${_meters(n)} 풀 스로틀을 밟아요 → 뒷타이어 휠스핀·과열, 꺾은 핸들을 풀면서 스로틀을 밟으세요',
   };
 }
 
@@ -128,8 +128,20 @@ String _straightName(StraightErs s) => '${s.after?.label ?? '출발선'}–${s.b
 
 String _pct(double fraction) => '${(fraction * _percent).round()}%';
 
+String _underusedAdvice(StraightErs s) {
+  if (s.deployOff) {
+    return '→ ERS를 None으로 두어 배포가 없었어요, 이 직선에서는 Normal 이상으로 두세요';
+  }
+  if (s.referenceBoosted) {
+    return '→ 기준 랩은 여기서 Overtake 모드를 켰어요, 이 직선에서 켜세요';
+  }
+  return '→ 이 직선에서는 배터리를 더 쓰세요(ERS 모드를 올리거나 오버테이크 버튼)';
+}
+
 /// 배터리 피드백 줄들. 최대 속도 기준: 잔량·바닥난 곳·덜 써서 잃은 직선. 배터리 기준: 여기에 더해 효과가 작은 배포,
 /// 배포하기 가장 좋은 직선, 랩당 소모가 클 때 lift & coast 자리.
+/// Medium(Normal) 모드의 배포는 게임이 알아서 나눠 쓰므로 직선별로 아끼라고 하지 않는다 — 효과가 작은 배포는 Hotlap·Overtake를 켠 직선만,
+/// 가장 좋은 직선은 이미 거기서 켜고 있으면 말하지 않는다.
 List<String> ersFeedbackLines(ErsAnalysis ers, {AnalysisFocus focus = AnalysisFocus.pace}) {
   final refStart = ers.referenceStartFraction;
   final refEnd = ers.referenceEndFraction;
@@ -140,7 +152,7 @@ List<String> ersFeedbackLines(ErsAnalysis ers, {AnalysisFocus focus = AnalysisFo
       '${ers.emptyNear?.label ?? '출발 직후'} 지나서 배터리가 바닥났어요 → 앞 구간에서 배터리를 아껴 랩 전체에 나눠 쓰세요',
     for (final s in ers.underusedStraights)
       '${_straightName(s)} 직선에서 기준 랩보다 배터리를 ${_kj(-s.deployDiffJ!)} 덜 써 ${formatDeltaSeconds(s.lossS!)} 잃었어요 '
-            '→ 이 직선에서는 배터리를 더 쓰세요(ERS 모드를 올리거나 오버테이크 버튼)',
+          '${_underusedAdvice(s)}',
   ];
   if (focus != AnalysisFocus.battery || ers.straights.isEmpty) {
     return lines;
@@ -148,13 +160,18 @@ List<String> ersFeedbackLines(ErsAnalysis ers, {AnalysisFocus focus = AnalysisFo
   // 배포 효과는 낮은 속도에서 긴 직선으로 나갈 때 가장 크다.
   final best = ers.straights.reduce((a, b) => a.lengthM / a.entryKph >= b.lengthM / b.entryKph ? a : b);
   for (final s in ers.straights) {
-    if (!identical(s, best) && s.deployJ >= _notableDeployJ && (s.lengthM < _shortStraightM || s.entryKph >= _fastEntryKph)) {
-      lines.add('${_straightName(s)} 직선(${_meters(s.lengthM)}, ${s.entryKph.round()}km/h에서 시작)에서 배터리를 ${_kj(s.deployJ)} 써요 '
-          '→ 짧거나 이미 빠른 구간이라 효과가 작아요, 아껴서 ${_straightName(best)} 직선에 쓰세요');
+    if (!identical(s, best) &&
+        s.boosted &&
+        s.deployJ >= _notableDeployJ &&
+        (s.lengthM < _shortStraightM || s.entryKph >= _fastEntryKph)) {
+      lines.add('${_straightName(s)} 직선(${_meters(s.lengthM)}, ${s.entryKph.round()}km/h에서 시작)에서 Overtake 모드로 배터리를 ${_kj(s.deployJ)} 써요 '
+          '→ 짧거나 이미 빠른 구간이라 효과가 작아요, 여기선 Normal로 두고 ${_straightName(best)} 직선에서 켜세요');
     }
   }
-  lines.add('배터리는 ${_straightName(best)} 직선(${_meters(best.lengthM)}, ${best.entryKph.round()}km/h에서 시작)에서 쓰는 게 가장 효과적이에요 '
-      '— 느린 탈출에서 긴 직선으로 나갈 때 시간 이득이 커요');
+  if (!best.boosted) {
+    lines.add('배터리는 ${_straightName(best)} 직선(${_meters(best.lengthM)}, ${best.entryKph.round()}km/h에서 시작)에서 쓰는 게 가장 효과적이에요 '
+        '— 느린 탈출에서 긴 직선으로 나갈 때 시간 이득이 커요, 여기서 Overtake 모드를 켜세요');
+  }
   final netUse = ers.startFraction - ers.endFraction;
   final refNet = refStart == null || refEnd == null ? null : refStart - refEnd;
   if (netUse >= _heavyNetUse && (refNet == null || netUse > refNet)) {
@@ -186,7 +203,7 @@ List<String> tyreFeedbackLines(WheelValues? wearStart, WheelValues? wearEnd, Lap
       final left = top.key.endsWith('왼쪽');
       lines.add(front
           ? '${top.key} 타이어가 가장 많이 닳아요 → ${left ? '오른쪽' : '왼쪽'} 코너에서 앞이 밀리고 있어요(언더스티어). 진입 속도를 낮추고 조향을 덜 쓰세요'
-          : '${top.key} 타이어가 가장 많이 닳아요 → 탈출 휠스핀이 원인이에요. ${left ? '오른쪽' : '왼쪽'} 코너 탈출에서 스로틀을 천천히 여세요');
+          : '${top.key} 타이어가 가장 많이 닳아요 → 탈출 휠스핀이 원인이에요. ${left ? '오른쪽' : '왼쪽'} 코너 탈출에서 핸들을 푼 뒤 스로틀을 천천히 밟으세요');
     }
   }
   final stressed = analysis.corners.where((c) => c.factors.any((f) => isTyreFactor(f.kind))).toList();

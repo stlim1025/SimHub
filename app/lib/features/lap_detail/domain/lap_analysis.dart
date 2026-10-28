@@ -39,7 +39,7 @@ const double _lineOffsetM = 1.0;
 const double _lineSearchM = 60;
 const double _headingSpanM = 5;
 
-/// 탈출 스로틀: 일찍 열었다 뗀 것으로 볼 최고값(%)·떨어진 폭(%p). 기준 랩이 뗀 폭은 이보다 작아야 한다(%p).
+/// 탈출 스로틀: 일찍 밟았다 뗀 것으로 볼 최고값(%)·떨어진 폭(%p). 기준 랩이 뗀 폭은 이보다 작아야 한다(%p).
 const int _liftFromPct = 50;
 const double _liftDropPct = 30;
 const double _referenceLiftPct = 15;
@@ -73,6 +73,12 @@ const double _ersEmptyFraction = 0.02;
 const double _straightMinM = 250;
 const double _ersDeployDiffJ = 150000;
 const double _straightLossS = 0.03;
+
+/// ERS 배포 모드: 배포 없음(None), 게임이 알아서 나눠 쓰는 Medium(Normal)보다 센 모드(Hotlap·Overtake).
+/// 직선에서 이만큼(m) 그 모드였으면 그 직선을 그 모드로 달린 것으로 본다.
+const Set<int> _ersNoneModes = {0};
+const Set<int> _ersBoostModes = {2, 3};
+const double _modeMinM = 50;
 
 const double _msPerSecond = 1000;
 const double _kphPerMps = 3.6;
@@ -156,7 +162,7 @@ enum CornerFactorKind {
   /// 코너 최저속도가 낮다(km/h).
   slowerApex,
 
-  /// 탈출에서 스로틀을 일찍 열었다가 뗐다(%p).
+  /// 탈출에서 스로틀을 일찍 밟았다가 뗐다(%p).
   throttleLift,
 
   /// 기준 랩은 풀 스로틀인 곳에서 덜 밟았다(m).
@@ -257,7 +263,8 @@ class CornerAnalysis {
   final List<CornerFactor> factors;
 }
 
-/// 두 코너 사이 직선 하나의 배터리 사용: 길이(m), 시작 속도(km/h), 배포량(J, 이 랩·기준 랩), 잃은 시간(초, 기준이 없으면 null).
+/// 두 코너 사이 직선 하나의 배터리 사용: 길이(m), 시작 속도(km/h), 배포량(J, 이 랩·기준 랩), 잃은 시간(초, 기준이 없으면 null),
+/// Hotlap·Overtake 모드로 달린 거리(m, 이 랩·기준 랩)와 None으로 달린 거리(m) — 모드 채널이 없으면 null.
 class StraightErs {
   const StraightErs({
     required this.after,
@@ -267,6 +274,9 @@ class StraightErs {
     required this.deployJ,
     required this.referenceDeployJ,
     required this.lossS,
+    this.boostM,
+    this.referenceBoostM,
+    this.noneM,
   });
 
   /// 직선 앞 코너(없으면 출발선)·뒤 코너(없으면 결승선).
@@ -277,12 +287,32 @@ class StraightErs {
   final double deployJ;
   final double? referenceDeployJ;
   final double? lossS;
+  final double? boostM;
+  final double? referenceBoostM;
+  final double? noneM;
+
+  /// 이 직선에서 Hotlap·Overtake 모드를 켰는지 — 배터리를 일부러 여기 썼다.
+  bool get boosted => (boostM ?? 0) >= _modeMinM;
+
+  /// 기준 랩은 이 직선에서 Hotlap·Overtake를 켰는지.
+  bool get referenceBoosted => (referenceBoostM ?? 0) >= _modeMinM;
+
+  /// 이 직선에서 ERS를 None으로 두었는지(배포 없음).
+  bool get deployOff => (noneM ?? 0) >= _modeMinM;
+
+  /// 두 랩의 모드를 아는지. 둘 다 Normal이면 배포 차이는 게임이 정한 것이다(스로틀을 일찍 놓으면 덜 쓴다) — 배터리 탓이 아니다.
+  bool get modeKnown => boostM != null && referenceBoostM != null;
 
   /// 이 랩 − 기준 배포량(J). 기준이 없으면 null.
   double? get deployDiffJ => referenceDeployJ == null ? null : deployJ - referenceDeployJ!;
 
-  /// 기준보다 [_ersDeployDiffJ] 넘게 덜 쓰고 [_straightLossS] 넘게 잃은 직선.
-  bool get underused => (deployDiffJ ?? 0) <= -_ersDeployDiffJ && (lossS ?? 0) >= _straightLossS;
+  /// 기준보다 [_ersDeployDiffJ] 넘게 덜 쓰고 [_straightLossS] 넘게 잃은 직선. 모드를 알면 모드 탓일 때만
+  /// (기준 랩은 Overtake 등을 켰는데 이 랩은 아님, 또는 None) — 이미 켜고 있던 직선은 빼고.
+  bool get underused =>
+      !boosted &&
+      (deployDiffJ ?? 0) <= -_ersDeployDiffJ &&
+      (lossS ?? 0) >= _straightLossS &&
+      (!modeKnown || referenceBoosted || deployOff);
 }
 
 /// 랩 전체 배터리: 랩 시작·끝 잔량(0~1, 기준 랩은 없으면 null), 이 랩에서만 바닥난 첫 자리, 직선마다 사용.
@@ -589,7 +619,7 @@ List<CornerFactor> _factors(LapTrace lap, LapTrace reference, LapCorner corner, 
     factors.add((kind: CornerFactorKind.slowerApex, amount: apexDiff));
   }
 
-  // 탈출 스로틀: 일찍 열었다 뗌 > 덜 밟음 > 늦게 밟음 가운데 하나.
+  // 탈출 스로틀: 일찍 밟았다 뗌 > 덜 밟음 > 늦게 밟음 가운데 하나.
   bool full(double v) => v >= _throttleFullPct;
   final lift = _throttleLift(lap, mine.at, b);
   var partial = 0.0;
@@ -630,8 +660,33 @@ ErsAnalysis? _ers(LapTrace lap, LapTrace? reference, List<LapCorner> corners, do
   }
   final ref = reference != null && reference.hasErs ? reference : null;
   double store(LapTrace t, double d) => _valueAt(t.ersStoreJ, t.resolutionM, d) / kErsCapacityJ;
-  double deployed(LapTrace t, double d) => _valueAt(t.ersDeployedJ, t.resolutionM, d);
+  // 이번 랩 누적 배포량은 랩이 바뀌는 표본에서 0으로 돌아간다 — 늘어난 만큼만 더한다(줄어든 곳은 리셋).
+  double deployedBetween(LapTrace t, double from, double to) {
+    var total = 0.0;
+    var previous = _valueAt(t.ersDeployedJ, t.resolutionM, from);
+    for (var i = (from / t.resolutionM).floor() + 1; i < t.length && t.distanceAt(i) <= to; i++) {
+      final value = t.ersDeployedJ[i];
+      if (value > previous) {
+        total += value - previous;
+      }
+      previous = value;
+    }
+    final end = _valueAt(t.ersDeployedJ, t.resolutionM, to);
+    return end > previous ? total + end - previous : total;
+  }
   bool empty(double fraction) => fraction <= _ersEmptyFraction;
+  double? modeMeters(LapTrace? t, Set<int> modes, double from, double to) {
+    if (t == null || !t.hasErsDeployMode) {
+      return null;
+    }
+    var meters = 0.0;
+    for (var i = (from / t.resolutionM).ceil(); i < t.length && t.distanceAt(i) < to; i++) {
+      if (modes.contains(t.ersDeployMode[i])) {
+        meters += t.resolutionM;
+      }
+    }
+    return meters;
+  }
 
   double? emptyAt;
   for (var d = 0.0; d <= endM; d++) {
@@ -657,9 +712,12 @@ ErsAnalysis? _ers(LapTrace lap, LapTrace? reference, List<LapCorner> corners, do
       before: k == corners.length ? null : corners[k],
       lengthM: to - from,
       entryKph: _valueAt(lap.speedKph, lap.resolutionM, from),
-      deployJ: deployed(lap, to) - deployed(lap, from),
-      referenceDeployJ: ref == null ? null : deployed(ref, to) - deployed(ref, from),
+      deployJ: deployedBetween(lap, from, to),
+      referenceDeployJ: ref == null ? null : deployedBetween(ref, from, to),
       lossS: reference == null ? null : _lossS(lap, reference, from, to),
+      boostM: modeMeters(lap, _ersBoostModes, from, to),
+      referenceBoostM: modeMeters(ref, _ersBoostModes, from, to),
+      noneM: modeMeters(lap, _ersNoneModes, from, to),
     ));
   }
 
@@ -681,6 +739,9 @@ ErsAnalysis? _ers(LapTrace lap, LapTrace? reference, List<LapCorner> corners, do
         deployJ: last.deployJ + first.deployJ,
         referenceDeployJ: first.referenceDeployJ == null ? null : first.referenceDeployJ! + last.referenceDeployJ!,
         lossS: first.lossS == null ? null : first.lossS! + last.lossS!,
+        boostM: _sumOrNull(first.boostM, last.boostM),
+        referenceBoostM: _sumOrNull(first.referenceBoostM, last.referenceBoostM),
+        noneM: _sumOrNull(first.noneM, last.noneM),
       );
   }
 
@@ -694,3 +755,5 @@ ErsAnalysis? _ers(LapTrace lap, LapTrace? reference, List<LapCorner> corners, do
     straights: straights,
   );
 }
+
+double? _sumOrNull(double? a, double? b) => a == null || b == null ? null : a + b;

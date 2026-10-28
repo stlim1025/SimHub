@@ -36,6 +36,8 @@ LapTrace _lap({
   required double apexKph,
   double lateral = 0,
   List<double>? ersStore,
+  List<double>? ersDeployed,
+  List<int>? ersMode,
   int cornerSteer = 0,
 }) {
   final arcEnd = _straightM + _radiusM * math.pi / 2;
@@ -84,7 +86,8 @@ LapTrace _lap({
     worldPosX: [for (final p in positions) p.x],
     worldPosZ: [for (final p in positions) p.z],
     ersStoreJ: ersStore ?? const [],
-    ersDeployedJ: ersStore == null ? const [] : List.filled(n, 0),
+    ersDeployedJ: ersStore == null ? const [] : ersDeployed ?? List.filled(n, 0),
+    ersDeployMode: ersMode ?? const [],
   );
 }
 
@@ -167,6 +170,35 @@ void main() {
     expect(straight.entryKph, lessThan(150));
     expect(ersFeedbackLines(ers, focus: AnalysisFocus.battery).last, startsWith('배터리는 T1–T1 직선'));
     expect(ersFeedbackLines(ers), hasLength(1)); // 최대 속도 기준은 잔량만
+  });
+
+  test('Overtake 모드를 켠 직선에는 배터리를 더 쓰라고도, 거기 쓰라고도 하지 않는다', () {
+    const n = 1000 ~/ _res + 1;
+    final store = List.filled(n, 2e6);
+    final full = _lap(
+        brakeAtM: 300, apexKph: 110, ersStore: store, ersDeployed: [for (var i = 0; i < n; i++) i * 1000.0]);
+    final normal = _lap(brakeAtM: 250, apexKph: 110, ersStore: store, ersMode: List.filled(n, 1));
+    final overtake = _lap(
+        brakeAtM: 250, apexKph: 110, ersStore: store, ersMode: [for (var i = 0; i < n; i++) i * _res < 200 ? 3 : 1]);
+
+    final normalErs = analyzeLap(normal, full, detectLapCorners(full), focus: AnalysisFocus.battery).ers!;
+    expect(normalErs.straights.single.boosted, isFalse);
+    expect(normalErs.underusedStraights, hasLength(1));
+    expect(ersFeedbackLines(normalErs, focus: AnalysisFocus.battery).last, contains('Overtake 모드를 켜세요'));
+
+    // 두 랩 다 Normal이면 배포 차이는 게임이 정한 것 — 배터리를 더 쓰라고 하지 않는다. 기준 랩만 Overtake를 켰으면 그걸 짚는다.
+    final fullNormal = _lap(brakeAtM: 300, apexKph: 110, ersStore: store,
+        ersDeployed: [for (var i = 0; i < n; i++) i * 1000.0], ersMode: List.filled(n, 1));
+    expect(analyzeLap(normal, fullNormal, detectLapCorners(full)).ers!.underusedStraights, isEmpty);
+    final fullOvertake = _lap(brakeAtM: 300, apexKph: 110, ersStore: store,
+        ersDeployed: [for (var i = 0; i < n; i++) i * 1000.0], ersMode: [for (var i = 0; i < n; i++) i * _res < 200 ? 3 : 1]);
+    expect(ersFeedbackLines(analyzeLap(normal, fullOvertake, detectLapCorners(full)).ers!)[1],
+        endsWith('기준 랩은 여기서 Overtake 모드를 켰어요, 이 직선에서 켜세요'));
+
+    final overtakeErs = analyzeLap(overtake, full, detectLapCorners(full), focus: AnalysisFocus.battery).ers!;
+    expect(overtakeErs.straights.single.boostM, closeTo(200, _res));
+    expect(overtakeErs.underusedStraights, isEmpty);
+    expect(ersFeedbackLines(overtakeErs, focus: AnalysisFocus.battery).where((l) => l.startsWith('배터리는')), isEmpty);
   });
 
   test('레이스는 타이어 관리, 그 밖은 최대 속도가 기본 분석 기준', () {

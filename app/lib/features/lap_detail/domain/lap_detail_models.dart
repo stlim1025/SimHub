@@ -359,6 +359,9 @@ const String kWorldPosYChannel = 'worldPosY';
 const String kErsStoreChannel = 'ersStoreEnergy';
 const String kErsDeployedChannel = 'ersDeployedThisLap';
 
+/// extra 채널: 게임 ERS 배포 모드(0 None·1 Medium(Normal)·2 Hotlap·3 Overtake).
+const String kErsDeployModeChannel = 'ersDeployMode';
+
 /// extra 채널: 바퀴별 노면 종류(FL·FR·RL·RR). 값 1 = 연석(Rumble) — `shared/telemetry/f1_25_udp_spec.md`.
 const List<String> kSurfaceTypeChannels = ['surfaceTypeFL', 'surfaceTypeFR', 'surfaceTypeRL', 'surfaceTypeRR'];
 const int kSurfaceRumble = 1;
@@ -382,6 +385,7 @@ class LapTrace {
     this.worldPosY = const [],
     this.ersStoreJ = const [],
     this.ersDeployedJ = const [],
+    this.ersDeployMode = const [],
     this.kerbContact = const [],
   });
 
@@ -429,6 +433,11 @@ class LapTrace {
   /// ERS 두 채널이 모두 있는지(고스트 재생 HUD의 배터리 표시).
   bool get hasErs => length > 0 && ersStoreJ.length == length && ersDeployedJ.length == length;
 
+  /// 표본마다 ERS 배포 모드([kErsDeployModeChannel] 값) — 없거나 길이가 다르면 빈 목록.
+  final List<int> ersDeployMode;
+
+  bool get hasErsDeployMode => length > 0 && ersDeployMode.length == length;
+
   /// 표본마다 바퀴 하나라도 연석 위에 있었는지(노면 채널). 채널이 없거나 길이가 다르면 빈 목록.
   final List<bool> kerbContact;
 
@@ -472,6 +481,7 @@ class LapTrace {
       worldPosY: hasBoth ? _positionChannel(extra?[kWorldPosYChannel], length) : const [],
       ersStoreJ: _positionChannel(extra?[kErsStoreChannel], length),
       ersDeployedJ: _positionChannel(extra?[kErsDeployedChannel], length),
+      ersDeployMode: List.unmodifiable(_positionChannel(extra?[kErsDeployModeChannel], length).map((v) => v.round())),
       kerbContact: _kerbContact(extra, length),
     );
   }

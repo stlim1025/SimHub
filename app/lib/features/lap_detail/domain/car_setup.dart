@@ -244,7 +244,7 @@ SetupDiagnosis diagnoseSetup(CarSetup setup, String trackName) {
     oversteer += (n - _middle) * _diffWeight;
     if (n >= _high) {
       add('디퍼렌셜', '온스로틀 ${_f(on)}%',
-          '많이 잠겨 탈출 트랙션은 좋지만 두 뒷바퀴가 함께 돌아 탈출 중 차가 덜 돌고, 스로틀을 거칠게 열면 한꺼번에 휠스핀·파워 오버스티어가 나요. 저속 코너 탈출에서 특히 조심하세요.',
+          '많이 잠겨 탈출 트랙션은 좋지만 두 뒷바퀴가 함께 돌아 탈출 중 차가 덜 돌고, 스로틀을 한 번에 깊이 밟으면 한꺼번에 휠스핀·파워 오버스티어가 나요. 저속 코너 탈출에서 특히 조심하세요.',
           SetupTone.caution);
     } else if (n <= _onThrottleOpen) {
       add('디퍼렌셜', '온스로틀 ${_f(on)}%', '많이 열려 탈출 때 차가 잘 돌지만 안쪽 바퀴가 헛돌아 트랙션이 떨어져요.', SetupTone.caution);
@@ -396,7 +396,7 @@ SetupDiagnosis diagnoseSetup(CarSetup setup, String trackName) {
   }
 
   final balance = oversteer >= _balanceLean
-      ? '전체적으로 오버스티어 경향이에요 — 리어가 먼저 미끄러지기 쉬우니 탈출에서 스로틀을 부드럽게 여세요.'
+      ? '전체적으로 오버스티어 경향이에요 — 리어가 먼저 미끄러지기 쉬우니 탈출에서 핸들을 풀어 가며 스로틀을 천천히 밟으세요.'
       : oversteer <= -_balanceLean
           ? '전체적으로 언더스티어 경향이에요 — 코너에서 앞이 밀리기 쉬우니 진입 속도를 조금 낮추세요.'
           : '전체 밸런스는 중립에 가까워요.';
