@@ -76,9 +76,18 @@ public sealed record HighlightsResponse(
 /// </summary>
 public static class HighlightsBuilder
 {
-    /// <summary>묶음마다 클립 수 한도.</summary>
-    private const int MineClipLimit = 14;
-    private const int RaceClipLimit = 18;
+    /// <summary>
+    /// 묶음마다 클립 수 한도 = 기본 + 랩 수 × 랩당 클립, [Min]~[Max] 안으로 — 긴 레이스는 후반 싸움까지 담고, 짧은 레이스는 같은 장면을 늘어놓지 않게.
+    /// 랩 수는 세션 랩 수, 모르면(0) 우승 차의 결승선 통과 수.
+    /// </summary>
+    private const int RaceClipBase = 6;
+    private const double RaceClipsPerLap = 0.6;
+    private const int RaceClipMin = 10;
+    private const int RaceClipMax = 40;
+    private const int MineClipBase = 4;
+    private const double MineClipsPerLap = 0.4;
+    private const int MineClipMin = 8;
+    private const int MineClipMax = 30;
 
     /// <summary>출발 장면 길이(이 안의 추월은 출발 장면에 맡긴다).</summary>
     private const int StartWindowMs = 18_000;
@@ -261,7 +270,8 @@ public static class HighlightsBuilder
         }
 
         var standings = new RaceStandings(timeline, trackLengthM, totalLaps, winner, crossings, retirements, pitPhases);
-        var raceScenes = Pick(scenes, RaceClipLimit);
+        var laps = totalLaps > 0 ? totalLaps : winnerCrossings?.Count ?? 0;
+        var raceScenes = Pick(scenes, ClipLimit(laps, RaceClipBase, RaceClipsPerLap, RaceClipMin, RaceClipMax));
         var mineScenes = new List<Scene>();
         if (player is { } me)
         {
@@ -273,7 +283,7 @@ public static class HighlightsBuilder
                 mineScenes.Add(new Scene(HighlightKind.Finish, mine[^1], me, null, FinishScore, FinishBeforeMs, FinishAfterMs));
             }
 
-            mineScenes = Pick(mineScenes, MineClipLimit);
+            mineScenes = Pick(mineScenes, ClipLimit(laps, MineClipBase, MineClipsPerLap, MineClipMin, MineClipMax));
         }
 
         return new HighlightsResponse(
@@ -472,6 +482,9 @@ public static class HighlightsBuilder
             .OrderByDescending(x => crossings[x.car].Count(t => t <= timeMs) * CrossingWeightM + x.sample!.Value.LapDistanceM)
             .Select(x => (int?)x.car)
             .FirstOrDefault();
+
+    private static int ClipLimit(int laps, int clipBase, double perLap, int min, int max)
+        => Math.Clamp(clipBase + (int)Math.Round(laps * perLap), min, max);
 
     /// <summary>
     /// 점수 높은 것부터 [limit]개를 시간 순으로. 이미 고른 클립 구간 안에 드는 장면은 그 클립이 보여 주므로 뺀다.

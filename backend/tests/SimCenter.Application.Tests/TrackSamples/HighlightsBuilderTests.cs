@@ -72,8 +72,8 @@ public sealed class HighlightsBuilderTests
         new(2, "THIRD", "#fff", false, 3),
     ];
 
-    private static HighlightsResponse Build(DecodedTrackSamples samples, IReadOnlyList<RaceFlagPeriod>? flags = null)
-        => HighlightsBuilder.Build(Guid.Empty, Guid.Empty, "F1_25", 5, RaceTimeline.Build([samples]), TrackLength, Cars, flags ?? [], []);
+    private static HighlightsResponse Build(DecodedTrackSamples samples, IReadOnlyList<RaceFlagPeriod>? flags = null, int laps = 5)
+        => HighlightsBuilder.Build(Guid.Empty, Guid.Empty, "F1_25", laps, RaceTimeline.Build([samples]), TrackLength, Cars, flags ?? [], []);
 
     [Fact]
     public void Timeline_WhenTimeGoesBack_DropsSamplesAfterTheRewind()
@@ -271,12 +271,31 @@ public sealed class HighlightsBuilderTests
         var samples = Race(
             new Dictionary<byte, double> { [1] = 330, [4] = 320, [2] = 30, [3] = 20 }, toMs: raceMs, marks: [.. marks]);
 
-        var race = Build(samples).Race;
+        var race = Build(samples, laps: 20).Race;
 
         Assert.DoesNotContain(race, c => c.Kind == nameof(HighlightKind.Collision));
         var overtakes = race.Where(c => c.Kind == nameof(HighlightKind.Overtake)).ToList();
-        Assert.Equal(16, overtakes.Count);                 // 한도 18 − 출발·결승
+        Assert.Equal(16, overtakes.Count);                 // 한도 18(20랩) − 출발·결승
         Assert.InRange(overtakes.Count(c => c.FocusCar is 2 or 3), 6, 10);
+    }
+
+    [Fact]
+    public void ClipLimit_GrowsWithTheRaceLaps()
+    {
+        // 6초마다 다른 두 쌍이 번갈아 추월 — 장면은 한도보다 많다. 5랩이면 10개, 40랩이면 30개까지.
+        const int raceMs = 420_000;
+        var marks = new List<Mark>();
+        for (var t = 30_000; t <= 400_000; t += 6_000)
+        {
+            var (by, of) = t / 6_000 % 2 == 0 ? ((byte)4, (byte)1) : ((byte)3, (byte)2);
+            marks.Add(new Mark(t, by, Flags2: RaceSample.OvertookFlag));
+            marks.Add(new Mark(t, of, Flags2: RaceSample.OvertakenFlag));
+        }
+
+        var samples = Race(new Dictionary<byte, double> { [1] = 330, [4] = 320, [2] = 30, [3] = 20 }, toMs: raceMs, marks: [.. marks]);
+
+        Assert.Equal(10, Build(samples, laps: 5).Race.Count);
+        Assert.True(Build(samples, laps: 40).Race.Count > 18);
     }
 
     [Fact]
@@ -301,7 +320,7 @@ public sealed class HighlightsBuilderTests
             marks.Add(new Mark(t, of, Flags2: RaceSample.OvertakenFlag));
         }
 
-        var race = Build(Race(new Dictionary<byte, double> { [1] = 330, [4] = 320, [2] = 30, [3] = 20 }, toMs: raceMs, marks: [.. marks])).Race;
+        var race = Build(Race(new Dictionary<byte, double> { [1] = 330, [4] = 320, [2] = 30, [3] = 20 }, toMs: raceMs, marks: [.. marks]), laps: 20).Race;
 
         Assert.InRange(race.Count(c => c.Kind == nameof(HighlightKind.Overtake)), 4, 6);
         Assert.InRange(race.Count(c => c.Kind == nameof(HighlightKind.Collision)), 10, 12);
