@@ -72,6 +72,8 @@ flutter:
     # 고스트 재생 실측 트랙 폭: TUMFTM/racetrack-database(LGPL-3.0) 중심선·좌우 폭과 그 라이선스.
     - assets/track_widths/track_widths.json
     - assets/track_widths/LICENSE-racetrack-database.txt
+    # 공식 코너 번호·위치(F1 라이브 타이밍 서킷 정보에서 만든 랩 거리 비율).
+    - assets/track_corners/track_corners.json
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

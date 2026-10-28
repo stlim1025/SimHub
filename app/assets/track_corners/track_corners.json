@@ -1,0 +1,2618 @@
+{
+ "source": "Official F1 corner numbering and positions (F1 live timing circuit info via api.multiviewer.app). fraction = distance from the timing line / lap length. Reverse layouts keep the original numbers.",
+ "tracks": {
+  "Melbourne": {
+   "year": 2022,
+   "corners": [
+    {
+     "number": 1,
+     "letter": "",
+     "fraction": 0.06798
+    },
+    {
+     "number": 2,
+     "letter": "",
+     "fraction": 0.08345
+    },
+    {
+     "number": 3,
+     "letter": "",
+     "fraction": 0.20604
+    },
+    {
+     "number": 4,
+     "letter": "",
+     "fraction": 0.23534
+    },
+    {
+     "number": 5,
+     "letter": "",
+     "fraction": 0.27339
+    },
+    {
+     "number": 6,
+     "letter": "",
+     "fraction": 0.35504
+    },
+    {
+     "number": 7,
+     "letter": "",
+     "fraction": 0.37606
+    },
+    {
+     "number": 8,
+     "letter": "",
+     "fraction": 0.41482
+    },
+    {
+     "number": 9,
+     "letter": "",
+     "fraction": 0.62633
+    },
+    {
+     "number": 10,
+     "letter": "",
+     "fraction": 0.64805
+    },
+    {
+     "number": 11,
+     "letter": "",
+     "fraction": 0.78197
+    },
+    {
+     "number": 12,
+     "letter": "",
+     "fraction": 0.83213
+    },
+    {
+     "number": 13,
+     "letter": "",
+     "fraction": 0.87894
+    },
+    {
+     "number": 14,
+     "letter": "",
+     "fraction": 0.91011
+    }
+   ]
+  },
+  "Sakhir (Bahrain)": {
+   "year": 2022,
+   "corners": [
+    {
+     "number": 1,
+     "letter": "",
+     "fraction": 0.13225
+    },
+    {
+     "number": 2,
+     "letter": "",
+     "fraction": 0.14995
+    },
+    {
+     "number": 3,
+     "letter": "",
+     "fraction": 0.17093
+    },
+    {
+     "number": 4,
+     "letter": "",
+     "fraction": 0.28048
+    },
+    {
+     "number": 5,
+     "letter": "",
+     "fraction": 0.33005
+    },
+    {
+     "number": 6,
+     "letter": "",
+     "fraction": 0.34759
+    },
+    {
+     "number": 7,
+     "letter": "",
+     "fraction": 0.36466
+    },
+    {
+     "number": 8,
+     "letter": "",
+     "fraction": 0.41289
+    },
+    {
+     "number": 9,
+     "letter": "",
+     "fraction": 0.48054
+    },
+    {
+     "number": 10,
+     "letter": "",
+     "fraction": 0.49848
+    },
+    {
+     "number": 11,
+     "letter": "",
+     "fraction": 0.64334
+    },
+    {
+     "number": 12,
+     "letter": "",
+     "fraction": 0.71749
+    },
+    {
+     "number": 13,
+     "letter": "",
+     "fraction": 0.75836
+    },
+    {
+     "number": 14,
+     "letter": "",
+     "fraction": 0.9091
+    },
+    {
+     "number": 15,
+     "letter": "",
+     "fraction": 0.92429
+    }
+   ]
+  },
+  "Jeddah": {
+   "year": 2022,
+   "corners": [
+    {
+     "number": 1,
+     "letter": "",
+     "fraction": 0.07934
+    },
+    {
+     "number": 2,
+     "letter": "",
+     "fraction": 0.08903
+    },
+    {
+     "number": 3,
+     "letter": "",
+     "fraction": 0.11193
+    },
+    {
+     "number": 4,
+     "letter": "",
+     "fraction": 0.16149
+    },
+    {
+     "number": 5,
+     "letter": "",
+     "fraction": 0.17884
+    },
+    {
+     "number": 6,
+     "letter": "",
+     "fraction": 0.20386
+    },
+    {
+     "number": 7,
+     "letter": "",
+     "fraction": 0.22293
+    },
+    {
+     "number": 8,
+     "letter": "",
+     "fraction": 0.23512
+    },
+    {
+     "number": 9,
+     "letter": "",
+     "fraction": 0.2606
+    },
+    {
+     "number": 10,
+     "letter": "",
+     "fraction": 0.27741
+    },
+    {
+     "number": 11,
+     "letter": "",
+     "fraction": 0.29398
+    },
+    {
+     "number": 12,
+     "letter": "",
+     "fraction": 0.30844
+    },
+    {
+     "number": 13,
+     "letter": "",
+     "fraction": 0.39482
+    },
+    {
+     "number": 14,
+     "letter": "",
+     "fraction": 0.44695
+    },
+    {
+     "number": 15,
+     "letter": "",
+     "fraction": 0.48041
+    },
+    {
+     "number": 16,
+     "letter": "",
+     "fraction": 0.50151
+    },
+    {
+     "number": 17,
+     "letter": "",
+     "fraction": 0.518
+    },
+    {
+     "number": 18,
+     "letter": "",
+     "fraction": 0.55459
+    },
+    {
+     "number": 19,
+     "letter": "",
+     "fraction": 0.58695
+    },
+    {
+     "number": 20,
+     "letter": "",
+     "fraction": 0.62095
+    },
+    {
+     "number": 21,
+     "letter": "",
+     "fraction": 0.65378
+    },
+    {
+     "number": 22,
+     "letter": "",
+     "fraction": 0.69357
+    },
+    {
+     "number": 23,
+     "letter": "",
+     "fraction": 0.70818
+    },
+    {
+     "number": 24,
+     "letter": "",
+     "fraction": 0.73163
+    },
+    {
+     "number": 25,
+     "letter": "",
+     "fraction": 0.77916
+    },
+    {
+     "number": 26,
+     "letter": "",
+     "fraction": 0.83841
+    },
+    {
+     "number": 27,
+     "letter": "",
+     "fraction": 0.90164
+    }
+   ]
+  },
+  "Shanghai": {
+   "year": 2019,
+   "corners": [
+    {
+     "number": 1,
+     "letter": "",
+     "fraction": 0.10552
+    },
+    {
+     "number": 2,
+     "letter": "",
+     "fraction": 0.13938
+    },
+    {
+     "number": 3,
+     "letter": "",
+     "fraction": 0.16746
+    },
+    {
+     "number": 4,
+     "letter": "",
+     "fraction": 0.19234
+    },
+    {
+     "number": 5,
+     "letter": "",
+     "fraction": 0.24771
+    },
+    {
+     "number": 6,
+     "letter": "",
+     "fraction": 0.29441
+    },
+    {
+     "number": 7,
+     "letter": "",
+     "fraction": 0.3792
+    },
+    {
+     "number": 8,
+     "letter": "",
+     "fraction": 0.43395
+    },
+    {
+     "number": 9,
+     "letter": "",
+     "fraction": 0.46907
+    },
+    {
+     "number": 10,
+     "letter": "",
+     "fraction": 0.49042
+    },
+    {
+     "number": 11,
+     "letter": "",
+     "fraction": 0.5781
+    },
+    {
+     "number": 12,
+     "letter": "",
+     "fraction": 0.59375
+    },
+    {
+     "number": 13,
+     "letter": "",
+     "fraction": 0.63114
+    },
+    {
+     "number": 14,
+     "letter": "",
+     "fraction": 0.88221
+    },
+    {
+     "number": 15,
+     "letter": "",
+     "fraction": 0.89723
+    },
+    {
+     "number": 16,
+     "letter": "",
+     "fraction": 0.95159
+    }
+   ]
+  },
+  "Suzuka": {
+   "year": 2025,
+   "corners": [
+    {
+     "number": 1,
+     "letter": "",
+     "fraction": 0.12195
+    },
+    {
+     "number": 2,
+     "letter": "",
+     "fraction": 0.14231
+    },
+    {
+     "number": 3,
+     "letter": "",
+     "fraction": 0.18508
+    },
+    {
+     "number": 4,
+     "letter": "",
+     "fraction": 0.20779
+    },
+    {
+     "number": 5,
+     "letter": "",
+     "fraction": 0.2345
+    },
+    {
+     "number": 6,
+     "letter": "",
+     "fraction": 0.26293
+    },
+    {
+     "number": 7,
+     "letter": "",
+     "fraction": 0.32042
+    },
+    {
+     "number": 8,
+     "letter": "",
+     "fraction": 0.39209
+    },
+    {
+     "number": 9,
+     "letter": "",
+     "fraction": 0.41911
+    },
+    {
+     "number": 10,
+     "letter": "",
+     "fraction": 0.47393
+    },
+    {
+     "number": 11,
+     "letter": "",
+     "fraction": 0.50064
+    },
+    {
+     "number": 12,
+     "letter": "",
+     "fraction": 0.54442
+    },
+    {
+     "number": 13,
+     "letter": "",
+     "fraction": 0.65463
+    },
+    {
+     "number": 14,
+     "letter": "",
+     "fraction": 0.68157
+    },
+    {
+     "number": 15,
+     "letter": "",
+     "fraction": 0.86187
+    },
+    {
+     "number": 16,
+     "letter": "",
+     "fraction": 0.93017
+    },
+    {
+     "number": 17,
+     "letter": "",
+     "fraction": 0.9427
+    },
+    {
+     "number": 18,
+     "letter": "",
+     "fraction": 0.97144
+    }
+   ]
+  },
+  "Miami": {
+   "year": 2022,
+   "corners": [
+    {
+     "number": 1,
+     "letter": "",
+     "fraction": 0.07075
+    },
+    {
+     "number": 2,
+     "letter": "",
+     "fraction": 0.09022
+    },
+    {
+     "number": 3,
+     "letter": "",
+     "fraction": 0.10726
+    },
+    {
+     "number": 4,
+     "letter": "",
+     "fraction": 0.21312
+    },
+    {
+     "number": 5,
+     "letter": "",
+     "fraction": 0.23899
+    },
+    {
+     "number": 6,
+     "letter": "",
+     "fraction": 0.26667
+    },
+    {
+     "number": 7,
+     "letter": "",
+     "fraction": 0.29247
+    },
+    {
+     "number": 8,
+     "letter": "",
+     "fraction": 0.31107
+    },
+    {
+     "number": 9,
+     "letter": "",
+     "fraction": 0.40934
+    },
+    {
+     "number": 10,
+     "letter": "",
+     "fraction": 0.46157
+    },
+    {
+     "number": 11,
+     "letter": "",
+     "fraction": 0.58102
+    },
+    {
+     "number": 12,
+     "letter": "",
+     "fraction": 0.60213
+    },
+    {
+     "number": 13,
+     "letter": "",
+     "fraction": 0.62629
+    },
+    {
+     "number": 14,
+     "letter": "",
+     "fraction": 0.64028
+    },
+    {
+     "number": 15,
+     "letter": "",
+     "fraction": 0.64388
+    },
+    {
+     "number": 16,
+     "letter": "",
+     "fraction": 0.66077
+    },
+    {
+     "number": 17,
+     "letter": "",
+     "fraction": 0.90703
+    },
+    {
+     "number": 18,
+     "letter": "",
+     "fraction": 0.93299
+    },
+    {
+     "number": 19,
+     "letter": "",
+     "fraction": 0.97192
+    }
+   ]
+  },
+  "Imola": {
+   "year": 2022,
+   "corners": [
+    {
+     "number": 1,
+     "letter": "",
+     "fraction": 0.05219
+    },
+    {
+     "number": 2,
+     "letter": "",
+     "fraction": 0.18173
+    },
+    {
+     "number": 3,
+     "letter": "",
+     "fraction": 0.19439
+    },
+    {
+     "number": 4,
+     "letter": "",
+     "fraction": 0.22345
+    },
+    {
+     "number": 5,
+     "letter": "",
+     "fraction": 0.31205
+    },
+    {
+     "number": 6,
+     "letter": "",
+     "fraction": 0.3319
+    },
+    {
+     "number": 7,
+     "letter": "",
+     "fraction": 0.38893
+    },
+    {
+     "number": 8,
+     "letter": "",
+     "fraction": 0.47081
+    },
+    {
+     "number": 9,
+     "letter": "",
+     "fraction": 0.5216
+    },
+    {
+     "number": 10,
+     "letter": "",
+     "fraction": 0.54933
+    },
+    {
+     "number": 11,
+     "letter": "",
+     "fraction": 0.60074
+    },
+    {
+     "number": 12,
+     "letter": "",
+     "fraction": 0.62012
+    },
+    {
+     "number": 13,
+     "letter": "",
+     "fraction": 0.63715
+    },
+    {
+     "number": 14,
+     "letter": "",
+     "fraction": 0.72216
+    },
+    {
+     "number": 15,
+     "letter": "",
+     "fraction": 0.73216
+    },
+    {
+     "number": 16,
+     "letter": "",
+     "fraction": 0.84537
+    },
+    {
+     "number": 17,
+     "letter": "",
+     "fraction": 0.88537
+    },
+    {
+     "number": 18,
+     "letter": "",
+     "fraction": 0.9142
+    },
+    {
+     "number": 19,
+     "letter": "",
+     "fraction": 0.9778
+    }
+   ]
+  },
+  "Monaco": {
+   "year": 2022,
+   "corners": [
+    {
+     "number": 1,
+     "letter": "",
+     "fraction": 0.05941
+    },
+    {
+     "number": 2,
+     "letter": "",
+     "fraction": 0.17869
+    },
+    {
+     "number": 3,
+     "letter": "",
+     "fraction": 0.22918
+    },
+    {
+     "number": 4,
+     "letter": "",
+     "fraction": 0.26748
+    },
+    {
+     "number": 5,
+     "letter": "",
+     "fraction": 0.33674
+    },
+    {
+     "number": 6,
+     "letter": "",
+     "fraction": 0.37316
+    },
+    {
+     "number": 7,
+     "letter": "",
+     "fraction": 0.39739
+    },
+    {
+     "number": 8,
+     "letter": "",
+     "fraction": 0.42381
+    },
+    {
+     "number": 9,
+     "letter": "",
+     "fraction": 0.52527
+    },
+    {
+     "number": 10,
+     "letter": "",
+     "fraction": 0.62533
+    },
+    {
+     "number": 11,
+     "letter": "",
+     "fraction": 0.64127
+    },
+    {
+     "number": 12,
+     "letter": "",
+     "fraction": 0.71099
+    },
+    {
+     "number": 13,
+     "letter": "",
+     "fraction": 0.75774
+    },
+    {
+     "number": 14,
+     "letter": "",
+     "fraction": 0.7668
+    },
+    {
+     "number": 15,
+     "letter": "",
+     "fraction": 0.80776
+    },
+    {
+     "number": 16,
+     "letter": "",
+     "fraction": 0.81433
+    },
+    {
+     "number": 17,
+     "letter": "",
+     "fraction": 0.83684
+    },
+    {
+     "number": 18,
+     "letter": "",
+     "fraction": 0.87264
+    },
+    {
+     "number": 19,
+     "letter": "",
+     "fraction": 0.90047
+    }
+   ]
+  },
+  "Montreal": {
+   "year": 2022,
+   "corners": [
+    {
+     "number": 1,
+     "letter": "",
+     "fraction": 0.052
+    },
+    {
+     "number": 2,
+     "letter": "",
+     "fraction": 0.07565
+    },
+    {
+     "number": 3,
+     "letter": "",
+     "fraction": 0.16282
+    },
+    {
+     "number": 4,
+     "letter": "",
+     "fraction": 0.17598
+    },
+    {
+     "number": 5,
+     "letter": "",
+     "fraction": 0.22782
+    },
+    {
+     "number": 6,
+     "letter": "",
+     "fraction": 0.2792
+    },
+    {
+     "number": 7,
+     "letter": "",
+     "fraction": 0.2994
+    },
+    {
+     "number": 8,
+     "letter": "",
+     "fraction": 0.45698
+    },
+    {
+     "number": 9,
+     "letter": "",
+     "fraction": 0.47569
+    },
+    {
+     "number": 10,
+     "letter": "",
+     "fraction": 0.61376
+    },
+    {
+     "number": 11,
+     "letter": "",
+     "fraction": 0.6382
+    },
+    {
+     "number": 12,
+     "letter": "",
+     "fraction": 0.72333
+    },
+    {
+     "number": 13,
+     "letter": "",
+     "fraction": 0.88928
+    },
+    {
+     "number": 14,
+     "letter": "",
+     "fraction": 0.8968
+    }
+   ]
+  },
+  "Catalunya": {
+   "year": 2023,
+   "corners": [
+    {
+     "number": 1,
+     "letter": "",
+     "fraction": 0.17662
+    },
+    {
+     "number": 2,
+     "letter": "",
+     "fraction": 0.19432
+    },
+    {
+     "number": 3,
+     "letter": "",
+     "fraction": 0.24915
+    },
+    {
+     "number": 4,
+     "letter": "",
+     "fraction": 0.37243
+    },
+    {
+     "number": 5,
+     "letter": "",
+     "fraction": 0.46744
+    },
+    {
+     "number": 6,
+     "letter": "",
+     "fraction": 0.50754
+    },
+    {
+     "number": 7,
+     "letter": "",
+     "fraction": 0.54459
+    },
+    {
+     "number": 8,
+     "letter": "",
+     "fraction": 0.56441
+    },
+    {
+     "number": 9,
+     "letter": "",
+     "fraction": 0.62252
+    },
+    {
+     "number": 10,
+     "letter": "",
+     "fraction": 0.75176
+    },
+    {
+     "number": 11,
+     "letter": "",
+     "fraction": 0.78418
+    },
+    {
+     "number": 12,
+     "letter": "",
+     "fraction": 0.80745
+    },
+    {
+     "number": 13,
+     "letter": "",
+     "fraction": 0.86768
+    },
+    {
+     "number": 14,
+     "letter": "",
+     "fraction": 0.93465
+    }
+   ]
+  },
+  "Austria (Red Bull Ring)": {
+   "year": 2022,
+   "corners": [
+    {
+     "number": 1,
+     "letter": "",
+     "fraction": 0.10035
+    },
+    {
+     "number": 2,
+     "letter": "",
+     "fraction": 0.24862
+    },
+    {
+     "number": 3,
+     "letter": "",
+     "fraction": 0.31857
+    },
+    {
+     "number": 4,
+     "letter": "",
+     "fraction": 0.50841
+    },
+    {
+     "number": 5,
+     "letter": "",
+     "fraction": 0.55225
+    },
+    {
+     "number": 6,
+     "letter": "",
+     "fraction": 0.62877
+    },
+    {
+     "number": 7,
+     "letter": "",
+     "fraction": 0.70341
+    },
+    {
+     "number": 8,
+     "letter": "",
+     "fraction": 0.7503
+    },
+    {
+     "number": 9,
+     "letter": "",
+     "fraction": 0.87512
+    },
+    {
+     "number": 10,
+     "letter": "",
+     "fraction": 0.91928
+    }
+   ]
+  },
+  "Silverstone": {
+   "year": 2022,
+   "corners": [
+    {
+     "number": 1,
+     "letter": "",
+     "fraction": 0.07753
+    },
+    {
+     "number": 2,
+     "letter": "",
+     "fraction": 0.10468
+    },
+    {
+     "number": 3,
+     "letter": "",
+     "fraction": 0.14865
+    },
+    {
+     "number": 4,
+     "letter": "",
+     "fraction": 0.17783
+    },
+    {
+     "number": 5,
+     "letter": "",
+     "fraction": 0.21061
+    },
+    {
+     "number": 6,
+     "letter": "",
+     "fraction": 0.33642
+    },
+    {
+     "number": 7,
+     "letter": "",
+     "fraction": 0.37397
+    },
+    {
+     "number": 8,
+     "letter": "",
+     "fraction": 0.43288
+    },
+    {
+     "number": 9,
+     "letter": "",
+     "fraction": 0.52285
+    },
+    {
+     "number": 10,
+     "letter": "",
+     "fraction": 0.61752
+    },
+    {
+     "number": 11,
+     "letter": "",
+     "fraction": 0.63317
+    },
+    {
+     "number": 12,
+     "letter": "",
+     "fraction": 0.65804
+    },
+    {
+     "number": 13,
+     "letter": "",
+     "fraction": 0.68222
+    },
+    {
+     "number": 14,
+     "letter": "",
+     "fraction": 0.70733
+    },
+    {
+     "number": 15,
+     "letter": "",
+     "fraction": 0.85512
+    },
+    {
+     "number": 16,
+     "letter": "",
+     "fraction": 0.93242
+    },
+    {
+     "number": 17,
+     "letter": "",
+     "fraction": 0.94775
+    },
+    {
+     "number": 18,
+     "letter": "",
+     "fraction": 0.97349
+    }
+   ]
+  },
+  "Hungaroring": {
+   "year": 2021,
+   "corners": [
+    {
+     "number": 1,
+     "letter": "",
+     "fraction": 0.14845
+    },
+    {
+     "number": 1,
+     "letter": "A",
+     "fraction": 0.19118
+    },
+    {
+     "number": 2,
+     "letter": "",
+     "fraction": 0.26337
+    },
+    {
+     "number": 3,
+     "letter": "",
+     "fraction": 0.30509
+    },
+    {
+     "number": 4,
+     "letter": "",
+     "fraction": 0.41471
+    },
+    {
+     "number": 5,
+     "letter": "",
+     "fraction": 0.47026
+    },
+    {
+     "number": 6,
+     "letter": "",
+     "fraction": 0.54737
+    },
+    {
+     "number": 7,
+     "letter": "",
+     "fraction": 0.55729
+    },
+    {
+     "number": 8,
+     "letter": "",
+     "fraction": 0.59566
+    },
+    {
+     "number": 9,
+     "letter": "",
+     "fraction": 0.62777
+    },
+    {
+     "number": 10,
+     "letter": "",
+     "fraction": 0.67254
+    },
+    {
+     "number": 11,
+     "letter": "",
+     "fraction": 0.71824
+    },
+    {
+     "number": 12,
+     "letter": "",
+     "fraction": 0.8091
+    },
+    {
+     "number": 12,
+     "letter": "A",
+     "fraction": 0.83848
+    },
+    {
+     "number": 13,
+     "letter": "",
+     "fraction": 0.87036
+    },
+    {
+     "number": 14,
+     "letter": "",
+     "fraction": 0.93731
+    }
+   ]
+  },
+  "Spa": {
+   "year": 2021,
+   "corners": [
+    {
+     "number": 1,
+     "letter": "",
+     "fraction": 0.05485
+    },
+    {
+     "number": 2,
+     "letter": "",
+     "fraction": 0.15244
+    },
+    {
+     "number": 3,
+     "letter": "",
+     "fraction": 0.16869
+    },
+    {
+     "number": 4,
+     "letter": "",
+     "fraction": 0.18284
+    },
+    {
+     "number": 5,
+     "letter": "",
+     "fraction": 0.34559
+    },
+    {
+     "number": 6,
+     "letter": "",
+     "fraction": 0.35692
+    },
+    {
+     "number": 7,
+     "letter": "",
+     "fraction": 0.3806
+    },
+    {
+     "number": 8,
+     "letter": "",
+     "fraction": 0.43693
+    },
+    {
+     "number": 9,
+     "letter": "",
+     "fraction": 0.4717
+    },
+    {
+     "number": 10,
+     "letter": "",
+     "fraction": 0.54578
+    },
+    {
+     "number": 11,
+     "letter": "",
+     "fraction": 0.58133
+    },
+    {
+     "number": 12,
+     "letter": "",
+     "fraction": 0.6418
+    },
+    {
+     "number": 13,
+     "letter": "",
+     "fraction": 0.66454
+    },
+    {
+     "number": 14,
+     "letter": "",
+     "fraction": 0.70697
+    },
+    {
+     "number": 15,
+     "letter": "",
+     "fraction": 0.74291
+    },
+    {
+     "number": 16,
+     "letter": "",
+     "fraction": 0.84644
+    },
+    {
+     "number": 17,
+     "letter": "",
+     "fraction": 0.88582
+    },
+    {
+     "number": 18,
+     "letter": "",
+     "fraction": 0.96302
+    },
+    {
+     "number": 19,
+     "letter": "",
+     "fraction": 0.97263
+    }
+   ]
+  },
+  "Zandvoort": {
+   "year": 2021,
+   "corners": [
+    {
+     "number": 1,
+     "letter": "",
+     "fraction": 0.08556
+    },
+    {
+     "number": 2,
+     "letter": "",
+     "fraction": 0.15808
+    },
+    {
+     "number": 3,
+     "letter": "",
+     "fraction": 0.19707
+    },
+    {
+     "number": 4,
+     "letter": "",
+     "fraction": 0.24755
+    },
+    {
+     "number": 5,
+     "letter": "",
+     "fraction": 0.29147
+    },
+    {
+     "number": 6,
+     "letter": "",
+     "fraction": 0.32936
+    },
+    {
+     "number": 7,
+     "letter": "",
+     "fraction": 0.40071
+    },
+    {
+     "number": 8,
+     "letter": "",
+     "fraction": 0.47596
+    },
+    {
+     "number": 9,
+     "letter": "",
+     "fraction": 0.52753
+    },
+    {
+     "number": 10,
+     "letter": "",
+     "fraction": 0.58871
+    },
+    {
+     "number": 11,
+     "letter": "",
+     "fraction": 0.72671
+    },
+    {
+     "number": 12,
+     "letter": "",
+     "fraction": 0.74742
+    },
+    {
+     "number": 13,
+     "letter": "",
+     "fraction": 0.81962
+    },
+    {
+     "number": 14,
+     "letter": "",
+     "fraction": 0.88596
+    }
+   ]
+  },
+  "Monza": {
+   "year": 2021,
+   "corners": [
+    {
+     "number": 1,
+     "letter": "",
+     "fraction": 0.15734
+    },
+    {
+     "number": 2,
+     "letter": "",
+     "fraction": 0.16719
+    },
+    {
+     "number": 3,
+     "letter": "",
+     "fraction": 0.25641
+    },
+    {
+     "number": 4,
+     "letter": "",
+     "fraction": 0.36859
+    },
+    {
+     "number": 5,
+     "letter": "",
+     "fraction": 0.37758
+    },
+    {
+     "number": 6,
+     "letter": "",
+     "fraction": 0.44
+    },
+    {
+     "number": 7,
+     "letter": "",
+     "fraction": 0.49539
+    },
+    {
+     "number": 8,
+     "letter": "",
+     "fraction": 0.68102
+    },
+    {
+     "number": 9,
+     "letter": "",
+     "fraction": 0.6968
+    },
+    {
+     "number": 10,
+     "letter": "",
+     "fraction": 0.71445
+    },
+    {
+     "number": 11,
+     "letter": "",
+     "fraction": 0.90312
+    }
+   ]
+  },
+  "Baku (Azerbaijan)": {
+   "year": 2022,
+   "corners": [
+    {
+     "number": 1,
+     "letter": "",
+     "fraction": 0.04959
+    },
+    {
+     "number": 2,
+     "letter": "",
+     "fraction": 0.10638
+    },
+    {
+     "number": 3,
+     "letter": "",
+     "fraction": 0.25091
+    },
+    {
+     "number": 4,
+     "letter": "",
+     "fraction": 0.28851
+    },
+    {
+     "number": 5,
+     "letter": "",
+     "fraction": 0.34476
+    },
+    {
+     "number": 6,
+     "letter": "",
+     "fraction": 0.35447
+    },
+    {
+     "number": 7,
+     "letter": "",
+     "fraction": 0.41933
+    },
+    {
+     "number": 8,
+     "letter": "",
+     "fraction": 0.45247
+    },
+    {
+     "number": 9,
+     "letter": "",
+     "fraction": 0.45685
+    },
+    {
+     "number": 10,
+     "letter": "",
+     "fraction": 0.46179
+    },
+    {
+     "number": 11,
+     "letter": "",
+     "fraction": 0.4697
+    },
+    {
+     "number": 12,
+     "letter": "",
+     "fraction": 0.47926
+    },
+    {
+     "number": 13,
+     "letter": "",
+     "fraction": 0.54663
+    },
+    {
+     "number": 14,
+     "letter": "",
+     "fraction": 0.5847
+    },
+    {
+     "number": 15,
+     "letter": "",
+     "fraction": 0.62199
+    },
+    {
+     "number": 16,
+     "letter": "",
+     "fraction": 0.68215
+    },
+    {
+     "number": 17,
+     "letter": "",
+     "fraction": 0.71387
+    },
+    {
+     "number": 18,
+     "letter": "",
+     "fraction": 0.75383
+    },
+    {
+     "number": 19,
+     "letter": "",
+     "fraction": 0.77968
+    },
+    {
+     "number": 20,
+     "letter": "",
+     "fraction": 0.83208
+    }
+   ]
+  },
+  "Singapore": {
+   "year": 2023,
+   "corners": [
+    {
+     "number": 1,
+     "letter": "",
+     "fraction": 0.08236
+    },
+    {
+     "number": 2,
+     "letter": "",
+     "fraction": 0.09648
+    },
+    {
+     "number": 3,
+     "letter": "",
+     "fraction": 0.111
+    },
+    {
+     "number": 4,
+     "letter": "",
+     "fraction": 0.14206
+    },
+    {
+     "number": 5,
+     "letter": "",
+     "fraction": 0.1972
+    },
+    {
+     "number": 6,
+     "letter": "",
+     "fraction": 0.28482
+    },
+    {
+     "number": 7,
+     "letter": "",
+     "fraction": 0.36201
+    },
+    {
+     "number": 8,
+     "letter": "",
+     "fraction": 0.40908
+    },
+    {
+     "number": 9,
+     "letter": "",
+     "fraction": 0.44791
+    },
+    {
+     "number": 10,
+     "letter": "",
+     "fraction": 0.53451
+    },
+    {
+     "number": 11,
+     "letter": "",
+     "fraction": 0.56769
+    },
+    {
+     "number": 12,
+     "letter": "",
+     "fraction": 0.58439
+    },
+    {
+     "number": 13,
+     "letter": "",
+     "fraction": 0.61875
+    },
+    {
+     "number": 14,
+     "letter": "",
+     "fraction": 0.73445
+    },
+    {
+     "number": 15,
+     "letter": "",
+     "fraction": 0.77995
+    },
+    {
+     "number": 16,
+     "letter": "",
+     "fraction": 0.88067
+    },
+    {
+     "number": 17,
+     "letter": "",
+     "fraction": 0.89612
+    },
+    {
+     "number": 18,
+     "letter": "",
+     "fraction": 0.95064
+    },
+    {
+     "number": 19,
+     "letter": "",
+     "fraction": 0.97488
+    }
+   ]
+  },
+  "Texas (COTA)": {
+   "year": 2021,
+   "corners": [
+    {
+     "number": 1,
+     "letter": "",
+     "fraction": 0.11829
+    },
+    {
+     "number": 2,
+     "letter": "",
+     "fraction": 0.16305
+    },
+    {
+     "number": 3,
+     "letter": "",
+     "fraction": 0.21141
+    },
+    {
+     "number": 4,
+     "letter": "",
+     "fraction": 0.22735
+    },
+    {
+     "number": 5,
+     "letter": "",
+     "fraction": 0.24556
+    },
+    {
+     "number": 6,
+     "letter": "",
+     "fraction": 0.26985
+    },
+    {
+     "number": 7,
+     "letter": "",
+     "fraction": 0.31197
+    },
+    {
+     "number": 8,
+     "letter": "",
+     "fraction": 0.34033
+    },
+    {
+     "number": 9,
+     "letter": "",
+     "fraction": 0.35744
+    },
+    {
+     "number": 10,
+     "letter": "",
+     "fraction": 0.39603
+    },
+    {
+     "number": 11,
+     "letter": "",
+     "fraction": 0.46643
+    },
+    {
+     "number": 12,
+     "letter": "",
+     "fraction": 0.68565
+    },
+    {
+     "number": 13,
+     "letter": "",
+     "fraction": 0.7287
+    },
+    {
+     "number": 14,
+     "letter": "",
+     "fraction": 0.74206
+    },
+    {
+     "number": 15,
+     "letter": "",
+     "fraction": 0.77925
+    },
+    {
+     "number": 16,
+     "letter": "",
+     "fraction": 0.8137
+    },
+    {
+     "number": 17,
+     "letter": "",
+     "fraction": 0.83839
+    },
+    {
+     "number": 18,
+     "letter": "",
+     "fraction": 0.86386
+    },
+    {
+     "number": 19,
+     "letter": "",
+     "fraction": 0.91566
+    },
+    {
+     "number": 20,
+     "letter": "",
+     "fraction": 0.97191
+    }
+   ]
+  },
+  "Mexico": {
+   "year": 2021,
+   "corners": [
+    {
+     "number": 1,
+     "letter": "",
+     "fraction": 0.28391
+    },
+    {
+     "number": 2,
+     "letter": "",
+     "fraction": 0.3011
+    },
+    {
+     "number": 3,
+     "letter": "",
+     "fraction": 0.3154
+    },
+    {
+     "number": 4,
+     "letter": "",
+     "fraction": 0.47915
+    },
+    {
+     "number": 5,
+     "letter": "",
+     "fraction": 0.49571
+    },
+    {
+     "number": 6,
+     "letter": "",
+     "fraction": 0.52767
+    },
+    {
+     "number": 7,
+     "letter": "",
+     "fraction": 0.60642
+    },
+    {
+     "number": 8,
+     "letter": "",
+     "fraction": 0.63322
+    },
+    {
+     "number": 9,
+     "letter": "",
+     "fraction": 0.65087
+    },
+    {
+     "number": 10,
+     "letter": "",
+     "fraction": 0.6947
+    },
+    {
+     "number": 11,
+     "letter": "",
+     "fraction": 0.71884
+    },
+    {
+     "number": 12,
+     "letter": "",
+     "fraction": 0.85002
+    },
+    {
+     "number": 13,
+     "letter": "",
+     "fraction": 0.89205
+    },
+    {
+     "number": 14,
+     "letter": "",
+     "fraction": 0.90744
+    },
+    {
+     "number": 15,
+     "letter": "",
+     "fraction": 0.91783
+    },
+    {
+     "number": 16,
+     "letter": "",
+     "fraction": 0.93299
+    },
+    {
+     "number": 17,
+     "letter": "",
+     "fraction": 0.96159
+    }
+   ]
+  },
+  "Brazil (Interlagos)": {
+   "year": 2023,
+   "corners": [
+    {
+     "number": 1,
+     "letter": "",
+     "fraction": 0.08206
+    },
+    {
+     "number": 2,
+     "letter": "",
+     "fraction": 0.1054
+    },
+    {
+     "number": 3,
+     "letter": "",
+     "fraction": 0.14965
+    },
+    {
+     "number": 4,
+     "letter": "",
+     "fraction": 0.32885
+    },
+    {
+     "number": 5,
+     "letter": "",
+     "fraction": 0.36752
+    },
+    {
+     "number": 6,
+     "letter": "",
+     "fraction": 0.47198
+    },
+    {
+     "number": 7,
+     "letter": "",
+     "fraction": 0.50468
+    },
+    {
+     "number": 8,
+     "letter": "",
+     "fraction": 0.54295
+    },
+    {
+     "number": 9,
+     "letter": "",
+     "fraction": 0.5729
+    },
+    {
+     "number": 10,
+     "letter": "",
+     "fraction": 0.64238
+    },
+    {
+     "number": 11,
+     "letter": "",
+     "fraction": 0.69198
+    },
+    {
+     "number": 12,
+     "letter": "",
+     "fraction": 0.7613
+    },
+    {
+     "number": 13,
+     "letter": "",
+     "fraction": 0.78771
+    },
+    {
+     "number": 14,
+     "letter": "",
+     "fraction": 0.84909
+    },
+    {
+     "number": 15,
+     "letter": "",
+     "fraction": 0.94428
+    }
+   ]
+  },
+  "Las Vegas": {
+   "year": 2023,
+   "corners": [
+    {
+     "number": 1,
+     "letter": "",
+     "fraction": 0.04536
+    },
+    {
+     "number": 2,
+     "letter": "",
+     "fraction": 0.06098
+    },
+    {
+     "number": 3,
+     "letter": "",
+     "fraction": 0.09167
+    },
+    {
+     "number": 4,
+     "letter": "",
+     "fraction": 0.11152
+    },
+    {
+     "number": 5,
+     "letter": "",
+     "fraction": 0.25122
+    },
+    {
+     "number": 6,
+     "letter": "",
+     "fraction": 0.29415
+    },
+    {
+     "number": 7,
+     "letter": "",
+     "fraction": 0.32994
+    },
+    {
+     "number": 8,
+     "letter": "",
+     "fraction": 0.33857
+    },
+    {
+     "number": 9,
+     "letter": "",
+     "fraction": 0.35929
+    },
+    {
+     "number": 10,
+     "letter": "",
+     "fraction": 0.43903
+    },
+    {
+     "number": 11,
+     "letter": "",
+     "fraction": 0.48211
+    },
+    {
+     "number": 12,
+     "letter": "",
+     "fraction": 0.51963
+    },
+    {
+     "number": 13,
+     "letter": "",
+     "fraction": 0.64394
+    },
+    {
+     "number": 14,
+     "letter": "",
+     "fraction": 0.83599
+    },
+    {
+     "number": 15,
+     "letter": "",
+     "fraction": 0.8458
+    },
+    {
+     "number": 16,
+     "letter": "",
+     "fraction": 0.85545
+    },
+    {
+     "number": 17,
+     "letter": "",
+     "fraction": 0.9782
+    }
+   ]
+  },
+  "Losail (Qatar)": {
+   "year": 2023,
+   "corners": [
+    {
+     "number": 1,
+     "letter": "",
+     "fraction": 0.14828
+    },
+    {
+     "number": 2,
+     "letter": "",
+     "fraction": 0.20235
+    },
+    {
+     "number": 3,
+     "letter": "",
+     "fraction": 0.24374
+    },
+    {
+     "number": 4,
+     "letter": "",
+     "fraction": 0.32176
+    },
+    {
+     "number": 5,
+     "letter": "",
+     "fraction": 0.35086
+    },
+    {
+     "number": 6,
+     "letter": "",
+     "fraction": 0.40892
+    },
+    {
+     "number": 7,
+     "letter": "",
+     "fraction": 0.48255
+    },
+    {
+     "number": 8,
+     "letter": "",
+     "fraction": 0.51816
+    },
+    {
+     "number": 9,
+     "letter": "",
+     "fraction": 0.54069
+    },
+    {
+     "number": 10,
+     "letter": "",
+     "fraction": 0.58381
+    },
+    {
+     "number": 11,
+     "letter": "",
+     "fraction": 0.64179
+    },
+    {
+     "number": 12,
+     "letter": "",
+     "fraction": 0.69883
+    },
+    {
+     "number": 13,
+     "letter": "",
+     "fraction": 0.73616
+    },
+    {
+     "number": 14,
+     "letter": "",
+     "fraction": 0.77426
+    },
+    {
+     "number": 15,
+     "letter": "",
+     "fraction": 0.82904
+    },
+    {
+     "number": 16,
+     "letter": "",
+     "fraction": 0.9173
+    }
+   ]
+  },
+  "Abu Dhabi": {
+   "year": 2021,
+   "corners": [
+    {
+     "number": 1,
+     "letter": "",
+     "fraction": 0.07432
+    },
+    {
+     "number": 2,
+     "letter": "",
+     "fraction": 0.12066
+    },
+    {
+     "number": 3,
+     "letter": "",
+     "fraction": 0.16059
+    },
+    {
+     "number": 4,
+     "letter": "",
+     "fraction": 0.19747
+    },
+    {
+     "number": 5,
+     "letter": "",
+     "fraction": 0.27241
+    },
+    {
+     "number": 6,
+     "letter": "",
+     "fraction": 0.50185
+    },
+    {
+     "number": 7,
+     "letter": "",
+     "fraction": 0.51326
+    },
+    {
+     "number": 8,
+     "letter": "",
+     "fraction": 0.55178
+    },
+    {
+     "number": 9,
+     "letter": "",
+     "fraction": 0.70807
+    },
+    {
+     "number": 10,
+     "letter": "",
+     "fraction": 0.77254
+    },
+    {
+     "number": 11,
+     "letter": "",
+     "fraction": 0.8031
+    },
+    {
+     "number": 12,
+     "letter": "",
+     "fraction": 0.82802
+    },
+    {
+     "number": 13,
+     "letter": "",
+     "fraction": 0.84881
+    },
+    {
+     "number": 14,
+     "letter": "",
+     "fraction": 0.8721
+    },
+    {
+     "number": 15,
+     "letter": "",
+     "fraction": 0.9232
+    },
+    {
+     "number": 16,
+     "letter": "",
+     "fraction": 0.96743
+    }
+   ]
+  },
+  "Paul Ricard": {
+   "year": 2022,
+   "corners": [
+    {
+     "number": 1,
+     "letter": "",
+     "fraction": 0.07427
+    },
+    {
+     "number": 2,
+     "letter": "",
+     "fraction": 0.09178
+    },
+    {
+     "number": 3,
+     "letter": "",
+     "fraction": 0.19138
+    },
+    {
+     "number": 4,
+     "letter": "",
+     "fraction": 0.20819
+    },
+    {
+     "number": 5,
+     "letter": "",
+     "fraction": 0.2275
+    },
+    {
+     "number": 6,
+     "letter": "",
+     "fraction": 0.25064
+    },
+    {
+     "number": 7,
+     "letter": "",
+     "fraction": 0.28848
+    },
+    {
+     "number": 8,
+     "letter": "",
+     "fraction": 0.47696
+    },
+    {
+     "number": 9,
+     "letter": "",
+     "fraction": 0.49135
+    },
+    {
+     "number": 10,
+     "letter": "",
+     "fraction": 0.63731
+    },
+    {
+     "number": 11,
+     "letter": "",
+     "fraction": 0.72659
+    },
+    {
+     "number": 12,
+     "letter": "",
+     "fraction": 0.80203
+    },
+    {
+     "number": 13,
+     "letter": "",
+     "fraction": 0.83877
+    },
+    {
+     "number": 14,
+     "letter": "",
+     "fraction": 0.88216
+    },
+    {
+     "number": 15,
+     "letter": "",
+     "fraction": 0.91171
+    }
+   ]
+  },
+  "Hockenheim": {
+   "year": 2019,
+   "corners": [
+    {
+     "number": 1,
+     "letter": "",
+     "fraction": 0.0583
+    },
+    {
+     "number": 2,
+     "letter": "",
+     "fraction": 0.18358
+    },
+    {
+     "number": 3,
+     "letter": "",
+     "fraction": 0.1975
+    },
+    {
+     "number": 4,
+     "letter": "",
+     "fraction": 0.2132
+    },
+    {
+     "number": 5,
+     "letter": "",
+     "fraction": 0.32676
+    },
+    {
+     "number": 6,
+     "letter": "",
+     "fraction": 0.46001
+    },
+    {
+     "number": 7,
+     "letter": "",
+     "fraction": 0.56013
+    },
+    {
+     "number": 8,
+     "letter": "",
+     "fraction": 0.61734
+    },
+    {
+     "number": 9,
+     "letter": "",
+     "fraction": 0.64063
+    },
+    {
+     "number": 10,
+     "letter": "",
+     "fraction": 0.65634
+    },
+    {
+     "number": 11,
+     "letter": "",
+     "fraction": 0.67455
+    },
+    {
+     "number": 12,
+     "letter": "",
+     "fraction": 0.75684
+    },
+    {
+     "number": 13,
+     "letter": "",
+     "fraction": 0.83343
+    },
+    {
+     "number": 14,
+     "letter": "",
+     "fraction": 0.86571
+    },
+    {
+     "number": 15,
+     "letter": "",
+     "fraction": 0.8808
+    },
+    {
+     "number": 16,
+     "letter": "",
+     "fraction": 0.90831
+    },
+    {
+     "number": 17,
+     "letter": "",
+     "fraction": 0.938
+    }
+   ]
+  },
+  "Portimão": {
+   "year": 2021,
+   "corners": [
+    {
+     "number": 1,
+     "letter": "",
+     "fraction": 0.1432
+    },
+    {
+     "number": 2,
+     "letter": "",
+     "fraction": 0.17792
+    },
+    {
+     "number": 3,
+     "letter": "",
+     "fraction": 0.21108
+    },
+    {
+     "number": 4,
+     "letter": "",
+     "fraction": 0.2433
+    },
+    {
+     "number": 5,
+     "letter": "",
+     "fraction": 0.36788
+    },
+    {
+     "number": 6,
+     "letter": "",
+     "fraction": 0.41762
+    },
+    {
+     "number": 7,
+     "letter": "",
+     "fraction": 0.46814
+    },
+    {
+     "number": 8,
+     "letter": "",
+     "fraction": 0.50334
+    },
+    {
+     "number": 9,
+     "letter": "",
+     "fraction": 0.57575
+    },
+    {
+     "number": 10,
+     "letter": "",
+     "fraction": 0.63175
+    },
+    {
+     "number": 11,
+     "letter": "",
+     "fraction": 0.64638
+    },
+    {
+     "number": 12,
+     "letter": "",
+     "fraction": 0.69291
+    },
+    {
+     "number": 13,
+     "letter": "",
+     "fraction": 0.7353
+    },
+    {
+     "number": 14,
+     "letter": "",
+     "fraction": 0.78527
+    },
+    {
+     "number": 15,
+     "letter": "",
+     "fraction": 0.88295
+    }
+   ]
+  },
+  "Austria (Red Bull Ring, Reverse)": {
+   "year": 2022,
+   "reverseOf": "Austria (Red Bull Ring)",
+   "corners": [
+    {
+     "number": 10,
+     "letter": "",
+     "fraction": 0.08072
+    },
+    {
+     "number": 9,
+     "letter": "",
+     "fraction": 0.12488
+    },
+    {
+     "number": 8,
+     "letter": "",
+     "fraction": 0.2497
+    },
+    {
+     "number": 7,
+     "letter": "",
+     "fraction": 0.29659
+    },
+    {
+     "number": 6,
+     "letter": "",
+     "fraction": 0.37123
+    },
+    {
+     "number": 5,
+     "letter": "",
+     "fraction": 0.44775
+    },
+    {
+     "number": 4,
+     "letter": "",
+     "fraction": 0.49159
+    },
+    {
+     "number": 3,
+     "letter": "",
+     "fraction": 0.68143
+    },
+    {
+     "number": 2,
+     "letter": "",
+     "fraction": 0.75138
+    },
+    {
+     "number": 1,
+     "letter": "",
+     "fraction": 0.89965
+    }
+   ]
+  },
+  "Silverstone (Reverse)": {
+   "year": 2022,
+   "reverseOf": "Silverstone",
+   "corners": [
+    {
+     "number": 18,
+     "letter": "",
+     "fraction": 0.02651
+    },
+    {
+     "number": 17,
+     "letter": "",
+     "fraction": 0.05225
+    },
+    {
+     "number": 16,
+     "letter": "",
+     "fraction": 0.06758
+    },
+    {
+     "number": 15,
+     "letter": "",
+     "fraction": 0.14488
+    },
+    {
+     "number": 14,
+     "letter": "",
+     "fraction": 0.29267
+    },
+    {
+     "number": 13,
+     "letter": "",
+     "fraction": 0.31778
+    },
+    {
+     "number": 12,
+     "letter": "",
+     "fraction": 0.34196
+    },
+    {
+     "number": 11,
+     "letter": "",
+     "fraction": 0.36683
+    },
+    {
+     "number": 10,
+     "letter": "",
+     "fraction": 0.38248
+    },
+    {
+     "number": 9,
+     "letter": "",
+     "fraction": 0.47715
+    },
+    {
+     "number": 8,
+     "letter": "",
+     "fraction": 0.56712
+    },
+    {
+     "number": 7,
+     "letter": "",
+     "fraction": 0.62603
+    },
+    {
+     "number": 6,
+     "letter": "",
+     "fraction": 0.66358
+    },
+    {
+     "number": 5,
+     "letter": "",
+     "fraction": 0.78939
+    },
+    {
+     "number": 4,
+     "letter": "",
+     "fraction": 0.82217
+    },
+    {
+     "number": 3,
+     "letter": "",
+     "fraction": 0.85135
+    },
+    {
+     "number": 2,
+     "letter": "",
+     "fraction": 0.89532
+    },
+    {
+     "number": 1,
+     "letter": "",
+     "fraction": 0.92247
+    }
+   ]
+  },
+  "Zandvoort (Reverse)": {
+   "year": 2021,
+   "reverseOf": "Zandvoort",
+   "corners": [
+    {
+     "number": 14,
+     "letter": "",
+     "fraction": 0.11404
+    },
+    {
+     "number": 13,
+     "letter": "",
+     "fraction": 0.18038
+    },
+    {
+     "number": 12,
+     "letter": "",
+     "fraction": 0.25258
+    },
+    {
+     "number": 11,
+     "letter": "",
+     "fraction": 0.27329
+    },
+    {
+     "number": 10,
+     "letter": "",
+     "fraction": 0.41129
+    },
+    {
+     "number": 9,
+     "letter": "",
+     "fraction": 0.47247
+    },
+    {
+     "number": 8,
+     "letter": "",
+     "fraction": 0.52404
+    },
+    {
+     "number": 7,
+     "letter": "",
+     "fraction": 0.59929
+    },
+    {
+     "number": 6,
+     "letter": "",
+     "fraction": 0.67064
+    },
+    {
+     "number": 5,
+     "letter": "",
+     "fraction": 0.70853
+    },
+    {
+     "number": 4,
+     "letter": "",
+     "fraction": 0.75245
+    },
+    {
+     "number": 3,
+     "letter": "",
+     "fraction": 0.80293
+    },
+    {
+     "number": 2,
+     "letter": "",
+     "fraction": 0.84192
+    },
+    {
+     "number": 1,
+     "letter": "",
+     "fraction": 0.91444
+    }
+   ]
+  }
+ }
+}

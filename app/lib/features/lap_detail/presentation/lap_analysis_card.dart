@@ -130,7 +130,7 @@ class LapAnalysisCard extends StatelessWidget {
                   for (final c in gains)
                     Text(
                       '${c.corner.label} ${formatDeltaSeconds(c.lossS)}',
-                      key: ValueKey('lap-analysis-gain-${c.corner.number}'),
+                      key: ValueKey('lap-analysis-gain-${c.corner.label}'),
                       style: TextStyle(color: palette.success, fontWeight: FontWeight.w600),
                     ),
                 ],
@@ -163,7 +163,7 @@ class _CornerRow extends StatelessWidget {
     final palette = context.palette;
     final corner = analysis.corner;
     return InkWell(
-      key: ValueKey('lap-analysis-corner-${corner.number}'),
+      key: ValueKey('lap-analysis-corner-${corner.label}'),
       onTap: onTap,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

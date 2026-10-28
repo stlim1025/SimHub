@@ -21,6 +21,7 @@ import '../../lap_detail/presentation/replay_circuit.dart';
 import '../../lap_detail/presentation/replay_corner_badge.dart';
 import '../../lap_detail/presentation/replay_three_scene.dart';
 import '../../lap_detail/presentation/replay_three_view.dart';
+import '../../tracks/application/track_corners_provider.dart';
 import '../../tracks/application/track_widths_provider.dart';
 import '../../tracks/application/tracks_providers.dart';
 import '../../tracks/domain/track_sample_geometry.dart';
@@ -201,6 +202,7 @@ class _Loaded extends ConsumerWidget {
       trackSamples: geometry.valueOrNull,
       estimatedTrackWidthM: kEstimatedTrackWidthsM[trackName],
       streetCircuit: kStreetCircuits.contains(trackName),
+      officialCorners: ref.watch(trackCornersProvider).valueOrNull?[trackName],
     );
   }
 }
@@ -230,6 +232,7 @@ class HighlightsPlayer extends StatefulWidget {
     this.trackSamples,
     this.estimatedTrackWidthM,
     this.streetCircuit = false,
+    this.officialCorners,
   });
 
   final RaceHighlights highlights;
@@ -241,6 +244,9 @@ class HighlightsPlayer extends StatefulWidget {
   final double? estimatedTrackWidthM;
   final bool streetCircuit;
 
+  /// 이 트랙의 공식 코너(번호·위치). 없으면 주행선에서 코너를 찾는다.
+  final List<OfficialCorner>? officialCorners;
+
   @override
   State<HighlightsPlayer> createState() => _HighlightsPlayerState();
 }
@@ -250,7 +256,7 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
   late final List<ReplayGridSlot>? _grid = _startGrid(widget.highlights);
 
   /// 내 랩 주행선에서 찾은 코너(중심 차의 지금 코너 이름표).
-  late final List<LapCorner> _corners = detectLapCorners(widget.trace);
+  late List<LapCorner> _corners = resolveLapCorners(widget.trace, widget.officialCorners);
   late HighlightReel _reel = widget.highlights.mine.isEmpty ? HighlightReel.race : HighlightReel.mine;
   ReplayCamera _camera = ReplayCamera.chase;
   int _index = 0;
@@ -274,6 +280,15 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
   void initState() {
     super.initState();
     _load(0);
+  }
+
+  @override
+  void didUpdateWidget(HighlightsPlayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 공식 코너 asset은 따로 읽히므로 늦게 올 수 있다.
+    if (!identical(oldWidget.officialCorners, widget.officialCorners)) {
+      _corners = resolveLapCorners(widget.trace, widget.officialCorners);
+    }
   }
 
   @override

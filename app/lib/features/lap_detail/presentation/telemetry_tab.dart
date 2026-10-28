@@ -14,6 +14,7 @@ import '../../auth/application/auth_controller.dart';
 import '../../auth/domain/user_preferences.dart';
 import '../../laps/domain/lap_models.dart';
 import '../../laps/presentation/empty_laps_card.dart';
+import '../../tracks/application/track_corners_provider.dart';
 import '../../tracks/application/track_widths_provider.dart';
 import '../../tracks/application/tracks_providers.dart';
 import '../../tracks/domain/track_sample_geometry.dart';
@@ -129,6 +130,7 @@ class TelemetryTab extends ConsumerWidget {
               trackSamples: ref.watch(trackGeometryProvider((trackId: detail.trackId, gameCode: lap.gameCode))).valueOrNull,
               estimatedTrackWidthM: kEstimatedTrackWidthsM[lap.trackName],
               streetCircuit: kStreetCircuits.contains(lap.trackName),
+              officialCorners: ref.watch(trackCornersProvider).valueOrNull?[lap.trackName],
             ),
     );
   }
@@ -160,6 +162,7 @@ class TelemetryCharts extends StatefulWidget {
     this.trackSamples,
     this.estimatedTrackWidthM,
     this.streetCircuit = false,
+    this.officialCorners,
   });
 
   final LapTrace trace;
@@ -197,6 +200,9 @@ class TelemetryCharts extends StatefulWidget {
 
   /// 시가지 서킷인지(다시보기에 그래블 없이 벽을 도로 옆에).
   final bool streetCircuit;
+
+  /// 이 트랙의 공식 코너(번호·위치). 없으면 주행선에서 코너를 찾아 번호를 매긴다.
+  final List<OfficialCorner>? officialCorners;
 
   @override
   State<TelemetryCharts> createState() => _TelemetryChartsState();
@@ -236,7 +242,7 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
     final reference = widget.reference;
     final maxDistanceM = math.max(trace.lengthM, reference?.lengthM ?? 0);
     final referenceTime = widget.referenceLapTimeMs;
-    final corners = detectLapCorners(trace);
+    final corners = resolveLapCorners(trace, widget.officialCorners);
     // 비교 랩이 있으면 코너별로 맞대어 잃은 곳·이유를 짚는다. 누른 코너로 재생 막대·지도 점을 옮긴다.
     final analysisCard = reference == null || corners.isEmpty
         ? null

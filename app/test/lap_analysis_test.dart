@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -94,6 +96,32 @@ void main() {
     expect(nearestLapDistance(reference, 200, 0), 200);
   });
 
+  test('공식 코너가 있으면 공식 번호·글자로, 직선의 킹크도 공식 지점 앞뒤로 코너를 만든다', () {
+    // 1km 랩: 공식 7번 = 회전 구간 안(450m), 7A = 직선 위(700m).
+    final corners = resolveLapCorners(reference, const [
+      (number: 7, letter: '', fraction: 0.45),
+      (number: 7, letter: 'A', fraction: 0.70),
+    ]);
+
+    expect(corners.map((c) => c.label), ['T7', 'T7A']);
+    expect(corners.first.direction, CornerDirection.right);
+    expect(corners.first.startM, inInclusiveRange(380, 420));
+    expect((corners.last.startM, corners.last.endM), (675, 725));
+    expect(resolveLapCorners(reference, const []).single.label, 'T1'); // 공식 데이터가 없으면 주행선으로
+  });
+
+  test('공식 코너 asset: 게임 트랙 이름별 번호·비율(역방향은 원래 번호를 거꾸로)', () {
+    final json = jsonDecode(File('assets/track_corners/track_corners.json').readAsStringSync()) as Map<String, dynamic>;
+    final tracks = parseTrackCorners(json);
+
+    expect(tracks['Catalunya']!.map((c) => c.number), [for (var i = 1; i <= 14; i++) i]);
+    expect(tracks['Monaco'], hasLength(19));
+    expect(tracks['Hungaroring']!.where((c) => c.letter == 'A').map((c) => c.number), [1, 12]);
+    final reverse = tracks['Silverstone (Reverse)']!;
+    expect(reverse.first.number, tracks['Silverstone']!.last.number);
+    expect(reverse.first.fraction, closeTo(1 - tracks['Silverstone']!.last.fraction, 1e-5));
+  });
+
   test('브레이크를 늦게 밟아 최저속도가 낮으면 그 코너에서 시간을 잃고 이유를 짚는다', () {
     final lap = _lap(brakeAtM: 320, apexKph: 100);
     final analysis = analyzeLap(lap, reference, detectLapCorners(reference));
@@ -157,7 +185,7 @@ void main() {
 
     expect(find.text('기준: 내 최고 랩'), findsOneWidget);
     expect(find.textContaining('브레이킹이 20m 늦어요'), findsOneWidget);
-    await t.tap(find.byKey(const ValueKey('lap-analysis-corner-1')));
+    await t.tap(find.byKey(const ValueKey('lap-analysis-corner-T1')));
     expect(selected?.number, 1);
   });
 }
