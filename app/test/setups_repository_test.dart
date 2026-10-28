@@ -65,12 +65,12 @@ void main() {
       expect(tracks.last.circuitName, isNull);
     });
 
-    test('getSetups는 trackId·condition 쿼리로 부르고 목록을 읽는다', () async {
+    test('getSetups는 trackId·condition·session 쿼리로 부르고 목록을 읽는다', () async {
       final adapter = StubAdapter(200, _listBody);
-      final list = await SetupsRepository(stubDio(adapter)).getSetups(trackId: 'au', condition: 'Wet');
+      final list = await SetupsRepository(stubDio(adapter)).getSetups(trackId: 'au', condition: 'Wet', session: 'Race');
 
       expect(adapter.requests.single.path, '/setups');
-      expect(adapter.requests.single.queryParameters, {'trackId': 'au', 'condition': 'Wet'});
+      expect(adapter.requests.single.queryParameters, {'trackId': 'au', 'condition': 'Wet', 'session': 'Race'});
       expect(list.track.name, 'Australia');
       expect(list.condition, 'Wet');
       expect(list.fetchedAt, DateTime.utc(2026, 10, 22, 9));
@@ -80,7 +80,7 @@ void main() {
     });
 
     test('getSetups: 아직 가져오지 않았으면 fetchedAt null + 빈 목록', () async {
-      final list = await SetupsRepository(stubDio(StubAdapter(200, _emptyListBody))).getSetups(trackId: 'au', condition: 'Dry');
+      final list = await SetupsRepository(stubDio(StubAdapter(200, _emptyListBody))).getSetups(trackId: 'au', condition: 'Dry', session: 'TimeTrial');
 
       expect(list.fetchedAt, isNull);
       expect(list.items, isEmpty);
@@ -158,13 +158,21 @@ void main() {
       final container = ProviderContainer(overrides: [setupsRepositoryProvider.overrideWithValue(repo)]);
       addTearDown(container.dispose);
 
-      await container.read(setupListProvider((trackId: 'au', condition: 'Wet')).future);
+      await container.read(setupListProvider((trackId: 'au', condition: 'Wet', session: 'Qualifying')).future);
 
-      expect(repo.listRequests, [(trackId: 'au', condition: 'Wet')]);
+      expect(repo.listRequests, [(trackId: 'au', condition: 'Wet', session: 'Qualifying')]);
     });
   });
 
   group('display', () {
+    test('normalizeSetupSession: 조건에 있는 세션 종류만, 없으면 조건의 기본(Wet엔 타임 트라이얼 없음)', () {
+      expect(normalizeSetupSession('race', 'Dry'), 'Race');
+      expect(normalizeSetupSession(null, 'Dry'), 'TimeTrial');
+      expect(normalizeSetupSession('timetrial', 'Wet'), 'Race');
+      expect(normalizeSetupSession('QUALIFYING', 'Wet'), 'Qualifying');
+      expect(setupSessionsFor('Wet'), ['Race', 'Qualifying']);
+    });
+
     test('normalizeSetupCondition: wet만 Wet', () {
       expect(normalizeSetupCondition('wet'), 'Wet');
       expect(normalizeSetupCondition('WET'), 'Wet');
@@ -177,6 +185,9 @@ void main() {
       expect(setupsLocation(condition: 'Wet'), '/setups?condition=wet');
       expect(setupTrackLocation('au'), '/setups/au');
       expect(setupTrackLocation('au', condition: 'Wet'), '/setups/au?condition=wet');
+      expect(setupTrackLocation('au', session: 'TimeTrial'), '/setups/au'); // Dry 기본
+      expect(setupTrackLocation('au', session: 'Race'), '/setups/au?session=race');
+      expect(setupTrackLocation('au', condition: 'Wet', session: 'Qualifying'), '/setups/au?condition=wet&session=qualifying');
       expect(setupDetailLocation('au', 's1'), '/setups/au/s1');
       expect(trackOverviewLocation('au'), '/tracks/au');
       expect(leaderboardLocation('au'), '/leaderboard?trackId=au');

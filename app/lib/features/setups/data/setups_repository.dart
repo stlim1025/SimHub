@@ -21,12 +21,12 @@ class SetupsRepository {
     }
   }
 
-  /// 한 트랙·조건(`Dry`·`Wet`)의 상위 셋업. `GET /setups?trackId=&condition=`.
-  Future<SetupList> getSetups({required String trackId, required String condition}) async {
+  /// 한 트랙·조건(`Dry`·`Wet`)·세션 종류(`TimeTrial`·`Race`·`Qualifying`)의 상위 셋업. `GET /setups?trackId=&condition=&session=`.
+  Future<SetupList> getSetups({required String trackId, required String condition, required String session}) async {
     try {
       final res = await _dio.get<Map<String, dynamic>>(
         '/setups',
-        queryParameters: {'trackId': trackId, 'condition': condition},
+        queryParameters: {'trackId': trackId, 'condition': condition, 'session': session},
       );
       return SetupList.fromJson(res.data!);
     } on DioException catch (e) {

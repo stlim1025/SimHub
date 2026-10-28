@@ -11,18 +11,34 @@ const String kTracksPath = '/tracks';
 /// 주소 쿼리 이름(`?condition=wet`).
 const String kSetupConditionQuery = 'condition';
 
+/// 주소 쿼리 이름(`?session=race`).
+const String kSetupSessionQuery = 'session';
+
 const String _wetQueryValue = 'wet';
 
 Map<String, String>? _conditionQuery(String condition) =>
     condition == kSetupConditionWet ? {kSetupConditionQuery: _wetQueryValue} : null;
 
+/// 세션 종류 → 화면 이름.
+const Map<String, String> kSetupSessionLabels = {
+  kSetupSessionTimeTrial: 'Time Trial',
+  kSetupSessionRace: 'Race',
+  kSetupSessionQualifying: 'Qualifying',
+};
+
 /// 셋업 모음 목록 주소. Wet이면 `?condition=wet`(Dry는 쿼리 없음).
 String setupsLocation({String condition = kSetupConditionDry}) =>
     Uri(path: kSetupsPath, queryParameters: _conditionQuery(condition)).toString();
 
-/// 한 트랙의 상위 셋업 주소(`/setups/:trackId`, Wet이면 `?condition=wet`).
-String setupTrackLocation(String trackId, {String condition = kSetupConditionDry}) =>
-    Uri(path: '$kSetupsPath/${Uri.encodeComponent(trackId)}', queryParameters: _conditionQuery(condition)).toString();
+/// 한 트랙의 상위 셋업 주소(`/setups/:trackId`, Wet이면 `?condition=wet`, 조건의 기본이 아닌 세션 종류면 `session=race` 등).
+String setupTrackLocation(String trackId, {String condition = kSetupConditionDry, String? session}) {
+  final query = {
+    ...?_conditionQuery(condition),
+    if (session != null && session != defaultSetupSession(condition)) kSetupSessionQuery: session.toLowerCase(),
+  };
+  return Uri(path: '$kSetupsPath/${Uri.encodeComponent(trackId)}', queryParameters: query.isEmpty ? null : query)
+      .toString();
+}
 
 /// 셋업 하나의 주소(`/setups/:trackId/:setupId`).
 String setupDetailLocation(String trackId, String setupId) =>

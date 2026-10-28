@@ -43,7 +43,7 @@ public sealed class CommunitySetupRefresherTests
 
         var result = await Refresher().RefreshAsync([GameCodes.F1_25], TopCount);
 
-        Assert.Equal((4, 0, 12), (result.GroupsReplaced, result.GroupsFailed, result.DetailsFetched));
+        Assert.Equal((10, 0, 12), (result.GroupsReplaced, result.GroupsFailed, result.DetailsFetched)); // 2 트랙 × (Dry 3 + Wet 2)
         var dry = _repository.Active(_australia.Id, SetupConditions.Dry);
         Assert.Equal(Enumerable.Range(1, TopCount), dry.Select(s => s.Rank));
         Assert.Equal(Id("a", 0), dry[0].SourceId);
@@ -116,10 +116,30 @@ public sealed class CommunitySetupRefresherTests
 
         var result = await Refresher().RefreshAsync([GameCodes.F1_25], TopCount);
 
-        Assert.Equal((1, 3), (result.GroupsReplaced, result.GroupsFailed));
+        Assert.Equal((7, 3), (result.GroupsReplaced, result.GroupsFailed));
         Assert.Equal([Id("a", 0), Id("a", 1)], _repository.Active(_australia.Id, SetupConditions.Dry).Select(s => s.SourceId));
         var wet = Assert.Single(_repository.Active(_australia.Id, SetupConditions.Wet));
         Assert.Equal((Id("w", 0), T0), (wet.SourceId, wet.FetchedAt));
+    }
+
+    [Fact]
+    public async Task Sessions_AreStoredAsSeparateGroups_FromTheSessionFilteredRankings()
+    {
+        ServeIndex();
+        ServeList("australia", SetupConditions.Dry, Rows("a", 2), SetupSessions.TimeTrial);
+        ServeList("australia", SetupConditions.Dry, Rows("w", 1), SetupSessions.Race);
+        ServeDetails("a", 2);
+        ServeDetails("w", 1);
+
+        await Refresher().RefreshAsync([GameCodes.F1_25], TopCount);
+
+        Assert.Equal([Id("a", 0), Id("a", 1)],
+            _repository.Active(_australia.Id, SetupConditions.Dry, SetupSessions.TimeTrial).Select(s => s.SourceId));
+        var race = Assert.Single(_repository.Active(_australia.Id, SetupConditions.Dry, SetupSessions.Race));
+        Assert.Equal((Id("w", 0), SetupSessions.Race, 1), (race.SourceId, race.SessionType, race.Rank));
+        Assert.Empty(_repository.Active(_australia.Id, SetupConditions.Dry, SetupSessions.Qualifying));
+        Assert.Contains($"{Base}f1-25/setups/australia/?session=5", _http.Requested);
+        Assert.DoesNotContain(_http.Requested, u => u.Contains("wet/?session=6", StringComparison.Ordinal)); // 젖은 노면엔 타임 트라이얼 없음
     }
 
     [Fact]
@@ -161,10 +181,24 @@ public sealed class CommunitySetupRefresherTests
         DisplayOrder = gameTrackId + 1,
     };
 
-    private void ServeIndex() => _http.Serve($"{Base}f1-25/setups/", Index25);
+    /// <summary>트랙 목록과, 모든 트랙 × 조건 × 세션 종류의 빈 순위표(테스트가 필요한 묶음만 덮어쓴다).</summary>
+    private void ServeIndex()
+    {
+        _http.Serve($"{Base}f1-25/setups/", Index25);
+        foreach (var slug in new[] { "australia", "miami" })
+        {
+            foreach (var condition in SetupConditions.All)
+            {
+                foreach (var session in SetupSessions.For(condition))
+                {
+                    ServeList(slug, condition, [], session);
+                }
+            }
+        }
+    }
 
-    private void ServeList(string slug, string condition, IEnumerable<ListRow> rows)
-        => _http.Serve(ListUrl(slug, condition), ListPage(slug, rows));
+    private void ServeList(string slug, string condition, IEnumerable<ListRow> rows, string? session = null)
+        => _http.Serve(ListUrl(slug, condition, session), ListPage(slug, rows));
 
     private void ServeDetails(string prefix, int count)
     {
@@ -176,8 +210,17 @@ public sealed class CommunitySetupRefresherTests
         }
     }
 
-    private static string ListUrl(string slug, string condition)
-        => $"{Base}f1-25/setups/{slug}/" + (condition == SetupConditions.Wet ? "wet/" : string.Empty);
+    /// <summary>순위표 주소: 조건(젖은 노면은 `wet/`) + 세션 필터(타임 트라이얼 6·레이스 5·퀄리파잉 4, 생략하면 조건의 기본 세션 종류).</summary>
+    private static string ListUrl(string slug, string condition, string? session = null)
+    {
+        var code = (session ?? SetupSessions.DefaultFor(condition)) switch
+        {
+            SetupSessions.TimeTrial => "6",
+            SetupSessions.Race => "5",
+            _ => "4",
+        };
+        return $"{Base}f1-25/setups/{slug}/" + (condition == SetupConditions.Wet ? "wet/" : string.Empty) + $"?session={code}";
+    }
 
     private static string DetailUrl(string slug, string id) => $"{Base}f1-25/setups/{slug}/{id}/";
 
@@ -238,13 +281,17 @@ public sealed class CommunitySetupRefresherTests
     {
         public List<CommunitySetup> All { get; } = [];
 
-        public List<CommunitySetup> Active(Guid trackId, string condition)
-            => All.Where(s => !s.IsDeleted && s.TrackId == trackId && s.Condition == condition).OrderBy(s => s.Rank).ToList();
+        public List<CommunitySetup> Active(Guid trackId, string condition, string? session = null)
+            => All.Where(s => !s.IsDeleted && s.TrackId == trackId && s.Condition == condition
+                              && s.SessionType == (session ?? SetupSessions.DefaultFor(condition)))
+                .OrderBy(s => s.Rank)
+                .ToList();
 
         public Task<IReadOnlyList<CommunitySetupCount>> GetCountsAsync(string gameCode, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
-        public Task<IReadOnlyList<CommunitySetup>> GetActiveAsync(Guid trackId, string condition, CancellationToken cancellationToken = default)
+        public Task<IReadOnlyList<CommunitySetup>> GetActiveAsync(
+            Guid trackId, string condition, string sessionType, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
         public Task<CommunitySetup?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
@@ -256,10 +303,11 @@ public sealed class CommunitySetupRefresherTests
                 All.Where(s => s.GameCode == gameCode && s.TrackId == trackId && s.Condition == condition).ToList());
 
         public Task ReplaceGroupAsync(
-            string gameCode, Guid trackId, string condition, IReadOnlyList<CommunitySetup> setups, DateTime now,
+            string gameCode, Guid trackId, string condition, string sessionType, IReadOnlyList<CommunitySetup> setups, DateTime now,
             CancellationToken cancellationToken = default)
         {
-            var group = All.Where(s => s.GameCode == gameCode && s.TrackId == trackId && s.Condition == condition).ToList();
+            var group = All.Where(s => s.GameCode == gameCode && s.TrackId == trackId && s.Condition == condition
+                                       && s.SessionType == sessionType).ToList();
             foreach (var row in group.Where(r => setups.All(s => s.SourceId != r.SourceId)))
             {
                 row.IsDeleted = true;

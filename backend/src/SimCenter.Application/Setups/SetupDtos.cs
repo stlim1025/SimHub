@@ -22,10 +22,11 @@ public sealed record SetupListItemDto(
     int LapTimeMs,
     string SourceUrl);
 
-/// <summary>트랙·조건의 셋업 목록. <see cref="FetchedAt"/> = 마지막으로 출처를 읽은 시각(셋업이 없으면 null).</summary>
+/// <summary>트랙·조건·세션 종류의 셋업 목록. <see cref="FetchedAt"/> = 마지막으로 출처를 읽은 시각(셋업이 없으면 null).</summary>
 public sealed record SetupListResponse(
     SetupTrackRefDto Track,
     string Condition,
+    string Session,
     DateTime? FetchedAt,
     IReadOnlyList<SetupListItemDto> Items);
 

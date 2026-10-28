@@ -198,3 +198,24 @@ const String _wetQuery = 'wet';
 /// 주소 쿼리 → 서버 조건 값. `wet`(대소문자 무관)만 Wet, 나머지는 Dry(순수 함수).
 String normalizeSetupCondition(String? query) =>
     query?.toLowerCase() == _wetQuery ? kSetupConditionWet : kSetupConditionDry;
+
+/// 셋업 세션 종류(서버 `session` 쿼리 값). 타임 트라이얼은 Dry만 있다.
+const String kSetupSessionTimeTrial = 'TimeTrial';
+const String kSetupSessionRace = 'Race';
+const String kSetupSessionQualifying = 'Qualifying';
+
+/// 조건별 세션 종류(화면 순서).
+List<String> setupSessionsFor(String condition) => condition == kSetupConditionWet
+    ? const [kSetupSessionRace, kSetupSessionQualifying]
+    : const [kSetupSessionTimeTrial, kSetupSessionRace, kSetupSessionQualifying];
+
+/// 조건의 기본 세션 종류: Dry는 타임 트라이얼, Wet은 레이스.
+String defaultSetupSession(String condition) =>
+    condition == kSetupConditionWet ? kSetupSessionRace : kSetupSessionTimeTrial;
+
+/// 주소 쿼리(`?session=race`) → 세션 종류. 없거나 모르거나 그 조건에 없는 값(Wet의 타임 트라이얼)이면 조건의 기본값.
+String normalizeSetupSession(String? query, String condition) {
+  final key = query?.toLowerCase();
+  return setupSessionsFor(condition)
+      .firstWhere((s) => s.toLowerCase() == key, orElse: () => defaultSetupSession(condition));
+}

@@ -37,6 +37,7 @@ Future<GoRouter> _pump(
         body: SetupTrackPage(
           trackId: state.pathParameters['trackId']!,
           condition: state.uri.queryParameters['condition'],
+          session: state.uri.queryParameters['session'],
         ),
       ),
     ),
@@ -151,8 +152,24 @@ void main() {
       await t.pumpAndSettle();
 
       expect(_location(router), '/setups/au?condition=wet');
-      expect(repo.listRequests.last, (trackId: 'au', condition: 'Wet'));
+      expect(repo.listRequests.last, (trackId: 'au', condition: 'Wet', session: 'Race'));
       expect(find.text('Ferrari'), findsOneWidget);
+    });
+
+    testWidgets('세션 종류를 고르면 주소와 요청이 바뀌고, Wet에는 Time Trial이 없다', (t) async {
+      final router = await _pump(t, repo, '/setups/au');
+      expect(repo.listRequests.last, (trackId: 'au', condition: 'Dry', session: 'TimeTrial'));
+
+      await t.tap(find.byKey(const ValueKey('setup-session-Race')));
+      await t.pumpAndSettle();
+      expect(_location(router), '/setups/au?session=race');
+      expect(repo.listRequests.last, (trackId: 'au', condition: 'Dry', session: 'Race'));
+
+      await t.tap(find.byKey(const ValueKey('setup-condition-Wet')));
+      await t.pumpAndSettle();
+      expect(_location(router), '/setups/au?condition=wet'); // 레이스는 Wet 기본이라 쿼리 없음
+      expect(find.byKey(const ValueKey('setup-session-TimeTrial')), findsNothing);
+      expect(find.byKey(const ValueKey('setup-session-Qualifying')), findsOneWidget);
     });
 
     testWidgets('줄을 누르면 셋업 상세로', (t) async {

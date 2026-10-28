@@ -35,20 +35,25 @@ const int _sessionFlex = 2;
 
 
 /// 한 트랙의 상위 셋업(`/setups/:trackId`, F1Laps `F1 25 Australia Setups` 모양):
-/// 이동 경로 + 제목 + Dry | Wet + `# | TEAM | SESSION | LAP TIME` 표(작성자 닉네임은 개인정보라 싣지 않는다). 줄을 누르면 셋업 상세로 간다.
+/// 이동 경로 + 제목 + Dry | Wet · Time Trial | Race | Qualifying(Wet은 타임 트라이얼 없음) + `# | TEAM | SESSION | LAP TIME` 표
+/// (작성자 닉네임은 개인정보라 싣지 않는다). 조건 × 세션 종류마다 출처 순위표가 따로다. 줄을 누르면 셋업 상세로 간다.
 class SetupTrackPage extends ConsumerWidget {
-  const SetupTrackPage({super.key, required this.trackId, this.condition});
+  const SetupTrackPage({super.key, required this.trackId, this.condition, this.session});
 
   final String trackId;
 
   /// 주소의 `condition` 쿼리(`wet`이면 Wet, 나머지는 Dry).
   final String? condition;
 
+  /// 주소의 `session` 쿼리(`timetrial`·`race`·`qualifying`, 없으면 조건의 기본 — Dry는 타임 트라이얼, Wet은 레이스).
+  final String? session;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final gameCode = ref.watch(selectedGameProvider);
     final selected = normalizeSetupCondition(condition);
-    final query = (trackId: trackId, condition: selected);
+    final selectedSession = normalizeSetupSession(session, selected);
+    final query = (trackId: trackId, condition: selected, session: selectedSession);
     final list = ref.watch(setupListProvider(query));
     final trackName = list.valueOrNull?.track.name;
     final gameTitle = gameTitleOf(gameCode);
@@ -66,14 +71,28 @@ class SetupTrackPage extends ConsumerWidget {
           showFlag: trackName != null,
         ),
         const SizedBox(height: _headingGap),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: ButtonGroup<String>(
-            options: kSetupConditionOptions,
-            selected: selected,
-            segmentKeyOf: setupConditionKey,
-            onSelected: (value) => context.go(setupTrackLocation(trackId, condition: value)),
-          ),
+        Wrap(
+          spacing: _toggleGap,
+          runSpacing: _toggleGap / 2,
+          children: [
+            ButtonGroup<String>(
+              options: kSetupConditionOptions,
+              selected: selected,
+              segmentKeyOf: setupConditionKey,
+              // 조건을 바꾸면 그 조건에도 있는 세션 종류는 그대로 둔다(Wet으로 가면 타임 트라이얼은 레이스로).
+              onSelected: (value) => context.go(setupTrackLocation(
+                trackId,
+                condition: value,
+                session: normalizeSetupSession(selectedSession, value),
+              )),
+            ),
+            ButtonGroup<String>(
+              options: [for (final s in setupSessionsFor(selected)) (value: s, label: kSetupSessionLabels[s]!)],
+              selected: selectedSession,
+              segmentKeyOf: (s) => ValueKey('setup-session-$s'),
+              onSelected: (value) => context.go(setupTrackLocation(trackId, condition: selected, session: value)),
+            ),
+          ],
         ),
         const SizedBox(height: _toggleGap),
         list.when(

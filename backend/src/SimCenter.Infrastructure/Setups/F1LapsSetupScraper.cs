@@ -15,6 +15,14 @@ public sealed class F1LapsSetupScraper : ISetupSource
 {
     private const string WetSegment = "wet/";
 
+    /// <summary>세션 종류 → 출처 순위표의 `session` 필터 값.</summary>
+    private static readonly IReadOnlyDictionary<string, string> SessionCodes = new Dictionary<string, string>
+    {
+        [SetupSessions.TimeTrial] = "6",
+        [SetupSessions.Race] = "5",
+        [SetupSessions.Qualifying] = "4",
+    };
+
     private readonly HttpClient _http;
     private readonly CommunitySetupOptions _options;
     private readonly ILogger<F1LapsSetupScraper> _logger;
@@ -37,7 +45,7 @@ public sealed class F1LapsSetupScraper : ISetupSource
     }
 
     public async Task<IReadOnlyList<SetupListRow>> GetRankingAsync(
-        string gameCode, string slug, string condition, CancellationToken cancellationToken = default)
+        string gameCode, string slug, string condition, string sessionType, CancellationToken cancellationToken = default)
     {
         var path = $"{GamePath(gameCode)}/setups/{Uri.EscapeDataString(slug)}/";
         if (condition == SetupConditions.Wet)
@@ -45,7 +53,11 @@ public sealed class F1LapsSetupScraper : ISetupSource
             path += WetSegment;
         }
 
-        var html = await GetAsync(new Uri(_baseUri, path), cancellationToken);
+        // 순위표의 세션 필터(`?session=`, 출처 값: 타임 트라이얼 6·레이스 5·퀄리파잉 4). 고르지 않으면 출처는 타임 트라이얼을 보인다.
+        var session = SessionCodes.TryGetValue(sessionType, out var code)
+            ? code
+            : throw new ArgumentException($"셋업 출처가 지원하지 않는 세션 종류입니다: {sessionType}", nameof(sessionType));
+        var html = await GetAsync(new Uri(_baseUri, $"{path}?session={session}"), cancellationToken);
         return F1LapsHtmlParser.ParseRanking(html, _baseUri);
     }
 

@@ -402,7 +402,7 @@ void main() {
     final trackPage = t.widget<SetupTrackPage>(find.byType(SetupTrackPage));
     expect(trackPage.trackId, 'au');
     expect(trackPage.condition, 'wet');
-    expect(setupsRepo.listRequests.last, (trackId: 'au', condition: 'Wet'));
+    expect(setupsRepo.listRequests.last, (trackId: 'au', condition: 'Wet', session: 'Race'));
 
     router.go('/setups/au/s1');
     await t.pumpAndSettle();

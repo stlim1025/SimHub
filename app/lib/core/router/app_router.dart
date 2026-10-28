@@ -155,6 +155,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             (state) => SetupTrackPage(
               trackId: state.pathParameters['trackId']!,
               condition: state.uri.queryParameters[kSetupConditionQuery],
+              session: state.uri.queryParameters[kSetupSessionQuery],
             ),
           ),
           _screen(

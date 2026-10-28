@@ -19,7 +19,7 @@ class FakeSetupsRepository implements SetupsRepository {
   /// 있으면 모든 호출이 이 오류로 실패한다.
   final Object? error;
   final trackRequests = <String>[];
-  final listRequests = <({String trackId, String condition})>[];
+  final listRequests = <({String trackId, String condition, String session})>[];
   final detailRequests = <String>[];
 
   @override
@@ -30,8 +30,8 @@ class FakeSetupsRepository implements SetupsRepository {
   }
 
   @override
-  Future<SetupList> getSetups({required String trackId, required String condition}) async {
-    listRequests.add((trackId: trackId, condition: condition));
+  Future<SetupList> getSetups({required String trackId, required String condition, required String session}) async {
+    listRequests.add((trackId: trackId, condition: condition, session: session));
     if (error case final e?) throw e;
     return lists['$trackId|$condition'] ??
         SetupList(track: SetupTrackRef(trackId: trackId, name: 'Australia'), condition: condition, items: const []);

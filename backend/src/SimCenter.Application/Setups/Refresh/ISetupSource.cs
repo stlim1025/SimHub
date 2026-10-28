@@ -33,9 +33,9 @@ public interface ISetupSource
     /// <summary>게임의 셋업 트랙 목록.</summary>
     Task<IReadOnlyList<SetupTrackLink>> GetTracksAsync(string gameCode, CancellationToken cancellationToken = default);
 
-    /// <summary>트랙·조건의 셋업 순위표(출처가 보여 주는 순서).</summary>
+    /// <summary>트랙·조건·세션 종류(<see cref="SimCenter.Domain.Constants.SetupSessions"/>)의 셋업 순위표(출처가 보여 주는 순서).</summary>
     Task<IReadOnlyList<SetupListRow>> GetRankingAsync(
-        string gameCode, string slug, string condition, CancellationToken cancellationToken = default);
+        string gameCode, string slug, string condition, string sessionType, CancellationToken cancellationToken = default);
 
     /// <summary>셋업 상세.</summary>
     Task<SetupDetail> GetDetailAsync(string sourceUrl, CancellationToken cancellationToken = default);

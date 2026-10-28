@@ -13,8 +13,9 @@ public interface ICommunitySetupService
     /// <summary>게임의 트랙(캘린더 순) + 조건별 셋업 수.</summary>
     Task<IReadOnlyList<SetupTrackDto>> GetTracksAsync(string gameCode, CancellationToken cancellationToken = default);
 
-    /// <summary>트랙·조건의 셋업 목록(순위 순). 트랙이 없으면 <see cref="NotFoundException"/>.</summary>
-    Task<SetupListResponse> GetListAsync(Guid trackId, string condition, CancellationToken cancellationToken = default);
+    /// <summary>트랙·조건·세션 종류의 셋업 목록(순위 순). 트랙이 없으면 <see cref="NotFoundException"/>.</summary>
+    Task<SetupListResponse> GetListAsync(
+        Guid trackId, string condition, string session, CancellationToken cancellationToken = default);
 
     /// <summary>셋업 상세. 없으면 <see cref="NotFoundException"/>.</summary>
     Task<SetupDetailDto> GetDetailAsync(Guid id, CancellationToken cancellationToken = default);
@@ -54,18 +55,19 @@ public sealed class CommunitySetupService : ICommunitySetupService
             .ToList();
     }
 
-    public async Task<SetupListResponse> GetListAsync(Guid trackId, string condition, CancellationToken cancellationToken = default)
+    public async Task<SetupListResponse> GetListAsync(
+        Guid trackId, string condition, string session, CancellationToken cancellationToken = default)
     {
         var track = await _tracks.GetByIdAsync(trackId, cancellationToken)
             ?? throw new NotFoundException("트랙을 찾을 수 없습니다.");
 
-        var setups = await _setups.GetActiveAsync(trackId, condition, cancellationToken);
+        var setups = await _setups.GetActiveAsync(trackId, condition, session, cancellationToken);
         var items = setups
             .Select(s => new SetupListItemDto(s.Id, s.Rank, s.TeamName, s.SessionType, s.LapTimeMs, s.SourceUrl))
             .ToList();
         DateTime? fetchedAt = setups.Count == 0 ? null : setups.Max(s => s.FetchedAt);
 
-        return new SetupListResponse(ToTrackRef(track), condition, fetchedAt, items);
+        return new SetupListResponse(ToTrackRef(track), condition, session, fetchedAt, items);
     }
 
     public async Task<SetupDetailDto> GetDetailAsync(Guid id, CancellationToken cancellationToken = default)

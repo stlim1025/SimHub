@@ -79,6 +79,36 @@ public sealed class SetupsApiE2ETests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Sessions_AreListedSeparately_AndTimeTrialIsDryOnly()
+    {
+        var track = await TrackAsync(GameCodes.F1_25, MelbourneGameTrackId);
+        await ReplaceAsync(track.Id, SetupConditions.Dry,
+            [Setup(track.Id, SetupConditions.Dry, 1, "race-1", session: SetupSessions.Race)], SetupSessions.Race);
+        await ReplaceAsync(track.Id, SetupConditions.Dry,
+            [Setup(track.Id, SetupConditions.Dry, 1, "quali-1", session: SetupSessions.Qualifying)], SetupSessions.Qualifying);
+        var client = _factory.CreateClient();
+        await TestApi.RegisterAndLoginAsync(client);
+
+        var race = await client.GetFromJsonAsync<JsonElement>($"/api/v1/setups?trackId={track.Id}&condition=Dry&session=race");
+        Assert.Equal(SetupSessions.Race, race.GetProperty("session").GetString());
+        var item = Assert.Single(race.GetProperty("items").EnumerateArray());
+        Assert.Equal(SetupSessions.Race, item.GetProperty("sessionType").GetString());
+        var quali = await client.GetFromJsonAsync<JsonElement>($"/api/v1/setups?trackId={track.Id}&condition=Dry&session=Qualifying");
+        Assert.Single(quali.GetProperty("items").EnumerateArray());
+        var timeTrial = await client.GetFromJsonAsync<JsonElement>($"/api/v1/setups?trackId={track.Id}&condition=Dry&session=TimeTrial");
+        Assert.DoesNotContain(timeTrial.GetProperty("items").EnumerateArray(), i => i.GetProperty("sessionType").GetString() != SetupSessions.TimeTrial);
+
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await client.GetAsync($"/api/v1/setups?trackId={track.Id}&condition=Wet&session=TimeTrial")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await client.GetAsync($"/api/v1/setups?trackId={track.Id}&session=Sprint")).StatusCode);
+
+        // 같은 DB를 쓰는 다른 테스트의 셋업 수가 바뀌지 않게 넣은 묶음을 비운다.
+        await ReplaceAsync(track.Id, SetupConditions.Dry, [], SetupSessions.Race);
+        await ReplaceAsync(track.Id, SetupConditions.Dry, [], SetupSessions.Qualifying);
+    }
+
+    [Fact]
     public async Task EmptyCondition_HasNullFetchedAt_AndBadInputsAreRejected()
     {
         var track = await TrackAsync(GameCodes.F1_26, 42); // Madring — 셋업 없음
@@ -131,11 +161,12 @@ public sealed class SetupsApiE2ETests : IClassFixture<ApiFactory>
     private Task<Track> TrackAsync(string gameCode, int gameTrackId)
         => WithDbAsync(db => db.Tracks.AsNoTracking().SingleAsync(t => t.GameCode == gameCode && t.GameTrackId == gameTrackId));
 
-    private async Task ReplaceAsync(Guid trackId, string condition, IReadOnlyList<CommunitySetup> setups)
+    private async Task ReplaceAsync(Guid trackId, string condition, IReadOnlyList<CommunitySetup> setups, string? session = null)
     {
         using var scope = _factory.Services.CreateScope();
         var repository = scope.ServiceProvider.GetRequiredService<ICommunitySetupRepository>();
-        await repository.ReplaceGroupAsync(GameCodes.F1_25, trackId, condition, setups, FetchedAt);
+        await repository.ReplaceGroupAsync(
+            GameCodes.F1_25, trackId, condition, session ?? SetupSessions.DefaultFor(condition), setups, FetchedAt);
     }
 
     private async Task<T> WithDbAsync<T>(Func<AppDbContext, Task<T>> query)
@@ -144,7 +175,8 @@ public sealed class SetupsApiE2ETests : IClassFixture<ApiFactory>
         return await query(scope.ServiceProvider.GetRequiredService<AppDbContext>());
     }
 
-    private static CommunitySetup Setup(Guid trackId, string condition, int rank, string key, bool withDate = true)
+    private static CommunitySetup Setup(
+        Guid trackId, string condition, int rank, string key, bool withDate = true, string? session = null)
         => new()
         {
             Id = Guid.CreateVersion7(),
@@ -156,7 +188,7 @@ public sealed class SetupsApiE2ETests : IClassFixture<ApiFactory>
             SourceId = key,
             SourceUrl = $"https://www.f1laps.com/f1-25/setups/australia/{key}/",
             TeamName = "Aston Martin",
-            SessionType = "Time Trial",
+            SessionType = session ?? SetupSessions.DefaultFor(condition),
             LapTimeMs = 75_973 + rank,
             Steering = "Wheel",
             SetOn = withDate ? new DateOnly(2025, 12, 22) : null,

@@ -20,10 +20,10 @@ public sealed class CommunitySetupRepository : ICommunitySetupRepository
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<CommunitySetup>> GetActiveAsync(
-        Guid trackId, string condition, CancellationToken cancellationToken = default)
+        Guid trackId, string condition, string sessionType, CancellationToken cancellationToken = default)
         => await _context.CommunitySetups
             .AsNoTracking()
-            .Where(s => s.TrackId == trackId && s.Condition == condition)
+            .Where(s => s.TrackId == trackId && s.Condition == condition && s.SessionType == sessionType)
             .OrderBy(s => s.Rank)
             .ThenBy(s => s.Id)
             .ToListAsync(cancellationToken);
@@ -42,6 +42,7 @@ public sealed class CommunitySetupRepository : ICommunitySetupRepository
         string gameCode,
         Guid trackId,
         string condition,
+        string sessionType,
         IReadOnlyList<CommunitySetup> setups,
         DateTime now,
         CancellationToken cancellationToken = default)
@@ -68,7 +69,9 @@ public sealed class CommunitySetupRepository : ICommunitySetupRepository
                 }
             }
 
-            foreach (var row in existing.Values.Where(r => !r.IsDeleted && !incomingIds.Contains(r.SourceId)))
+            // 지우는 것은 이 세션 종류의 행만(같은 조건의 다른 세션 종류 묶음은 그대로).
+            foreach (var row in existing.Values.Where(r =>
+                         !r.IsDeleted && r.SessionType == sessionType && !incomingIds.Contains(r.SourceId)))
             {
                 row.IsDeleted = true;
                 row.UpdatedAt = now;
@@ -84,7 +87,7 @@ public sealed class CommunitySetupRepository : ICommunitySetupRepository
         }
     }
 
-    /// <summary>묶음의 모든 행(지운 행 포함, tracked).</summary>
+    /// <summary>게임·트랙·조건의 모든 행(세션 종류 전부, 지운 행 포함, tracked) — SourceId는 이 안에서 하나다(고유 인덱스).</summary>
     private IQueryable<CommunitySetup> Group(string gameCode, Guid trackId, string condition)
         => _context.CommunitySetups
             .IgnoreQueryFilters()
