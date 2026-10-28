@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import '../../laps/domain/lap_models.dart';
+import 'car_setup.dart';
 import 'lap_compare.dart';
 
 /// 트레이스 해상도의 최솟값(m). 서버 검증은 1~50m(docs/15 §5) — 0 이하가 오면 이 값으로 본다.
@@ -68,6 +69,7 @@ class CarSnapshot {
     this.ersStoreEndJ,
     this.ersDeployedJ,
     this.ersHarvestedJ,
+    this.setup,
   });
 
   final int? visualTyreCompound;
@@ -103,6 +105,9 @@ class CarSnapshot {
   final double? ersDeployedJ;
   final double? ersHarvestedJ;
 
+  /// 랩 끝 차량 셋업(`details.setup`). 없으면 null.
+  final CarSetup? setup;
+
   static CarSnapshot? fromJsonOrNull(Object? json) {
     final map = _mapOrNull(json);
     if (map == null) {
@@ -131,6 +136,7 @@ class CarSnapshot {
       ersStoreEndJ: _doubleOrNull(map['ersStoreEndJ']),
       ersDeployedJ: _doubleOrNull(map['ersDeployedJ']),
       ersHarvestedJ: _doubleOrNull(map['ersHarvestedJ']),
+      setup: CarSetup.fromJsonOrNull(_mapOrNull(map['details'])?['setup']),
     );
   }
 }

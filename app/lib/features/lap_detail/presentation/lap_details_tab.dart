@@ -9,6 +9,7 @@ import 'car_tyres_card.dart';
 import 'driver_assists_card.dart';
 import 'lap_info_card.dart';
 import 'lap_time_cards.dart';
+import 'setup_diagnosis_card.dart';
 
 /// 이 콘텐츠 폭(논리 px) 이상이면 2열, 미만이면 1열(docs/15 §2.3).
 const double kLapDetailTwoColumnWidth = 900;
@@ -21,7 +22,7 @@ List<Widget> _spaced(List<Widget> children) => [
 ];
 
 /// Lap Details 탭(D-46, D-51): 왼쪽 = Lap Time · Comparison · Lap Details · Driver Assists(있을 때), 오른쪽 = Car & Tyres · Damage,
-/// 아래 = Conditions · Fuel · ERS 세 칸. 900px 미만이면 모두 한 줄로 쌓는다. 스냅샷이 없으면 차·손상·연료·ERS 대신 안내 한 장.
+/// 아래 = Conditions · Fuel · ERS 세 칸, 셋업이 있으면 맨 아래에 셋업 진단(한 줄 전체). 900px 미만이면 모두 한 줄로 쌓는다. 스냅샷이 없으면 차·손상·연료·ERS 대신 안내 한 장.
 class LapDetailsTab extends StatelessWidget {
   const LapDetailsTab({super.key, required this.detail, this.compare = LapCompareSelection.defaults});
 
@@ -52,13 +53,15 @@ class LapDetailsTab extends StatelessWidget {
       if (conditions != null) ConditionsCard(conditions: conditions),
       if (car != null) ...[FuelCard(car: car), ErsCard(car: car)],
     ];
+    final setup = car?.setup;
+    final setupCard = setup == null ? null : SetupDiagnosisCard(setup: setup, trackName: detail.lap.trackName);
 
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth < kLapDetailTwoColumnWidth) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: _spaced([...left, ...right, ...bottom]),
+            children: _spaced([...left, ...right, ...bottom, ?setupCard]),
           );
         }
         // 두 열은 같은 폭. 차 정보가 있으면 [랩 시간·비교 | Car & Tyres], [랩 정보·보조 | Damage] 두 줄로 나눠
@@ -83,6 +86,7 @@ class LapDetailsTab extends StatelessWidget {
               const SizedBox(height: _cardGap),
               EqualHeightRow(gap: _cardGap, children: bottom),
             ],
+            if (setupCard != null) ...[const SizedBox(height: _cardGap), setupCard],
           ],
         );
       },

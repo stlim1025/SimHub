@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../auth/domain/user_preferences.dart';
 import '../domain/lap_analysis.dart';
@@ -132,7 +131,7 @@ class LapAnalysisCard extends StatelessWidget {
                     Text(
                       '${c.corner.label} ${formatDeltaSeconds(c.lossS)}',
                       key: ValueKey('lap-analysis-gain-${c.corner.number}'),
-                      style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.w600),
+                      style: TextStyle(color: palette.success, fontWeight: FontWeight.w600),
                     ),
                 ],
               ),
@@ -185,7 +184,7 @@ class _CornerRow extends StatelessWidget {
               children: [
                 Text(
                   formatDeltaSeconds(analysis.lossS),
-                  style: const TextStyle(color: AppColors.danger, fontWeight: FontWeight.w700),
+                  style: TextStyle(color: palette.danger, fontWeight: FontWeight.w700),
                 ),
                 for (final f in analysis.factors)
                   Padding(
