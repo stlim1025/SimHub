@@ -79,12 +79,8 @@ class SetupTrackPage extends ConsumerWidget {
               options: kSetupConditionOptions,
               selected: selected,
               segmentKeyOf: setupConditionKey,
-              // 조건을 바꾸면 그 조건에도 있는 세션 종류는 그대로 둔다(Wet으로 가면 타임 트라이얼은 레이스로).
-              onSelected: (value) => context.go(setupTrackLocation(
-                trackId,
-                condition: value,
-                session: normalizeSetupSession(selectedSession, value),
-              )),
+              // 조건을 바꾸면 그 조건의 기본 세션 종류로(Dry는 타임 트라이얼, Wet은 레이스).
+              onSelected: (value) => context.go(setupTrackLocation(trackId, condition: value)),
             ),
             ButtonGroup<String>(
               options: [for (final s in setupSessionsFor(selected)) (value: s, label: kSetupSessionLabels[s]!)],

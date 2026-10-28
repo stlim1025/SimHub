@@ -170,6 +170,12 @@ void main() {
       expect(_location(router), '/setups/au?condition=wet'); // 레이스는 Wet 기본이라 쿼리 없음
       expect(find.byKey(const ValueKey('setup-session-TimeTrial')), findsNothing);
       expect(find.byKey(const ValueKey('setup-session-Qualifying')), findsOneWidget);
+
+      // 다시 Dry로 오면 Dry 기본(타임 트라이얼)으로.
+      await t.tap(find.byKey(const ValueKey('setup-condition-Dry')));
+      await t.pumpAndSettle();
+      expect(_location(router), '/setups/au');
+      expect(repo.listRequests.last, (trackId: 'au', condition: 'Dry', session: 'TimeTrial'));
     });
 
     testWidgets('줄을 누르면 셋업 상세로', (t) async {
