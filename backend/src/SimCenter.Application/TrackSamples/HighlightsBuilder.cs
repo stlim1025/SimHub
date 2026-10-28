@@ -111,7 +111,8 @@ public static class HighlightsBuilder
     private const int ClipSampleStepMs = 200;
 
     /// <summary>
-    /// 점수: 종류별 기본, 상위권(최종 5위 안)·선두를 넘으면 더한다(내 차라고 더하지 않는다 — 레이스 하이라이트는 모두의 장면). 출발·결승은 늘 든다.
+    /// 점수: 종류별 기본, 상위권(최종 5위 안) 차의 장면이면 더한다(내 차라고 더하지 않는다 — 레이스 하이라이트는 모두의 장면). 출발·결승은 늘 든다.
+    /// 추월은 그 순간 다툰 순위로 더한다(선두·포디움·5위 안) — 최종 순위가 아니라, 선두를 되찾는 장면도 선두 다툼이다.
     /// 차 대 차 충돌은 어느 한 차라도 손상이 늘어야 충돌 점수, 아니면 가벼운 접촉 점수(추월 기본보다 낮다).
     /// 고를 때 같은 두 차의 추월은 이미 고른 수만큼 깎는다(한 싸움이 하이라이트를 채우지 않게) — 그래도 가벼운 접촉보다는 높게.
     /// </summary>
@@ -129,7 +130,19 @@ public static class HighlightsBuilder
     private const double RepeatPairFloor = 1.5;
     private const double TopFiveBonus = 1.5;
     private const int TopFive = 5;
-    private const double LeadBonus = 2;
+    private const double LeadFightBonus = 4;
+    private const double PodiumFightBonus = 2.5;
+    private const int Podium = 3;
+    private const double TopFiveFightBonus = 1.5;
+
+    /// <summary>추월에서 다툰 순위를 볼 시각(추월 표시 이만큼 앞, ms — 표시 순간에는 이미 순위가 바뀌어 있다).</summary>
+    private const int FightLookBackMs = 1_000;
+
+    /// <summary>
+    /// 고르기: 레이스를 장면 [ScenesPerSegment]개마다 한 구간으로 나눠 구간마다 고를 수를 고르게 나눈다(출발·결승 빼고) —
+    /// 초반에 몰리고 후반을 건너뛰지 않게. 모든 구간이 몫을 채웠거나 더 고를 장면이 없을 때만 몫을 넘는다.
+    /// </summary>
+    private const int ScenesPerSegment = 3;
 
     /// <summary>클립 길이(장면 순간 앞·뒤 ms).</summary>
     private const int OvertakeBeforeMs = 7_000;
@@ -208,7 +221,17 @@ public static class HighlightsBuilder
             return false;
         }
 
-        scenes.AddRange(Overtakes(timeline, flags, start, position, Rank, Pitting));
+        // [time]에 [car]의 순위(결승선 통과 수 + 랩 거리, 표본이 끊긴 차는 뺀다).
+        int PositionAt(int car, int time)
+        {
+            double? Progress(int c) => timeline.SampleAt(c, time) is { } s && Math.Abs(s.TimeMs - time) < SameCarMergeMs
+                ? crossings[c].Count(t => t <= time) * CrossingWeightM + s.LapDistanceM
+                : null;
+            var mine = Progress(car) ?? double.MinValue;
+            return 1 + timeline.Cars.Keys.Count(c => c != car && Progress(c) > mine);
+        }
+
+        scenes.AddRange(Overtakes(timeline, flags, start, PositionAt, Pitting));
         scenes.AddRange(Contacts(timeline, player, Rank));
 
         foreach (var retirement in retirements)
@@ -269,8 +292,8 @@ public static class HighlightsBuilder
     /// 같은 두 차는 몇 초 안에 한 번 — 그 안의 재추월·되찾기는 앞 장면을 늘려 함께 보여 준다.
     /// </summary>
     private static List<Scene> Overtakes(
-        RaceTimeline timeline, IReadOnlyList<RaceFlagPeriod> flags, int start, IReadOnlyDictionary<int, int> position,
-        Func<int, double> rank, Func<int, int, bool> pitting)
+        RaceTimeline timeline, IReadOnlyList<RaceFlagPeriod> flags, int start, Func<int, int, int> positionAt,
+        Func<int, int, bool> pitting)
     {
         var overtook = Marks(timeline, s => (s.Flags2 & RaceSample.OvertookFlag) != 0);
         var overtaken = Marks(timeline, s => (s.Flags2 & RaceSample.OvertakenFlag) != 0);
@@ -304,19 +327,29 @@ public static class HighlightsBuilder
 
             var pair = (Math.Min(car, other), Math.Max(car, other));
             var after = OvertakeAfter(timeline, time, car, other);
+            var fought = positionAt(other, time - FightLookBackMs);
+            var score = OvertakeScore + fought switch
+            {
+                1 => LeadFightBonus,
+                <= Podium => PodiumFightBonus,
+                <= TopFive => TopFiveFightBonus,
+                _ => 0,
+            };
             if (last.TryGetValue(pair, out var previous) && time - previous < SamePairMergeMs)
             {
                 var index = sceneOf[pair];
                 var merged = scenes[index];
-                scenes[index] = merged with { AfterMs = Math.Max(merged.AfterMs, time - merged.TimeMs + after) };
+                scenes[index] = merged with
+                {
+                    AfterMs = Math.Max(merged.AfterMs, time - merged.TimeMs + after),
+                    Score = Math.Max(merged.Score, score),
+                };
                 continue;
             }
 
             last[pair] = time;
             sceneOf[pair] = scenes.Count;
-            var lead = position.TryGetValue(other, out var p) && p == 1 ? LeadBonus : 0;
-            scenes.Add(new Scene(HighlightKind.Overtake, time, car, other,
-                OvertakeScore + rank(car) + lead, OvertakeBeforeMs, after));
+            scenes.Add(new Scene(HighlightKind.Overtake, time, car, other, score, OvertakeBeforeMs, after));
         }
 
         return scenes;
@@ -442,13 +475,22 @@ public static class HighlightsBuilder
 
     /// <summary>
     /// 점수 높은 것부터 [limit]개를 시간 순으로. 이미 고른 클립 구간 안에 드는 장면은 그 클립이 보여 주므로 뺀다.
-    /// 추월은 같은 두 차의 추월을 이미 고른 수만큼 깎은 점수로 견준다.
+    /// 추월은 같은 차가 같은 차를 넘은 추월을 이미 고른 수만큼 깎은 점수로 견주고, 구간마다 몫을 고르게 나눈다.
     /// </summary>
     private static List<Scene> Pick(IEnumerable<Scene> scenes, int limit)
     {
         var left = scenes.OrderBy(s => s.TimeMs).ToList();
         var picked = new List<Scene>();
         var pairs = new Dictionary<(int, int), int>();
+        var from = left.Count == 0 ? 0 : left[0].TimeMs;
+        var span = left.Count == 0 ? 1 : Math.Max(1, left[^1].TimeMs - from + 1);
+        var segments = Math.Max(1, limit / ScenesPerSegment);
+        var bookends = left.Count(Bookend);
+        var share = (int)Math.Ceiling((double)Math.Max(0, limit - bookends) / segments);
+        var taken = new int[segments];
+        int SegmentOf(Scene s) => (int)((long)(s.TimeMs - from) * segments / span);
+        static bool Bookend(Scene s) => s.Kind is HighlightKind.Start or HighlightKind.Finish;
+        bool Open(Scene s) => Bookend(s) || taken[SegmentOf(s)] < share;
         double Effective(Scene s) => s.Kind == HighlightKind.Overtake && PairOf(s) is { } pair
             ? Math.Max(s.Score - pairs.GetValueOrDefault(pair) * RepeatPairPenalty, Math.Min(s.Score, RepeatPairFloor))
             : s.Score;
@@ -461,8 +503,15 @@ public static class HighlightsBuilder
                 break;
             }
 
-            var best = left[0];
-            foreach (var scene in left.Skip(1))
+            // 몫이 남은 구간의 장면 가운데 가장 높은 것, 없으면 전체에서.
+            var pool = left.Where(Open).ToList();
+            if (pool.Count == 0)
+            {
+                pool = left;
+            }
+
+            var best = pool[0];
+            foreach (var scene in pool.Skip(1))
             {
                 if (Effective(scene) > Effective(best))
                 {
@@ -472,6 +521,11 @@ public static class HighlightsBuilder
 
             picked.Add(best);
             left.Remove(best);
+            if (!Bookend(best))
+            {
+                taken[SegmentOf(best)]++;
+            }
+
             if (best.Kind == HighlightKind.Overtake && PairOf(best) is { } bestPair)
             {
                 pairs[bestPair] = pairs.GetValueOrDefault(bestPair) + 1;
@@ -481,8 +535,9 @@ public static class HighlightsBuilder
         return picked.OrderBy(s => s.TimeMs).ToList();
     }
 
+    /// <summary>추월한 차 → 당한 차(방향 있음: 주고받는 싸움은 양쪽 추월을 하나씩 먼저 보여 준다).</summary>
     private static (int, int)? PairOf(Scene scene)
-        => scene.Other is { } other ? (Math.Min(scene.Focus, other), Math.Max(scene.Focus, other)) : null;
+        => scene.Other is { } other ? (scene.Focus, other) : null;
 
     private static double Distance(RaceSample a, RaceSample b)
         => Math.Sqrt(Math.Pow(a.X - b.X, 2) + Math.Pow(a.Z - b.Z, 2));

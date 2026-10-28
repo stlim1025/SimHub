@@ -280,6 +280,52 @@ public sealed class HighlightsBuilderTests
     }
 
     [Fact]
+    public void Picks_AreSpreadOverTheRace_NotPiledUpWhereTheScoresAreHigh()
+    {
+        // 30~270초에 손상 난 충돌(점수 높음)이 12초마다 21번, 300~400초에 추월(점수 낮음)이 20초마다 6번 — 후반도 든다.
+        const int raceMs = 420_000;
+        var marks = new List<Mark>();
+        var damage = 0;
+        for (var t = 30_000; t <= 270_000; t += 12_000)
+        {
+            damage += 4;
+            marks.Add(new Mark(t, 1, Status: RaceSample.CollisionFlag));
+            marks.Add(new Mark(t, 4, Status: RaceSample.CollisionFlag));
+            marks.Add(new Mark(t + 100, 4, Damage: (byte)damage));
+        }
+
+        for (var t = 300_000; t <= 400_000; t += 20_000)
+        {
+            var (by, of) = t / 20_000 % 2 == 0 ? ((byte)2, (byte)3) : ((byte)3, (byte)2);
+            marks.Add(new Mark(t, by, Flags2: RaceSample.OvertookFlag));
+            marks.Add(new Mark(t, of, Flags2: RaceSample.OvertakenFlag));
+        }
+
+        var race = Build(Race(new Dictionary<byte, double> { [1] = 330, [4] = 320, [2] = 30, [3] = 20 }, toMs: raceMs, marks: [.. marks])).Race;
+
+        Assert.InRange(race.Count(c => c.Kind == nameof(HighlightKind.Overtake)), 4, 6);
+        Assert.InRange(race.Count(c => c.Kind == nameof(HighlightKind.Collision)), 10, 12);
+    }
+
+    [Fact]
+    public void Overtake_ForTheLeadAtThatMoment_OutranksOneForAMidfieldPlace()
+    {
+        // 30초에 2번이 3번(그 순간 선두)을, 28초에 1번이 4번(그 순간 3위)을 넘는다 — 서로의 클립 안이라 하나만 든다.
+        // 최종 순위표(1번 우승)와 상관없이 그 순간의 선두 다툼이 더 높다.
+        var samples = Race(
+            new Dictionary<byte, double> { [3] = 250, [2] = 240, [4] = 30, [1] = 20 },
+            marks:
+            [
+                new Mark(30_000, 2, Flags2: RaceSample.OvertookFlag), new Mark(30_000, 3, Flags2: RaceSample.OvertakenFlag),
+                new Mark(28_000, 1, Flags2: RaceSample.OvertookFlag), new Mark(28_000, 4, Flags2: RaceSample.OvertakenFlag),
+            ]);
+
+        var overtake = Assert.Single(Build(samples).Race, c => c.Kind == nameof(HighlightKind.Overtake));
+
+        Assert.Equal(2, overtake.FocusCar);
+    }
+
+    [Fact]
     public void WallHit_CountsOnlyWhenDamageRises()
     {
         var samples = Race(
