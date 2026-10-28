@@ -129,6 +129,18 @@ void main() {
       expect(kerbAt(onCircle(150, radius - 5.75)), isFalse); // 밟지 않은 곳에는 없다
     });
 
+    test('덮을 자리(그리드에 선 차)가 도로 밖이면 그 둘레만 폭을 넓혀 차가 통째로 도로 안에 든다', () {
+      final points = [for (var i = 0; i < count; i++) onCircle(i, radius)];
+      final real = _profile(points, left: 5, right: 5);
+      final grid = onCircle(40, radius + 7); // 오른쪽(바깥) 7m
+
+      final circuit = ReplayCircuit.build(LapReplay(_trace(points)), real: real, cover: [grid]);
+
+      expect(circuit.asphalt.contains(onCircle(40, radius + 8.5)), isTrue); // 차 바깥 끝 + 여유
+      expect(circuit.asphalt.contains(onCircle(200, radius + 5.5)), isFalse); // 먼 곳은 그대로
+      expect(circuit.asphalt.contains(onCircle(40, radius - 5.5)), isFalse); // 반대쪽도 그대로
+    });
+
     test('실측 폭으로 도로를 그리고, 실측 서킷이 없으면 주행 기록으로 추정한다', () {
       final points = [for (var i = 0; i < count; i++) onCircle(i, radius)];
       final real = _profile(points, left: 5, right: 5);

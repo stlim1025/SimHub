@@ -76,9 +76,8 @@ const double _singleRowControlsMinWidth = 760;
 const double _wideViewMinWidth = 700;
 const double _microsecondsPerMs = 1000;
 
-/// 출발 클립 첫 순간 이만큼(ms) 뒤까지 이 거리(m) 안에 머문 차를 그리드에 선 차로 본다.
-const double _gridStillMs = 1000;
-const double _gridStillM = 0.5;
+/// 출발 클립 첫 순간 이 속도(km/h) 이하인 차를 그리드에 선 차로 본다(소등이 첫 표본 바로 뒤일 수 있어 정지 시간은 보지 않는다).
+const double _gridStillKph = 1;
 
 /// 출발 클립(소등 전 그리드부터 시작할 때)에서 서 있는 차들의 자리 = 실제 그리드 칸. 하나도 없으면 null.
 List<ReplayGridSlot>? _startGrid(RaceHighlights highlights) {
@@ -97,8 +96,7 @@ List<ReplayGridSlot>? _startGrid(RaceHighlights highlights) {
         continue;
       }
       final now = path.frameAt(t);
-      final later = path.frameAt(t + _gridStillMs);
-      if ((Offset(now.x, now.z) - Offset(later.x, later.z)).distance > _gridStillM) {
+      if (now.speedKph > _gridStillKph) {
         continue;
       }
       slots[track.carIndex] = (x: now.x, z: now.z, heading: now.heading);
@@ -282,14 +280,23 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
   ReplayCircuit _buildCircuit() {
     final player = LapReplay(widget.trace);
     final baseWidth = widget.estimatedTrackWidthM;
+    // 그리드에 선 차가 풀밭에 서지 않게 그 자리까지 도로를 넓힌다.
+    final cover = [for (final slot in _grid ?? const <ReplayGridSlot>[]) Offset(slot.x, slot.z)];
     return baseWidth == null
-        ? ReplayCircuit.build(player, real: widget.realTrack, samples: widget.trackSamples, street: widget.streetCircuit)
+        ? ReplayCircuit.build(
+            player,
+            real: widget.realTrack,
+            samples: widget.trackSamples,
+            street: widget.streetCircuit,
+            cover: cover,
+          )
         : ReplayCircuit.build(
             player,
             real: widget.realTrack,
             samples: widget.trackSamples,
             baseWidthM: baseWidth,
             street: widget.streetCircuit,
+            cover: cover,
           );
   }
 

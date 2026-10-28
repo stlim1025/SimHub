@@ -49,6 +49,9 @@ const double _kerbCarAllowanceM = 0.5;
 /// 실측 중심선을 좌우로 옮기는 보정이 앞뒤로 퍼지는 거리(m) — 갑자기 꺾이지 않게.
 const double _shiftSpreadM = 20;
 
+/// 도로 안에 들어야 할 자리(출발 그리드 등)를 덮을 때 차 반폭 바깥으로 더 남기는 폭(m).
+const double _coverMarginM = 1;
+
 /// 추정 중심선 점이 실측 중심선에서 이 거리(m) 안이면 같은 길로 보고 실측 중심·폭을 쓴다(멀면 레이아웃이 바뀐 구간).
 const double _measuredMatchM = 15;
 
@@ -165,6 +168,7 @@ class ReplayCircuit {
   /// 높이·연석은 [samples]가 있으면 그것을 먼저 쓴다(내 랩 하나보다 여러 차·여러 랩이 고르다).
   /// [baseWidthM]은 실측이 없는 구간의 직선 도로 폭(트랙마다 다를 수 있다, 기본 [kCircuitBaseWidthM]).
   /// [street](시가지 서킷)이면 코너 바깥 그래블을 깔지 않는다.
+  /// [cover](월드 X·Z — 출발 그리드에 선 차 자리 등)는 차가 통째로 도로 안에 들도록 그 둘레 폭을 넓힌다.
   factory ReplayCircuit.build(
     LapReplay player, {
     LapReplay? ghost,
@@ -172,13 +176,17 @@ class ReplayCircuit {
     TrackSampleGeometry? samples,
     double baseWidthM = kCircuitBaseWidthM,
     bool street = false,
+    List<Offset> cover = const [],
   }) {
     final lines = [player.trace, if (ghost != null) ghost.trace];
     final playerLine = _positions(player.trace);
     final profile = samples == null ? real : trackProfileFromSamples(samples, widthM: baseWidthM);
     final aligned = profile == null ? null : alignTrackProfile(profile, playerLine);
     final estimated = _estimated(player, ghost, baseWidthM);
-    final geometry = aligned == null ? estimated : _keepLinesInside(_withMeasured(estimated, aligned), lines);
+    final geometry = _covering(
+      aligned == null ? estimated : _keepLinesInside(_withMeasured(estimated, aligned), lines),
+      cover,
+    );
     final center = geometry.center;
     final n = center.length;
     final closed = geometry.closed;
@@ -476,6 +484,56 @@ class ReplayCircuit {
       center: [for (var j = 0; j < n; j++) center[j] + normals[j] * shift[j]],
       left: geometry.left,
       right: geometry.right,
+      closed: closed,
+    );
+  }
+
+  /// [points]가 (차 반폭 + 여유까지) 도로 안에 들도록 그 쪽 폭을 넓힌다. 앞뒤로 퍼뜨린 뒤 평균해 폭이 부드럽게 늘고 준다.
+  static _Geometry _covering(_Geometry geometry, List<Offset> points) {
+    if (points.isEmpty) {
+      return geometry;
+    }
+    final center = geometry.center;
+    final n = center.length;
+    final closed = geometry.closed;
+    int at(int i) => closed ? (i % n + n) % n : i.clamp(0, n - 1);
+    final needLeft = List<double>.filled(n, 0);
+    final needRight = List<double>.filled(n, 0);
+    for (final p in points) {
+      final j = _nearestIndex(center, p);
+      final d = center[at(j + 1)] - center[at(j - 1)];
+      if (d.distance == 0) {
+        continue;
+      }
+      final normal = Offset(-d.dy, d.dx) / d.distance;
+      final lateral = (p.dx - center[j].dx) * normal.dx + (p.dy - center[j].dy) * normal.dy;
+      final need = lateral.abs() + _carHalfWidthM + _coverMarginM;
+      if (lateral >= 0) {
+        needLeft[j] = math.max(needLeft[j], need);
+      } else {
+        needRight[j] = math.max(needRight[j], need);
+      }
+    }
+    final spread = math.max(1, (_shiftSpreadM / _spacing(center, closed: closed)).round());
+    List<double> widen(List<double> base, List<double> need) {
+      final dilated = [
+        for (var j = 0; j < n; j++)
+          () {
+            var best = 0.0;
+            for (var k = j - spread; k <= j + spread; k++) {
+              best = math.max(best, need[at(k)]);
+            }
+            return best;
+          }(),
+      ];
+      final smooth = _movingAverage(dilated, spread, at);
+      return [for (var j = 0; j < n; j++) math.max(base[j], smooth[j])];
+    }
+
+    return (
+      center: center,
+      left: widen(geometry.left, needLeft),
+      right: widen(geometry.right, needRight),
       closed: closed,
     );
   }
