@@ -200,6 +200,35 @@ void main() {
     expect(ersFeedbackLines(ers).first, '랩 시작 50% → 끝 0% (기준 50% → 50%)');
   });
 
+  test('타이어가 기준 랩보다 많이 닳았거나 단단하면 그립 탓일 수 있는 차이를 운전 실수로 몰지 않는다', () {
+    expect(const TyreCondition(wearPct: 30, referenceWearPct: 12).limitsGrip, isTrue);
+    expect(const TyreCondition(wearPct: 15, referenceWearPct: 12).limitsGrip, isFalse);
+    expect(const TyreCondition(wearPct: 15, referenceWearPct: 12, compound: 'Hard', referenceCompound: 'Soft').limitsGrip,
+        isTrue);
+    expect(const TyreCondition(wearPct: 35).limitsGrip, isTrue); // 기준 마모를 모르면 이 랩 마모만
+    expect(const TyreCondition(wearPct: 20).limitsGrip, isFalse);
+
+    final lap = _lap(brakeAtM: 280, apexKph: 100); // 일찍 밟고 코너가 느리다
+    final worn = analyzeLap(lap, reference, detectLapCorners(reference),
+        tyres: const TyreCondition(wearPct: 40, referenceWearPct: 10));
+    final corner = worn.losses.single;
+    expect(worn.gripLimited, isTrue);
+    expect(worn.tyreExplained(corner), isTrue);
+    expect(tyreConditionText(worn), startsWith('타이어 마모 평균 40%(기준 랩 10%, +30%p) → 그립이 기준 랩보다 낮아'));
+    expect(cornerFactorText((kind: CornerFactorKind.brakeEarlier, amount: 20), UnitSystem.metric, gripLimited: true),
+        '브레이킹이 20m 일러요 → 닳은 타이어로는 어쩔 수 없어요, 무리하게 늦추면 락업·오버슛이 나요');
+    // 그립과 상관없는 실수(늦은 브레이크)는 그대로 짚는다.
+    expect(cornerFactorText((kind: CornerFactorKind.brakeLater, amount: 20), UnitSystem.metric, gripLimited: true),
+        '브레이킹이 20m 늦어요 → 진입 오버슛, 브레이크 포인트를 앞당기세요');
+
+    final fresh = analyzeLap(lap, reference, detectLapCorners(reference),
+        tyres: const TyreCondition(wearPct: 10, referenceWearPct: 10));
+    expect(fresh.gripLimited, isFalse);
+    expect(tyreConditionText(fresh), isNull);
+    expect(averageWear(const WheelValues(frontLeft: 31, frontRight: 18, rearLeft: 24, rearRight: 18.5)), 22.875);
+    expect(averageWear(const WheelValues(frontLeft: 31)), isNull);
+  });
+
   test('피드백 글자: 관찰 → 고칠 점, 속도는 사용자 단위', () {
     expect(cornerFactorText((kind: CornerFactorKind.brakeLater, amount: 19.6), UnitSystem.metric),
         '브레이킹이 20m 늦어요 → 진입 오버슛, 브레이크 포인트를 앞당기세요');

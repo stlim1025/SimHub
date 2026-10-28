@@ -348,25 +348,7 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
           );
     // 트랙 지도(같은 십자선 거리에 점) + Lap Telemetry 통계.
     final panel = LapTelemetryPanel(trace: trace, sectors: widget.sectors, cursor: _shown, units: widget.units);
-    return LayoutBuilder(
-      builder: (context, box) => box.maxWidth >= kTelemetrySideBySideMinWidth
-          // 넓은 화면: 왼쪽 그래프, 오른쪽 지도·통계 칸 — 스크롤해도 화면 위쪽에 붙어 있다.
-          ? ViewportPinned(
-              key: const ValueKey('telemetry-wide-layout'),
-              asideWidth: kTelemetryAsideWidth,
-              gap: _panelGap,
-              main: mainColumn(kGhostReplayWideHeight),
-              pinned: KeyedSubtree(key: const ValueKey('telemetry-aside'), child: panel),
-            )
-          // 좁은 화면: 위에서부터 지도·통계 → 그래프. 지도가 화면 위로 지나가면 오른쪽 아래에 작은 지도.
-          : _NarrowTelemetryLayout(
-              panel: panel,
-              charts: mainColumn(kGhostReplayNarrowHeight),
-              trace: trace,
-              sectors: widget.sectors,
-              cursor: _shown,
-            ),
-    );
+    return LapPanelLayout(panel: panel, main: mainColumn, trace: trace, sectors: widget.sectors, cursor: _shown);
   }
 
   /// Delta = 같은 거리에서 이 랩 시간 − 비교 랩 시간(초), 0 기준선.
@@ -383,6 +365,50 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
       baseline: 0,
       height: _deltaChartHeight,
       format: formatDeltaSeconds,
+    );
+  }
+}
+
+/// Telemetry·Analysis 탭 공통 배치: 넓은 화면은 왼쪽 [main], 오른쪽 지도·통계 칸([panel], 스크롤해도 화면 위쪽에 붙어 있다).
+/// 좁은 화면은 위에서부터 [panel] → [main]이고, 지도가 화면 위로 지나가면 오른쪽 아래에 작은 지도를 띄운다.
+class LapPanelLayout extends StatelessWidget {
+  const LapPanelLayout({
+    super.key,
+    required this.panel,
+    required this.main,
+    required this.trace,
+    required this.sectors,
+    required this.cursor,
+  });
+
+  final Widget panel;
+
+  /// 왼쪽(좁으면 아래) 내용. 인자 = 그 폭에 맞는 리플레이 높이.
+  final Widget Function(double replayHeight) main;
+  final LapTrace trace;
+  final List<LapSector> sectors;
+
+  /// 작은 지도 점의 거리.
+  final ValueNotifier<double?> cursor;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, box) => box.maxWidth >= kTelemetrySideBySideMinWidth
+          ? ViewportPinned(
+              key: const ValueKey('telemetry-wide-layout'),
+              asideWidth: kTelemetryAsideWidth,
+              gap: _panelGap,
+              main: main(kGhostReplayWideHeight),
+              pinned: KeyedSubtree(key: const ValueKey('telemetry-aside'), child: panel),
+            )
+          : _NarrowTelemetryLayout(
+              panel: panel,
+              charts: main(kGhostReplayNarrowHeight),
+              trace: trace,
+              sectors: sectors,
+              cursor: cursor,
+            ),
     );
   }
 }

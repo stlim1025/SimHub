@@ -57,6 +57,10 @@ const int _turningSteerPct = 40;
 const int _hardBrakePct = 50;
 const double _turningPedalM = 10;
 
+/// 타이어가 그립을 줄였다고 볼 비교 랩보다 많은 평균 마모(%p), 비교 랩 마모를 모를 때 이 랩 평균 마모(%).
+const double kGripLimitingExtraWearPct = 8;
+const double kGripLimitingWearPct = 30;
+
 /// 이 이상 잃은(초) 코너만 피드백한다.
 const double kCornerLossThresholdS = 0.05;
 
@@ -193,6 +197,55 @@ bool isTyreFactor(CornerFactorKind kind) => switch (kind) {
       _ => false,
     };
 
+/// 타이어 그립이 줄면 어쩔 수 없이 생기는 차이인지: 일찍·약하게 밟는 브레이크, 낮은 코너 속도,
+/// 늦거나 덜 밟는 가속·탈출 휠스핀, 느린 탈출·구간 속도.
+bool isGripLimitedFactor(CornerFactorKind kind) => switch (kind) {
+      CornerFactorKind.brakeEarlier ||
+      CornerFactorKind.brakeLighter ||
+      CornerFactorKind.slowerApex ||
+      CornerFactorKind.throttleLift ||
+      CornerFactorKind.partialThrottle ||
+      CornerFactorKind.throttleLater ||
+      CornerFactorKind.slowerExit ||
+      CornerFactorKind.slowerThrough =>
+        true,
+      _ => false,
+    };
+
+/// 드라이 컴파운드 그립 순서(앞일수록 그립이 높다).
+const List<String> _dryCompoundGrip = ['Soft', 'Medium', 'Hard'];
+
+/// 이 랩·비교 랩의 타이어 상태: 랩 끝 네 바퀴 평균 마모(%), 보이는 컴파운드 이름(Soft·Medium·Hard·Intermediate·Wet). 모르면 null.
+class TyreCondition {
+  const TyreCondition({this.wearPct, this.referenceWearPct, this.compound, this.referenceCompound});
+
+  final double? wearPct;
+  final double? referenceWearPct;
+  final String? compound;
+  final String? referenceCompound;
+
+  /// 이 랩 − 비교 랩 평균 마모(%p). 둘 중 하나를 모르면 null.
+  double? get extraWearPct => wearPct == null || referenceWearPct == null ? null : wearPct! - referenceWearPct!;
+
+  /// 비교 랩보다 그립이 낮은 드라이 컴파운드인지(예: 비교 Soft, 이 랩 Hard).
+  bool get harderCompound {
+    final mine = _dryCompoundGrip.indexOf(compound ?? '');
+    final theirs = _dryCompoundGrip.indexOf(referenceCompound ?? '');
+    return mine >= 0 && theirs >= 0 && mine > theirs;
+  }
+
+  /// 비교 랩보다 [kGripLimitingExtraWearPct] 넘게 더 닳았거나(비교 랩 마모를 모르면 [kGripLimitingWearPct] 이상) 더 단단한 컴파운드라
+  /// 그립이 줄어든 상태인지.
+  bool get limitsGrip {
+    final extra = extraWearPct;
+    final wear = wearPct;
+    if (extra != null) {
+      return extra >= kGripLimitingExtraWearPct || harderCompound;
+    }
+    return (referenceWearPct == null && wear != null && wear >= kGripLimitingWearPct) || harderCompound;
+  }
+}
+
 typedef CornerFactor = ({CornerFactorKind kind, double amount});
 
 /// 코너 하나의 비교: 그 구간에서 잃은 시간(초, 음수면 번 시간)과 기준 랩과 다른 점(브레이킹 → 코너 → 탈출 순).
@@ -258,14 +311,30 @@ class ErsAnalysis {
   List<StraightErs> get underusedStraights => straights.where((s) => s.underused).toList();
 }
 
-/// 랩 분석: 기준([focus]), 비교 랩이 있었는지, 코너별 결과(코너 순서), 배터리(ERS 채널이 있을 때만).
+/// 랩 분석: 기준([focus]), 비교 랩이 있었는지, 코너별 결과(코너 순서), 배터리(ERS 채널이 있을 때만), 타이어 상태.
 class LapAnalysis {
-  const LapAnalysis({required this.focus, required this.hasReference, required this.corners, required this.ers});
+  const LapAnalysis({
+    required this.focus,
+    required this.hasReference,
+    required this.corners,
+    required this.ers,
+    this.tyres,
+  });
 
   final AnalysisFocus focus;
   final bool hasReference;
   final List<CornerAnalysis> corners;
   final ErsAnalysis? ers;
+
+  /// 이 랩·비교 랩 타이어 상태. 모르면 null.
+  final TyreCondition? tyres;
+
+  /// 비교 랩이 있고, 마모·컴파운드로 그립이 줄어 [isGripLimitedFactor] 차이를 운전 실수로만 볼 수 없는지.
+  bool get gripLimited => hasReference && (tyres?.limitsGrip ?? false);
+
+  /// [gripLimited]일 때 짚은 차이가 모두 그립 탓인 코너인지(고칠 운전 실수가 따로 없다).
+  bool tyreExplained(CornerAnalysis corner) =>
+      gripLimited && corner.factors.isNotEmpty && corner.factors.every((f) => isGripLimitedFactor(f.kind));
 
   /// 기준보다 [kCornerLossThresholdS] 넘게 잃은 코너(많이 잃은 순).
   List<CornerAnalysis> get losses =>
@@ -284,7 +353,14 @@ class LapAnalysis {
 /// [lap]을 코너([corners])마다 분석한다(순수 계산). [reference]가 있으면 같은 랩 거리끼리 맞대어 잃은 시간과
 /// 차이 요인을 짚고(두 랩이 같은 트랙이어야 한다), [focus]가 타이어면 타이어에 무리를 주는 운전도 짚는다.
 /// 코너 구간 = 앞 브레이킹(최대 [_brakeLookbackM]) ~ 뒤 탈출(최대 [_exitLookM]), 앞뒤 코너에서 자른다.
-LapAnalysis analyzeLap(LapTrace lap, LapTrace? reference, List<LapCorner> corners, {AnalysisFocus focus = AnalysisFocus.pace}) {
+/// [tyres]로 이 랩 타이어가 비교 랩보다 닳았거나 단단한지 보고, 그립 탓일 수 있는 차이를 가린다([LapAnalysis.gripLimited]).
+LapAnalysis analyzeLap(
+  LapTrace lap,
+  LapTrace? reference,
+  List<LapCorner> corners, {
+  AnalysisFocus focus = AnalysisFocus.pace,
+  TyreCondition? tyres,
+}) {
   final endM = reference == null ? lap.lengthM : math.min(lap.lengthM, reference.lengthM);
   final results = <CornerAnalysis>[];
   for (var k = 0; k < corners.length; k++) {
@@ -310,6 +386,7 @@ LapAnalysis analyzeLap(LapTrace lap, LapTrace? reference, List<LapCorner> corner
     hasReference: reference != null,
     corners: results,
     ers: _ers(lap, reference, corners, endM),
+    tyres: tyres,
   );
 }
 

@@ -27,7 +27,8 @@ public sealed record LapRow(
     bool HasTrace,
     IReadOnlyList<LapSectorDto> Sectors,
     Guid UserId,
-    int? VisualTyreCompound = null);
+    int? VisualTyreCompound = null,
+    double? TyreWearEndAverage = null);
 
 /// <summary>
 /// 내 랩 목록 필터(04 §3.11, 15 §4.2). <see cref="ValidOnly"/> = 게임 판정 유효(<c>IsValid</c>) 랩만 — <c>bestValidLapTimeMs</c>와 같은 기준.

@@ -121,6 +121,14 @@ public sealed class LapDetailApiE2ETests : IClassFixture<ApiFactory>
         Assert.Equal(BestValidMs, comparison.GetProperty("lapTimeMs").GetInt32());
         Assert.Equal(3, comparison.GetProperty("sectors").GetArrayLength());
         Assert.True(comparison.GetProperty("hasTrace").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, comparison.GetProperty("tyreWearPercent").ValueKind); // 스냅샷 없는 랩
+
+        // 스냅샷이 있는 랩을 비교로 고르면 랩 끝 네 바퀴 평균 마모(31·18·24·18.5)와 컴파운드가 온다.
+        var reverse = await client.GetFromJsonAsync<JsonElement>(
+            $"/api/v1/me/laps/{bestId}?compare=lap&compareLapId={currentId}");
+        var withSnapshot = reverse.GetProperty("comparison");
+        Assert.Equal(22.875, withSnapshot.GetProperty("tyreWearPercent").GetDouble(), 3);
+        Assert.Equal(16, withSnapshot.GetProperty("visualTyreCompound").GetInt32());
     }
 
     private static async Task AssertTraceAsync(HttpClient client, Guid lapId, LapDetailPayloads.TraceChannels sent)

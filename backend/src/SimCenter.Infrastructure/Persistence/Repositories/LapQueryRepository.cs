@@ -172,6 +172,9 @@ public sealed class LapQueryRepository : ILapQueryRepository
             ? query.OrderByDescending(l => l.IsValid).ThenBy(l => l.LapTimeMs).ThenBy(l => l.SetAt).ThenBy(l => l.Id)
             : query.OrderByDescending(l => l.SetAt).ThenBy(l => l.Id);
 
+    /// <summary>평균 타이어 마모를 낼 바퀴 수.</summary>
+    private const double WheelCount = 4;
+
     /// <summary>랩 → 읽기 행(쿼리 1회). 트랙은 필수 관계(inner join), 스냅샷은 선택 관계(left join).</summary>
     private IQueryable<LapRow> Project(IQueryable<Lap> laps)
         => laps.Select(l => new LapRow(
@@ -196,5 +199,9 @@ public sealed class LapQueryRepository : ILapQueryRepository
                 .Select(s => new LapSectorDto(s.SectorNumber, s.SectorTimeMs))
                 .ToList(),
             l.UserId,
-            l.Snapshot == null ? null : l.Snapshot.VisualTyreCompound));
+            l.Snapshot == null ? null : l.Snapshot.VisualTyreCompound,
+            l.Snapshot == null
+                ? null
+                : (l.Snapshot.TyreWearEndFrontLeft + l.Snapshot.TyreWearEndFrontRight
+                    + l.Snapshot.TyreWearEndRearLeft + l.Snapshot.TyreWearEndRearRight) / WheelCount));
 }

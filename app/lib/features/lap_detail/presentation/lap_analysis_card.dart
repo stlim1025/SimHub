@@ -36,6 +36,7 @@ const String _tyreTitle = '타이어 관리';
 const String _tyreCornerTitle = '타이어에 무리가 간 코너';
 const String _noLossText = '기준 랩보다 시간을 잃은 코너가 없어요.';
 const String _noReferenceText = '비교 랩을 고르면 코너마다 기준 랩보다 잃은 시간과 이유를 짚어 줘요.';
+const String _tyreExplainedText = '타이어 탓';
 
 const Map<CornerDirection, String> _directionText = {CornerDirection.left: '왼쪽', CornerDirection.right: '오른쪽'};
 
@@ -46,9 +47,34 @@ String _speed(double kph, UnitSystem units) =>
 
 String _kj(double joules) => '${(joules / _joulesPerKj).round()}kJ';
 
-/// 코너 차이 하나를 엔지니어 말투로(무엇이 달랐는지 → 어떻게 고칠지).
-String cornerFactorText(CornerFactor factor, UnitSystem units) {
+/// 타이어 그립이 줄어 생긴 차이([isGripLimitedFactor])를, 고칠 점 대신 그 상태에서 할 수 있는 것으로.
+String? _gripLimitedText(CornerFactor factor, UnitSystem units) {
   final n = factor.amount;
+  return switch (factor.kind) {
+    CornerFactorKind.brakeEarlier =>
+      '브레이킹이 ${_meters(n)} 일러요 → 닳은 타이어로는 어쩔 수 없어요, 무리하게 늦추면 락업·오버슛이 나요',
+    CornerFactorKind.brakeLighter =>
+      '최대 브레이크 압력이 ${n.round()}%p 낮아요 → 그립이 줄어 락업을 피하려면 자연스러워요, 대신 조금 더 길게 밟으세요',
+    CornerFactorKind.slowerApex => '코너 최저속도가 ${_speed(n, units)} 낮아요 → 줄어든 그립 탓이 커요, 라인을 넓게 써 속도를 지키세요',
+    CornerFactorKind.throttleLift =>
+      '탈출에서 스로틀을 ${n.round()}%p 떼요 → 닳은 뒷타이어가 미끄러지는 거예요, 핸들을 다 푼 뒤 천천히 여세요',
+    CornerFactorKind.partialThrottle =>
+      '기준 랩이 풀 스로틀인 곳에서 ${_meters(n)} 덜 밟아요 → 뒷타이어 그립이 모자라 그래요, 휠스핀 없이 여는 게 우선이에요',
+    CornerFactorKind.throttleLater => '풀 스로틀이 ${_meters(n)} 늦어요 → 그립이 줄어 늦게 여는 건 어쩔 수 없어요',
+    CornerFactorKind.slowerExit => '탈출 속도가 ${_speed(n, units)} 낮아요 → 그립이 줄어든 만큼은 어쩔 수 없어요',
+    CornerFactorKind.slowerThrough => '구간 평균 속도가 ${_speed(n, units)} 낮아요 → 그립이 줄어든 만큼은 어쩔 수 없어요',
+    _ => null,
+  };
+}
+
+/// 코너 차이 하나를 엔지니어 말투로(무엇이 달랐는지 → 어떻게 고칠지). [gripLimited]면 그립 탓일 수 있는 차이는
+/// 운전 실수로 몰지 않고 그 상태에서 할 수 있는 것을 말한다.
+String cornerFactorText(CornerFactor factor, UnitSystem units, {bool gripLimited = false}) {
+  final n = factor.amount;
+  final limited = gripLimited ? _gripLimitedText(factor, units) : null;
+  if (limited != null) {
+    return limited;
+  }
   return switch (factor.kind) {
     CornerFactorKind.brakeLater => '브레이킹이 ${_meters(n)} 늦어요 → 진입 오버슛, 브레이크 포인트를 앞당기세요',
     CornerFactorKind.brakeEarlier => '브레이킹이 ${_meters(n)} 일러요 → 더 늦게, 더 강하게 밟아도 돼요',
@@ -77,6 +103,25 @@ String cornerFactorText(CornerFactor factor, UnitSystem units) {
     CornerFactorKind.throttleWhileTurning =>
       '크게 꺾은 채 ${_meters(n)} 풀 스로틀을 밟아요 → 뒷타이어 휠스핀·과열, 핸들을 풀면서 스로틀을 여세요',
   };
+}
+
+/// 타이어 상태 줄: 그립이 줄어든 비교일 때(이 랩 마모·컴파운드가 비교 랩보다 불리할 때)만. 아니면 null.
+String? tyreConditionText(LapAnalysis analysis) {
+  final tyres = analysis.tyres;
+  if (!analysis.gripLimited || tyres == null) {
+    return null;
+  }
+  final wear = tyres.wearPct;
+  final referenceWear = tyres.referenceWearPct;
+  final extra = tyres.extraWearPct;
+  final parts = [
+    if (wear != null)
+      '타이어 마모 평균 ${wear.round()}%'
+          '${referenceWear == null || extra == null ? '' : '(기준 랩 ${referenceWear.round()}%, +${extra.round()}%p)'}',
+    if (tyres.harderCompound) '컴파운드 ${tyres.compound}(기준 랩 ${tyres.referenceCompound})',
+  ];
+  return '${parts.join(' · ')} → 그립이 기준 랩보다 낮아 브레이크를 일찍 잡고 코너·탈출 속도가 낮은 건 어느 정도 어쩔 수 없어요. '
+      '"타이어 탓" 코너는 그 영향이 대부분이고, 나머지 줄이 실제로 고칠 점이에요';
 }
 
 String _straightName(StraightErs s) => '${s.after?.label ?? '출발선'}–${s.before?.label ?? '결승선'}';
@@ -197,6 +242,8 @@ class LapAnalysisCard extends StatelessWidget {
                 analysis: c,
                 units: units,
                 showLoss: showLoss,
+                gripLimited: analysis.gripLimited,
+                tyreExplained: analysis.tyreExplained(c),
                 onTap: select == null ? null : () => select(c.corner),
               ),
               const SizedBox(height: _rowGap),
@@ -207,6 +254,7 @@ class LapAnalysisCard extends StatelessWidget {
     final tyreLines = tyreFeedbackLines(tyreWearStart, tyreWearEnd, analysis);
     final losses = analysis.losses;
     final gains = analysis.gains;
+    final tyreCondition = tyreConditionText(analysis);
     return Card(
       key: const ValueKey('lap-analysis'),
       child: Padding(
@@ -222,6 +270,10 @@ class LapAnalysisCard extends StatelessWidget {
                 if (label != null) Text('기준: $label', style: muted),
               ],
             ),
+            if (tyreCondition != null) ...[
+              const SizedBox(height: _rowGap),
+              Text(tyreCondition, key: const ValueKey('lap-analysis-tyre-condition')),
+            ],
             if (focus == AnalysisFocus.battery && batteryLines.isNotEmpty) ...[
               const SizedBox(height: _sectionGap),
               Text(_batteryTitle, style: heading),
@@ -281,12 +333,23 @@ class LapAnalysisCard extends StatelessWidget {
 
 /// 코너 한 줄: `T10`·방향, 잃은 시간([showLoss]), 아래에 이유·고칠 점.
 class _CornerRow extends StatelessWidget {
-  const _CornerRow({required this.analysis, required this.units, required this.showLoss, required this.onTap});
+  const _CornerRow({
+    required this.analysis,
+    required this.units,
+    required this.showLoss,
+    required this.onTap,
+    this.gripLimited = false,
+    this.tyreExplained = false,
+  });
 
   final CornerAnalysis analysis;
   final UnitSystem units;
   final bool showLoss;
   final VoidCallback? onTap;
+
+  /// 타이어 그립이 줄어든 비교인지([LapAnalysis.gripLimited]), 이 코너 차이가 모두 그 탓인지.
+  final bool gripLimited;
+  final bool tyreExplained;
 
   @override
   Widget build(BuildContext context) {
@@ -313,14 +376,23 @@ class _CornerRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (showLoss)
-                  Text(
-                    formatDeltaSeconds(analysis.lossS),
-                    style: TextStyle(color: palette.danger, fontWeight: FontWeight.w700),
+                  Text.rich(
+                    TextSpan(
+                      text: formatDeltaSeconds(analysis.lossS),
+                      style: TextStyle(color: palette.danger, fontWeight: FontWeight.w700),
+                      children: [
+                        if (tyreExplained)
+                          TextSpan(
+                            text: '  $_tyreExplainedText',
+                            style: TextStyle(color: palette.textMuted, fontWeight: FontWeight.w600),
+                          ),
+                      ],
+                    ),
                   ),
                 for (final (i, f) in analysis.factors.indexed)
                   Padding(
                     padding: EdgeInsets.only(top: showLoss || i > 0 ? _lineGap : 0),
-                    child: Text(cornerFactorText(f, units)),
+                    child: Text(cornerFactorText(f, units, gripLimited: gripLimited)),
                   ),
               ],
             ),

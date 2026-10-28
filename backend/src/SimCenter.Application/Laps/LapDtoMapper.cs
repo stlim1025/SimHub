@@ -114,7 +114,8 @@ public static class LapDtoMapper
             ToTeam(row.GameCode, row.TeamId),
             row.SessionType.ToString(),
             appliedFilters,
-            row.VisualTyreCompound);
+            row.VisualTyreCompound,
+            row.TyreWearEndAverage);
     }
 
     /// <summary>바퀴 4개 값이 모두 있을 때만 묶음을 만든다(인입 검증이 묶음 단위로 받으므로 보통 모두 있거나 모두 없다).</summary>

@@ -21,6 +21,7 @@ import '../domain/lap_detail_models.dart';
 import 'ghost_replay.dart';
 import 'lap_analysis_card.dart';
 import 'telemetry_tab.dart';
+import 'track_map.dart';
 
 const String _noTraceText = '이 랩은 텔레메트리가 저장되지 않아 분석할 수 없어요.';
 const String _raceSessionType = 'Race';
@@ -29,6 +30,15 @@ const String _thisLapLabel = '이 랩';
 
 /// 코너를 눌러 리플레이로 올라갈 때 스크롤 시간.
 const Duration _scrollToReplay = Duration(milliseconds: 350);
+
+/// 네 바퀴 평균 마모(%). 하나라도 모르면 null.
+double? averageWear(WheelValues? wear) {
+  final values = [wear?.frontLeft, wear?.frontRight, wear?.rearLeft, wear?.rearRight];
+  if (values.any((v) => v == null)) {
+    return null;
+  }
+  return values.fold<double>(0, (sum, v) => sum + v!) / values.length;
+}
 
 /// 분석 기준 선택지.
 const List<({AnalysisFocus value, String label})> kAnalysisFocusOptions = [
@@ -41,8 +51,9 @@ const List<({AnalysisFocus value, String label})> kAnalysisFocusOptions = [
 AnalysisFocus defaultAnalysisFocus(String sessionType) =>
     sessionType == _raceSessionType ? AnalysisFocus.tyres : AnalysisFocus.pace;
 
-/// Analysis 탭: 위에 이 랩(비교 랩이 있으면 고스트와 함께) 리플레이, 아래에 분석 기준(최대 속도·배터리·타이어)을 고르면
-/// 그 기준의 조언과, 비교 랩이 있으면 코너마다 잃은 시간·이유. 코너 줄을 누르면 리플레이로 올라가 그 코너 앞부터 보여 준다.
+/// Analysis 탭: Telemetry 탭과 같은 배치(오른쪽·위 트랙 지도·Lap Telemetry 통계)에서 그래프 대신
+/// 이 랩(비교 랩이 있으면 고스트와 함께) 리플레이와 분석 기준(최대 속도·배터리·타이어)별 조언, 비교 랩이 있으면 코너마다 잃은 시간·이유.
+/// 코너 줄을 누르면 리플레이로 올라가 그 코너 앞부터 보여 준다.
 class AnalysisTab extends ConsumerStatefulWidget {
   const AnalysisTab({super.key, required this.detail, this.compare = LapCompareSelection.defaults});
 
@@ -105,46 +116,56 @@ class _AnalysisTabState extends ConsumerState<AnalysisTab> {
         }
         final referenceTrace = reference?.valueOrNull;
         final corners = resolveLapCorners(data, official);
-        final analysis = analyzeLap(data, referenceTrace, corners, focus: _focus);
+        final comparison = traces.otherCar ? null : traces.comparison;
+        final analysis = analyzeLap(
+          data,
+          referenceTrace,
+          corners,
+          focus: _focus,
+          tyres: TyreCondition(
+            wearPct: averageWear(detail.car?.tyreWearEnd),
+            referenceWearPct: comparison?.tyreWearPercent,
+            compound: visualCompoundName(detail.car?.visualTyreCompound),
+            referenceCompound: visualCompoundName(comparison?.visualTyreCompound),
+          ),
+        );
         final referenceLabel = lapReferenceLabel(
           otherCar: traces.otherCar,
           comparison: traces.comparison,
           otherCarName: traces.otherCarName,
         );
         final otherCarColor = widget.compare.compareTeamColor;
-        return Column(
+        Widget main(double replayHeight) => Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (data.hasPositions) ...[
               KeyedSubtree(
                 key: _replayKey,
-                child: LayoutBuilder(
-                  builder: (context, box) => GhostReplay(
-                    trace: data,
-                    reference: referenceTrace,
-                    cursor: _replayCursor,
-                    units: units,
-                    height: box.maxWidth >= kTelemetrySideBySideMinWidth ? kGhostReplayWideHeight : kGhostReplayNarrowHeight,
-                    thisLapLabel: _thisLapLabel,
-                    referenceLabel: referenceLabel,
-                    playerTeam: lap.team,
-                    referenceTeam: traces.otherCar
-                        ? (otherCarColor == null ? null : LapTeam(name: traces.otherCarName, color: otherCarColor))
-                        : traces.comparison?.team,
-                    playerSectors: lap.sectors,
-                    referenceSectors: referenceTrace == null ? const [] : traces.comparison?.sectors ?? const [],
-                    playerTyreCompound: visualCompoundName(detail.car?.visualTyreCompound),
-                    referenceTyreCompound: referenceTrace == null || traces.otherCar
-                        ? null
-                        : visualCompoundName(traces.comparison?.visualTyreCompound),
-                    realTrack: ref.watch(trackWidthsProvider).valueOrNull?[lap.trackName],
-                    trackSamples:
-                        ref.watch(trackGeometryProvider((trackId: detail.trackId, gameCode: lap.gameCode))).valueOrNull,
-                    estimatedTrackWidthM: kEstimatedTrackWidthsM[lap.trackName],
-                    streetCircuit: kStreetCircuits.contains(lap.trackName),
-                    corners: corners,
-                    seek: _seek,
-                  ),
+                child: GhostReplay(
+                  trace: data,
+                  reference: referenceTrace,
+                  cursor: _replayCursor,
+                  units: units,
+                  height: replayHeight,
+                  thisLapLabel: _thisLapLabel,
+                  referenceLabel: referenceLabel,
+                  playerTeam: lap.team,
+                  referenceTeam: traces.otherCar
+                      ? (otherCarColor == null ? null : LapTeam(name: traces.otherCarName, color: otherCarColor))
+                      : traces.comparison?.team,
+                  playerSectors: lap.sectors,
+                  referenceSectors: referenceTrace == null ? const [] : traces.comparison?.sectors ?? const [],
+                  playerTyreCompound: visualCompoundName(detail.car?.visualTyreCompound),
+                  referenceTyreCompound: referenceTrace == null || traces.otherCar
+                      ? null
+                      : visualCompoundName(traces.comparison?.visualTyreCompound),
+                  realTrack: ref.watch(trackWidthsProvider).valueOrNull?[lap.trackName],
+                  trackSamples:
+                      ref.watch(trackGeometryProvider((trackId: detail.trackId, gameCode: lap.gameCode))).valueOrNull,
+                  estimatedTrackWidthM: kEstimatedTrackWidthsM[lap.trackName],
+                  streetCircuit: kStreetCircuits.contains(lap.trackName),
+                  corners: corners,
+                  seek: _seek,
                 ),
               ),
               const SizedBox(height: _gap),
@@ -168,6 +189,13 @@ class _AnalysisTabState extends ConsumerState<AnalysisTab> {
               onSelect: data.hasPositions ? _showCorner : null,
             ),
           ],
+        );
+        return LapPanelLayout(
+          panel: LapTelemetryPanel(trace: data, sectors: lap.sectors, cursor: _replayCursor, units: units),
+          main: main,
+          trace: data,
+          sectors: lap.sectors,
+          cursor: _replayCursor,
         );
       },
     );
