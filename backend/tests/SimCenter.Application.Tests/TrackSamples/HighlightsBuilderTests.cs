@@ -202,6 +202,38 @@ public sealed class HighlightsBuilderTests
     }
 
     [Fact]
+    public void LightContacts_WithoutDamage_RankBelowOvertakes_AndOneBattleDoesNotFillTheReel()
+    {
+        // 1번·4번(선두 싸움, 점수가 높다)이 30초부터 20초마다 서로 추월하고, 2번·3번도 그 10초 뒤마다 추월한다.
+        // 그 사이마다 2번·3번이 손상 없이 닿는다. 장면이 한도보다 많다 — 접촉은 들지 않고, 선두 싸움이 한도를 채우지 않는다.
+        const int raceMs = 420_000;
+        const int stepMs = 20_000;
+        var marks = new List<Mark>();
+        for (var t = 30_000; t <= 390_000; t += stepMs)
+        {
+            var even = t / stepMs % 2 == 0;
+            var (by, of) = even ? ((byte)4, (byte)1) : ((byte)1, (byte)4);
+            marks.Add(new Mark(t, by, Flags2: RaceSample.OvertookFlag));
+            marks.Add(new Mark(t, of, Flags2: RaceSample.OvertakenFlag));
+            var (by2, of2) = even ? ((byte)3, (byte)2) : ((byte)2, (byte)3);
+            marks.Add(new Mark(t + 10_000, by2, Flags2: RaceSample.OvertookFlag));
+            marks.Add(new Mark(t + 10_000, of2, Flags2: RaceSample.OvertakenFlag));
+            marks.Add(new Mark(t + 5_000, 2, Status: RaceSample.CollisionFlag));
+            marks.Add(new Mark(t + 5_000, 3, Status: RaceSample.CollisionFlag));
+        }
+
+        var samples = Race(
+            new Dictionary<byte, double> { [1] = 330, [4] = 320, [2] = 30, [3] = 20 }, toMs: raceMs, marks: [.. marks]);
+
+        var race = Build(samples).Race;
+
+        Assert.DoesNotContain(race, c => c.Kind == nameof(HighlightKind.Collision));
+        var overtakes = race.Where(c => c.Kind == nameof(HighlightKind.Overtake)).ToList();
+        Assert.Equal(16, overtakes.Count);                 // 한도 18 − 출발·결승
+        Assert.InRange(overtakes.Count(c => c.FocusCar is 2 or 3), 6, 10);
+    }
+
+    [Fact]
     public void WallHit_CountsOnlyWhenDamageRises()
     {
         var samples = Race(
