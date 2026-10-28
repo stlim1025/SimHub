@@ -16,6 +16,9 @@ const String _modulePath = './replay3d/replay3d.js';
 const String _containerTag = 'div';
 const String _fill = '100%';
 
+/// 그림 요소는 포인터를 받지 않는다 — 클릭(재생·일시정지)은 Flutter가 받는다.
+const String _noPointerEvents = 'none';
+
 bool get replayThreeEnabled => Uri.base.queryParameters[_flagParameter] != _canvasValue;
 
 extension type _SceneModule(JSObject _) implements JSObject {
@@ -108,7 +111,8 @@ class _ReplayThreeViewState extends State<ReplayThreeView> {
     final container = element as web.HTMLElement;
     container.style
       ..width = _fill
-      ..height = _fill;
+      ..height = _fill
+      ..pointerEvents = _noPointerEvents;
     try {
       final module = await _loadModule();
       if (!mounted) {

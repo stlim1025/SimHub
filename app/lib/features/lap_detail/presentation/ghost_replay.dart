@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
@@ -160,6 +161,9 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
   /// 재생 경과 시간(ms).
   final ValueNotifier<double> _time = ValueNotifier<double>(0);
   late final Ticker _ticker = createTicker(_onTick);
+
+  /// 스페이스로 재생·일시정지하려고 리플레이(버튼·막대 포함)가 받는 키보드 포커스.
+  final FocusNode _focusNode = FocusNode(debugLabel: 'ghost-replay');
   Duration _lastTick = Duration.zero;
   double _speed = _defaultSpeed;
 
@@ -220,6 +224,7 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
     widget.seek?.removeListener(_onExternalSeek);
     _ticker.dispose();
     _time.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -294,60 +299,87 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
 
   void _restart() => _scrub(0);
 
+  /// 스페이스 = 재생·일시정지(리플레이 안 버튼·막대에 포커스가 있어도).
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent || event.logicalKey != LogicalKeyboardKey.space) {
+      return KeyEventResult.ignored;
+    }
+    _togglePlay();
+    return KeyEventResult.handled;
+  }
+
+  /// 화면을 누르면 재생·일시정지하고, 이후 스페이스가 먹도록 포커스를 가져온다.
+  void _onViewTap() {
+    _focusNode.requestFocus();
+    _togglePlay();
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
     final playerColor = replayCarColor(widget.playerTeam, fallback: AppColors.accent);
     final ghostColor = replayCarColor(widget.referenceTeam, fallback: palette.comparison);
-    return Card(
-      key: const ValueKey('ghost-replay'),
-      child: Padding(
-        padding: _cardPadding,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(_viewRadius),
-              child: SizedBox(
-                height: widget.height,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    _view(playerColor, ghostColor),
-                    ValueListenableBuilder<double>(
-                      valueListenable: _time,
-                      builder: (context, elapsed, _) => GhostReplayHud(
-                        elapsedMs: elapsed,
-                        player: _player.frameAt(elapsed),
-                        ghost: _ghost?.frameAt(elapsed),
-                        gapMs: _gapAt(elapsed),
-                        sectors: replaySectorRows(widget.playerSectors, widget.referenceSectors, elapsed),
-                        units: widget.units,
-                        playerColor: playerColor,
-                        ghostColor: ghostColor,
-                        thisLapLabel: widget.thisLapLabel,
-                        referenceLabel: widget.referenceLabel,
-                        tyreCompound: widget.playerTyreCompound,
-                        referenceTyreCompound: widget.referenceTyreCompound,
-                      ),
-                    ),
-                    ValueListenableBuilder<double>(
-                      valueListenable: _time,
-                      builder: (context, elapsed, _) => Align(
-                        alignment: Alignment.topCenter,
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: _cornerBadgeInset),
-                          child: ReplayCornerBadge(corner: cornerAt(widget.corners, _player.frameAt(elapsed).distanceM)),
+    return Focus(
+      focusNode: _focusNode,
+      autofocus: true,
+      onKeyEvent: _onKey,
+      child: Card(
+        key: const ValueKey('ghost-replay'),
+        child: Padding(
+          padding: _cardPadding,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(_viewRadius),
+                child: SizedBox(
+                  height: widget.height,
+                  child: GestureDetector(
+                    key: const ValueKey('ghost-replay-tap'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _onViewTap,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        _view(playerColor, ghostColor),
+                        ValueListenableBuilder<double>(
+                          valueListenable: _time,
+                          builder: (context, elapsed, _) => GhostReplayHud(
+                            elapsedMs: elapsed,
+                            player: _player.frameAt(elapsed),
+                            ghost: _ghost?.frameAt(elapsed),
+                            gapMs: _gapAt(elapsed),
+                            sectors: replaySectorRows(widget.playerSectors, widget.referenceSectors, elapsed),
+                            units: widget.units,
+                            playerColor: playerColor,
+                            ghostColor: ghostColor,
+                            thisLapLabel: widget.thisLapLabel,
+                            referenceLabel: widget.referenceLabel,
+                            tyreCompound: widget.playerTyreCompound,
+                            referenceTyreCompound: widget.referenceTyreCompound,
+                          ),
                         ),
-                      ),
+                        ValueListenableBuilder<double>(
+                          valueListenable: _time,
+                          builder: (context, elapsed, _) => Align(
+                            alignment: Alignment.topCenter,
+                            child: Padding(
+                              padding: const EdgeInsets.only(top: _cornerBadgeInset),
+                              child: ReplayCornerBadge(
+                                corner: cornerAt(widget.corners, _player.frameAt(elapsed).distanceM),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: _controlsGap),
-            _controls(palette),
-          ],
+              const SizedBox(height: _controlsGap),
+              _controls(palette),
+            ],
+          ),
         ),
       ),
     );

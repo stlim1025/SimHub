@@ -62,6 +62,80 @@ public sealed record SessionPenaltyDto(
     int? InfringementType,
     int? PenaltyType);
 
+/// <summary>레이스 총평 재료(<see cref="RaceReviewBuilder"/>). 모르는 부분은 null·빈 목록.</summary>
+public sealed record RaceReviewDto(
+    RacePaceReviewDto? Pace,
+    RaceStrategyReviewDto Strategy,
+    IReadOnlyList<RaceStintReviewDto> Stints,
+    RaceBatteryReviewDto? Battery);
+
+/// <summary>
+/// 페이스: 깨끗한 랩 중앙값(ms) — 내 값, 내 순위(1 = 가장 빠름)/순위를 낸 차 수, 다른 차들 중앙값의 중앙값,
+/// 나를 뺀 가장 빠른 차, 결과 바로 앞·뒤 차(없으면 null).
+/// </summary>
+public sealed record RacePaceReviewDto(
+    int MyMedianMs,
+    int Rank,
+    int RankedCars,
+    int FieldMedianMs,
+    string FastestName,
+    int FastestMedianMs,
+    string? AheadName,
+    int? AheadMedianMs,
+    string? BehindName,
+    int? BehindMedianMs);
+
+/// <summary>
+/// 전략: 그리드·결과 순위, 내 스톱 수와 스톱마다의 결과, 완주 차들이 가장 많이 한 스톱 수와 그 차 수,
+/// 우승 차 스톱 수·컴파운드 순서, 다른 차들 스톱 손실 중앙값(ms).
+/// </summary>
+public sealed record RaceStrategyReviewDto(
+    int? GridPosition,
+    int? FinishPosition,
+    int Stops,
+    IReadOnlyList<RacePitStopReviewDto> PitStops,
+    int? CommonStops,
+    int CommonStopsCars,
+    int? WinnerStops,
+    IReadOnlyList<string> WinnerCompounds,
+    int? FieldPitLossMs);
+
+/// <summary>피트 스톱 하나: 인 랩, 앞 랩 순위 → 아웃 랩 다음 랩 순위, 손실(ms), 바꾸기 전·후 컴파운드.</summary>
+public sealed record RacePitStopReviewDto(
+    int Lap,
+    int? PositionBefore,
+    int? PositionAfter,
+    int? LossMs,
+    string FromCompound,
+    string ToCompound);
+
+/// <summary>
+/// 내 스틴트 하나: 컴파운드·랩 범위, 깨끗한 랩 중앙값(ms)과 같은 컴파운드 다른 차들 값, 랩타임 추세(ms/랩, +면 느려짐)와 다른 차들 값,
+/// 랩당 타이어 마모(%p)·끝 잔여 수명(%).
+/// </summary>
+public sealed record RaceStintReviewDto(
+    string Compound,
+    int StartLap,
+    int EndLap,
+    int? MedianMs,
+    int? FieldMedianMs,
+    int? TrendMsPerLap,
+    int? FieldTrendMsPerLap,
+    double? WearPerLapPct,
+    double? EndLifePct);
+
+/// <summary>배터리: 기록된 랩 수, 랩당 평균 배포·회수(J), 랩 끝 잔량 처음·끝·최저(J)와 그 랩, 거의 바닥·가득 찬 랩 수.</summary>
+public sealed record RaceBatteryReviewDto(
+    int Laps,
+    double? AverageDeployJ,
+    double? AverageHarvestJ,
+    double FirstStoreJ,
+    double LastStoreJ,
+    double MinStoreJ,
+    int MinStoreLap,
+    int LowLaps,
+    int FullLaps);
+
 /// <summary>세션 상세의 F1Laps 카드 재료 묶음(D-53). 데이터가 없으면 null·빈 목록 — 오류로 만들지 않는다.</summary>
 public sealed record SessionDetailExtras(
     IReadOnlyList<QualifyingPositionDto> QualifyingPositions,
@@ -71,4 +145,5 @@ public sealed record SessionDetailExtras(
     EngineWearDto? EngineWear,
     IReadOnlyList<TyreStintSeriesDto> TyreStints,
     IReadOnlyList<SessionPenaltyDto> Penalties,
-    string? Weather);
+    string? Weather,
+    RaceReviewDto? RaceReview = null);

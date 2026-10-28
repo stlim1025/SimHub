@@ -1,4 +1,5 @@
 import '../../laps/domain/lap_models.dart';
+import 'race_review.dart';
 import 'session_detail_models.dart';
 import 'session_display.dart' show knownPosition;
 
@@ -296,6 +297,7 @@ class SessionDetail {
     this.engineWear,
     this.tyreStints = const [],
     this.penalties = const [],
+    this.raceReview,
   });
 
   final SessionDetailHeader header;
@@ -312,6 +314,9 @@ class SessionDetail {
   final List<SessionTyreStint> tyreStints;
   final List<SessionPenalty> penalties;
 
+  /// 레이스 총평 재료(레이스만, 모르면 null).
+  final RaceReview? raceReview;
+
   factory SessionDetail.fromJson(Map<String, dynamic> json) => SessionDetail(
         header: SessionDetailHeader.fromJson(json['session'] as Map<String, dynamic>),
         results: (json['results'] as List<dynamic>)
@@ -324,5 +329,6 @@ class SessionDetail {
         engineWear: EngineWear.fromJsonOrNull(json['engineWear']),
         tyreStints: jsonObjects(json['tyreStints'], SessionTyreStint.fromJsonOrNull),
         penalties: jsonObjects(json['penalties'], SessionPenalty.fromJsonOrNull),
+        raceReview: RaceReview.fromJsonOrNull(json['raceReview']),
       );
 }

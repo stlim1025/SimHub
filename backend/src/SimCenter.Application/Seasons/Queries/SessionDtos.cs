@@ -41,7 +41,8 @@ public sealed record SessionDetailDto(
     IReadOnlyList<SessionLapDto> Laps,
     EngineWearDto? EngineWear,
     IReadOnlyList<TyreStintSeriesDto> TyreStints,
-    IReadOnlyList<SessionPenaltyDto> Penalties);
+    IReadOnlyList<SessionPenaltyDto> Penalties,
+    RaceReviewDto? RaceReview = null);
 
 /// <summary>
 /// 세션 상세 헤더 = <see cref="SessionSummaryDto"/>의 모든 필드 + 세션 설정. 시즌에 속하면 <see cref="Round"/>는

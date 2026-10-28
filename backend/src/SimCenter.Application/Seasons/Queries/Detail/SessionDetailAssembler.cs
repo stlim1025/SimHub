@@ -48,7 +48,8 @@ public static class SessionDetailAssembler
             LatestLapValues.EngineWear(myLaps),
             TyreStintSeriesBuilder.Build(stints, laps, myLaps),
             penalties,
-            LatestLapValues.Weather(myLaps));
+            LatestLapValues.Weather(myLaps),
+            RaceReviewBuilder.Build(session, results, history, playerCarIndex, myLaps));
     }
 
     /// <summary>예선 세션일 때만: 같은 주말 예선들의 내 순위(종류 → 시각 순). 주말이 없으면 이 세션만.</summary>

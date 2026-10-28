@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/gestures.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:simcenter_app/core/theme/app_colors.dart';
 import 'package:simcenter_app/features/auth/domain/user_preferences.dart';
@@ -388,6 +389,32 @@ void main() {
       final paused = _textOf(t, 'ghost-replay-elapsed');
       await t.pump(const Duration(seconds: 1));
       expect(_textOf(t, 'ghost-replay-elapsed'), paused);
+    });
+
+    testWidgets('재생 화면을 누르거나 스페이스를 누르면 재생·일시정지한다', (t) async {
+      await _pumpCharts(t, trace: _player, reference: _reference);
+
+      await t.tap(find.byKey(const ValueKey('ghost-replay-tap')));
+      await t.pump();
+      await t.pump(const Duration(seconds: 1));
+      expect(_textOf(t, 'ghost-replay-elapsed'), '0:01.000');
+
+      await t.sendKeyEvent(LogicalKeyboardKey.space);
+      await t.pump();
+      final paused = _textOf(t, 'ghost-replay-elapsed');
+      await t.pump(const Duration(seconds: 1));
+      expect(_textOf(t, 'ghost-replay-elapsed'), paused);
+
+      await t.sendKeyEvent(LogicalKeyboardKey.space);
+      await t.pump();
+      await t.pump(const Duration(seconds: 1));
+      expect(_textOf(t, 'ghost-replay-elapsed'), isNot(paused));
+
+      await t.tap(find.byKey(const ValueKey('ghost-replay-tap')));
+      await t.pump();
+      final again = _textOf(t, 'ghost-replay-elapsed');
+      await t.pump(const Duration(seconds: 1));
+      expect(_textOf(t, 'ghost-replay-elapsed'), again);
     });
 
     testWidgets('재생 중 그래프에 마우스를 올려도 재생 막대는 재생 위치에 남고, 십자선만 마우스 자리로 간다', (t) async {

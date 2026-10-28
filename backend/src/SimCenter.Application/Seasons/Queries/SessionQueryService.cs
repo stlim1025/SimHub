@@ -83,7 +83,8 @@ public sealed class SessionQueryService : ISessionQueryService
             extras.Laps,
             extras.EngineWear,
             extras.TyreStints,
-            extras.Penalties);
+            extras.Penalties,
+            extras.RaceReview);
     }
 
     /// <summary>시즌에 속한 세션이면 그 시즌의 주말 순서에서 라운드 번호를 찾는다. 아니면(또는 주말 행이 없으면) null.</summary>

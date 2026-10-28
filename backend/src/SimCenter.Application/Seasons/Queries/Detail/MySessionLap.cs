@@ -21,7 +21,10 @@ public sealed record SessionLapRow(
     double? TyreWearEndRearLeft,
     double? TyreWearEndRearRight,
     int? GearboxDamage,
-    int? EngineDamage);
+    int? EngineDamage,
+    double? ErsStoreEndJ = null,
+    double? ErsDeployedJ = null,
+    double? ErsHarvestedJ = null);
 
 /// <summary>PENA 이벤트 한 건(f1_25_udp_spec §7 이벤트 표). 모르는 칸은 null.</summary>
 public sealed record PenaltyEvent(

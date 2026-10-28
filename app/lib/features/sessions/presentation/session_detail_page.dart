@@ -14,12 +14,14 @@ import '../../lap_detail/domain/lap_compare.dart';
 import '../../lap_detail/domain/lap_detail_display.dart';
 import '../../seasons/domain/season_display.dart';
 import '../application/sessions_providers.dart';
+import '../domain/race_review.dart';
 import '../domain/session_detail_display.dart';
 import '../domain/session_display.dart';
 import '../domain/session_models.dart';
 import 'engine_wear_card.dart';
 import 'final_classification_card.dart';
 import 'penalties_card.dart';
+import 'race_review_card.dart';
 import 'session_details_card.dart';
 import 'session_highlights_page.dart';
 import 'session_laps_card.dart';
@@ -143,7 +145,7 @@ class _Header extends StatelessWidget {
   }
 }
 
-/// 카드 7장. 2열이면 [Details | Final Classification] · [Laps] · [Engine Wear | Tyre Life] · [Lap Times | Penalties].
+/// 카드 7장(레이스 총평이 있으면 맨 위에 하나 더). 2열이면 [Details | Final Classification] · [Laps] · [Engine Wear | Tyre Life] · [Lap Times | Penalties].
 class _SessionCards extends StatelessWidget {
   const _SessionCards({required this.detail});
 
@@ -177,17 +179,20 @@ class _SessionCards extends StatelessWidget {
     final tyreLife = TyreLifeCard(stints: detail.tyreStints);
     final lapTimes = StintLapTimesCard(stints: detail.tyreStints);
     final penalties = PenaltiesCard(penalties: detail.penalties);
+    final review = detail.raceReview;
+    final reviewCard = review == null || raceReviewSections(review).isEmpty ? null : RaceReviewCard(review: review);
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final rows = constraints.maxWidth >= kSessionDetailTwoColumnWidth
             ? <Widget>[
+                ?reviewCard,
                 _Pair(details, classification),
                 laps,
                 _Pair(engine, tyreLife),
                 _Pair(lapTimes, penalties),
               ]
-            : <Widget>[details, classification, laps, engine, tyreLife, lapTimes, penalties];
+            : <Widget>[?reviewCard, details, classification, laps, engine, tyreLife, lapTimes, penalties];
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

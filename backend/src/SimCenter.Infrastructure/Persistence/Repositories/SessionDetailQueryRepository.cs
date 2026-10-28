@@ -52,6 +52,9 @@ public sealed class SessionDetailQueryRepository : ISessionDetailQueryRepository
                         l.Snapshot.TyreWearEndRearRight,
                         l.Snapshot.GearboxDamage,
                         l.Snapshot.EngineDamage,
+                        l.Snapshot.ErsStoreEndJ,
+                        l.Snapshot.ErsDeployedJ,
+                        l.Snapshot.ErsHarvestedJ,
                     },
             })
             .ToListAsync(cancellationToken);
@@ -73,7 +76,10 @@ public sealed class SessionDetailQueryRepository : ISessionDetailQueryRepository
                 l.Snapshot?.TyreWearEndRearLeft,
                 l.Snapshot?.TyreWearEndRearRight,
                 l.Snapshot?.GearboxDamage,
-                l.Snapshot?.EngineDamage))
+                l.Snapshot?.EngineDamage,
+                l.Snapshot?.ErsStoreEndJ,
+                l.Snapshot?.ErsDeployedJ,
+                l.Snapshot?.ErsHarvestedJ))
             .ToList();
     }
 

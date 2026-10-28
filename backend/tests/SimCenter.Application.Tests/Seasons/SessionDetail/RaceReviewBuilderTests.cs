@@ -1,0 +1,109 @@
+using System.Text.Json;
+using SimCenter.Application.Seasons.Queries.Detail;
+using SimCenter.Domain.Entities;
+using SimCenter.Domain.Enums;
+using static SimCenter.Application.Tests.Seasons.SeasonTestRows;
+using static SimCenter.Application.Tests.Seasons.SessionDetail.SessionDetailSamples;
+
+namespace SimCenter.Application.Tests.Seasons.SessionDetail;
+
+/// <summary>레이스 총평 재료: 깨끗한 랩 페이스·피트 스톱·스틴트 추세·배터리.</summary>
+public class RaceReviewBuilderTests
+{
+    // 차 0(나, 2위): 3랩 세이프티카, 5랩 피트(Medium → Hard). 차 1(우승): 6랩 피트(Soft → Medium). 차 2(3위): 5랩 피트(Medium → Hard).
+    private static readonly int[] MyLaps = [100_000, 90_000, 99_000, 90_200, 110_000, 112_000, 89_500, 89_600, 89_700, 89_800];
+    private static readonly int[] WinnerLaps = [99_000, 89_000, 89_000, 89_000, 89_000, 109_000, 111_000, 89_000, 89_000, 89_000];
+    private static readonly int[] ThirdLaps = [101_000, 91_000, 91_000, 91_000, 112_000, 113_000, 91_000, 91_000, 91_000, 91_000];
+
+    private static readonly SessionResult Me =
+        Result(0, position: 2, grid: 3, isPlayer: true, name: "Player", teamId: 221, (5, TyreCompound.Medium), (0, TyreCompound.Hard));
+    private static readonly SessionResult Winner =
+        Result(1, position: 1, grid: 1, false, "NORRIS", 228, (6, TyreCompound.Soft), (0, TyreCompound.Medium));
+    private static readonly SessionResult Third =
+        Result(2, position: 3, grid: 2, false, "LECLERC", 222, (5, TyreCompound.Medium), (0, TyreCompound.Hard));
+
+    [Fact]
+    public void Build_RaceReview_PaceStrategyStintsBattery()
+    {
+        var rows = new[]
+        {
+            LapRow(7, 89_500, wear: 2) with { ErsStoreEndJ = 3_900_000, ErsDeployedJ = 1_000_000, ErsHarvestedJ = 800_000 },
+            LapRow(10, 89_800, wear: 8) with { ErsStoreEndJ = 300_000, ErsDeployedJ = 1_200_000, ErsHarvestedJ = 600_000 },
+        };
+
+        var review = RaceReviewBuilder.Build(
+            Session(SessionType.Race), [Winner, Me, Third], SessionHistory.Parse(History()), 0, rows.Select(MySessionLap.From).ToList());
+
+        Assert.NotNull(review);
+
+        // 세이프티카 랩(99.0초)·피트 인·아웃 랩·1랩을 뺀 중앙값.
+        Assert.Equal(new RacePaceReviewDto(89_750, 2, 3, 90_000, "NORRIS", 89_000, "NORRIS", 89_000, "LECLERC", 91_000), review.Pace);
+
+        var strategy = review.Strategy;
+        Assert.Equal((3, 2, 1), (strategy.GridPosition, strategy.FinishPosition, strategy.Stops));
+        Assert.Equal(new RacePitStopReviewDto(5, 2, 3, 42_500, "Medium", "Hard"), Assert.Single(strategy.PitStops));
+        Assert.Equal((1, 3, 1), (strategy.CommonStops, strategy.CommonStopsCars, strategy.WinnerStops));
+        Assert.Equal(new[] { "Soft", "Medium" }, strategy.WinnerCompounds);
+        Assert.Equal(42_500, strategy.FieldPitLossMs);  // 42.0초·43.0초
+
+        Assert.Equal(2, review.Stints.Count);
+        Assert.Equal(new RaceStintReviewDto("Medium", 1, 5, null, 90_000, null, null, null, null), review.Stints[0]);
+        // Hard: 7~10랩 89.5→89.8초(+100ms/랩), 같은 Hard의 차 2는 91.0초 일정. 마모 97% → 91%(3랩).
+        Assert.Equal(new RaceStintReviewDto("Hard", 6, 10, 89_650, 91_000, 100, 0, 2.0, 91.0), review.Stints[1]);
+
+        Assert.Equal(new RaceBatteryReviewDto(2, 1_100_000, 700_000, 3_900_000, 300_000, 300_000, 10, 1, 1), review.Battery);
+    }
+
+    [Fact]
+    public void Build_NotRaceOrUnknownCar_Null()
+    {
+        var history = SessionHistory.Parse(History());
+        Assert.Null(RaceReviewBuilder.Build(Session(SessionType.Qualifying), [Me], history, 0, []));
+        Assert.Null(RaceReviewBuilder.Build(Session(SessionType.Race), [Me], history, null, []));
+        Assert.Null(RaceReviewBuilder.Build(Session(SessionType.Race), [Me], SessionHistory.Empty, 0, []));
+    }
+
+    private static string History()
+    {
+        static object Car(int carIndex, int[] laps) => new
+        {
+            carIndex,
+            laps = laps.Select((ms, i) => new
+            {
+                lapNumber = i + 1,
+                lapTimeMs = ms,
+                sector1TimeMs = 30_000,
+                sector2TimeMs = 30_000,
+                sector3TimeMs = ms - 60_000,
+                lapValid = true,
+                sector1Valid = true,
+                sector2Valid = true,
+                sector3Valid = true,
+            }),
+        };
+
+        // positions[carIndex]: 4랩 끝 나 2위, 7랩 끝 나 3위.
+        var positions = Enumerable.Range(1, 10).Select(lap => new
+        {
+            lapNumber = lap,
+            positions = lap is >= 5 and <= 7 ? new[] { 3, 1, 2 } : new[] { 2, 1, 3 },
+        });
+        return JsonSerializer.Serialize(new
+        {
+            lapHistory = new[] { Car(0, MyLaps), Car(1, WinnerLaps), Car(2, ThirdLaps) },
+            lapPositions = positions,
+        });
+    }
+
+    private static GameSession Session(SessionType type) => new()
+    {
+        Id = Id(1),
+        UserId = Id(500),
+        GameCode = "F1_25",
+        SessionKey = "link:1:2:3",
+        SessionRef = "1",
+        SessionType = type,
+        SessionKind = type == SessionType.Race ? SessionKind.Race : SessionKind.Qualifying1,
+        ClassifiedAt = At(9),
+    };
+}
