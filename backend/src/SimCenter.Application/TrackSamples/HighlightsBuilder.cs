@@ -23,6 +23,7 @@ public sealed record HighlightFlagDto(string Kind, int FromMs, int ToMs);
 /// <summary>
 /// 클립 안 차 한 대의 움직임(같은 칸 = 같은 순간, 시간은 세션 ms). <c>Pit</c>은 피트 인(1, 박스에 서기 전)·피트 아웃(2, 박스를 떠난 뒤)·아님(0).
 /// 표본 사이가 몇 초씩 비면 그 사이 차는 피트 레인에 있었다(옛 에이전트는 피트 레인 표본을 남기지 않았다).
+/// <c>Tyre</c>는 끼고 있는 보이는 컴파운드(<see cref="SimCenter.Domain.Enums.TyreCompound"/> 값, 모르면 0).
 /// </summary>
 public sealed record HighlightCarTrackDto(
     int CarIndex,
@@ -35,7 +36,8 @@ public sealed record HighlightCarTrackDto(
     IReadOnlyList<int> Throttle,
     IReadOnlyList<int> Brake,
     IReadOnlyList<int> Lap,
-    IReadOnlyList<int> Pit);
+    IReadOnlyList<int> Pit,
+    IReadOnlyList<int> Tyre);
 
 /// <summary>
 /// 하이라이트 클립 하나: 장면 종류·구간(세션 ms)·장면 순간·중심 차(카메라가 따라감)·상대 차·중심 차의 랩, 그 둘레 차들의 움직임,
@@ -519,7 +521,8 @@ public static class HighlightsBuilder
                 window.Select(s => (int)s.Throttle).ToList(),
                 window.Select(s => (int)s.Brake).ToList(),
                 window.Select(s => 1 + carCrossings.Count(t => t <= s.TimeMs)).ToList(),
-                pit));
+                pit,
+                window.Select(s => s.Tyre).ToList()));
         }
 
         var lap = 1 + crossings.GetValueOrDefault(scene.Focus, []).Count(t => t <= scene.TimeMs);

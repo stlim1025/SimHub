@@ -85,7 +85,8 @@ public static class RaceGrid
                     0,
                     first.Damage,
                     0,
-                    0));
+                    0,
+                    first.TyreVisualRaw));
             }
 
             cars[car] = grid.Concat(samples).ToList();

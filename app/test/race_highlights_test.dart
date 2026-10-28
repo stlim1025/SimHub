@@ -39,7 +39,7 @@ Map<String, dynamic> _clipJson(String kind, int focus, {int? other, int startMs 
         if (other != null) _trackJson(other, fromMs: startMs, toMs: endMs, startRad: 0.1),
       ],
       'standings': [
-        {'timeMs': startMs, 'lap': lap, 'cars': [4, 21, 2], 'gapMs': [0, 1234, null], 'lapsDown': [0, 0, 0], 'state': [0, 1, 0]},
+        {'timeMs': startMs, 'lap': lap, 'cars': [4, 21, 2], 'gapMs': [0, 1234, null], 'lapsDown': [0, 0, 0], 'state': [0, 1, 0], 'tyre': [1, 3, 0]},
         {'timeMs': startMs + 3000, 'lap': lap, 'cars': [21, 4, 2], 'gapMs': [0, 800, 90000], 'lapsDown': [0, 0, 1], 'state': [2, 0, 3]},
       ],
     };
@@ -204,6 +204,7 @@ void main() {
       'brake': [0, 0, 0, 0, 0],
       'lap': [5, 5, 5, 5, 5],
       'pit': [0, 1, 1, 2, 2],
+      'tyre': [2, 2, 2, 1, 1],
     })!;
     final path = TimedCarPath(track);
 
@@ -214,6 +215,12 @@ void main() {
       expect(highlightCarLabel('NORRIS', path, 500), 'NORRIS');
       expect(highlightCarLabel('NORRIS', path, 1500), 'NORRIS · PIT IN');
       expect(highlightCarLabel('NORRIS', path, 20500), 'NORRIS · PIT OUT');
+    });
+
+    test('컴파운드는 그 순간 바로 앞 표본 값(피트에서 바뀐다), 열이 없으면 모름', () {
+      expect(path.tyreAt(500), HighlightTyre.medium);
+      expect(path.tyreAt(20500), HighlightTyre.soft);
+      expect(TimedCarPath(HighlightCarTrack.fromJsonOrNull(_trackJson(1, fromMs: 0, toMs: 1000))!).tyreAt(0), HighlightTyre.unknown);
     });
 
     test('피니시는 결승 클립에서 결승선을 지난 뒤만', () {
@@ -239,15 +246,15 @@ void main() {
       expect(standingAbbreviation('VERSTAPPEN'), 'VER');
       expect(standingAbbreviation('GOMDOL SUPER'), 'GOM');
       expect(standingAbbreviation('PÉREZ'), 'PÉR');
-      const row = (carIndex: 1, gapMs: 1234, lapsDown: 0, state: StandingState.running);
+      const row = (carIndex: 1, gapMs: 1234, lapsDown: 0, state: StandingState.running, tyre: HighlightTyre.unknown);
       expect(standingGapText(row, leader: true), 'Leader');
       expect(standingGapText(row, leader: false), '+1.2');
-      expect(standingGapText((carIndex: 1, gapMs: 90000, lapsDown: 2, state: StandingState.running), leader: false), '+2 LAPS');
-      expect(standingGapText((carIndex: 1, gapMs: null, lapsDown: 0, state: StandingState.running), leader: false), '');
-      expect(standingGapText((carIndex: 1, gapMs: 59_940, lapsDown: 0, state: StandingState.running), leader: false), '+59.9');
-      expect(standingGapText((carIndex: 1, gapMs: 59_960, lapsDown: 0, state: StandingState.running), leader: false), '+1:00.0');
-      expect(standingGapText((carIndex: 1, gapMs: 70_230, lapsDown: 0, state: StandingState.running), leader: false), '+1:10.2');
-      expect(standingGapText((carIndex: 1, gapMs: 125_000, lapsDown: 0, state: StandingState.running), leader: false), '+2:05.0');
+      expect(standingGapText((carIndex: 1, gapMs: 90000, lapsDown: 2, state: StandingState.running, tyre: HighlightTyre.unknown), leader: false), '+2 LAPS');
+      expect(standingGapText((carIndex: 1, gapMs: null, lapsDown: 0, state: StandingState.running, tyre: HighlightTyre.unknown), leader: false), '');
+      expect(standingGapText((carIndex: 1, gapMs: 59_940, lapsDown: 0, state: StandingState.running, tyre: HighlightTyre.unknown), leader: false), '+59.9');
+      expect(standingGapText((carIndex: 1, gapMs: 59_960, lapsDown: 0, state: StandingState.running, tyre: HighlightTyre.unknown), leader: false), '+1:00.0');
+      expect(standingGapText((carIndex: 1, gapMs: 70_230, lapsDown: 0, state: StandingState.running, tyre: HighlightTyre.unknown), leader: false), '+1:10.2');
+      expect(standingGapText((carIndex: 1, gapMs: 125_000, lapsDown: 0, state: StandingState.running, tyre: HighlightTyre.unknown), leader: false), '+2:05.0');
     });
   });
 
@@ -332,6 +339,10 @@ void main() {
       expect(find.descendant(of: find.byKey(const ValueKey('standing-row-21')), matching: find.text('+1.2')), findsOneWidget);
       expect(find.descendant(of: find.byKey(const ValueKey('standing-row-21')), matching: find.text('PIT')), findsOneWidget);
       expect(find.descendant(of: find.byKey(const ValueKey('standing-row-21')), matching: find.text('ME')), findsOneWidget);
+      // 컴파운드 원: 소프트 S·하드 H, 모르는 차는 원 없음.
+      expect(find.descendant(of: find.byKey(const ValueKey('standing-tyre-4')), matching: find.text('S')), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const ValueKey('standing-tyre-21')), matching: find.text('H')), findsOneWidget);
+      expect(find.byKey(const ValueKey('standing-tyre-2')), findsNothing);
     });
 
     testWidgets('묶음에 장면이 없으면 안내 문구', (t) async {

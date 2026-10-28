@@ -43,7 +43,7 @@ public static class TeamCatalog
         new("Red Bull Racing", "#3671C6"),
         new("Williams", "#64C4FF"),
         new("Aston Martin", "#229971"),
-        new("Alpine", "#0093CC"),
+        new("Alpine", "#FF87BC"),
         new("Racing Bulls", "#6692FF"),
         new("Haas", "#B6BABD"),
         new("McLaren", "#FF8000"),

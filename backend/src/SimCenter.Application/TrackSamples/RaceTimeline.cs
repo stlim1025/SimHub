@@ -1,3 +1,5 @@
+using SimCenter.Domain.Enums;
+
 namespace SimCenter.Application.TrackSamples;
 
 /// <summary>레이스 한 순간 차 한 대(표본 열을 한데 모은 값). 상태·표시 비트는 계약(<c>shared/schema/track_samples_chunk.json</c>) 그대로.</summary>
@@ -15,8 +17,27 @@ public readonly record struct RaceSample(
     byte Flags2,
     byte Damage,
     float GLateral,
-    float GLongitudinal)
+    float GLongitudinal,
+    byte TyreVisualRaw = 0)
 {
+    /// <summary>F1 게임 보이는 컴파운드 원시 값(소프트·미디엄·하드·인터·웻).</summary>
+    private const byte RawSoft = 16;
+    private const byte RawMedium = 17;
+    private const byte RawHard = 18;
+    private const byte RawInter = 7;
+    private const byte RawWet = 8;
+
+    /// <summary>보이는 컴파운드(<see cref="TyreCompound"/> 값, 모르면 0 — format 3 이전 표본·클래식 타이어).</summary>
+    public int Tyre => (int)(TyreVisualRaw switch
+    {
+        RawSoft => TyreCompound.Soft,
+        RawMedium => TyreCompound.Medium,
+        RawHard => TyreCompound.Hard,
+        RawInter => TyreCompound.Intermediate,
+        RawWet => TyreCompound.Wet,
+        _ => TyreCompound.Unknown,
+    });
+
     /// <summary>상태 비트: 차 대 차 충돌·충격 순간.</summary>
     public const byte CollisionFlag = 0x20;
     public const byte ImpactFlag = 0x40;
@@ -86,7 +107,8 @@ public sealed class RaceTimeline
                     chunk.Flags2?[i] ?? 0,
                     chunk.Damage?[i] ?? 0,
                     chunk.GLateral?[i] ?? 0,
-                    chunk.GLongitudinal?[i] ?? 0)));
+                    chunk.GLongitudinal?[i] ?? 0,
+                    chunk.TyreCompound?[i] ?? 0)));
             }
         }
 

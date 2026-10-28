@@ -97,8 +97,11 @@ class ReplayTrackMesh {
   }
 }
 
-/// 그릴 차 한 대: 움직임·몸체 색·불투명도(고스트는 반투명)·타이어 옆 띠 색(컴파운드, 모르면 null).
-typedef ReplaySceneCar = ({ReplayCar car, Color color, double opacity, Color? tyre});
+/// 경과 시간마다 타이어 옆 띠 색(컴파운드 — 피트에서 바뀐다, 모르면 null).
+typedef ReplayTyreAt = Color? Function(double elapsedMs);
+
+/// 그릴 차 한 대: 움직임·몸체 색·불투명도(고스트는 반투명)·타이어 옆 띠 색(없으면 null).
+typedef ReplaySceneCar = ({ReplayCar car, Color color, double opacity, ReplayTyreAt? tyre});
 
 /// 실제 출발 그리드 한 칸: 소등 전 차 기준점(월드 X·Z, m)과 진행 방향(라디안, 차 자세와 같은 기준).
 typedef ReplayGridSlot = ({double x, double z, double heading});
@@ -373,7 +376,7 @@ Float32List packReplayFrame(ReplayTrack3d track, List<ReplaySceneCar> cars, Repl
     final car = visible[k];
     final frame = car.car.frameAt(elapsedMs);
     final p = replayCarPose(track, frame);
-    final tyre = car.tyre;
+    final tyre = car.tyre?.call(elapsedMs);
     final o = _headerFields + k * kReplayFrameCarStride;
     out
       ..[o] = p.origin.x

@@ -75,7 +75,16 @@ enum HighlightPit { none, pitIn, pitOut }
 /// 표본 사이가 이보다(ms) 비면 그 사이 차는 기록이 없는 곳(피트 레인 — 옛 에이전트)에 있었다고 보고 숨긴다.
 const int kHighlightHiddenGapMs = 1500;
 
-/// 클립 안 차 한 대의 움직임(같은 칸 = 같은 순간, 시간은 세션 ms, 시간 순). [pit]은 표본마다 피트 인·아웃(없으면 모두 none).
+/// 끼고 있는 보이는 컴파운드(서버 `TyreCompound` 값 순서, 모르면 unknown).
+enum HighlightTyre { unknown, soft, medium, hard, intermediate, wet }
+
+HighlightTyre _tyreOf(Object? value) {
+  final i = jsonInt(value) ?? 0;
+  return i >= 0 && i < HighlightTyre.values.length ? HighlightTyre.values[i] : HighlightTyre.unknown;
+}
+
+/// 클립 안 차 한 대의 움직임(같은 칸 = 같은 순간, 시간은 세션 ms, 시간 순). [pit]은 표본마다 피트 인·아웃(없으면 모두 none),
+/// [tyre]는 표본마다 컴파운드(없으면 비어 있다).
 class HighlightCarTrack {
   const HighlightCarTrack({
     required this.carIndex,
@@ -88,6 +97,7 @@ class HighlightCarTrack {
     required this.brake,
     required this.lap,
     this.pit = const [],
+    this.tyre = const [],
   });
 
   final int carIndex;
@@ -100,6 +110,7 @@ class HighlightCarTrack {
   final List<int> brake;
   final List<int> lap;
   final List<HighlightPit> pit;
+  final List<HighlightTyre> tyre;
 
   int get length => timeMs.length;
 
@@ -117,6 +128,7 @@ class HighlightCarTrack {
     final brake = ints('brake');
     final lap = ints('lap');
     final pit = ints('pit');
+    final tyre = json['tyre'] as List<dynamic>? ?? const [];
     final n = time.length;
     if (car == null || n == 0 || [x, z, speed, gear, throttle, brake, lap].any((c) => c.length != n)) {
       return null;
@@ -133,6 +145,7 @@ class HighlightCarTrack {
       brake: brake,
       lap: lap,
       pit: pit.length == n ? [for (final p in pit) pitOf(p)] : const [],
+      tyre: tyre.length == n ? [for (final t in tyre) _tyreOf(t)] : const [],
     );
   }
 }
@@ -140,8 +153,8 @@ class HighlightCarTrack {
 /// 순위표 칸 상태(서버 `StandingState` 값 순서).
 enum StandingState { running, pit, finished, out }
 
-/// 순위표 한 칸: 차, 리더와의 간격(ms, 리더 0, 모르면 null), 랩 뒤처짐, 상태.
-typedef HighlightStandingRow = ({int carIndex, int? gapMs, int lapsDown, StandingState state});
+/// 순위표 한 칸: 차, 리더와의 간격(ms, 리더 0, 모르면 null), 랩 뒤처짐, 상태, 끼고 있는 컴파운드.
+typedef HighlightStandingRow = ({int carIndex, int? gapMs, int lapsDown, StandingState state, HighlightTyre tyre});
 
 /// 클립 안 한 순간의 순위표(칸 순서 = 순위)와 리더의 랩.
 class HighlightStanding {
@@ -158,6 +171,7 @@ class HighlightStanding {
     final gaps = json['gapMs'];
     final lapsDown = json['lapsDown'];
     final states = json['state'];
+    final tyres = json['tyre'];
     if (time == null || cars is! List || gaps is! List || lapsDown is! List || states is! List) {
       return null;
     }
@@ -175,7 +189,13 @@ class HighlightStanding {
       lap: jsonInt(json['lap']) ?? 1,
       rows: [
         for (var i = 0; i < n; i++)
-          (carIndex: jsonInt(cars[i]) ?? -1, gapMs: jsonInt(gaps[i]), lapsDown: jsonInt(lapsDown[i]) ?? 0, state: stateOf(states[i])),
+          (
+            carIndex: jsonInt(cars[i]) ?? -1,
+            gapMs: jsonInt(gaps[i]),
+            lapsDown: jsonInt(lapsDown[i]) ?? 0,
+            state: stateOf(states[i]),
+            tyre: tyres is List && tyres.length == n ? _tyreOf(tyres[i]) : HighlightTyre.unknown,
+          ),
       ],
     );
   }
@@ -493,6 +513,10 @@ class TimedCarPath implements ReplayCar {
     }
     return track.timeMs[lower + 1] - track.timeMs[lower] <= kHighlightHiddenGapMs;
   }
+
+  /// [elapsedMs]의 컴파운드(바로 앞 표본 값, 모르면 unknown).
+  HighlightTyre tyreAt(double elapsedMs) =>
+      track.tyre.isEmpty ? HighlightTyre.unknown : track.tyre[_positionAt(elapsedMs).floor()];
 
   /// [elapsedMs]의 피트 인·아웃(바로 앞 표본 값, 표시가 없으면 none).
   HighlightPit pitAt(double elapsedMs) {

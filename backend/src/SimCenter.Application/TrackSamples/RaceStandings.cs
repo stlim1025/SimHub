@@ -12,6 +12,7 @@ public enum StandingState
 /// <summary>
 /// 클립 안 한 순간의 순위표(중계 화면 왼쪽 순위표). 칸 순서 = 순위. 간격은 리더가 그 차의 지금 자리를 지난 시각과의 차(ms),
 /// 리더면 0, 알 수 없으면(출발 전 등) null. 랩 뒤처짐이 1 이상이면 간격 대신 <c>+N LAP</c>을 보인다. 상태는 <see cref="StandingState"/> 값.
+/// 타이어는 그 순간 끼고 있는 보이는 컴파운드(<see cref="SimCenter.Domain.Enums.TyreCompound"/> 값, 모르면 0).
 /// </summary>
 public sealed record HighlightStandingDto(
     int TimeMs,
@@ -19,7 +20,8 @@ public sealed record HighlightStandingDto(
     IReadOnlyList<int> Cars,
     IReadOnlyList<int?> GapMs,
     IReadOnlyList<int> LapsDown,
-    IReadOnlyList<int> State);
+    IReadOnlyList<int> State,
+    IReadOnlyList<int> Tyre);
 
 /// <summary>
 /// 레이스 진행(랩 수 × 트랙 길이 + 랩 거리)으로 매 순간 순위표를 만든다(순수 계산).
@@ -132,7 +134,23 @@ public sealed class RaceStandings
             rows.Select(r => r.Car).ToList(),
             gaps,
             lapsDown,
-            rows.Select(r => (int)r.State).ToList());
+            rows.Select(r => (int)r.State).ToList(),
+            rows.Select(r => TyreAt(r.Car, timeMs)).ToList());
+    }
+
+    /// <summary>[timeMs]까지 마지막으로 알려진 컴파운드(그 전 표본에 없으면 그 뒤 첫 값, 끝내 모르면 0).</summary>
+    private int TyreAt(int car, int timeMs)
+    {
+        var samples = _timeline.Cars[car];
+        for (var k = Math.Min(Upper(samples, timeMs), samples.Count) - 1; k >= 0; k--)
+        {
+            if (samples[k].Tyre != 0)
+            {
+                return samples[k].Tyre;
+            }
+        }
+
+        return samples.Select(s => s.Tyre).FirstOrDefault(t => t != 0);
     }
 
     /// <summary>

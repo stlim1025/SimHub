@@ -147,7 +147,7 @@ void main() {
       final state = packReplayFrame(
         track,
         [
-          (car: player, color: const Color(0xFFFF0000), opacity: 1, tyre: AppColors.tyreSoft),
+          (car: player, color: const Color(0xFFFF0000), opacity: 1, tyre: (_) => AppColors.tyreSoft),
           (car: _HiddenCar(player), color: const Color(0xFF00FF00), opacity: 0.5, tyre: null),
           (car: player, color: const Color(0xFF0000FF), opacity: 0.5, tyre: null),
         ],

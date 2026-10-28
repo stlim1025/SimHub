@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../domain/race_highlights.dart';
+import 'tyre_stints_view.dart';
 
 /// 중계 그래픽 공통: 판 불투명도, 숫자는 폭이 고정된 숫자 글꼴(간격이 바뀌어도 칸이 흔들리지 않게).
 const double _panelOpacity = 0.88;
@@ -22,6 +23,16 @@ const double _towerGap = 5;
 const double _towerMarkWidth = 26;
 const double _towerMarkHeight = 13;
 const double _towerSidePadding = 6;
+const double _towerTyreSize = 13;
+
+/// 순위표 컴파운드 원에 넘길 이름(`tyreColorOf`·`TyreCompoundCircle` 기준). 모르면 원을 그리지 않는다.
+const Map<HighlightTyre, String> kHighlightTyreNames = {
+  HighlightTyre.soft: 'Soft',
+  HighlightTyre.medium: 'Medium',
+  HighlightTyre.hard: 'Hard',
+  HighlightTyre.intermediate: 'Intermediate',
+  HighlightTyre.wet: 'Wet',
+};
 const double _letterSpacing = 0.4;
 
 /// 하단 자막·위 띠 치수.
@@ -48,7 +59,7 @@ TextStyle _broadcastText(BuildContext context, {double size = _towerFontSize, Co
         );
 
 /// 중계 화면 왼쪽 순위표: 빨간 띠 + `LAP 16 / 39` 머리, 줄마다 순위·팀 색 띠·세 글자 이름·간격,
-/// 피트면 `PIT` 칸, 피니시면 체커기, 리타이어면 `OUT`. 카메라가 따라가는 차의 줄은 흰 바탕에 검은 글자로 뒤집는다.
+/// 피트면 `PIT` 칸, 피니시면 체커기, 리타이어면 `OUT`, 줄 끝에 끼고 있는 컴파운드 원(모르면 없음). 카메라가 따라가는 차의 줄은 흰 바탕에 검은 글자로 뒤집는다.
 /// [compact](좁은 화면)면 간격 칸을 뺀다. 높이가 모자라면 들어가는 줄까지만.
 class BroadcastStandingsTower extends StatelessWidget {
   const BroadcastStandingsTower({
@@ -134,6 +145,7 @@ class BroadcastStandingsTower extends StatelessWidget {
       StandingState.finished => Icon(Icons.sports_score, size: _towerMarkHeight + 2, color: ink),
       _ => null,
     };
+    final tyre = kHighlightTyreNames[row.tyre];
     return Container(
       key: ValueKey('standing-row-${row.carIndex}'),
       height: _towerRowHeight,
@@ -147,6 +159,10 @@ class BroadcastStandingsTower extends StatelessWidget {
           SizedBox(width: _towerNameWidth, child: Text(standingAbbreviation(nameOf(row.carIndex)), style: text)),
           Expanded(child: Align(alignment: Alignment.centerRight, child: gap)),
           if (mark != null) ...[const SizedBox(width: _towerGap), mark],
+          if (tyre != null) ...[
+            const SizedBox(width: _towerGap),
+            TyreCompoundCircle(key: ValueKey('standing-tyre-${row.carIndex}'), compound: tyre, tooltip: tyre, size: _towerTyreSize),
+          ],
         ],
       ),
     );

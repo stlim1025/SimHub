@@ -27,6 +27,7 @@ import '../application/sessions_providers.dart';
 import '../domain/race_highlights.dart';
 import '../domain/session_models.dart';
 import 'highlights_broadcast_overlay.dart';
+import 'tyre_stints_view.dart';
 
 /// 세션 하이라이트 주소.
 String sessionHighlightsLocation(String sessionId) => '/sessions/${Uri.encodeComponent(sessionId)}/highlights';
@@ -427,6 +428,17 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
     );
   }
 
+  /// 차 타이어 옆 띠 색: 그 순간 끼고 있는 컴파운드 색(모르면 띠 없음).
+  static ReplayTyreAt? _tyreOf(ReplayCar car) {
+    if (car is! TimedCarPath || car.track.tyre.isEmpty) {
+      return null;
+    }
+    return (t) {
+      final name = kHighlightTyreNames[car.tyreAt(t)];
+      return name == null ? null : tyreColorOf(name);
+    };
+  }
+
   /// 3D 장면: WebGL 다시보기를 켰으면 three.js 그림 위에 이름표를 얹는다(못 쓰면 캔버스 그림으로 돌아간다), 아니면 캔버스 그림.
   Widget _scene(BuildContext context, HighlightClip clip) {
     final focus = _focus!;
@@ -455,8 +467,8 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
       track: _track,
       grid: _grid,
       cars: [
-        (car: focus, color: focusColor, opacity: 1, tyre: null),
-        for (final other in _field) (car: other.car, color: other.color, opacity: 1, tyre: null),
+        (car: focus, color: focusColor, opacity: 1, tyre: _tyreOf(focus)),
+        for (final other in _field) (car: other.car, color: other.color, opacity: 1, tyre: _tyreOf(other.car)),
       ],
       camera: _camera,
       time: _time,

@@ -146,6 +146,27 @@ public sealed class HighlightsBuilderTests
         Assert.Equal(nameof(RaceFlagKind.SafetyCar), Assert.Single(result.Flags).Kind);
     }
 
+    [Theory]
+    [InlineData(16, 1)]   // 소프트
+    [InlineData(17, 2)]   // 미디엄
+    [InlineData(18, 3)]   // 하드
+    [InlineData(7, 4)]    // 인터
+    [InlineData(8, 5)]    // 웻
+    [InlineData(0, 0)]    // 모름
+    [InlineData(9, 0)]    // 클래식 등
+    public void Sample_Tyre_IsTheVisualCompound(byte raw, int expected)
+        => Assert.Equal(expected, new RaceSample(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, raw).Tyre);
+
+    [Fact]
+    public void Clip_CarsAndStandings_CarryATyreValuePerSample()
+    {
+        var result = Build(Race(new Dictionary<byte, double> { [1] = 30, [Player] = 20 }));
+
+        var clip = result.Race[0];
+        Assert.All(clip.Cars, c => Assert.Equal(c.TimeMs.Count, c.Tyre.Count));
+        Assert.All(clip.Standings, s => Assert.Equal(s.Cars.Count, s.Tyre.Count));
+    }
+
     [Fact]
     public void Overtake_RightBeforeOrAfterAPitStop_IsIgnored()
     {

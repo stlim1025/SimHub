@@ -63,7 +63,7 @@ class AppColors {
   static const Color teamRedBull = Color(0xFF3671C6);
   static const Color teamMcLaren = Color(0xFFFF8000);
   static const Color teamAstonMartin = Color(0xFF229971);
-  static const Color teamAlpine = Color(0xFF0093CC);
+  static const Color teamAlpine = Color(0xFFFF87BC);
   static const Color teamWilliams = Color(0xFF64C4FF);
   static const Color teamRacingBulls = Color(0xFF6692FF);
   static const Color teamSauber = Color(0xFF52E252);
