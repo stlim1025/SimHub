@@ -29,6 +29,23 @@ Future<void> _tapAndSettle(WidgetTester tester, Finder finder) async {
 }
 
 void main() {
+  testWidgets('셋업이 저장된 랩은 Lap Details의 View Setup으로 셋업 값·셋업 진단을 연다', (t) async {
+    const setup = <String, Object?>{'frontWing': 40, 'rearWing': 26, 'brakeBias': 54, 'onThrottle': 100};
+    const car = CarSnapshot(visualTyreCompound: 16, tyreAgeLaps: 3, setup: setup);
+    final router = await pumpLapDetail(t, detailRepo: _repo(sampleDetail(car: car)));
+
+    await _tapAndSettle(t, find.byKey(const ValueKey('lap-view-setup')));
+
+    expect(locationOf(router), '/laps/l1/setup');
+    expect(find.text('Jeddah Setup'), findsOneWidget);
+    expect(find.byKey(const ValueKey('setup-diagnosis')), findsOneWidget);
+  });
+
+  testWidgets('셋업이 없는 랩에는 View Setup이 없다', (t) async {
+    await pumpLapDetail(t, detailRepo: _repo());
+    expect(find.byKey(const ValueKey('lap-view-setup')), findsNothing);
+  });
+
   testWidgets('머리줄은 국기 + 트랙 이름 · 랩타임이고, 뒤로 가기는 그 트랙의 표로 간다', (t) async {
     final router = await pumpLapDetail(t, detailRepo: _repo());
 
@@ -69,7 +86,7 @@ void main() {
 
   testWidgets('주소가 바뀌면 탭 막대의 선택도 따라간다', (t) async {
     final router = await pumpLapDetail(t, detailRepo: _repo(), location: '/laps/l1?tab=best');
-    expect(t.widget<TabBar>(find.byType(TabBar)).controller?.index, 2);
+    expect(t.widget<TabBar>(find.byType(TabBar)).controller?.index, 3);
 
     router.go('/laps/l1?tab=telemetry');
     await t.pumpAndSettle();

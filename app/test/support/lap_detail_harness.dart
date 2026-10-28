@@ -8,6 +8,7 @@ import 'package:simcenter_app/features/lap_detail/data/lap_detail_repository.dar
 import 'package:simcenter_app/features/lap_detail/domain/lap_compare.dart';
 import 'package:simcenter_app/features/lap_detail/domain/lap_detail_models.dart';
 import 'package:simcenter_app/features/lap_detail/presentation/lap_detail_page.dart';
+import 'package:simcenter_app/features/lap_detail/presentation/lap_setup_page.dart';
 import 'package:simcenter_app/features/laps/data/laps_repository.dart';
 import 'package:simcenter_app/features/laps/domain/lap_models.dart';
 import 'package:simcenter_app/features/ranking/data/ranking_repository.dart';
@@ -134,6 +135,10 @@ Future<GoRouter> pumpLapDetail(
           compare: LapCompareSelection.fromQuery(state.uri.queryParameters),
         ),
       ),
+    ),
+    GoRoute(
+      path: '/laps/:lapId/setup',
+      builder: (_, state) => Scaffold(body: LapSetupPage(lapId: state.pathParameters['lapId']!)),
     ),
     GoRoute(path: '/sessions/:sessionId', builder: (_, state) => Text('session:${state.pathParameters['sessionId']}')),
   ]);

@@ -12,6 +12,8 @@ import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/not_found_state.dart';
 import '../../../core/widgets/page_loading_bar.dart';
 import '../../../core/widgets/track_flag.dart';
+import '../../lap_detail/domain/car_setup.dart';
+import '../../lap_detail/presentation/setup_diagnosis_card.dart';
 import '../../laps/domain/lap_display.dart';
 import '../../laps/presentation/lap_cells.dart';
 import '../application/sessions_providers.dart';
@@ -132,6 +134,8 @@ class _SetupBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final setup = detail.setup;
     final groups = setup == null ? const <SetupGroup>[] : setupGroups(setup);
+    // 셋업 값 아래에 이 셋업이 차에 주는 효과·이 트랙에 맞는지 진단.
+    final carSetup = CarSetup.fromJsonOrNull(setup);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -145,6 +149,10 @@ class _SetupBody extends StatelessWidget {
           )
         else
           SetupGrid(groups: groups),
+        if (carSetup != null) ...[
+          const SizedBox(height: _cardGap),
+          SetupDiagnosisCard(setup: carSetup, trackName: detail.header.trackName),
+        ],
       ],
     );
   }

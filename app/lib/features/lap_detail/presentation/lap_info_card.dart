@@ -21,6 +21,7 @@ const String _copyTooltip = '랩 ID 복사';
 const String _copiedText = '랩 ID를 복사했어요';
 const String _copyFailedText = '복사하지 못했어요. 직접 선택해 복사해 주세요.';
 const String _sessionLinkLabel = '세션 보기';
+const String _setupLinkLabel = 'View Setup';
 
 final DateFormat _dateTimeFormat = DateFormat('yyyy-MM-dd HH:mm:ss');
 
@@ -33,7 +34,8 @@ String gameModeAndSessionText(String? gameMode, String sessionType) {
   return parts.isEmpty ? kDetailNoValueText : parts.join(' · ');
 }
 
-/// Lap Details 목록(docs/15 §2.3, §10): Track(국기) · Team · Game Mode(모드 · 세션) · Lap · Lap Valid · Lap ID(복사) · Date · 세션 보기 링크.
+/// Lap Details 목록(docs/15 §2.3, §10): Track(국기) · Team · Game Mode(모드 · 세션) · Lap · Lap Valid · Lap ID(복사) · Date ·
+/// 세션 보기 링크, 셋업이 저장된 랩이면 View Setup 링크.
 class LapInfoCard extends StatelessWidget {
   const LapInfoCard({super.key, required this.detail});
 
@@ -57,15 +59,23 @@ class LapInfoCard extends StatelessWidget {
             DetailItem('Lap ID', value: _LapIdValue(lapId: lap.lapId)),
             DetailItem('Date', text: _dateTimeFormat.format(lap.setAt.toLocal())),
           ]),
-          if (sessionId != null)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: () => context.go(sessionLocation(sessionId)),
-                icon: const Icon(Icons.flag_outlined),
-                label: const Text(_sessionLinkLabel),
-              ),
-            ),
+          Wrap(
+            children: [
+              if (sessionId != null)
+                TextButton.icon(
+                  onPressed: () => context.go(sessionLocation(sessionId)),
+                  icon: const Icon(Icons.flag_outlined),
+                  label: const Text(_sessionLinkLabel),
+                ),
+              if (detail.car?.setup != null)
+                TextButton.icon(
+                  key: const ValueKey('lap-view-setup'),
+                  onPressed: () => context.go(lapSetupLocation(lap.lapId)),
+                  icon: const Icon(Icons.tune),
+                  label: const Text(_setupLinkLabel),
+                ),
+            ],
+          ),
         ],
       ),
     );

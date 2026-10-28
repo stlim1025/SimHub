@@ -17,6 +17,7 @@ import '../application/lap_detail_providers.dart';
 import '../domain/lap_compare.dart';
 import '../domain/lap_detail_display.dart';
 import '../domain/lap_detail_models.dart';
+import 'analysis_tab.dart';
 import 'best_laps_tab.dart';
 import 'compare_controls.dart';
 import 'lap_details_tab.dart';
@@ -46,10 +47,11 @@ const EdgeInsets _tabLabelPadding = EdgeInsets.symmetric(horizontal: 8);
 const Map<String, String> _tabLabels = {
   kLapTabDetails: 'Lap Details',
   kLapTabTelemetry: 'Telemetry',
+  kLapTabAnalysis: 'Analysis',
   kLapTabBest: 'Your Best Laps',
 };
 
-/// 랩 상세(D-46, docs/15 §2.3·§10): 머리줄(← 트랙 표 · 국기 + `{트랙} Lap {랩타임}` · [Share]) + 탭 3개
+/// 랩 상세(D-46, docs/15 §2.3·§10): 머리줄(← 트랙 표 · 국기 + `{트랙} Lap {랩타임}` · [Share]) + 탭 4개
 /// + "Compare with ▾"·"Filter by ▾"(D-51). 탭·비교 선택은 주소 쿼리와 동기화된다(모르는 값은 기본).
 /// 남의 것이거나 없는 랩이면 404 상태.
 class LapDetailPage extends ConsumerStatefulWidget {
@@ -288,6 +290,7 @@ class _TabContent extends StatelessWidget {
   Widget build(BuildContext context) {
     return switch (tab) {
       kLapTabTelemetry => TelemetryTab(detail: detail, compare: compare),
+      kLapTabAnalysis => AnalysisTab(detail: detail, compare: compare),
       kLapTabBest => BestLapsTab(detail: detail),
       _ => LapDetailsTab(detail: detail, compare: compare),
     };

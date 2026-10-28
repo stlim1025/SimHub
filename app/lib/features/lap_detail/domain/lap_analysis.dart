@@ -48,6 +48,15 @@ const double _referenceLiftPct = 15;
 const int _partialThrottlePct = 80;
 const double _partialThrottleM = 20;
 
+/// 타이어: 연석을 오래 탄 것으로 볼 길이(m), 기준보다 많이 쓴 조향(%p), 크게 꺾은 것으로 볼 조향(%),
+/// 강한 브레이크(%), 꺾은 채 페달을 밟은 것으로 볼 길이(m).
+const double _kerbUseM = 15;
+const double _kerbUseAloneM = 40;
+const double _moreSteeringPct = 8;
+const int _turningSteerPct = 40;
+const int _hardBrakePct = 50;
+const double _turningPedalM = 10;
+
 /// 이 이상 잃은(초) 코너만 피드백한다.
 const double kCornerLossThresholdS = 0.05;
 
@@ -157,7 +166,32 @@ enum CornerFactorKind {
 
   /// 다른 요인 없이 구간 전체 평균 속도가 낮다(km/h) — 라인·리듬 차이.
   slowerThrough,
+
+  /// (타이어) 연석을 오래 탔다(m).
+  kerbUse,
+
+  /// (타이어) 기준 랩보다 조향을 많이 썼다(%p, 코너 평균) — 미끄러짐·언더스티어.
+  moreSteering,
+
+  /// (타이어) 크게 꺾은 채 강하게 브레이크를 밟았다(m) — 앞타이어 락업·플랫스팟.
+  brakingWhileTurning,
+
+  /// (타이어) 크게 꺾은 채 풀 스로틀을 밟았다(m) — 뒷타이어 휠스핀·과열.
+  throttleWhileTurning,
 }
+
+/// 분석 기준: 최대 속도(퀄리·타임 트라이얼), 배터리 관리, 타이어 관리. 어느 기준이든 랩타임 손실은 함께 본다.
+enum AnalysisFocus { pace, battery, tyres }
+
+/// 타이어 요인인지(타이어 기준에서만 짚는다).
+bool isTyreFactor(CornerFactorKind kind) => switch (kind) {
+      CornerFactorKind.kerbUse ||
+      CornerFactorKind.moreSteering ||
+      CornerFactorKind.brakingWhileTurning ||
+      CornerFactorKind.throttleWhileTurning =>
+        true,
+      _ => false,
+    };
 
 typedef CornerFactor = ({CornerFactorKind kind, double amount});
 
@@ -170,18 +204,35 @@ class CornerAnalysis {
   final List<CornerFactor> factors;
 }
 
-/// 두 코너 사이 직선의 ERS 비교: 배포량 차이(J, 이 랩 − 기준), 잃은 시간(초).
+/// 두 코너 사이 직선 하나의 배터리 사용: 길이(m), 시작 속도(km/h), 배포량(J, 이 랩·기준 랩), 잃은 시간(초, 기준이 없으면 null).
 class StraightErs {
-  const StraightErs({required this.after, required this.before, required this.deployDiffJ, required this.lossS});
+  const StraightErs({
+    required this.after,
+    required this.before,
+    required this.lengthM,
+    required this.entryKph,
+    required this.deployJ,
+    required this.referenceDeployJ,
+    required this.lossS,
+  });
 
   /// 직선 앞 코너(없으면 출발선)·뒤 코너(없으면 결승선).
   final LapCorner? after;
   final LapCorner? before;
-  final double deployDiffJ;
-  final double lossS;
+  final double lengthM;
+  final double entryKph;
+  final double deployJ;
+  final double? referenceDeployJ;
+  final double? lossS;
+
+  /// 이 랩 − 기준 배포량(J). 기준이 없으면 null.
+  double? get deployDiffJ => referenceDeployJ == null ? null : deployJ - referenceDeployJ!;
+
+  /// 기준보다 [_ersDeployDiffJ] 넘게 덜 쓰고 [_straightLossS] 넘게 잃은 직선.
+  bool get underused => (deployDiffJ ?? 0) <= -_ersDeployDiffJ && (lossS ?? 0) >= _straightLossS;
 }
 
-/// 랩 전체 ERS 비교: 랩 시작·끝 배터리(0~1), 이 랩에서만 배터리가 바닥난 첫 자리, 덜 써서 잃은 직선들.
+/// 랩 전체 배터리: 랩 시작·끝 잔량(0~1, 기준 랩은 없으면 null), 이 랩에서만 바닥난 첫 자리, 직선마다 사용.
 class ErsAnalysis {
   const ErsAnalysis({
     required this.startFraction,
@@ -190,24 +241,29 @@ class ErsAnalysis {
     required this.referenceEndFraction,
     required this.emptyAtM,
     required this.emptyNear,
-    required this.underusedStraights,
+    required this.straights,
   });
 
   final double startFraction;
   final double endFraction;
-  final double referenceStartFraction;
-  final double referenceEndFraction;
+  final double? referenceStartFraction;
+  final double? referenceEndFraction;
 
   /// 바닥난 자리(랩 거리 m)와 그 앞 마지막 코너(출발 직후면 null). 바닥나지 않았으면 둘 다 null.
   final double? emptyAtM;
   final LapCorner? emptyNear;
-  final List<StraightErs> underusedStraights;
+  final List<StraightErs> straights;
+
+  /// 기준보다 덜 써서 시간을 잃은 직선들.
+  List<StraightErs> get underusedStraights => straights.where((s) => s.underused).toList();
 }
 
-/// 랩 비교 분석: 코너별 비교(코너 순서), ERS 비교(두 랩 모두 ERS 채널이 있을 때만).
+/// 랩 분석: 기준([focus]), 비교 랩이 있었는지, 코너별 결과(코너 순서), 배터리(ERS 채널이 있을 때만).
 class LapAnalysis {
-  const LapAnalysis({required this.corners, required this.ers});
+  const LapAnalysis({required this.focus, required this.hasReference, required this.corners, required this.ers});
 
+  final AnalysisFocus focus;
+  final bool hasReference;
   final List<CornerAnalysis> corners;
   final ErsAnalysis? ers;
 
@@ -218,12 +274,18 @@ class LapAnalysis {
   /// 기준보다 [kCornerLossThresholdS] 넘게 번 코너(많이 번 순).
   List<CornerAnalysis> get gains =>
       corners.where((c) => c.lossS <= -kCornerLossThresholdS).toList()..sort((a, b) => a.lossS.compareTo(b.lossS));
+
+  /// 시간은 안 잃었지만 타이어 요인이 있는 코너(코너 순서). 타이어 기준에서 [losses]와 함께 보인다.
+  List<CornerAnalysis> get tyreStress => corners
+      .where((c) => c.lossS < kCornerLossThresholdS && c.factors.any((f) => isTyreFactor(f.kind)))
+      .toList();
 }
 
-/// [lap]을 [reference]와 코너([corners] — [lap]에서 찾은 것)마다 비교한다(순수 계산). 같은 랩 거리끼리 맞대므로
-/// 두 랩이 같은 트랙이어야 한다. 코너 구간 = 앞 브레이킹(최대 [_brakeLookbackM]) ~ 뒤 탈출(최대 [_exitLookM]), 앞뒤 코너에서 자른다.
-LapAnalysis analyzeLap(LapTrace lap, LapTrace reference, List<LapCorner> corners) {
-  final endM = math.min(lap.lengthM, reference.lengthM);
+/// [lap]을 코너([corners])마다 분석한다(순수 계산). [reference]가 있으면 같은 랩 거리끼리 맞대어 잃은 시간과
+/// 차이 요인을 짚고(두 랩이 같은 트랙이어야 한다), [focus]가 타이어면 타이어에 무리를 주는 운전도 짚는다.
+/// 코너 구간 = 앞 브레이킹(최대 [_brakeLookbackM]) ~ 뒤 탈출(최대 [_exitLookM]), 앞뒤 코너에서 자른다.
+LapAnalysis analyzeLap(LapTrace lap, LapTrace? reference, List<LapCorner> corners, {AnalysisFocus focus = AnalysisFocus.pace}) {
+  final endM = reference == null ? lap.lengthM : math.min(lap.lengthM, reference.lengthM);
   final results = <CornerAnalysis>[];
   for (var k = 0; k < corners.length; k++) {
     final corner = corners[k];
@@ -236,11 +298,78 @@ LapAnalysis analyzeLap(LapTrace lap, LapTrace reference, List<LapCorner> corners
     final b = math.min(nextStart, corner.endM + _exitLookM);
     results.add(CornerAnalysis(
       corner: corner,
-      lossS: _lossS(lap, reference, a, b),
-      factors: _factors(lap, reference, corner, a, b),
+      lossS: reference == null ? 0 : _lossS(lap, reference, a, b),
+      factors: [
+        if (reference != null) ..._factors(lap, reference, corner, a, b),
+        if (focus == AnalysisFocus.tyres) ..._tyreFactors(lap, reference, corner, a, b),
+      ],
     ));
   }
-  return LapAnalysis(corners: results, ers: _ers(lap, reference, corners, endM));
+  return LapAnalysis(
+    focus: focus,
+    hasReference: reference != null,
+    corners: results,
+    ers: _ers(lap, reference, corners, endM),
+  );
+}
+
+/// 타이어에 무리를 주는 운전(이 랩만 보고, 조향 비교는 기준 랩이 있을 때만).
+List<CornerFactor> _tyreFactors(LapTrace lap, LapTrace? reference, LapCorner corner, double a, double b) {
+  final factors = <CornerFactor>[];
+  // 빠른 랩은 원래 연석을 쓰므로 기준 랩보다 많이 탄 만큼만 본다(기준이 없으면 더 높은 기준).
+  double kerb(LapTrace t) {
+    var meters = 0.0;
+    for (var d = corner.startM; d <= b; d++) {
+      if (t.kerbContact[(d / t.resolutionM).round().clamp(0, t.length - 1)]) {
+        meters++;
+      }
+    }
+    return meters;
+  }
+
+  if (lap.hasKerbContact) {
+    final mine = kerb(lap);
+    final more = reference != null && reference.hasKerbContact ? mine - kerb(reference) : null;
+    if (more != null ? more >= _kerbUseM : mine >= _kerbUseAloneM) {
+      factors.add((kind: CornerFactorKind.kerbUse, amount: more ?? mine));
+    }
+  }
+  double steer(LapTrace t, double d) => _valueAt(t.steer, t.resolutionM, d).abs();
+  if (reference != null) {
+    var mine = 0.0;
+    var theirs = 0.0;
+    var count = 0;
+    for (var d = corner.startM; d <= corner.endM; d++) {
+      mine += steer(lap, d);
+      theirs += steer(reference, d);
+      count++;
+    }
+    final more = count == 0 ? 0.0 : (mine - theirs) / count;
+    if (more >= _moreSteeringPct) {
+      factors.add((kind: CornerFactorKind.moreSteering, amount: more));
+    }
+  }
+  var brakingTurning = 0.0;
+  var throttleTurning = 0.0;
+  for (var d = a; d <= b; d++) {
+    final s = steer(lap, d);
+    if (s < _turningSteerPct) {
+      continue;
+    }
+    if (_valueAt(lap.brake, lap.resolutionM, d) >= _hardBrakePct) {
+      brakingTurning++;
+    }
+    if (_valueAt(lap.throttle, lap.resolutionM, d) >= _throttleFullPct) {
+      throttleTurning++;
+    }
+  }
+  if (brakingTurning >= _turningPedalM) {
+    factors.add((kind: CornerFactorKind.brakingWhileTurning, amount: brakingTurning));
+  }
+  if (throttleTurning >= _turningPedalM) {
+    factors.add((kind: CornerFactorKind.throttleWhileTurning, amount: throttleTurning));
+  }
+  return factors;
 }
 
 /// [from]~[to]에서 [values]가 [test]를 마지막으로 만족하는 거리(1m 간격). 없으면 null.
@@ -418,17 +547,18 @@ List<CornerFactor> _factors(LapTrace lap, LapTrace reference, LapCorner corner, 
   return factors;
 }
 
-ErsAnalysis? _ers(LapTrace lap, LapTrace reference, List<LapCorner> corners, double endM) {
-  if (!lap.hasErs || !reference.hasErs) {
+ErsAnalysis? _ers(LapTrace lap, LapTrace? reference, List<LapCorner> corners, double endM) {
+  if (!lap.hasErs) {
     return null;
   }
+  final ref = reference != null && reference.hasErs ? reference : null;
   double store(LapTrace t, double d) => _valueAt(t.ersStoreJ, t.resolutionM, d) / kErsCapacityJ;
   double deployed(LapTrace t, double d) => _valueAt(t.ersDeployedJ, t.resolutionM, d);
   bool empty(double fraction) => fraction <= _ersEmptyFraction;
 
   double? emptyAt;
   for (var d = 0.0; d <= endM; d++) {
-    if (empty(store(lap, d)) && !empty(store(reference, d))) {
+    if (empty(store(lap, d)) && (ref == null || !empty(store(ref, d)))) {
       emptyAt = d;
       break;
     }
@@ -436,33 +566,54 @@ ErsAnalysis? _ers(LapTrace lap, LapTrace reference, List<LapCorner> corners, dou
   final at = emptyAt;
   final near = at == null ? null : corners.where((c) => c.startM <= at).lastOrNull;
 
-  // 코너 사이 직선(출발선 ~ 첫 코너, 코너 끝 ~ 다음 코너 시작, 마지막 코너 끝 ~ 결승선)마다 배포량·시간 비교.
+  // 코너 사이 직선(출발선 ~ 첫 코너, 코너 끝 ~ 다음 코너 시작, 마지막 코너 끝 ~ 결승선)마다 배포량·시간.
   final straights = <StraightErs>[];
   for (var k = 0; k <= corners.length; k++) {
     final from = k == 0 ? 0.0 : corners[k - 1].endM;
     final to = math.min(k == corners.length ? endM : corners[k].startM, endM);
-    if (to - from < _straightMinM) {
+    // 마지막 코너 뒤 ~ 결승선은 짧아도 남겨 둔다(아래에서 출발선 쪽 직선과 합친다).
+    if (to - from < _straightMinM && !(k == corners.length && k > 0)) {
       continue;
     }
-    final diff = (deployed(lap, to) - deployed(lap, from)) - (deployed(reference, to) - deployed(reference, from));
-    final loss = _lossS(lap, reference, from, to);
-    if (diff <= -_ersDeployDiffJ && loss >= _straightLossS) {
-      straights.add(StraightErs(
-        after: k == 0 ? null : corners[k - 1],
-        before: k == corners.length ? null : corners[k],
-        deployDiffJ: diff,
-        lossS: loss,
-      ));
+    straights.add(StraightErs(
+      after: k == 0 ? null : corners[k - 1],
+      before: k == corners.length ? null : corners[k],
+      lengthM: to - from,
+      entryKph: _valueAt(lap.speedKph, lap.resolutionM, from),
+      deployJ: deployed(lap, to) - deployed(lap, from),
+      referenceDeployJ: ref == null ? null : deployed(ref, to) - deployed(ref, from),
+      lossS: reference == null ? null : _lossS(lap, reference, from, to),
+    ));
+  }
+
+  // 결승선을 사이에 둔 마지막 직선과 첫 직선은 한 직선이다(랩이 이미 달리는 중에 시작한다).
+  final first = straights.firstOrNull;
+  final last = straights.lastOrNull;
+  if (last != null && last.before == null && last.lengthM < _straightMinM) {
+    straights.removeLast();
+  }
+  if (first != null && last != null && !identical(first, last) && first.after == null && last.before == null) {
+    if (identical(straights.last, last)) {
+      straights.removeLast();
     }
+    straights[0] = StraightErs(
+        after: last.after,
+        before: first.before,
+        lengthM: last.lengthM + first.lengthM,
+        entryKph: last.entryKph,
+        deployJ: last.deployJ + first.deployJ,
+        referenceDeployJ: first.referenceDeployJ == null ? null : first.referenceDeployJ! + last.referenceDeployJ!,
+        lossS: first.lossS == null ? null : first.lossS! + last.lossS!,
+      );
   }
 
   return ErsAnalysis(
     startFraction: store(lap, 0),
     endFraction: store(lap, endM),
-    referenceStartFraction: store(reference, 0),
-    referenceEndFraction: store(reference, endM),
+    referenceStartFraction: ref == null ? null : store(ref, 0),
+    referenceEndFraction: ref == null ? null : store(ref, endM),
     emptyAtM: emptyAt,
     emptyNear: near,
-    underusedStraights: straights,
+    straights: straights,
   );
 }

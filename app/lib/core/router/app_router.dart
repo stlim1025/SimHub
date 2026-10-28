@@ -9,6 +9,7 @@ import '../../features/dashboard/presentation/dashboard_page.dart';
 import '../../features/devices/presentation/telemetry_app_page.dart';
 import '../../features/lap_detail/domain/lap_compare.dart';
 import '../../features/lap_detail/presentation/lap_detail_page.dart';
+import '../../features/lap_detail/presentation/lap_setup_page.dart';
 import '../../features/lap_detail/presentation/shared_lap_page.dart';
 import '../../features/laps/presentation/laps_page.dart';
 import '../../features/laps/presentation/track_laps_page.dart';
@@ -138,6 +139,8 @@ final routerProvider = Provider<GoRouter>((ref) {
               compare: LapCompareSelection.fromQuery(state.uri.queryParameters),
             ),
           ),
+          // 랩 셋업(랩 상세 Lap Details 카드의 View Setup) — 셋업 값과 셋업 진단. 뒤로 가기는 그 랩 상세로.
+          _screen('/laps/:lapId/setup', (state) => LapSetupPage(lapId: state.pathParameters['lapId']!)),
           _screen(
             '/leaderboard',
             (state) => LeaderboardPage(trackId: state.uri.queryParameters['trackId']),

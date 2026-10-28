@@ -24,10 +24,11 @@ const double _percent = 100;
 
 const String kLapTabDetails = 'details';
 const String kLapTabTelemetry = 'telemetry';
+const String kLapTabAnalysis = 'analysis';
 const String kLapTabBest = 'best';
 
 /// 화면에 보이는 순서.
-const List<String> kLapTabs = [kLapTabDetails, kLapTabTelemetry, kLapTabBest];
+const List<String> kLapTabs = [kLapTabDetails, kLapTabTelemetry, kLapTabAnalysis, kLapTabBest];
 
 /// 주소의 `tab` 값을 탭으로 바꾼다. 없거나 모르는 값이면 `details`(docs/15 §2.3).
 String normalizeLapTab(String? value) => kLapTabs.contains(value) ? value! : kLapTabDetails;
@@ -39,6 +40,9 @@ String lapDetailLocation(String lapId, {String? tab, LapCompareSelection? compar
   final path = '/laps/$lapId';
   return query.isEmpty ? path : Uri(path: path, queryParameters: query).toString();
 }
+
+/// 랩 셋업 주소(`/laps/:lapId/setup`). Lap Details 카드의 View Setup이 연다.
+String lapSetupLocation(String lapId) => '/laps/$lapId/setup';
 
 // -- 공유 링크 (`/share/laps/:lapId?tab=`) ------------------------------------------
 

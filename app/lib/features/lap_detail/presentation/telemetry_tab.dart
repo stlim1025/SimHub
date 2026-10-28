@@ -20,7 +20,6 @@ import '../../tracks/application/tracks_providers.dart';
 import '../../tracks/domain/track_sample_geometry.dart';
 import '../../tracks/domain/track_width_profile.dart';
 import '../application/lap_detail_providers.dart';
-import '../domain/lap_analysis.dart';
 import '../domain/lap_compare.dart';
 import '../domain/lap_corners.dart';
 import '../domain/lap_detail_display.dart';
@@ -29,7 +28,6 @@ import '../domain/telemetry_channels.dart';
 import '../domain/telemetry_math.dart';
 import 'compare_controls.dart';
 import 'ghost_replay.dart';
-import 'lap_analysis_card.dart';
 import 'lap_time_cards.dart';
 import 'telemetry_chart.dart';
 import 'track_map.dart';
@@ -82,18 +80,7 @@ class TelemetryTab extends ConsumerWidget {
     if (!lap.hasTrace) {
       return const EmptyLapsCard(message: _noTraceText);
     }
-    final otherCar = compare.kind == LapCompareKind.car && compare.compareSessionId != null && compare.compareCar != null;
-    final comparison = compare.kind == LapCompareKind.none || otherCar ? null : detail.comparison;
-    final comparisonId = comparison != null && comparison.hasTrace && comparison.lapId != lap.lapId
-        ? comparison.lapId
-        : null;
-    final trace = ref.watch(lapTraceProvider(lap.lapId));
-    // 비교 랩 트레이스는 공개 규칙을 지키는 경로(`/laps/{id}/trace`)로 읽는다 — 남의 공개 랩도 여기로 온다(D-51).
-    // 같은 세션의 다른 차는 모든 차 표본으로 복원한 트레이스를 읽는다.
-    final reference = otherCar
-        ? ref.watch(fieldLapTraceProvider((sessionId: compare.compareSessionId!, carIndex: compare.compareCar!)))
-        : (comparisonId == null ? null : ref.watch(comparisonTraceProvider(comparisonId)));
-    final otherCarName = (compare.compareName ?? '').isEmpty ? kCompareKindLabels[LapCompareKind.car]! : compare.compareName!;
+    final (:trace, :reference, :otherCar, :comparison, :otherCarName) = watchLapTraces(ref, detail, compare);
     final otherCarColor = compare.compareTeamColor;
     final units = ref.watch(authControllerProvider).valueOrNull?.preferences.units ?? UnitSystem.metric;
 
@@ -115,9 +102,7 @@ class TelemetryTab extends ConsumerWidget {
               reference: reference?.valueOrNull,
               lapTimeMs: lap.lapTimeMs,
               referenceLapTimeMs: otherCar ? compare.compareTimeMs : comparison?.lapTimeMs,
-              referenceLabel: otherCar
-                  ? otherCarName
-                  : (comparison == null ? _bestLapLabel : referenceLegendLabel(comparison)),
+              referenceLabel: lapReferenceLabel(otherCar: otherCar, comparison: comparison, otherCarName: otherCarName),
               units: units,
               sectors: lap.sectors,
               referenceSectors: comparison?.sectors ?? const [],
@@ -135,6 +120,37 @@ class TelemetryTab extends ConsumerWidget {
     );
   }
 }
+
+/// 랩 상세의 이 랩·비교 랩 트레이스(텔레메트리·분석 탭 공용). 비교 안 함이면 [reference]가 null.
+/// 비교 랩 트레이스는 공개 규칙을 지키는 경로(`/laps/{id}/trace`)로 읽는다 — 남의 공개 랩도 여기로 온다(D-51).
+/// 같은 세션의 다른 차([otherCar])는 모든 차 표본으로 복원한 트레이스를 읽는다.
+({
+  AsyncValue<LapTrace?> trace,
+  AsyncValue<LapTrace?>? reference,
+  bool otherCar,
+  ComparisonLap? comparison,
+  String otherCarName,
+}) watchLapTraces(WidgetRef ref, LapDetail detail, LapCompareSelection compare) {
+  final lap = detail.lap;
+  final otherCar = compare.kind == LapCompareKind.car && compare.compareSessionId != null && compare.compareCar != null;
+  final comparison = compare.kind == LapCompareKind.none || otherCar ? null : detail.comparison;
+  final comparisonId =
+      comparison != null && comparison.hasTrace && comparison.lapId != lap.lapId ? comparison.lapId : null;
+  return (
+    trace: ref.watch(lapTraceProvider(lap.lapId)),
+    reference: otherCar
+        ? ref.watch(fieldLapTraceProvider((sessionId: compare.compareSessionId!, carIndex: compare.compareCar!)))
+        : (comparisonId == null ? null : ref.watch(comparisonTraceProvider(comparisonId))),
+    otherCar: otherCar,
+    comparison: comparison,
+    otherCarName:
+        (compare.compareName ?? '').isEmpty ? kCompareKindLabels[LapCompareKind.car]! : compare.compareName!,
+  );
+}
+
+/// 이 랩·비교 랩 트레이스에 맞는 비교 랩 이름(범례·분석 기준 표시).
+String lapReferenceLabel({required bool otherCar, required ComparisonLap? comparison, required String otherCarName}) =>
+    otherCar ? otherCarName : (comparison == null ? _bestLapLabel : referenceLegendLabel(comparison));
 
 /// 범례의 비교 랩 이름: 비교 종류별 행 이름, 남의 랩이면 ` · {드라이버}`(D-51).
 String referenceLegendLabel(ComparisonLap comparison) {
@@ -243,15 +259,6 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
     final maxDistanceM = math.max(trace.lengthM, reference?.lengthM ?? 0);
     final referenceTime = widget.referenceLapTimeMs;
     final corners = resolveLapCorners(trace, widget.officialCorners);
-    // 비교 랩이 있으면 코너별로 맞대어 잃은 곳·이유를 짚는다. 누른 코너로 재생 막대·지도 점을 옮긴다.
-    final analysisCard = reference == null || corners.isEmpty
-        ? null
-        : LapAnalysisCard(
-            analysis: analyzeLap(trace, reference, corners),
-            referenceLabel: widget.referenceLabel,
-            units: widget.units,
-            onSelect: (corner) => _playhead.value = corner.startM,
-          );
 
     // 값이 없는 랩(ERS 채널이 없는 옛 기록 등)은 그 선을 빼고, 두 랩 모두 없으면 그래프를 그리지 않는다.
     Widget? channelChart(TelemetryChannel channel) {
@@ -306,13 +313,7 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
     );
     // 고스트 재생(이 랩에 위치가 있을 때만) → 그래프 카드.
     Widget mainColumn(double replayHeight) => !trace.hasPositions
-        ? Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (analysisCard != null) ...[analysisCard, const SizedBox(height: _panelGap)],
-              chartsCard,
-            ],
-          )
+        ? chartsCard
         : Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -336,7 +337,6 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
                 corners: corners,
               ),
               const SizedBox(height: _panelGap),
-              if (analysisCard != null) ...[analysisCard, const SizedBox(height: _panelGap)],
               chartsCard,
             ],
           );

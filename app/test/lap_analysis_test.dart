@@ -8,6 +8,7 @@ import 'package:simcenter_app/features/auth/domain/user_preferences.dart';
 import 'package:simcenter_app/features/lap_detail/domain/lap_analysis.dart';
 import 'package:simcenter_app/features/lap_detail/domain/lap_corners.dart';
 import 'package:simcenter_app/features/lap_detail/domain/lap_detail_models.dart';
+import 'package:simcenter_app/features/lap_detail/presentation/analysis_tab.dart';
 import 'package:simcenter_app/features/lap_detail/presentation/lap_analysis_card.dart';
 
 const int _res = 5;
@@ -29,7 +30,14 @@ const double _radiusM = 60;
 }
 
 /// 브레이크를 [brakeAtM]부터 코너 입구(400m)까지 밟아 [apexKph]로 줄이고, 코너 끝부터 풀 스로틀. 1km.
-LapTrace _lap({required double brakeAtM, required double apexKph, double lateral = 0, List<double>? ersStore}) {
+/// [cornerSteer]는 380m(브레이킹 끝)부터 코너 끝 20m 뒤까지의 조향(%).
+LapTrace _lap({
+  required double brakeAtM,
+  required double apexKph,
+  double lateral = 0,
+  List<double>? ersStore,
+  int cornerSteer = 0,
+}) {
   final arcEnd = _straightM + _radiusM * math.pi / 2;
   const totalM = 1000;
   const n = totalM ~/ _res + 1;
@@ -70,7 +78,7 @@ LapTrace _lap({required double brakeAtM, required double apexKph, double lateral
     speedKph: speed,
     throttle: throttle,
     brake: brake,
-    steer: List.filled(n, 0),
+    steer: [for (var i = 0; i < n; i++) i * _res >= 380 && i * _res <= arcEnd + 20 ? cornerSteer : 0],
     gear: List.filled(n, 6),
     rpm: List.filled(n, 11000),
     worldPosX: [for (final p in positions) p.x],
@@ -133,6 +141,38 @@ void main() {
     expect(kinds[CornerFactorKind.brakeLater], closeTo(20, 2));
     expect(kinds[CornerFactorKind.slowerApex], closeTo(10, 1));
     expect(analysis.ers, isNull);
+  });
+
+  test('비교 랩이 없으면 시간 손실은 없고, 타이어 기준이면 이 랩만 보고 무리한 운전을 짚는다', () {
+    final lap = _lap(brakeAtM: 300, apexKph: 110, cornerSteer: 60);
+
+    final alone = analyzeLap(lap, null, detectLapCorners(lap));
+    expect(alone.hasReference, isFalse);
+    expect(alone.losses, isEmpty);
+    expect(alone.corners.single.factors, isEmpty);
+
+    final tyres = analyzeLap(lap, null, detectLapCorners(lap), focus: AnalysisFocus.tyres);
+    final kinds = tyres.corners.single.factors.map((f) => f.kind);
+    expect(kinds, containsAll([CornerFactorKind.brakingWhileTurning, CornerFactorKind.throttleWhileTurning]));
+    expect(tyres.tyreStress.single.corner.label, 'T1');
+  });
+
+  test('배터리 기준: 결승선을 사이에 둔 직선을 하나로 보고 배포하기 가장 좋은 직선을 짚는다', () {
+    const n = 1000 ~/ _res + 1;
+    final lap = _lap(brakeAtM: 300, apexKph: 110, ersStore: List.filled(n, 2e6));
+    final ers = analyzeLap(lap, null, detectLapCorners(lap), focus: AnalysisFocus.battery).ers!;
+
+    final straight = ers.straights.single; // 코너 뒤 ~ 결승선 + 출발선 ~ 코너 앞
+    expect(straight.lengthM, closeTo(1000 - (straight.after!.endM - straight.before!.startM), 1));
+    expect(straight.entryKph, lessThan(150));
+    expect(ersFeedbackLines(ers, focus: AnalysisFocus.battery).last, startsWith('배포는 T1–T1 직선'));
+    expect(ersFeedbackLines(ers), hasLength(1)); // 최대 속도 기준은 잔량만
+  });
+
+  test('레이스는 타이어 관리, 그 밖은 최대 속도가 기본 분석 기준', () {
+    expect(defaultAnalysisFocus('Race'), AnalysisFocus.tyres);
+    expect(defaultAnalysisFocus('Qualifying'), AnalysisFocus.pace);
+    expect(defaultAnalysisFocus('TimeTrial'), AnalysisFocus.pace);
   });
 
   test('같은 랩이면 잃은 코너도 이유도 없다', () {

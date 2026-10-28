@@ -4,7 +4,7 @@ import 'package:simcenter_app/features/lap_detail/domain/car_setup.dart';
 import 'package:simcenter_app/features/lap_detail/domain/lap_detail_models.dart';
 import 'package:simcenter_app/features/lap_detail/presentation/setup_diagnosis_card.dart';
 
-/// 실제 카탈루냐 레이스 랩의 셋업(스냅샷 `details.setup`).
+/// 실제 카탈루냐 레이스의 셋업(세션 상세 `setup`과 같은 키).
 const Map<String, dynamic> _setupJson = {
   'ballast': 6,
   'rearToe': 0.11,
@@ -31,15 +31,21 @@ const Map<String, dynamic> _setupJson = {
 };
 
 void main() {
-  final setup = CarSnapshot.fromJsonOrNull({
-    'details': {'setup': _setupJson},
-  })!.setup!;
+  final setup = CarSetup.fromJsonOrNull(_setupJson)!;
 
-  test('스냅샷 details.setup을 읽는다(공기압은 좌우 평균), 없으면 null', () {
+  test('셋업 값을 읽는다(공기압은 좌우 평균), 윙이 없으면 null', () {
     expect((setup.frontWing, setup.rearWing, setup.brakeBias), (40, 26, 54));
     expect((setup.frontRideHeight, setup.rearRideHeight), (21, 43));
     expect(setup.frontTyrePressure, 29.5);
-    expect(CarSnapshot.fromJsonOrNull({'details': <String, dynamic>{}})!.setup, isNull);
+    expect(CarSetup.fromJsonOrNull(const <String, Object?>{'ballast': 6}), isNull);
+  });
+
+  test('랩 상세 응답의 car.details.setup을 랩 셋업으로 읽는다', () {
+    final car = CarSnapshot.fromJsonOrNull({
+      'details': {'setup': _setupJson, 'damage': <String, dynamic>{}},
+    })!;
+    expect(CarSetup.fromJsonOrNull(car.setup)!.frontWing, 40);
+    expect(CarSnapshot.fromJsonOrNull({'tyreAgeLaps': 1})!.setup, isNull);
   });
 
   test('앞 윙·리어 안티롤바·열린 오프스로틀이 겹치면 오버스티어 경향, 항목마다 효과를 짚는다', () {

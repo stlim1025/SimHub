@@ -127,6 +127,13 @@ void main() {
       expect(find.byType(Dialog), findsNothing);
     });
 
+    testWidgets('셋업 값 아래에 셋업 진단(밸런스·트랙 적합성·항목별 효과)', (t) async {
+      await _pumpPage(t, _repo(_withSetup(setup: _fullSetup)));
+
+      expect(find.byKey(const ValueKey('setup-diagnosis')), findsOneWidget);
+      expect(find.byKey(const ValueKey('setup-balance')), findsOneWidget);
+    });
+
     testWidgets('넓으면 3열, 중간 2열, 좁으면 1열', (t) async {
       await _pumpPage(t, _repo(_withSetup(setup: _fullSetup)), size: const Size(1400, 3000));
       expect(_groupTopLeft(t, 'Transmission').dy, _groupTopLeft(t, 'Aerodynamics').dy);
