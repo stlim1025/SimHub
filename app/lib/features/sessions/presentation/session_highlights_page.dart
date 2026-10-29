@@ -85,14 +85,54 @@ const double _wideViewMinWidth = 700;
 /// 장면 목록표: 재생기와의 간격, 오른쪽에 둘 때 최소·최대 폭(최소 폭이 안 남으면 재생기 아래), 아래에 둘 때 최대 높이.
 const double _listGap = 12;
 const double _listMinWidth = 300;
-const double _listMaxWidth = 420;
+const double _listMaxWidth = 480;
 const double _belowListMaxHeight = 360;
 
 /// 장면 목록표 열: 번호·랩 칸 폭, 종류·내용 칸 비율.
 const double _listIndexWidth = 24;
 const double _listLapWidth = 40;
-const int _listKindFlex = 2;
-const int _listTitleFlex = 3;
+const int _listKindFlex = 3;
+const int _listTitleFlex = 5;
+
+/// 장면 종류 칩: 바탕 색 진하기, 안쪽 여백, 모서리, 점 크기, 점·글자 간격, 글자 크기.
+const double _kindChipTint = 0.16;
+const EdgeInsets _kindChipPadding = EdgeInsets.symmetric(horizontal: 8, vertical: 3);
+const double _kindChipRadius = 4;
+const double _kindDotSize = 7;
+const double _kindDotGap = 6;
+const double _kindFontSize = 12;
+
+/// 드라이버 이름 앞 팀 색 막대(폭·높이), 막대·이름 간격, 이름과 화살표 사이 간격.
+const double _teamBarWidth = 3;
+const double _teamBarHeight = 14;
+const double _teamBarGap = 6;
+const double _driverJoinGap = 6;
+
+/// 장면 종류 색: 추월 초록, 충돌 주황, 벽 충돌 빨강, 깃발은 깃발 색, 결승 금색, 출발 강조색, 리타이어·모름 흐림.
+Color _kindColor(HighlightKind kind, AppPalette palette) => switch (kind) {
+      HighlightKind.start => AppColors.accent,
+      HighlightKind.overtake => palette.success,
+      HighlightKind.collision => AppColors.wearHigh,
+      HighlightKind.crash => palette.danger,
+      HighlightKind.safetyCar || HighlightKind.virtualSafetyCar => AppColors.replayFlagYellow,
+      HighlightKind.redFlag => AppColors.replayFlagRed,
+      HighlightKind.finish => palette.podiumGold,
+      HighlightKind.retirement || HighlightKind.unknown => palette.textMuted,
+    };
+
+/// 목록표 내용 칸의 차: 추월 `A → B`, 충돌 `A ↔ B`, 출발·깃발은 없음, 그 밖은 중심 차만(하단 자막과 같은 규칙).
+({List<int> cars, String? join}) _sceneCars(HighlightClip clip) {
+  final other = clip.otherCar;
+  return switch (clip.kind) {
+    HighlightKind.start || HighlightKind.safetyCar || HighlightKind.virtualSafetyCar || HighlightKind.redFlag => (
+        cars: const <int>[],
+        join: null,
+      ),
+    HighlightKind.overtake when other != null => (cars: [clip.focusCar, other], join: '→'),
+    HighlightKind.collision when other != null => (cars: [clip.focusCar, other], join: '↔'),
+    _ => (cars: [clip.focusCar], join: null),
+  };
+}
 const String _listIndexLabel = '#';
 const String _listLapLabel = '랩';
 const String _listKindLabel = '장면';
@@ -502,15 +542,82 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
           columns: [
             CompactColumn(label: _listIndexLabel, width: _listIndexWidth, cell: (i) => cell('${i + 1}', style: muted)),
             CompactColumn(label: _listLapLabel, width: _listLapWidth, cell: (i) => cell('L${_clips[i].lap}', style: kTabularStyle)),
-            CompactColumn(label: _listKindLabel, flex: _listKindFlex, cell: (i) => cell(kHighlightKindLabels[_clips[i].kind]!)),
-            CompactColumn(
-              label: _listTitleLabel,
-              flex: _listTitleFlex,
-              cell: (i) => cell(highlightCaptionTitle(_clips[i], widget.highlights.nameOf), style: TextStyle(color: palette.textMuted)),
-            ),
+            CompactColumn(label: _listKindLabel, flex: _listKindFlex, cell: (i) => _kindChip(i, palette)),
+            CompactColumn(label: _listTitleLabel, flex: _listTitleFlex, cell: (i) => _drivers(_clips[i], palette)),
           ],
         ),
       ),
+    );
+  }
+
+  /// 장면 종류 칩: 종류 색 점 + 이름, 바탕은 종류 색을 옅게.
+  Widget _kindChip(int index, AppPalette palette) {
+    final kind = _clips[index].kind;
+    final color = _kindColor(kind, palette);
+    return Container(
+      key: ValueKey('highlights-list-kind-$index'),
+      padding: _kindChipPadding,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: _kindChipTint),
+        borderRadius: BorderRadius.circular(_kindChipRadius),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: _kindDotSize,
+            height: _kindDotSize,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: _kindDotGap),
+          Flexible(
+            child: Text(
+              kHighlightKindLabels[kind]!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: _kindFontSize, fontWeight: FontWeight.w600, color: palette.textPrimary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 내용 칸: 드라이버마다 팀 색 막대 + 이름, 두 대면 사이에 → 또는 ↔.
+  /// 한 줄 글로 이어 써서 짧은 이름이 남긴 폭을 긴 이름이 쓰고, 넘치면 끝만 말줄임.
+  Widget _drivers(HighlightClip clip, AppPalette palette) {
+    final scene = _sceneCars(clip);
+    final cars = scene.cars;
+    return Text.rich(
+      TextSpan(
+        children: [
+          for (var i = 0; i < cars.length; i++) ...[
+            if (i > 0)
+              WidgetSpan(
+                alignment: PlaceholderAlignment.middle,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: _driverJoinGap),
+                  child: Text(scene.join ?? '', style: TextStyle(color: palette.textMuted)),
+                ),
+              ),
+            WidgetSpan(
+              alignment: PlaceholderAlignment.middle,
+              child: Padding(
+                padding: const EdgeInsets.only(right: _teamBarGap),
+                child: Container(
+                  key: ValueKey('highlights-list-team-${cars[i]}'),
+                  width: _teamBarWidth,
+                  height: _teamBarHeight,
+                  color: _colorOf(cars[i]),
+                ),
+              ),
+            ),
+            TextSpan(text: widget.highlights.nameOf(cars[i])),
+          ],
+        ],
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
     );
   }
 

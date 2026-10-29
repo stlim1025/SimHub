@@ -354,8 +354,21 @@ void main() {
       expect(player.width, greaterThan(1050));
       expect(list.left, greaterThan(player.right));
       expect(list.height, closeTo(player.height, 1));
-      expect(find.descendant(of: find.byKey(const ValueKey('highlights-list-row-1')), matching: find.text('ME → RUSSELL')), findsOneWidget);
-      expect(find.descendant(of: find.byKey(const ValueKey('highlights-list-row-1')), matching: find.text('L12')), findsOneWidget);
+      final row1 = find.byKey(const ValueKey('highlights-list-row-1'));
+      expect(find.descendant(of: row1, matching: find.text('L12')), findsOneWidget);
+      // 추월: 두 드라이버 이름 사이 →, 이름 앞 팀 색 막대.
+      for (final text in ['ME', '→', 'RUSSELL', '추월']) {
+        expect(find.descendant(of: row1, matching: find.textContaining(text)), findsOneWidget);
+      }
+      Color teamBar(int car) => t.widget<Container>(find.descendant(of: row1, matching: find.byKey(ValueKey('highlights-list-team-$car')))).color!;
+      expect(teamBar(21), const Color(0xFFE8002D));
+      expect(teamBar(2), const Color(0xFF27F4D2));
+      // 출발은 드라이버 없이 종류 칩만.
+      final row0 = find.byKey(const ValueKey('highlights-list-row-0'));
+      expect(find.descendant(of: row0, matching: find.byKey(const ValueKey('highlights-list-team-21'))), findsNothing);
+      // 종류마다 칩 색이 다르다(추월 ≠ 출발).
+      Color chip(int i) => (t.widget<Container>(find.byKey(ValueKey('highlights-list-kind-$i'))).decoration! as BoxDecoration).color!;
+      expect(chip(0), isNot(chip(1)));
 
       await t.tap(find.byKey(const ValueKey('highlights-list-row-1')));
       await t.pump();
