@@ -99,7 +99,9 @@ class RenderEqualHeightRow extends _CellsRenderBox {
     }
     var x = 0.0;
     for (final child in children) {
-      child.layout(BoxConstraints.tightFor(width: cellWidth, height: height), parentUsesSize: true);
+      // 높이를 꽉 고정하지 않고 최소 높이로만 준다 — 고정하면 칸이 재배치 경계가 되어,
+      // 웹 폰트가 늦게 로드돼 글자 높이가 바뀌어도 이 줄이 다시 재지 않아 칸이 넘친다.
+      child.layout(BoxConstraints(minWidth: cellWidth, maxWidth: cellWidth, minHeight: height), parentUsesSize: true);
       (child.parentData! as _CellParentData).offset = Offset(x, 0);
       x += cellWidth + gap;
     }

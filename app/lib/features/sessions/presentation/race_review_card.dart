@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../core/layout/equal_height.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/util/lap_time.dart';
@@ -87,6 +88,7 @@ const double _arrowIconSize = 14;
 const EdgeInsets _metricPadding = EdgeInsets.symmetric(horizontal: 10, vertical: 6);
 const double _metricRadius = 6;
 const double _metricValueSize = 13;
+const double _metricMinWidth = 96;
 
 /// 타이어 수명 막대.
 const double _lifeBarHeight = 8;
@@ -105,7 +107,8 @@ const double _batteryRadius = 5;
 const double _batteryInset = 3;
 const double _batteryLowFraction = 0.15;
 const double _batteryFullFraction = 0.95;
-const double _batteryGaugeGap = 18;
+const double _batteryGaugeWidth = 64;
+const double _batteryGaugeGap = 4;
 const double _flowLabelWidth = 36;
 const double _flowValueWidth = 64;
 const double _flowBarHeight = 10;
@@ -158,13 +161,12 @@ class RaceReviewCard extends StatelessWidget {
               final columns = constraints.maxWidth >= _twoColumnWidth ? 2 : 1;
               final rows = <Widget>[
                 for (var i = 0; i < blocks.length; i += columns)
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  // 나란한 블록은 같은 높이로(내용이 짧은 쪽도 바닥을 맞춘다).
+                  EqualHeightRow(
+                    gap: _blockGap,
                     children: [
-                      for (var j = 0; j < columns; j++) ...[
-                        if (j > 0) const SizedBox(width: _blockGap),
-                        Expanded(child: i + j < blocks.length ? blocks[i + j] : const SizedBox.shrink()),
-                      ],
+                      for (var j = 0; j < columns; j++)
+                        i + j < blocks.length ? blocks[i + j] : const SizedBox.shrink(),
                     ],
                   ),
               ];
@@ -330,34 +332,43 @@ class _BigStat extends StatelessWidget {
   }
 }
 
-/// 작은 수치 칸: 이름·값(색)·보조 값.
-class _Metric extends StatelessWidget {
-  const _Metric({required this.label, required this.value, this.sub, this.color});
+/// 작은 수치 칸 하나의 내용: 이름·값(색)·보조 값.
+typedef _MetricData = ({String label, String value, String? sub, Color? color});
 
-  final String label;
-  final String value;
-  final String? sub;
-  final Color? color;
+/// 작은 수치 칸 묶음: 칸 높이·최소 폭을 맞춘다(한 칸이라도 보조 값이 있으면 모든 칸이 그 줄을 비워 둔다).
+class _MetricGroup extends StatelessWidget {
+  const _MetricGroup(this.metrics);
+
+  final List<_MetricData> metrics;
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final sub = this.sub;
-    return Container(
-      padding: _metricPadding,
-      decoration: BoxDecoration(color: palette.tableHeader, borderRadius: BorderRadius.circular(_metricRadius)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(label, style: TextStyle(fontSize: _captionSize, color: palette.textMuted)),
-          Text(
-            value,
-            style: kTabularStyle.copyWith(fontSize: _metricValueSize, fontWeight: FontWeight.w700, color: color),
+    final reserveSub = metrics.any((m) => m.sub != null);
+    final captionStyle = TextStyle(fontSize: _captionSize, color: palette.textMuted);
+    return Wrap(
+      spacing: _chipGap,
+      runSpacing: _chipGap,
+      children: [
+        for (final m in metrics)
+          Container(
+            constraints: const BoxConstraints(minWidth: _metricMinWidth),
+            padding: _metricPadding,
+            decoration: BoxDecoration(color: palette.tableHeader, borderRadius: BorderRadius.circular(_metricRadius)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(m.label, style: captionStyle),
+                Text(
+                  m.value,
+                  style: kTabularStyle.copyWith(fontSize: _metricValueSize, fontWeight: FontWeight.w700, color: m.color),
+                ),
+                if (reserveSub) Text(m.sub ?? '', style: kTabularStyle.merge(captionStyle)),
+              ],
+            ),
           ),
-          if (sub != null) Text(sub, style: kTabularStyle.copyWith(fontSize: _captionSize, color: palette.textMuted)),
-        ],
-      ),
+      ],
     );
   }
 }
@@ -492,7 +503,10 @@ class _StrategyView extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (grid != null && finish != null)
+          // 화살표·순위 변화를 큰 숫자 줄(기준선)에 맞춘다.
           Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
             children: [
               _BigStat(value: 'P$grid', caption: _gridLabel),
               Padding(
@@ -757,32 +771,29 @@ class _StintList extends StatelessWidget {
           ),
         ],
         const SizedBox(height: _noteGap),
-        Wrap(
-          spacing: _chipGap,
-          runSpacing: _chipGap,
-          children: [
-            if (trend != null)
-              _Metric(
-                label: _trendLabel,
-                value: '${_signedSeconds(trend)}/랩',
-                sub: fieldTrend == null ? null : 'AI ${_signedSeconds(fieldTrend)}',
-                color: extra == null || fieldTrend == null ? null : versusField(trend, fieldTrend, kTrendMarginMs),
-              ),
-            if (wear != null)
-              _Metric(
-                label: _wearLabel,
-                value: '${wear.toStringAsFixed(_wearDigits)}%/랩',
-                color: wear >= kFastWearPct ? palette.danger : null,
-              ),
-            if (median != null)
-              _Metric(
-                label: _stintMedianLabel,
-                value: formatLapTime(median),
-                sub: fieldMedian == null ? null : 'AI ${formatLapTime(fieldMedian)}',
-                color: fieldMedian == null ? null : versusField(median, fieldMedian, kPaceMarginMs),
-              ),
-          ],
-        ),
+        _MetricGroup([
+          if (trend != null)
+            (
+              label: _trendLabel,
+              value: '${_signedSeconds(trend)}/랩',
+              sub: fieldTrend == null ? null : 'AI ${_signedSeconds(fieldTrend)}',
+              color: extra == null || fieldTrend == null ? null : versusField(trend, fieldTrend, kTrendMarginMs),
+            ),
+          if (wear != null)
+            (
+              label: _wearLabel,
+              value: '${wear.toStringAsFixed(_wearDigits)}%/랩',
+              sub: null,
+              color: wear >= kFastWearPct ? palette.danger : null,
+            ),
+          if (median != null)
+            (
+              label: _stintMedianLabel,
+              value: formatLapTime(median),
+              sub: fieldMedian == null ? null : 'AI ${formatLapTime(fieldMedian)}',
+              color: fieldMedian == null ? null : versusField(median, fieldMedian, kPaceMarginMs),
+            ),
+        ]),
       ],
     );
   }
@@ -820,22 +831,20 @@ class _BatteryView extends StatelessWidget {
           if (harvest != null) _flowRow(_harvestLabel, harvest, flowMax, palette.success),
           const SizedBox(height: _innerGap),
         ],
-        Wrap(
-          spacing: _chipGap,
-          runSpacing: _chipGap,
-          children: [
-            _Metric(
-              label: _lowLapsLabel,
-              value: '${battery.lowLaps}',
-              color: battery.lowLaps >= kErsFlagLaps ? palette.danger : null,
-            ),
-            _Metric(
-              label: _fullLapsLabel,
-              value: '${battery.fullLaps}',
-              color: battery.fullLaps >= kErsFlagLaps ? palette.danger : null,
-            ),
-          ],
-        ),
+        _MetricGroup([
+          (
+            label: _lowLapsLabel,
+            value: '${battery.lowLaps}',
+            sub: null,
+            color: battery.lowLaps >= kErsFlagLaps ? palette.danger : null,
+          ),
+          (
+            label: _fullLapsLabel,
+            value: '${battery.fullLaps}',
+            sub: null,
+            color: battery.fullLaps >= kErsFlagLaps ? palette.danger : null,
+          ),
+        ]),
       ],
     );
     return LayoutBuilder(
@@ -882,38 +891,46 @@ class _BatteryGauge extends StatelessWidget {
         : value >= _batteryFullFraction
             ? AppColors.wearMedium
             : palette.success;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: _batteryCapWidth,
-          height: _batteryCapHeight,
-          decoration: BoxDecoration(
-            color: palette.textMuted,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(_batteryBorder)),
-          ),
-        ),
-        Container(
-          width: _batteryWidth,
-          height: _batteryHeight,
-          padding: const EdgeInsets.all(_batteryInset),
-          decoration: BoxDecoration(
-            border: Border.all(color: palette.textMuted, width: _batteryBorder),
-            borderRadius: BorderRadius.circular(_batteryRadius),
-          ),
-          alignment: Alignment.bottomCenter,
-          child: FractionallySizedBox(
-            heightFactor: value,
-            widthFactor: 1,
-            child: Container(
-              decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(_batteryBorder)),
+    return SizedBox(
+      width: _batteryGaugeWidth,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: _batteryCapWidth,
+            height: _batteryCapHeight,
+            decoration: BoxDecoration(
+              color: palette.textMuted,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(_batteryBorder)),
             ),
           ),
-        ),
-        const SizedBox(height: _noteGap),
-        Text('${(value * _percent).round()}%', style: kTabularStyle.copyWith(fontWeight: FontWeight.w700)),
-        Text(label, style: TextStyle(fontSize: _captionSize, color: palette.textMuted)),
-      ],
+          Container(
+            width: _batteryWidth,
+            height: _batteryHeight,
+            padding: const EdgeInsets.all(_batteryInset),
+            decoration: BoxDecoration(
+              border: Border.all(color: palette.textMuted, width: _batteryBorder),
+              borderRadius: BorderRadius.circular(_batteryRadius),
+            ),
+            alignment: Alignment.bottomCenter,
+            child: FractionallySizedBox(
+              heightFactor: value,
+              widthFactor: 1,
+              child: Container(
+                decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(_batteryBorder)),
+              ),
+            ),
+          ),
+          const SizedBox(height: _noteGap),
+          Text('${(value * _percent).round()}%', style: kTabularStyle.copyWith(fontWeight: FontWeight.w700)),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: _captionSize, color: palette.textMuted),
+          ),
+        ],
+      ),
     );
   }
 }
