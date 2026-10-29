@@ -1,5 +1,7 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:simcenter_app/features/sessions/domain/race_review.dart';
+import 'package:simcenter_app/features/sessions/presentation/race_review_card.dart';
 
 void main() {
   final review = RaceReview.fromJsonOrNull({
@@ -52,27 +54,45 @@ void main() {
 
     final pace = sections[0].section;
     expect(pace.grade, ReviewGrade.fair); // 중앙값보다 0.25초 빠름 < 0.3초
-    expect(pace.lines.first, '깨끗한 랩 중앙값 1:29.750 — 페이스 2위/3대, AI 전체 중앙값보다 0.250초 빨라요');
-    expect(pace.lines, contains('바로 앞 NORRIS은 랩당 0.750초 빨랐어요 → 순위를 올리려면 그만큼 페이스가 더 필요해요'));
-    expect(pace.lines.any((l) => l.contains('LECLERC')), isFalse); // 뒤 차가 더 느리면 짚지 않는다
+    // 중앙값·순위·가장 빠른 차는 그래프가 보여 주고, 줄은 짚을 것만.
+    expect(pace.lines, ['바로 앞 NORRIS은 랩당 0.750초 빨랐어요 → 순위를 올리려면 그만큼 페이스가 더 필요해요']);
 
     final strategy = sections[1].section;
     expect(strategy.grade, ReviewGrade.poor); // 피트에서 2.5초 더 잃음
-    expect(strategy.lines.first, '3위 출발 → 2위 완주(1계단 상승)');
-    expect(strategy.lines[1], startsWith('5랩 피트 Medium → Hard: P2 → P4, 손실 45.000초(AI 42.500초) → 피트에서 2.500초 더 잃었어요'));
-    expect(strategy.lines.last, '우승 차 전략: Soft → Medium (1스톱)');
+    expect(pitStopGrade(review.strategy.pitStops.single, review.strategy.fieldPitLossMs), ReviewGrade.poor);
+    expect(strategy.lines, [
+      '5랩 피트에서 AI보다 2.500초 더 잃었어요 → 피트 진입 브레이킹과 아웃 랩 첫 코너를 점검하세요',
+      '완주한 차 대부분(3대)과 같은 1스톱이었어요',
+    ]);
 
     final tyres = sections[2].section;
     expect(tyres.grade, ReviewGrade.poor);
-    expect(tyres.lines.single, contains('추세 +0.100초/랩(AI +0.000초/랩)'));
-    expect(tyres.lines.single, contains('AI보다 랩당 0.100초씩 더 빨리 떨어졌어요'));
+    expect(tyres.lines.single, startsWith('Hard 6–10랩: AI보다 랩당 0.100초씩 더 빨리 떨어졌어요'));
 
     final battery = sections[3].section;
     expect(battery.grade, ReviewGrade.poor); // 바닥 4랩 + 끝 60% 남김
-    expect(battery.lines.first, '랩당 배포 1100kJ · 회수 700kJ · 끝 잔량 60% · 최저 5%(8랩)');
+    expect(battery.lines.first, startsWith('배터리가 거의 바닥인 랩이 4번이에요'));
+    expect(battery.lines.last, startsWith('레이스가 끝날 때 60%를 남겼어요'));
 
     expect(raceReviewSummary(sections), '전략·타이어 관리·배터리 관리에서 시간을 잃은 레이스예요.');
     expect(raceReviewSummary([(title: '페이스', section: (grade: ReviewGrade.good, lines: const <String>[]))]),
         '페이스가 좋았던 레이스예요.');
   });
+
+  for (final width in [1100.0, 360.0]) {
+    testWidgets('카드: 항목마다 평가와 그림을 넘침 없이 그린다 (폭 $width)', (tester) async {
+      tester.view.physicalSize = Size(width, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: SingleChildScrollView(child: RaceReviewCard(review: review)))));
+
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const ValueKey('race-review-grade-$kStrategySectionTitle')), findsOneWidget);
+      expect(find.textContaining('2위', findRichText: true), findsOneWidget); // 페이스 순위
+      expect(find.textContaining('P3', findRichText: true), findsOneWidget); // 출발
+      expect(find.text('L5'), findsWidgets); // 피트 랩
+      expect(find.text('91%'), findsOneWidget); // 끝 수명
+      expect(find.text('5%'), findsOneWidget); // 최저 잔량
+    });
+  }
 }

@@ -1,4 +1,3 @@
-import '../../../core/util/lap_time.dart';
 import 'session_detail_models.dart';
 
 // 레이스 총평(`raceReview`): 서버가 낸 수치(깨끗한 랩 중앙값·피트 스톱·스틴트 추세·배터리)를 평가 글로 바꾼다. 모두 순수 함수.
@@ -27,7 +26,6 @@ const double _ersLeftoverFraction = 0.5;
 
 const double _msPerSecond = 1000;
 const double _percent = 100;
-const double _joulesPerKj = 1000;
 
 /// 페이스: 깨끗한 랩(1랩·피트 인아웃·세이프티카 랩 제외) 중앙값.
 class RacePaceReview {
@@ -295,28 +293,21 @@ typedef ReviewSection = ({ReviewGrade grade, List<String> lines});
 
 String _seconds(int ms) => '${(ms.abs() / _msPerSecond).toStringAsFixed(3)}초';
 
-String _signedSeconds(int ms) => '${ms >= 0 ? '+' : '−'}${(ms.abs() / _msPerSecond).toStringAsFixed(3)}초';
-
 String _pct(double fraction) => '${(fraction * _percent).round()}%';
 
-String _kj(double joules) => '${(joules / _joulesPerKj).round()}kJ';
-
-/// 페이스 평가: 다른 차들 중앙값과의 차이로 등급, 가장 빠른 차·결과 앞뒤 차와 비교, 페이스 순위와 결과 순위가 어긋나면 짚는다.
-ReviewSection paceReview(RacePaceReview pace, RaceStrategyReview strategy) {
+/// 페이스 등급: 다른 차들 중앙값과의 차이로.
+ReviewGrade paceGrade(RacePaceReview pace) {
   final gap = pace.myMedianMs - pace.fieldMedianMs;
-  final grade = gap <= -kPaceMarginMs
+  return gap <= -kPaceMarginMs
       ? ReviewGrade.good
       : gap >= kPaceMarginMs
           ? ReviewGrade.poor
           : ReviewGrade.fair;
-  final lines = <String>[
-    '깨끗한 랩 중앙값 ${formatLapTime(pace.myMedianMs)} — 페이스 ${pace.rank}위/${pace.rankedCars}대, '
-        'AI 전체 중앙값보다 ${_seconds(gap)} ${gap <= 0 ? '빨라요' : '느려요'}',
-  ];
-  final toFastest = pace.myMedianMs - pace.fastestMedianMs;
-  lines.add(toFastest > 0
-      ? '가장 빠른 ${pace.fastestName}보다 랩당 ${_seconds(toFastest)} 느려요'
-      : '레이스에서 가장 빠른 페이스였어요(${pace.fastestName}보다 랩당 ${_seconds(toFastest)} 빠름)');
+}
+
+/// 페이스 평가: 수치(중앙값·순위·가장 빠른 차)는 그래프가 보여 주고, 줄은 결과 앞뒤 차와의 비교·페이스 순위와 결과 순위가 어긋난 것만.
+ReviewSection paceReview(RacePaceReview pace, RaceStrategyReview strategy) {
+  final lines = <String>[];
   final ahead = pace.aheadMedianMs;
   final aheadName = pace.aheadName;
   if (ahead != null && aheadName != null) {
@@ -338,57 +329,52 @@ ReviewSection paceReview(RacePaceReview pace, RaceStrategyReview strategy) {
       lines.add('페이스는 ${pace.rank}위인데 결과는 $finish위예요 — 출발·피트·배틀에서 순위를 잃었어요');
     }
   }
-  return (grade: grade, lines: lines);
+  return (grade: paceGrade(pace), lines: lines);
 }
 
-/// 전략 평가: 그리드 → 결과, 스톱마다 순위 변화·손실(다른 차들과 비교), 스톱 수를 다른 차들·우승 차와 비교.
+/// 피트 스톱 하나의 평가: 다른 차들보다 많이 잃었거나 순위를 잃으면 아쉬움, 순위를 얻으면 좋음.
+ReviewGrade pitStopGrade(RacePitStopReview stop, int? fieldLossMs) {
+  final loss = stop.lossMs;
+  final places = stop.placesGained;
+  if (loss != null && fieldLossMs != null && loss - fieldLossMs >= kPitLossMarginMs) {
+    return ReviewGrade.poor;
+  }
+  if (places != null && places <= -_placesLost) {
+    return ReviewGrade.poor;
+  }
+  return places != null && places > 0 ? ReviewGrade.good : ReviewGrade.fair;
+}
+
+/// 전략 평가: 그리드 → 결과·스톱 흐름·우승 차 전략은 그림이 보여 주고, 줄은 짚을 스톱과 스톱 수 비교만.
 ReviewSection strategyReview(RaceStrategyReview strategy) {
   final lines = <String>[];
   final grid = strategy.gridPosition;
   final finish = strategy.finishPosition;
   final gainedOverall = grid != null && finish != null ? grid - finish : 0;
-  if (grid != null && finish != null) {
-    lines.add('$grid위 출발 → $finish위 완주'
-        '${gainedOverall == 0 ? '(순위 그대로)' : gainedOverall > 0 ? '($gainedOverall계단 상승)' : '(${-gainedOverall}계단 하락)'}');
-  }
   var poor = 0;
   var good = 0;
   final fieldLoss = strategy.fieldPitLossMs;
   for (final stop in strategy.pitStops) {
-    final parts = <String>[];
-    final before = stop.positionBefore;
-    final after = stop.positionAfter;
-    if (before != null && after != null) {
-      parts.add('P$before → P$after');
-    }
     final loss = stop.lossMs;
-    if (loss != null) {
-      parts.add('손실 ${_seconds(loss)}${fieldLoss == null ? '' : '(AI ${_seconds(fieldLoss)})'}');
-    }
-    var line = '${stop.lap}랩 피트 ${stop.fromCompound} → ${stop.toCompound}'
-        '${parts.isEmpty ? '' : ': ${parts.join(', ')}'}';
     final places = stop.placesGained;
-    if (loss != null && fieldLoss != null && loss - fieldLoss >= kPitLossMarginMs) {
-      poor++;
-      line += ' → 피트에서 ${_seconds(loss - fieldLoss)} 더 잃었어요. 피트 진입 브레이킹과 아웃 랩 첫 코너를 점검하세요';
-    } else if (places != null && places <= -_placesLost) {
-      poor++;
-      line += ' → 피트 뒤 ${-places}계단 밀렸어요. 언더컷을 당했거나 트래픽 속으로 나왔어요 — 한두 랩 일찍 들어가는 걸 고려하세요';
-    } else if (places != null && places > 0) {
-      good++;
-      line += ' → 피트로 $places계단 올라섰어요';
+    switch (pitStopGrade(stop, fieldLoss)) {
+      case ReviewGrade.poor:
+        poor++;
+        lines.add(loss != null && fieldLoss != null && loss - fieldLoss >= kPitLossMarginMs
+            ? '${stop.lap}랩 피트에서 AI보다 ${_seconds(loss - fieldLoss)} 더 잃었어요 → 피트 진입 브레이킹과 아웃 랩 첫 코너를 점검하세요'
+            : '${stop.lap}랩 피트 뒤 ${-places!}계단 밀렸어요 → 언더컷을 당했거나 트래픽 속으로 나왔어요. 한두 랩 일찍 들어가는 걸 고려하세요');
+      case ReviewGrade.good:
+        good++;
+        lines.add('${stop.lap}랩 피트로 $places계단 올라섰어요');
+      case ReviewGrade.fair:
+        break;
     }
-    lines.add(line);
   }
   final common = strategy.commonStops;
   if (common != null && strategy.commonStopsCars > 0) {
     lines.add(common == strategy.stops
         ? '완주한 차 대부분(${strategy.commonStopsCars}대)과 같은 $common스톱이었어요'
         : '완주한 차 대부분(${strategy.commonStopsCars}대)은 $common스톱, 나는 ${strategy.stops}스톱이었어요');
-  }
-  final winnerStops = strategy.winnerStops;
-  if (winnerStops != null && strategy.winnerCompounds.isNotEmpty) {
-    lines.add('우승 차 전략: ${strategy.winnerCompounds.join(' → ')} ($winnerStops스톱)');
   }
   final grade = poor > 0
       ? ReviewGrade.poor
@@ -398,27 +384,15 @@ ReviewSection strategyReview(RaceStrategyReview strategy) {
   return (grade: grade, lines: lines);
 }
 
-/// 타이어 평가: 스틴트마다 랩타임 추세·중앙값을 같은 컴파운드 다른 차들과, 마모 속도·끝 수명.
+/// 타이어 평가: 스틴트 수치는 그림이 보여 주고, 줄은 스틴트마다 짚을 것(추세·마모·끝 수명)을 하나씩.
 ReviewSection tyreReview(List<RaceStintReview> stints) {
   final lines = <String>[];
   var worse = 0;
   var better = 0;
   for (final (i, stint) in stints.indexed) {
     final last = i == stints.length - 1;
-    final median = stint.medianMs;
-    final fieldMedian = stint.fieldMedianMs;
-    final trend = stint.trendMsPerLap;
-    final fieldTrend = stint.fieldTrendMsPerLap;
     final wear = stint.wearPerLapPct;
     final life = stint.endLifePct;
-    final facts = <String>[
-      if (median != null)
-        '중앙값 ${formatLapTime(median)}${fieldMedian == null ? '' : '(같은 ${stint.compound} AI ${formatLapTime(fieldMedian)})'}',
-      if (trend != null) '추세 ${_signedSeconds(trend)}/랩${fieldTrend == null ? '' : '(AI ${_signedSeconds(fieldTrend)}/랩)'}',
-      if (wear != null) '마모 ${wear.toStringAsFixed(1)}%/랩',
-      if (life != null) '끝 수명 ${life.round()}%',
-    ];
-    var line = '${stint.compound} ${stint.startLap}–${stint.endLap}랩${facts.isEmpty ? '' : ': ${facts.join(' · ')}'}';
     final extra = stint.extraTrendMs;
     final advice = <String>[];
     if (extra != null && extra >= kTrendMarginMs) {
@@ -430,17 +404,16 @@ ReviewSection tyreReview(List<RaceStintReview> stints) {
     }
     if (wear != null && wear >= _fastWearPct) {
       worse++;
-      advice.add('마모가 빨라요. 코너 진입 속도를 조금 낮추고 핸들을 덜 꺾으세요');
+      advice.add('마모가 빨라요 → 코너 진입 속도를 조금 낮추고 핸들을 덜 꺾으세요');
     }
     if (life != null && life < _lowLifePct) {
-      advice.add('그립 절벽 직전까지 탔어요. 한두 랩 일찍 들어가는 게 안전해요');
+      advice.add('그립 절벽 직전까지 탔어요 → 한두 랩 일찍 들어가는 게 안전해요');
     } else if (life != null && !last && life >= _earlyStopLifePct) {
-      advice.add('수명이 ${life.round()}% 남았는데 들어왔어요. 스틴트를 늘리면 스톱을 줄일 수 있어요');
+      advice.add('수명이 ${life.round()}% 남았는데 들어왔어요 → 스틴트를 늘리면 스톱을 줄일 수 있어요');
     }
-    if (advice.isNotEmpty) {
-      line += ' → ${advice.join(' / ')}';
+    for (final a in advice) {
+      lines.add('${stint.compound} ${stint.startLap}–${stint.endLap}랩: $a');
     }
-    lines.add(line);
   }
   final grade = worse > 0
       ? ReviewGrade.poor
@@ -450,33 +423,21 @@ ReviewSection tyreReview(List<RaceStintReview> stints) {
   return (grade: grade, lines: lines);
 }
 
-/// 배터리 평가: 랩당 배포·회수, 끝·최저 잔량, 거의 바닥·가득 찬 랩, 끝에 남긴 배터리.
+/// 배터리 평가: 잔량·배포·회수는 그림이 보여 주고, 줄은 거의 바닥·가득 찬 랩, 끝에 남긴 배터리.
 ReviewSection batteryReview(RaceBatteryReview battery) {
-  final deploy = battery.averageDeployJ;
-  final harvest = battery.averageHarvestJ;
-  final lines = <String>[
-    [
-      if (deploy != null) '랩당 배포 ${_kj(deploy)}',
-      if (harvest != null) '회수 ${_kj(harvest)}',
-      '끝 잔량 ${_pct(battery.lastStoreJ / kErsCapacityJ)}',
-      '최저 ${_pct(battery.minStoreJ / kErsCapacityJ)}(${battery.minStoreLap}랩)',
-    ].join(' · '),
-  ];
-  var issues = 0;
+  final lines = <String>[];
   if (battery.lowLaps >= _ersFlagLaps) {
-    issues++;
     lines.add('배터리가 거의 바닥인 랩이 ${battery.lowLaps}번이에요. 방어·추월할 때 쓸 배터리가 없었어요 '
         '→ 효과가 작은 짧은 직선에서는 아끼고, 긴 직선 하나에 몰아 쓰세요');
   }
   if (battery.fullLaps >= _ersFlagLaps) {
-    issues++;
     lines.add('배터리가 가득 찬 랩이 ${battery.fullLaps}번이에요. 가득 차면 더 회수하지 못해 에너지를 버린 셈이에요 '
         '→ 그때는 오버테이크 모드로 더 쓰세요');
   }
   if (battery.lastStoreJ >= kErsCapacityJ * _ersLeftoverFraction) {
-    issues++;
     lines.add('레이스가 끝날 때 ${_pct(battery.lastStoreJ / kErsCapacityJ)}를 남겼어요. 마지막 두세 랩은 다 써도 돼요');
   }
+  final issues = lines.length;
   if (issues == 0) {
     lines.add('바닥나거나 가득 차 버린 랩 없이 고르게 썼어요');
   }
@@ -487,6 +448,16 @@ ReviewSection batteryReview(RaceBatteryReview battery) {
           : ReviewGrade.poor;
   return (grade: grade, lines: lines);
 }
+
+/// 배터리가 거의 바닥·가득 찬 랩을 짚기 시작하는 횟수.
+const int kErsFlagLaps = _ersFlagLaps;
+
+/// 스틴트 끝 수명(%): 이 아래는 위험, 이 이상은 넉넉함(그림 색).
+const double kLowTyreLifePct = _lowLifePct;
+const double kHealthyTyreLifePct = _earlyStopLifePct;
+
+/// 랩당 마모(%p)가 이 이상이면 빠르다(그림 색).
+const double kFastWearPct = _fastWearPct;
 
 /// 항목 이름.
 const String kPaceSectionTitle = '페이스';
