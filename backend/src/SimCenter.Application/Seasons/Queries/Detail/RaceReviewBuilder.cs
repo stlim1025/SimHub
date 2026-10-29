@@ -31,6 +31,11 @@ public static class RaceReviewBuilder
     private const double FullStoreFraction = 0.95;
     private const int WearDecimals = 2;
 
+    /// <summary>섹터 수, 바퀴 수, 스틴트 끝 페이스를 볼 마지막 깨끗한 랩 수.</summary>
+    private const int SectorCount = 3;
+    private const int WheelCount = 4;
+    private const int EndLaps = 3;
+
     public static RaceReviewDto? Build(
         GameSession session,
         IReadOnlyList<SessionResult> results,
@@ -79,6 +84,7 @@ public static class RaceReviewBuilder
         var fastest = others[0];
         var ahead = FinishNeighbour(mine, cars, -1);
         var behind = FinishNeighbour(mine, cars, 1);
+        var fieldSectors = others.Select(c => SectorMedians(c.Clean)).OfType<IReadOnlyList<int>>().ToList();
         return new RacePaceReviewDto(
             myMedian,
             ranked.IndexOf(mine) + 1,
@@ -89,7 +95,26 @@ public static class RaceReviewBuilder
             ahead?.Name,
             ahead?.MedianMs,
             behind?.Name,
-            behind?.MedianMs);
+            behind?.MedianMs,
+            SectorMedians(mine.Clean),
+            fieldSectors.Count == 0
+                ? null
+                : Enumerable.Range(0, SectorCount).Select(i => Round(Median(fieldSectors.Select(s => (double)s[i])))).ToList(),
+            ahead is null ? null : SectorMedians(ahead.Clean));
+    }
+
+    /// <summary>깨끗한 랩의 섹터 1·2·3 중앙값(ms). 세 섹터가 모두 있는 랩이 <see cref="MinPaceLaps"/>보다 적으면 null.</summary>
+    private static IReadOnlyList<int>? SectorMedians(IReadOnlyList<HistoryLap> clean)
+    {
+        var laps = clean.Where(l => l.Sector1TimeMs > 0 && l.Sector2TimeMs > 0 && l.Sector3TimeMs > 0).ToList();
+        return laps.Count < MinPaceLaps
+            ? null
+            :
+            [
+                Round(Median(laps.Select(l => (double)l.Sector1TimeMs))),
+                Round(Median(laps.Select(l => (double)l.Sector2TimeMs))),
+                Round(Median(laps.Select(l => (double)l.Sector3TimeMs))),
+            ];
     }
 
     /// <summary>결과 순위로 [offset]만큼 앞(-)·뒤(+) 차. 내 순위를 모르면 null.</summary>
@@ -110,7 +135,9 @@ public static class RaceReviewBuilder
                 history.PositionOf(me.CarIndex, inLap + SettleLaps) ?? NullIfZero(me.Position),
                 mine.PitLossMs(inLap),
                 mine.Spans[i].VisualCompound,
-                mine.Spans[i + 1].VisualCompound));
+                mine.Spans[i + 1].VisualCompound,
+                mine.LapLossMs(inLap),
+                mine.LapLossMs(inLap + 1)));
         }
 
         // 완주 차들이 가장 많이 한 스톱 수(같으면 적은 쪽).
@@ -121,12 +148,15 @@ public static class RaceReviewBuilder
             .ThenBy(g => g.Key)
             .FirstOrDefault();
         var winner = cars.FirstOrDefault(c => c.Result.Position == 1);
-        var fieldLosses = cars
+        var fieldStops = cars
             .Where(c => !ReferenceEquals(c, mine))
-            .SelectMany(c => c.Spans.Take(c.Spans.Count - 1).Select(s => c.PitLossMs(s.EndLap)))
-            .OfType<int>()
-            .Select(ms => (double)ms)
+            .SelectMany(c => c.Spans.Take(c.Spans.Count - 1).Select(s => (Car: c, InLap: s.EndLap)))
             .ToList();
+        List<double> FieldLosses(Func<CarRace, int, int?> loss)
+            => fieldStops.Select(s => loss(s.Car, s.InLap)).OfType<int>().Select(ms => (double)ms).ToList();
+        var fieldLosses = FieldLosses((c, lap) => c.PitLossMs(lap));
+        var fieldInLosses = FieldLosses((c, lap) => c.LapLossMs(lap));
+        var fieldOutLosses = FieldLosses((c, lap) => c.LapLossMs(lap + 1));
 
         return new RaceStrategyReviewDto(
             NullIfZero(me.GridPosition),
@@ -137,7 +167,13 @@ public static class RaceReviewBuilder
             common?.Count() ?? 0,
             winner is null || winner.Spans.Count == 0 ? null : winner.Spans.Count - 1,
             winner?.Spans.Select(s => s.VisualCompound).ToList() ?? [],
-            fieldLosses.Count == 0 ? null : Round(Median(fieldLosses)));
+            fieldLosses.Count == 0 ? null : Round(Median(fieldLosses)),
+            mine.Laps
+                .Select(l => history.PositionOf(me.CarIndex, l.LapNumber) is { } p ? new RaceLapPositionDto(l.LapNumber, p) : null)
+                .OfType<RaceLapPositionDto>()
+                .ToList(),
+            fieldInLosses.Count == 0 ? null : Round(Median(fieldInLosses)),
+            fieldOutLosses.Count == 0 ? null : Round(Median(fieldOutLosses)));
     }
 
     private static List<RaceStintReviewDto> Stints(CarRace mine, IReadOnlyList<CarRace> cars, IReadOnlyList<MySessionLap> myLaps)
@@ -167,6 +203,10 @@ public static class RaceReviewBuilder
             double? wearPerLap = lives.Count >= 2
                 ? Math.Round((lives[0].Life!.Value - lives[^1].Life!.Value) / (lives[^1].Lap - lives[0].Lap), WearDecimals)
                 : null;
+            var cleanTimes = clean.Select(l => (double)l.LapTimeMs).ToList();
+            int? endSlower = cleanTimes.Count >= MinTrendLaps
+                ? Round(Median(cleanTimes.TakeLast(EndLaps)) - Median(cleanTimes))
+                : null;
 
             stints.Add(new RaceStintReviewDto(
                 span.VisualCompound,
@@ -177,10 +217,33 @@ public static class RaceReviewBuilder
                 Trend(clean) is { } trend ? Round(trend) : null,
                 fieldTrends.Count == 0 ? null : Round(Median(fieldTrends)),
                 wearPerLap,
-                lives.Count == 0 ? null : lives[^1].Life));
+                lives.Count == 0 ? null : lives[^1].Life,
+                WheelWearPerLap(stored, span.StartLap, end),
+                endSlower));
         }
 
         return stints;
+    }
+
+    /// <summary>스틴트 [start]~[end]랩의 바퀴별 랩당 마모(%p, 앞왼·앞오·뒤왼·뒤오) — 네 바퀴 마모가 모두 있는 처음·마지막 랩으로. 두 랩이 안 되면 null.</summary>
+    private static IReadOnlyList<double>? WheelWearPerLap(IReadOnlyDictionary<int, MySessionLap> stored, int start, int end)
+    {
+        static double[]? Wheels(MySessionLap lap)
+            => lap.Row is { TyreWearEndFrontLeft: { } fl, TyreWearEndFrontRight: { } fr, TyreWearEndRearLeft: { } rl, TyreWearEndRearRight: { } rr }
+                ? [fl, fr, rl, rr]
+                : null;
+
+        var laps = Enumerable.Range(start, end - start + 1)
+            .Select(n => (Lap: n, Wear: stored.TryGetValue(n, out var lap) ? Wheels(lap) : null))
+            .Where(x => x.Wear is not null)
+            .ToList();
+        if (laps.Count < 2)
+        {
+            return null;
+        }
+
+        var span = laps[^1].Lap - laps[0].Lap;
+        return Enumerable.Range(0, WheelCount).Select(i => Math.Round((laps[^1].Wear![i] - laps[0].Wear![i]) / span, WearDecimals)).ToList();
     }
 
     private static RaceBatteryReviewDto? Battery(IReadOnlyList<MySessionLap> myLaps)
@@ -272,6 +335,10 @@ public static class RaceReviewBuilder
 
         /// <summary>그 스틴트 안의 깨끗한 랩.</summary>
         public List<HistoryLap> CleanIn(StintSpan span) => Clean.Where(l => span.Contains(l.LapNumber)).ToList();
+
+        /// <summary>[lap] 랩타임 − 깨끗한 랩 중앙값(ms, 인 랩·아웃 랩 손실). 모르면 null.</summary>
+        public int? LapLossMs(int lap)
+            => MedianMs is { } median && Laps.FirstOrDefault(l => l.LapNumber == lap) is { } found ? found.LapTimeMs - median : null;
 
         /// <summary>[inLap]에 들어간 스톱의 손실(ms) = 인 랩 + 아웃 랩 − 깨끗한 랩 중앙값 2배. 하나라도 모르면 null.</summary>
         public int? PitLossMs(int inLap)

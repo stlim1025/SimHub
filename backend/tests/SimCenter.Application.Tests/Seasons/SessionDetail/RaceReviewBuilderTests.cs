@@ -37,19 +37,36 @@ public class RaceReviewBuilderTests
         Assert.NotNull(review);
 
         // 세이프티카 랩(99.0초)·피트 인·아웃 랩·1랩을 뺀 중앙값.
-        Assert.Equal(new RacePaceReviewDto(89_750, 2, 3, 90_000, "NORRIS", 89_000, "NORRIS", 89_000, "LECLERC", 91_000), review.Pace);
+        var pace = review.Pace!;
+        Assert.Equal(
+            new RacePaceReviewDto(89_750, 2, 3, 90_000, "NORRIS", 89_000, "NORRIS", 89_000, "LECLERC", 91_000),
+            pace with { MySectorMs = null, FieldSectorMs = null, AheadSectorMs = null });
+        // 섹터 1·2는 30초, 섹터 3 = 랩 − 60초: 나 29.75초, 다른 차들 중앙값(29.0·31.0초) 30.0초, 앞 차 NORRIS 29.0초.
+        Assert.Equal([30_000, 30_000, 29_750], pace.MySectorMs);
+        Assert.Equal([30_000, 30_000, 30_000], pace.FieldSectorMs);
+        Assert.Equal([30_000, 30_000, 29_000], pace.AheadSectorMs);
 
         var strategy = review.Strategy;
         Assert.Equal((3, 2, 1), (strategy.GridPosition, strategy.FinishPosition, strategy.Stops));
-        Assert.Equal(new RacePitStopReviewDto(5, 2, 3, 42_500, "Medium", "Hard"), Assert.Single(strategy.PitStops));
+        var stop = Assert.Single(strategy.PitStops);
+        Assert.Equal(new RacePitStopReviewDto(5, 2, 3, 42_500, "Medium", "Hard"), stop with { InLapLossMs = null, OutLapLossMs = null });
+        Assert.Equal(stop.LossMs, stop.InLapLossMs + stop.OutLapLossMs);   // 인 랩 + 아웃 랩 = 스톱 손실
+        Assert.NotNull(strategy.FieldInLapLossMs);
+        Assert.NotNull(strategy.FieldOutLapLossMs);
         Assert.Equal((1, 3, 1), (strategy.CommonStops, strategy.CommonStopsCars, strategy.WinnerStops));
         Assert.Equal(new[] { "Soft", "Medium" }, strategy.WinnerCompounds);
         Assert.Equal(42_500, strategy.FieldPitLossMs);  // 42.0초·43.0초
+        Assert.Equal(
+            Enumerable.Range(1, 10).Select(lap => new RaceLapPositionDto(lap, lap is >= 5 and <= 7 ? 3 : 2)),
+            strategy.LapPositions);
 
         Assert.Equal(2, review.Stints.Count);
         Assert.Equal(new RaceStintReviewDto("Medium", 1, 5, null, 90_000, null, null, null, null), review.Stints[0]);
         // Hard: 7~10랩 89.5→89.8초(+100ms/랩), 같은 Hard의 차 2는 91.0초 일정. 마모 97% → 91%(3랩).
-        Assert.Equal(new RaceStintReviewDto("Hard", 6, 10, 89_650, 91_000, 100, 0, 2.0, 91.0), review.Stints[1]);
+        var hard = review.Stints[1];
+        Assert.Equal(new RaceStintReviewDto("Hard", 6, 10, 89_650, 91_000, 100, 0, 2.0, 91.0), hard with { WheelWearPerLapPct = null, EndLapsSlowerMs = null });
+        Assert.Equal([2.0, 2.0, 2.0, 2.0], hard.WheelWearPerLapPct);   // 네 바퀴 모두 2% → 8%(3랩)
+        Assert.Equal(50, hard.EndLapsSlowerMs);                      // 마지막 3랩 중앙값 89.70초 − 스틴트 중앙값 89.65초
 
         var battery = review.Battery!;
         Assert.Equal(new RaceBatteryReviewDto(2, 1_100_000, 700_000, 3_900_000, 300_000, 300_000, 10, 1, 1, battery.PerLap), battery);

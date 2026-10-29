@@ -31,6 +31,8 @@ const String _harvestLabel = '회수';
 const String _lowLapsLabel = '바닥 랩';
 const String _fullLapsLabel = '가득 찬 랩';
 const String _perLapCaption = '랩당';
+const String _versusAiLabel = 'AI 대비';
+const String _positionChartCaption = '랩별 순위';
 const String _storeChartCaption = '랩 끝 잔량';
 const String _flowChartCaption = '랩별 배포 · 회수';
 
@@ -109,8 +111,6 @@ const double _batteryCapHeight = 4;
 const double _batteryBorder = 2;
 const double _batteryRadius = 5;
 const double _batteryInset = 3;
-const double _batteryLowFraction = 0.15;
-const double _batteryFullFraction = 0.95;
 const double _batteryGaugeWidth = 64;
 const double _batteryGaugeGap = 4;
 const double _flowLabelWidth = 36;
@@ -126,6 +126,13 @@ const double _lapBarMinWidth = 1;
 const double _lapBarMaxWidth = 10;
 const double _lapBarRadius = 1.5;
 const double _lapChartTickGap = 2;
+
+/// 랩별 순위 그래프: 높이, 선 두께·점 크기, 피트 점선 길이·간격.
+const double _positionChartHeight = 96;
+const double _positionLineWidth = 2;
+const double _positionDotRadius = 2.5;
+const double _pitDash = 3;
+const double _pitDashGap = 3;
 
 const double _msPerSecond = 1000;
 const double _percent = 100;
@@ -455,6 +462,8 @@ class _PaceChart extends StatelessWidget {
     ]..sort((a, b) => a.ms.compareTo(b.ms));
     final fastest = rows.first.ms;
     final span = math.max(1, rows.last.ms - fastest);
+    final mySectors = pace.mySectorMs;
+    final sectors = sectorGaps(mySectors, pace.fieldSectorMs);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -514,6 +523,22 @@ class _PaceChart extends StatelessWidget {
               ],
             ),
           ),
+        if (sectors != null && mySectors != null) ...[
+          const SizedBox(height: _innerGap),
+          _MetricGroup([
+            for (var i = 0; i < kSectorCount; i++)
+              (
+                label: 'S${i + 1} · $_versusAiLabel',
+                value: _signedSeconds(sectors[i]),
+                sub: _seconds(mySectors[i]),
+                color: sectors[i] >= kSectorMarginMs
+                    ? palette.danger
+                    : sectors[i] <= -kSectorMarginMs
+                        ? palette.success
+                        : null,
+              ),
+          ]),
+        ],
       ],
     );
   }
@@ -554,6 +579,18 @@ class _StrategyView extends StatelessWidget {
         if (stints.isNotEmpty) ...[
           const SizedBox(height: _innerGap),
           _StintTimeline(stints: stints, pitLaps: [for (final s in strategy.pitStops) s.lap]),
+        ],
+        if (strategy.lapPositions.length >= _lapChartMinLaps) ...[
+          const SizedBox(height: _innerGap),
+          _PositionChart(
+            positions: strategy.lapPositions,
+            grid: strategy.gridPosition,
+            pitLaps: [for (final s in strategy.pitStops) s.lap],
+            totalLaps: math.max(
+              strategy.lapPositions.last.lap,
+              stints.isEmpty ? 0 : stints.map((s) => s.endLap).reduce(math.max),
+            ),
+          ),
         ],
         if (strategy.pitStops.isNotEmpty) ...[
           const SizedBox(height: _innerGap),
@@ -756,6 +793,7 @@ class _StintList extends StatelessWidget {
     final fieldTrend = stint.fieldTrendMsPerLap;
     final extra = stint.extraTrendMs;
     final wear = stint.wearPerLapPct;
+    final axle = axleWear(stint);
     final median = stint.medianMs;
     final fieldMedian = stint.fieldMedianMs;
     final lifeColor = life == null
@@ -816,7 +854,9 @@ class _StintList extends StatelessWidget {
             (
               label: _wearLabel,
               value: '${wear.toStringAsFixed(_wearDigits)}%/랩',
-              sub: null,
+              sub: axle == null
+                  ? null
+                  : '앞 ${axle.front.toStringAsFixed(_wearDigits)} · 뒤 ${axle.rear.toStringAsFixed(_wearDigits)}',
               color: wear >= kFastWearPct ? palette.danger : null,
             ),
           if (median != null)
@@ -943,11 +983,126 @@ class _BatteryView extends StatelessWidget {
 }
 
 /// 잔량 비율 → 색(거의 바닥 빨강, 가득 노랑, 그 외 초록).
-Color _storeColor(double fraction, AppPalette palette) => fraction < _batteryLowFraction
+Color _storeColor(double fraction, AppPalette palette) => fraction < kErsLowFraction
     ? palette.danger
-    : fraction >= _batteryFullFraction
+    : fraction >= kErsFullFraction
         ? AppColors.wearMedium
         : palette.success;
+
+/// 랩별 순위 그래프: 위가 1위. 그리드(왼쪽 끝)부터 랩 끝 순위를 잇고, 피트 랩 끝에 점선. 가로는 스틴트 타임라인과 같은 랩 칸.
+class _PositionChart extends StatelessWidget {
+  const _PositionChart({required this.positions, required this.grid, required this.pitLaps, required this.totalLaps});
+
+  final List<RaceLapPosition> positions;
+  final int? grid;
+  final List<int> pitLaps;
+  final int totalLaps;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final all = [?grid, for (final p in positions) p.position];
+    final best = all.reduce(math.min);
+    final worst = all.reduce(math.max);
+    final captionStyle = TextStyle(fontSize: _captionSize, color: palette.textMuted);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // 순위 범위는 제목 줄에 — 그래프는 위 스틴트 타임라인과 같은 폭이라 랩 자리가 맞는다.
+        Text('$_positionChartCaption · P$best ~ P$worst', style: kTabularStyle.merge(captionStyle)),
+        const SizedBox(height: _noteGap),
+        SizedBox(
+          height: _positionChartHeight,
+          child: CustomPaint(
+            painter: _PositionPainter(
+              positions: positions,
+              grid: grid,
+              pitLaps: pitLaps,
+              totalLaps: totalLaps,
+              best: best,
+              worst: worst,
+              line: AppColors.accent,
+              guide: palette.border,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PositionPainter extends CustomPainter {
+  _PositionPainter({
+    required this.positions,
+    required this.grid,
+    required this.pitLaps,
+    required this.totalLaps,
+    required this.best,
+    required this.worst,
+    required this.line,
+    required this.guide,
+  });
+
+  final List<RaceLapPosition> positions;
+  final int? grid;
+  final List<int> pitLaps;
+  final int totalLaps;
+  final int best;
+  final int worst;
+  final Color line;
+  final Color guide;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (totalLaps <= 0) {
+      return;
+    }
+    final range = math.max(1, worst - best);
+    double y(int position) => (position - best) / range * size.height;
+    // 랩 끝 = 그 랩 칸의 오른쪽 끝(타임라인 눈금과 같은 자리), 그리드 = 왼쪽 끝.
+    double x(int lap) => size.width * lap / totalLaps;
+
+    final guidePaint = Paint()
+      ..color = guide
+      ..strokeWidth = 1;
+    for (final lap in pitLaps) {
+      for (var top = 0.0; top < size.height; top += _pitDash + _pitDashGap) {
+        canvas.drawLine(Offset(x(lap), top), Offset(x(lap), math.min(size.height, top + _pitDash)), guidePaint);
+      }
+    }
+
+    final start = grid;
+    final points = [
+      if (start != null) Offset(0, y(start)),
+      for (final p in positions) Offset(x(p.lap), y(p.position)),
+    ];
+    final path = Path()..moveTo(points.first.dx, points.first.dy);
+    for (final point in points.skip(1)) {
+      path.lineTo(point.dx, point.dy);
+    }
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = line
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = _positionLineWidth
+        ..strokeJoin = StrokeJoin.round,
+    );
+    final dot = Paint()..color = line;
+    for (final point in points) {
+      canvas.drawCircle(point, _positionDotRadius, dot);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_PositionPainter old) =>
+      old.positions != positions ||
+      old.grid != grid ||
+      old.pitLaps != pitLaps ||
+      old.totalLaps != totalLaps ||
+      old.line != line ||
+      old.guide != guide;
+}
 
 /// 랩별 막대 계열 하나: 랩마다 값, 값 → 색.
 typedef _LapSeries = ({List<double> values, Color Function(double value) colorOf});

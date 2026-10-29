@@ -71,7 +71,7 @@ public sealed record RaceReviewDto(
 
 /// <summary>
 /// 페이스: 깨끗한 랩 중앙값(ms) — 내 값, 내 순위(1 = 가장 빠름)/순위를 낸 차 수, 다른 차들 중앙값의 중앙값,
-/// 나를 뺀 가장 빠른 차, 결과 바로 앞·뒤 차(없으면 null).
+/// 나를 뺀 가장 빠른 차, 결과 바로 앞·뒤 차(없으면 null), 섹터 1·2·3 중앙값(ms) — 내 값·다른 차들 값의 중앙값·결과 바로 앞 차 값(모르면 null).
 /// </summary>
 public sealed record RacePaceReviewDto(
     int MyMedianMs,
@@ -83,11 +83,15 @@ public sealed record RacePaceReviewDto(
     string? AheadName,
     int? AheadMedianMs,
     string? BehindName,
-    int? BehindMedianMs);
+    int? BehindMedianMs,
+    IReadOnlyList<int>? MySectorMs = null,
+    IReadOnlyList<int>? FieldSectorMs = null,
+    IReadOnlyList<int>? AheadSectorMs = null);
 
 /// <summary>
 /// 전략: 그리드·결과 순위, 내 스톱 수와 스톱마다의 결과, 완주 차들이 가장 많이 한 스톱 수와 그 차 수,
-/// 우승 차 스톱 수·컴파운드 순서, 다른 차들 스톱 손실 중앙값(ms).
+/// 우승 차 스톱 수·컴파운드 순서, 다른 차들 스톱 손실 중앙값(ms), 내 랩 끝 순위(랩별, 기록된 랩만),
+/// 다른 차들 인 랩·아웃 랩 손실 중앙값(ms).
 /// </summary>
 public sealed record RaceStrategyReviewDto(
     int? GridPosition,
@@ -98,20 +102,28 @@ public sealed record RaceStrategyReviewDto(
     int CommonStopsCars,
     int? WinnerStops,
     IReadOnlyList<string> WinnerCompounds,
-    int? FieldPitLossMs);
+    int? FieldPitLossMs,
+    IReadOnlyList<RaceLapPositionDto> LapPositions,
+    int? FieldInLapLossMs = null,
+    int? FieldOutLapLossMs = null);
 
-/// <summary>피트 스톱 하나: 인 랩, 앞 랩 순위 → 아웃 랩 다음 랩 순위, 손실(ms), 바꾸기 전·후 컴파운드.</summary>
+/// <summary>내 랩 끝 순위 하나.</summary>
+public sealed record RaceLapPositionDto(int Lap, int Position);
+
+/// <summary>피트 스톱 하나: 인 랩, 앞 랩 순위 → 아웃 랩 다음 랩 순위, 손실(ms), 바꾸기 전·후 컴파운드, 인 랩·아웃 랩 손실(각 랩 − 깨끗한 랩 중앙값, ms).</summary>
 public sealed record RacePitStopReviewDto(
     int Lap,
     int? PositionBefore,
     int? PositionAfter,
     int? LossMs,
     string FromCompound,
-    string ToCompound);
+    string ToCompound,
+    int? InLapLossMs = null,
+    int? OutLapLossMs = null);
 
 /// <summary>
 /// 내 스틴트 하나: 컴파운드·랩 범위, 깨끗한 랩 중앙값(ms)과 같은 컴파운드 다른 차들 값, 랩타임 추세(ms/랩, +면 느려짐)와 다른 차들 값,
-/// 랩당 타이어 마모(%p)·끝 잔여 수명(%).
+/// 랩당 타이어 마모(%p)·끝 잔여 수명(%), 바퀴별 랩당 마모(%p, 앞왼·앞오·뒤왼·뒤오), 마지막 깨끗한 랩들이 스틴트 중앙값보다 느린 정도(ms).
 /// </summary>
 public sealed record RaceStintReviewDto(
     string Compound,
@@ -122,7 +134,9 @@ public sealed record RaceStintReviewDto(
     int? TrendMsPerLap,
     int? FieldTrendMsPerLap,
     double? WearPerLapPct,
-    double? EndLifePct);
+    double? EndLifePct,
+    IReadOnlyList<double>? WheelWearPerLapPct = null,
+    int? EndLapsSlowerMs = null);
 
 /// <summary>배터리: 기록된 랩 수, 랩당 평균 배포·회수(J), 랩 끝 잔량 처음·끝·최저(J)와 그 랩, 거의 바닥·가득 찬 랩 수, 랩별 잔량·배포·회수.</summary>
 public sealed record RaceBatteryReviewDto(
