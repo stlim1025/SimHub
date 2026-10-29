@@ -105,6 +105,15 @@ void main() {
       expect(find.text('5%'), findsOneWidget); // 최저 잔량
       expect(find.text('랩 끝 잔량'), findsOneWidget); // 랩별 그래프
       expect(find.text('랩별 배포 · 회수'), findsOneWidget);
+
+      // 제목 줄을 누르면 접히고, 다시 누르면 펴진다.
+      await tester.tap(find.text('Race Review'));
+      await tester.pump();
+      expect(find.text('랩 끝 잔량'), findsNothing);
+      expect(find.text('Race Review'), findsOneWidget);
+      await tester.tap(find.text('Race Review'));
+      await tester.pump();
+      expect(find.text('랩 끝 잔량'), findsOneWidget);
     });
   }
 }

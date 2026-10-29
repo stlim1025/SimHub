@@ -23,24 +23,47 @@ const String kPlayerName = 'You';
 const TextStyle kTabularStyle = TextStyle(fontFeatures: [FontFeature.tabularFigures()]);
 
 /// 세션 상세 카드: 제목 + 본문. [padded]가 false면 본문을 가장자리까지(표).
+/// [onTitleTap]이 있으면 제목 줄 전체를 누를 수 있고, [trailing]은 제목 오른쪽, [collapsed]면 본문을 숨긴다(접는 카드).
 class SessionCard extends StatelessWidget {
-  const SessionCard({super.key, required this.title, required this.child, this.padded = true});
+  const SessionCard({
+    super.key,
+    required this.title,
+    required this.child,
+    this.padded = true,
+    this.trailing,
+    this.onTitleTap,
+    this.collapsed = false,
+  });
 
   final String title;
   final Widget child;
   final bool padded;
+  final Widget? trailing;
+  final VoidCallback? onTitleTap;
+  final bool collapsed;
 
   @override
   Widget build(BuildContext context) {
+    final trailing = this.trailing;
+    final header = Padding(
+      padding: EdgeInsets.fromLTRB(
+          _cardTitlePadding, _cardTitlePadding, _cardTitlePadding, collapsed ? _cardTitlePadding : _cardTitleGap),
+      child: Row(
+        children: [
+          Expanded(child: Text(title, style: cardTitleStyle(context))),
+          ?trailing,
+        ],
+      ),
+    );
     return Card(
+      clipBehavior: onTitleTap == null ? Clip.none : Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(_cardTitlePadding, _cardTitlePadding, _cardTitlePadding, _cardTitleGap),
-            child: Text(title, style: cardTitleStyle(context)),
-          ),
-          if (padded)
+          if (onTitleTap == null) header else InkWell(onTap: onTitleTap, child: header),
+          if (collapsed)
+            const SizedBox.shrink()
+          else if (padded)
             Padding(
               padding: const EdgeInsets.fromLTRB(_cardTitlePadding, 0, _cardTitlePadding, _cardTitlePadding),
               child: child,

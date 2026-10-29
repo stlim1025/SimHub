@@ -11,6 +11,8 @@ import 'session_widgets.dart';
 import 'tyre_stints_view.dart';
 
 const String _title = 'Race Review';
+const String _collapseLabel = '레이스 리뷰 접기';
+const String _expandLabel = '레이스 리뷰 펼치기';
 const String _fieldMedianLabel = 'AI 중앙값';
 const String _paceRankLabel = '페이스 순위';
 const String _myMedianLabel = '내 중앙값';
@@ -116,11 +118,12 @@ const double _flowValueWidth = 64;
 const double _flowBarHeight = 10;
 const double _batteryWideWidth = 380;
 
-/// 랩별 그래프: 그릴 최소 랩 수, 높이, 막대가 칸에서 차지하는 비율·최소 폭·모서리, 눈금 간격.
+/// 랩별 그래프: 그릴 최소 랩 수, 높이, 막대가 칸에서 차지하는 비율·최소·최대 폭(랩이 적어도 막대가 뭉툭해지지 않게)·모서리, 눈금 간격.
 const int _lapChartMinLaps = 2;
 const double _lapChartHeight = 64;
 const double _lapBarFill = 0.7;
 const double _lapBarMinWidth = 1;
+const double _lapBarMaxWidth = 10;
 const double _lapBarRadius = 1.5;
 const double _lapChartTickGap = 2;
 
@@ -143,10 +146,22 @@ Color _gradeColor(ReviewGrade grade, AppPalette palette) => switch (grade) {
     };
 
 /// 레이스 총평 카드: 한 줄 총평, 항목(페이스·전략·타이어·배터리)마다 평가 + 그림 + 짚을 것. 넓으면 두 열.
-class RaceReviewCard extends StatelessWidget {
+/// 제목 줄을 누르면 접고 편다(처음엔 펼침).
+class RaceReviewCard extends StatefulWidget {
   const RaceReviewCard({super.key, required this.review});
 
   final RaceReview review;
+
+  @override
+  State<RaceReviewCard> createState() => _RaceReviewCardState();
+}
+
+class _RaceReviewCardState extends State<RaceReviewCard> {
+  var _expanded = true;
+
+  RaceReview get review => widget.review;
+
+  void _toggle() => setState(() => _expanded = !_expanded);
 
   @override
   Widget build(BuildContext context) {
@@ -159,6 +174,14 @@ class RaceReviewCard extends StatelessWidget {
     return SessionCard(
       key: const ValueKey('race-review'),
       title: _title,
+      collapsed: !_expanded,
+      onTitleTap: _toggle,
+      trailing: Icon(
+        _expanded ? Icons.expand_less : Icons.expand_more,
+        key: const ValueKey('race-review-toggle'),
+        semanticLabel: _expanded ? _collapseLabel : _expandLabel,
+        color: context.palette.textMuted,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -983,7 +1006,7 @@ class _LapBarsPainter extends CustomPainter {
       return;
     }
     final slot = size.width / count;
-    final barWidth = math.max(_lapBarMinWidth, slot * _lapBarFill / series.length);
+    final barWidth = (slot * _lapBarFill / series.length).clamp(_lapBarMinWidth, _lapBarMaxWidth).toDouble();
     final groupWidth = barWidth * series.length;
     final paint = Paint();
     for (var i = 0; i < count; i++) {
