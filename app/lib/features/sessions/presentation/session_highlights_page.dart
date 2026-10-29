@@ -94,13 +94,12 @@ const double _listLapWidth = 40;
 const int _listKindFlex = 3;
 const int _listTitleFlex = 5;
 
-/// 장면 종류 칩: 바탕 색 진하기, 안쪽 여백, 모서리, 점 크기, 점·글자 간격, 글자 크기.
-const double _kindChipTint = 0.16;
-const EdgeInsets _kindChipPadding = EdgeInsets.symmetric(horizontal: 8, vertical: 3);
-const double _kindChipRadius = 4;
-const double _kindDotSize = 7;
-const double _kindDotGap = 6;
-const double _kindFontSize = 12;
+/// 장면 종류 태그(재생 화면 하단 자막 머리 칸과 같은 중계 그래픽 모양): 안쪽 여백, 글자 크기·자간,
+/// 바탕이 이보다 밝으면 어두운 글자.
+const EdgeInsets _kindTagPadding = EdgeInsets.symmetric(horizontal: 8, vertical: 3);
+const double _kindFontSize = 11;
+const double _kindLetterSpacing = 0.4;
+const double _kindDarkTextLuminance = 0.4;
 
 /// 드라이버 이름 앞 팀 색 막대(폭·높이), 막대·이름 간격, 이름과 화살표 사이 간격.
 const double _teamBarWidth = 3;
@@ -542,7 +541,7 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
           columns: [
             CompactColumn(label: _listIndexLabel, width: _listIndexWidth, cell: (i) => cell('${i + 1}', style: muted)),
             CompactColumn(label: _listLapLabel, width: _listLapWidth, cell: (i) => cell('L${_clips[i].lap}', style: kTabularStyle)),
-            CompactColumn(label: _listKindLabel, flex: _listKindFlex, cell: (i) => _kindChip(i, palette)),
+            CompactColumn(label: _listKindLabel, flex: _listKindFlex, cell: (i) => _kindTag(i, palette)),
             CompactColumn(label: _listTitleLabel, flex: _listTitleFlex, cell: (i) => _drivers(_clips[i], palette)),
           ],
         ),
@@ -550,35 +549,20 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
     );
   }
 
-  /// 장면 종류 칩: 종류 색 점 + 이름, 바탕은 종류 색을 옅게.
-  Widget _kindChip(int index, AppPalette palette) {
+  /// 장면 종류 태그: 종류 색 각진 칸에 굵은 글자(밝은 바탕은 어두운 글자).
+  Widget _kindTag(int index, AppPalette palette) {
     final kind = _clips[index].kind;
     final color = _kindColor(kind, palette);
+    final ink = color.computeLuminance() > _kindDarkTextLuminance ? AppColors.replayFlagYellowText : AppColors.replayHudText;
     return Container(
       key: ValueKey('highlights-list-kind-$index'),
-      padding: _kindChipPadding,
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: _kindChipTint),
-        borderRadius: BorderRadius.circular(_kindChipRadius),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: _kindDotSize,
-            height: _kindDotSize,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: _kindDotGap),
-          Flexible(
-            child: Text(
-              kHighlightKindLabels[kind]!,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: _kindFontSize, fontWeight: FontWeight.w600, color: palette.textPrimary),
-            ),
-          ),
-        ],
+      color: color,
+      padding: _kindTagPadding,
+      child: Text(
+        kHighlightKindLabels[kind]!,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(fontSize: _kindFontSize, fontWeight: FontWeight.w800, letterSpacing: _kindLetterSpacing, color: ink),
       ),
     );
   }

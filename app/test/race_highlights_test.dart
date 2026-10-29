@@ -366,8 +366,8 @@ void main() {
       // 출발은 드라이버 없이 종류 칩만.
       final row0 = find.byKey(const ValueKey('highlights-list-row-0'));
       expect(find.descendant(of: row0, matching: find.byKey(const ValueKey('highlights-list-team-21'))), findsNothing);
-      // 종류마다 칩 색이 다르다(추월 ≠ 출발).
-      Color chip(int i) => (t.widget<Container>(find.byKey(ValueKey('highlights-list-kind-$i'))).decoration! as BoxDecoration).color!;
+      // 종류마다 태그 색이 다르다(추월 ≠ 출발).
+      Color chip(int i) => t.widget<Container>(find.byKey(ValueKey('highlights-list-kind-$i'))).color!;
       expect(chip(0), isNot(chip(1)));
 
       await t.tap(find.byKey(const ValueKey('highlights-list-row-1')));
