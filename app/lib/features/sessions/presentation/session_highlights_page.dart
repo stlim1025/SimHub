@@ -3,12 +3,14 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/layout/layout_constants.dart';
 import '../../../core/layout/page_padding.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/util/hex_color.dart';
 import '../../../core/widgets/button_group.dart';
+import '../../../core/widgets/compact_table.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/page_loading_bar.dart';
 import '../../lap_detail/application/lap_detail_providers.dart';
@@ -30,6 +32,7 @@ import '../application/sessions_providers.dart';
 import '../domain/race_highlights.dart';
 import '../domain/session_models.dart';
 import 'highlights_broadcast_overlay.dart';
+import 'session_widgets.dart';
 import 'tyre_stints_view.dart';
 
 /// 세션 하이라이트 주소.
@@ -78,6 +81,25 @@ const double _singleRowControlsMinWidth = 760;
 
 /// 재생 화면 폭이 이보다 넓으면 큰 화면 높이.
 const double _wideViewMinWidth = 700;
+
+/// 장면 목록표: 재생기와의 간격, 오른쪽에 둘 때 최소·최대 폭(최소 폭이 안 남으면 재생기 아래), 아래에 둘 때 최대 높이.
+const double _listGap = 12;
+const double _listMinWidth = 300;
+const double _listMaxWidth = 420;
+const double _belowListMaxHeight = 360;
+
+/// 장면 목록표 열: 번호·랩 칸 폭, 종류·내용 칸 비율.
+const double _listIndexWidth = 24;
+const double _listLapWidth = 40;
+const int _listKindFlex = 2;
+const int _listTitleFlex = 3;
+const String _listIndexLabel = '#';
+const String _listLapLabel = '랩';
+const String _listKindLabel = '장면';
+const String _listTitleLabel = '내용';
+
+/// 지금 장면 줄이 목록 밖이면 그 줄까지 굴리는 시간.
+const Duration _listRevealDuration = Duration(milliseconds: 200);
 const double _microsecondsPerMs = 1000;
 
 /// 출발 클립 첫 순간 이 속도(km/h) 이하인 차를 그리드에 선 차로 본다(소등이 첫 표본 바로 뒤일 수 있어 정지 시간은 보지 않는다).
@@ -125,7 +147,8 @@ class SessionHighlightsPage extends ConsumerWidget {
     final trackName = detail.valueOrNull?.header.trackName;
 
     return ListView(
-      padding: pagePadding(context),
+      // 재생 화면은 원래 폭 그대로 두고, 큰 모니터의 남는 폭에 장면 목록표를 붙인다.
+      padding: pagePadding(context, maxWidth: kWideContentMaxWidth),
       children: [
         Row(
           children: [
@@ -267,6 +290,9 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
 
   /// 재생 시각(세션 ms).
   final ValueNotifier<double> _time = ValueNotifier<double>(0);
+
+  /// 장면 목록표 스크롤(지금 장면 줄을 보이게 굴린다).
+  final ScrollController _listScroll = ScrollController();
   late final Ticker _ticker = createTicker(_onTick);
   Duration _lastTick = Duration.zero;
 
@@ -295,6 +321,7 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
   void dispose() {
     _ticker.dispose();
     _time.dispose();
+    _listScroll.dispose();
     super.dispose();
   }
 
@@ -326,6 +353,7 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
   /// 클립 [index]를 준비하고 그 클립 처음으로 돌린다.
   void _load(int index) {
     _index = index;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _revealListRow());
     final clip = _clip;
     if (clip == null) {
       _focus = null;
@@ -410,8 +438,103 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
     });
   }
 
+  /// 재생기 + 장면 목록표. 재생기는 원래 본문 폭([kContentMaxWidth])을 그대로 쓰고, 오른쪽에 목록표 폭이 남으면
+  /// 오른쪽(재생기와 같은 높이), 아니면 재생기 아래에 둔다.
   @override
   Widget build(BuildContext context) {
+    final player = _player(context);
+    if (_clips.isEmpty) {
+      return player;
+    }
+    return LayoutBuilder(
+      builder: (context, box) {
+        final spare = box.maxWidth - kContentMaxWidth - _listGap;
+        if (spare < _listMinWidth) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              player,
+              const SizedBox(height: _listGap),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: _belowListMaxHeight),
+                child: _list(context),
+              ),
+            ],
+          );
+        }
+        final listWidth = spare.clamp(_listMinWidth, _listMaxWidth).toDouble();
+        // 목록표는 재생기 높이에 맞춰 채우고, 넘치는 줄은 안에서 스크롤한다.
+        return SizedBox(
+          width: kContentMaxWidth + _listGap + listWidth,
+          child: Stack(
+            children: [
+              SizedBox(width: kContentMaxWidth, child: player),
+              Positioned(
+                left: kContentMaxWidth + _listGap,
+                top: 0,
+                bottom: 0,
+                width: listWidth,
+                child: _list(context),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// 장면 목록표: 번호·랩·종류·내용. 지금 장면 줄을 강조하고, 줄을 누르면 그 장면으로 옮긴다.
+  Widget _list(BuildContext context) {
+    final palette = context.palette;
+    final muted = kTabularStyle.copyWith(color: palette.textMuted);
+    Text cell(String text, {TextStyle? style}) => Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: style);
+    return Card(
+      key: const ValueKey('highlights-list'),
+      clipBehavior: Clip.antiAlias,
+      child: SingleChildScrollView(
+        controller: _listScroll,
+        child: CompactTable<int>(
+          framed: false,
+          rows: [for (var i = 0; i < _clips.length; i++) i],
+          rowKey: (i) => ValueKey('highlights-list-row-$i'),
+          isHighlighted: (i) => i == _index,
+          onRowTap: _jump,
+          columns: [
+            CompactColumn(label: _listIndexLabel, width: _listIndexWidth, cell: (i) => cell('${i + 1}', style: muted)),
+            CompactColumn(label: _listLapLabel, width: _listLapWidth, cell: (i) => cell('L${_clips[i].lap}', style: kTabularStyle)),
+            CompactColumn(label: _listKindLabel, flex: _listKindFlex, cell: (i) => cell(kHighlightKindLabels[_clips[i].kind]!)),
+            CompactColumn(
+              label: _listTitleLabel,
+              flex: _listTitleFlex,
+              cell: (i) => cell(highlightCaptionTitle(_clips[i], widget.highlights.nameOf), style: TextStyle(color: palette.textMuted)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 지금 장면 줄이 목록 보이는 영역 밖이면 그 줄이 보이게 굴린다(줄 높이가 고정이라 위치를 계산한다).
+  void _revealListRow() {
+    if (!mounted || !_listScroll.hasClients) {
+      return;
+    }
+    final position = _listScroll.position;
+    const rowExtent = kCompactRowHeight + 1;
+    final top = kCompactHeaderHeight + _index * rowExtent;
+    final bottom = top + rowExtent;
+    final double target;
+    if (top - kCompactHeaderHeight < position.pixels) {
+      target = _index == 0 ? 0 : top;
+    } else if (bottom > position.pixels + position.viewportDimension) {
+      target = bottom - position.viewportDimension;
+    } else {
+      return;
+    }
+    _listScroll.animateTo(target.clamp(0, position.maxScrollExtent).toDouble(), duration: _listRevealDuration, curve: Curves.easeOut);
+  }
+
+  Widget _player(BuildContext context) {
     final palette = context.palette;
     final clip = _clip;
     return Card(

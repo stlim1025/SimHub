@@ -84,9 +84,9 @@ LapTrace _circleLap() {
   );
 }
 
-Future<void> _pumpPlayer(WidgetTester tester, RaceHighlights highlights) async {
+Future<void> _pumpPlayer(WidgetTester tester, RaceHighlights highlights, {double width = 1200}) async {
   tester.view
-    ..physicalSize = const Size(1200, 1000)
+    ..physicalSize = Size(width, 1000)
     ..devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(MaterialApp(
@@ -343,6 +343,39 @@ void main() {
       expect(find.descendant(of: find.byKey(const ValueKey('standing-tyre-4')), matching: find.text('S')), findsOneWidget);
       expect(find.descendant(of: find.byKey(const ValueKey('standing-tyre-21')), matching: find.text('H')), findsOneWidget);
       expect(find.byKey(const ValueKey('standing-tyre-2')), findsNothing);
+    });
+
+    testWidgets('넓으면 재생기 폭은 그대로 두고 오른쪽에 장면 목록표, 줄을 누르면 그 장면으로', (t) async {
+      await _pumpPlayer(t, _highlights(), width: 1600);
+
+      final player = t.getRect(find.byKey(const ValueKey('highlights-player')));
+      final list = t.getRect(find.byKey(const ValueKey('highlights-list')));
+      expect(player.width, lessThanOrEqualTo(1100));
+      expect(player.width, greaterThan(1050));
+      expect(list.left, greaterThan(player.right));
+      expect(list.height, closeTo(player.height, 1));
+      expect(find.descendant(of: find.byKey(const ValueKey('highlights-list-row-1')), matching: find.text('ME → RUSSELL')), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const ValueKey('highlights-list-row-1')), matching: find.text('L12')), findsOneWidget);
+
+      await t.tap(find.byKey(const ValueKey('highlights-list-row-1')));
+      await t.pump();
+      expect(_caption(t), 'LAP 12 · 추월 | ME → RUSSELL');
+      expect(find.text('2 / 2'), findsOneWidget);
+
+      // 묶음을 바꾸면 목록도 그 묶음 장면.
+      await t.tap(find.byKey(const ValueKey('highlights-reel-race')));
+      await t.pump();
+      expect(find.byKey(const ValueKey('highlights-list-row-2')), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const ValueKey('highlights-list-row-1')), matching: find.text('충돌')), findsOneWidget);
+    });
+
+    testWidgets('목록표 폭이 안 남으면 재생기 아래에 둔다', (t) async {
+      await _pumpPlayer(t, _highlights());
+
+      final player = t.getRect(find.byKey(const ValueKey('highlights-player')));
+      final list = t.getRect(find.byKey(const ValueKey('highlights-list')));
+      expect(list.top, greaterThan(player.bottom));
+      expect(t.takeException(), isNull);
     });
 
     testWidgets('묶음에 장면이 없으면 안내 문구', (t) async {
