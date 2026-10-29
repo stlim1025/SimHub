@@ -164,6 +164,14 @@ void main() {
       await tester.tap(find.text('Race Review'));
       await tester.pump();
       expect(find.text('랩 끝 잔량'), findsOneWidget);
+
+      // 랩별 잔량 그래프를 누르면(마우스는 올리면) 그 랩의 잔량·배포·회수가 뜬다.
+      final caption = tester.getTopLeft(find.text('랩 끝 잔량'));
+      await tester.tapAt(caption + const Offset(4, 40));
+      await tester.pump();
+      expect(find.byKey(const ValueKey('race-review-tooltip')), findsOneWidget);
+      expect(find.textContaining('L1 · 잔량 98% (3900kJ)'), findsOneWidget);
+      expect(find.textContaining('배포 900kJ · 회수 800kJ'), findsOneWidget);
     });
   }
 }

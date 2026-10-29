@@ -33,6 +33,9 @@ const String _fullLapsLabel = '가득 찬 랩';
 const String _perLapCaption = '랩당';
 const String _versusAiLabel = 'AI 대비';
 const String _positionChartCaption = '랩별 순위';
+const String _gridTooltip = '출발 그리드';
+const String _pitTooltip = '피트';
+const String _storeLabel = '잔량';
 const String _storeChartCaption = '랩 끝 잔량';
 const String _flowChartCaption = '랩별 배포 · 회수';
 
@@ -134,6 +137,15 @@ const double _positionDotRadius = 2.5;
 const double _pitDash = 3;
 const double _pitDashGap = 3;
 
+/// 그래프 툴팁: 선과의 간격, 최대 폭, 안쪽 여백, 모서리, 글자 크기, 세로선 두께, 막대 칸 가운데 비율.
+const double _tooltipGap = 8;
+const double _tooltipMaxWidth = 240;
+const EdgeInsets _tooltipPadding = EdgeInsets.symmetric(horizontal: 8, vertical: 6);
+const double _tooltipRadius = 6;
+const double _tooltipFontSize = 12;
+const double _hoverLineWidth = 1;
+const double _half = 0.5;
+
 const double _msPerSecond = 1000;
 const double _percent = 100;
 const double _joulesPerKj = 1000;
@@ -143,6 +155,8 @@ const int _wearDigits = 1;
 
 String _signedSeconds(int ms, {int digits = _lapSecondDigits}) =>
     '${ms >= 0 ? '+' : '−'}${(ms.abs() / _msPerSecond).toStringAsFixed(digits)}초';
+
+String _kj(double joules) => '${(joules / _joulesPerKj).round()}kJ';
 
 String _seconds(int ms, {int digits = _lapSecondDigits}) => '${(ms.abs() / _msPerSecond).toStringAsFixed(digits)}초';
 
@@ -933,6 +947,18 @@ class _BatteryView extends StatelessWidget {
               children: [Align(alignment: Alignment.centerLeft, child: gauges), const SizedBox(height: _innerGap), flows],
             ),
     );
+    // 두 그래프 모두 같은 랩 설명: 끝 잔량(%·kJ), 배포·회수(kJ).
+    String lapTooltip(RaceBatteryLap l) {
+      final deployed = l.deployedJ;
+      final harvested = l.harvestedJ;
+      final flow = [
+        if (deployed != null) '$_deployLabel ${_kj(deployed)}',
+        if (harvested != null) '$_harvestLabel ${_kj(harvested)}',
+      ];
+      return 'L${l.lap} · $_storeLabel ${(l.storeJ / kErsCapacityJ * _percent).round()}% (${_kj(l.storeJ)})'
+          '${flow.isEmpty ? '' : '\n${flow.join(' · ')}'}';
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -949,6 +975,7 @@ class _BatteryView extends StatelessWidget {
               ),
             ],
             maxValue: 1,
+            tooltipOf: (i) => lapTooltip(perLap[i]),
           ),
         ],
         if (flowLaps.length >= _lapChartMinLaps) ...[
@@ -961,6 +988,7 @@ class _BatteryView extends StatelessWidget {
               (values: [for (final l in flowLaps) l.harvestedJ ?? 0], colorOf: (double _) => palette.success),
             ],
             maxValue: flowLaps.map((l) => math.max(l.deployedJ ?? 0, l.harvestedJ ?? 0)).fold(0, math.max),
+            tooltipOf: (i) => lapTooltip(flowLaps[i]),
           ),
         ],
       ],
@@ -975,7 +1003,7 @@ class _BatteryView extends StatelessWidget {
             Expanded(child: _Bar(factor: joules / max, color: color, height: _flowBarHeight)),
             SizedBox(
               width: _flowValueWidth,
-              child: Text('${(joules / _joulesPerKj).round()}kJ', textAlign: TextAlign.right, style: kTabularStyle),
+              child: Text(_kj(joules), textAlign: TextAlign.right, style: kTabularStyle),
             ),
           ],
         ),
@@ -1005,6 +1033,12 @@ class _PositionChart extends StatelessWidget {
     final best = all.reduce(math.min);
     final worst = all.reduce(math.max);
     final captionStyle = TextStyle(fontSize: _captionSize, color: palette.textMuted);
+    final start = grid;
+    // 그래프 점 = 그리드(0랩) + 랩 끝 순위.
+    final points = <RaceLapPosition>[
+      if (start != null) (lap: 0, position: start),
+      ...positions,
+    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1013,20 +1047,137 @@ class _PositionChart extends StatelessWidget {
         const SizedBox(height: _noteGap),
         SizedBox(
           height: _positionChartHeight,
-          child: CustomPaint(
-            painter: _PositionPainter(
-              positions: positions,
-              grid: grid,
-              pitLaps: pitLaps,
-              totalLaps: totalLaps,
-              best: best,
-              worst: worst,
-              line: AppColors.accent,
-              guide: palette.border,
+          child: _HoverLayer(
+            count: points.length,
+            xOf: (i, width) => width * points[i].lap / totalLaps,
+            tooltipOf: (i) => _positionTooltip(points, i),
+            child: CustomPaint(
+              painter: _PositionPainter(
+                positions: positions,
+                grid: grid,
+                pitLaps: pitLaps,
+                totalLaps: totalLaps,
+                best: best,
+                worst: worst,
+                line: AppColors.accent,
+                guide: palette.border,
+              ),
             ),
           ),
         ),
       ],
+    );
+  }
+
+  /// 점 하나의 설명: 그리드면 출발 순위, 랩이면 순위·앞 점 대비 변화·피트 랩 여부.
+  String _positionTooltip(List<RaceLapPosition> points, int i) {
+    final point = points[i];
+    if (point.lap == 0) {
+      return '$_gridTooltip · P${point.position}';
+    }
+    final change = i == 0 ? 0 : points[i - 1].position - point.position;
+    final parts = [
+      'L${point.lap} · P${point.position}',
+      if (change > 0) '$change계단 ↑',
+      if (change < 0) '${-change}계단 ↓',
+      if (pitLaps.contains(point.lap)) _pitTooltip,
+    ];
+    return parts.join(' · ');
+  }
+}
+
+/// 그래프 위 마우스·터치 툴팁: 포인터에서 가장 가까운 점([xOf]로 가로 자리)에 세로선과 설명([tooltipOf])을 띄운다.
+/// 설명은 그래프 왼쪽 절반이면 선 오른쪽, 오른쪽 절반이면 선 왼쪽에 둬 가장자리에서 잘리지 않게.
+class _HoverLayer extends StatefulWidget {
+  const _HoverLayer({required this.count, required this.xOf, required this.tooltipOf, required this.child});
+
+  final int count;
+  final double Function(int index, double width) xOf;
+  final String Function(int index) tooltipOf;
+  final Widget child;
+
+  @override
+  State<_HoverLayer> createState() => _HoverLayerState();
+}
+
+class _HoverLayerState extends State<_HoverLayer> {
+  int? _index;
+
+  void _pick(double dx, double width) {
+    if (widget.count == 0) {
+      return;
+    }
+    var nearest = 0;
+    for (var i = 1; i < widget.count; i++) {
+      if ((widget.xOf(i, width) - dx).abs() < (widget.xOf(nearest, width) - dx).abs()) {
+        nearest = i;
+      }
+    }
+    if (nearest != _index) {
+      setState(() => _index = nearest);
+    }
+  }
+
+  void _clear() {
+    if (_index != null) {
+      setState(() => _index = null);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final index = _index;
+        final x = index == null ? 0.0 : widget.xOf(index, width);
+        final left = x < width / 2;
+        return MouseRegion(
+          onHover: (event) => _pick(event.localPosition.dx, width),
+          onExit: (_) => _clear(),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapDown: (details) => _pick(details.localPosition.dx, width),
+            onHorizontalDragUpdate: (details) => _pick(details.localPosition.dx, width),
+            onHorizontalDragEnd: (_) => _clear(),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned.fill(child: widget.child),
+                if (index != null) ...[
+                  Positioned(
+                    left: x - _hoverLineWidth / 2,
+                    top: 0,
+                    bottom: 0,
+                    width: _hoverLineWidth,
+                    child: ColoredBox(color: palette.textMuted),
+                  ),
+                  Positioned(
+                    top: 0,
+                    left: left ? x + _tooltipGap : null,
+                    right: left ? null : width - x + _tooltipGap,
+                    child: Container(
+                      key: const ValueKey('race-review-tooltip'),
+                      constraints: const BoxConstraints(maxWidth: _tooltipMaxWidth),
+                      padding: _tooltipPadding,
+                      decoration: BoxDecoration(
+                        color: palette.surface,
+                        border: Border.all(color: palette.border),
+                        borderRadius: BorderRadius.circular(_tooltipRadius),
+                      ),
+                      child: Text(
+                        widget.tooltipOf(index),
+                        style: kTabularStyle.copyWith(fontSize: _tooltipFontSize, color: palette.textPrimary),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -1109,12 +1260,21 @@ typedef _LapSeries = ({List<double> values, Color Function(double value) colorOf
 
 /// 랩별 막대 그래프: 설명, 막대(계열이 여럿이면 한 랩에 나란히), 아래 첫·가운데·마지막 랩 눈금.
 class _LapChart extends StatelessWidget {
-  const _LapChart({required this.caption, required this.laps, required this.series, required this.maxValue});
+  const _LapChart({
+    required this.caption,
+    required this.laps,
+    required this.series,
+    required this.maxValue,
+    required this.tooltipOf,
+  });
 
   final String caption;
   final List<int> laps;
   final List<_LapSeries> series;
   final double maxValue;
+
+  /// 마우스·터치로 고른 막대([laps] 순번)의 설명.
+  final String Function(int index) tooltipOf;
 
   @override
   Widget build(BuildContext context) {
@@ -1127,8 +1287,14 @@ class _LapChart extends StatelessWidget {
         const SizedBox(height: _noteGap),
         SizedBox(
           height: _lapChartHeight,
-          child: CustomPaint(
-            painter: _LapBarsPainter(series: series, maxValue: maxValue, baseline: palette.border),
+          child: _HoverLayer(
+            count: laps.length,
+            // 막대 칸 가운데.
+            xOf: (i, width) => width / laps.length * (i + _half),
+            tooltipOf: tooltipOf,
+            child: CustomPaint(
+              painter: _LapBarsPainter(series: series, maxValue: maxValue, baseline: palette.border),
+            ),
           ),
         ),
         const SizedBox(height: _lapChartTickGap),
