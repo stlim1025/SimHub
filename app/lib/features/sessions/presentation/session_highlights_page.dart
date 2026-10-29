@@ -88,11 +88,10 @@ const double _listMinWidth = 300;
 const double _listMaxWidth = 480;
 const double _belowListMaxHeight = 360;
 
-/// 장면 목록표 열: 번호·랩 칸 폭, 종류·내용 칸 비율.
+/// 장면 목록표 열: 번호·랩 칸 폭, 장면 칸 최대 폭(그 안에서 이 세션의 가장 긴 태그에 맞춘다). 남는 폭은 드라이버 칸.
 const double _listIndexWidth = 24;
 const double _listLapWidth = 40;
-const int _listKindFlex = 3;
-const int _listTitleFlex = 5;
+const double _listKindMaxWidth = 112;
 
 /// 장면 종류 태그(재생 화면 하단 자막 머리 칸과 같은 중계 그래픽 모양): 안쪽 여백, 글자 크기·자간,
 /// 바탕이 이보다 밝으면 어두운 글자.
@@ -100,6 +99,7 @@ const EdgeInsets _kindTagPadding = EdgeInsets.symmetric(horizontal: 8, vertical:
 const double _kindFontSize = 11;
 const double _kindLetterSpacing = 0.4;
 const double _kindDarkTextLuminance = 0.4;
+const TextStyle _kindTextStyle = TextStyle(fontSize: _kindFontSize, fontWeight: FontWeight.w800, letterSpacing: _kindLetterSpacing);
 
 /// 드라이버 이름 앞 팀 색 막대(폭·높이), 막대·이름 간격, 이름과 화살표 사이 간격.
 const double _teamBarWidth = 3;
@@ -119,7 +119,7 @@ Color _kindColor(HighlightKind kind, AppPalette palette) => switch (kind) {
       HighlightKind.retirement || HighlightKind.unknown => palette.textMuted,
     };
 
-/// 목록표 내용 칸의 차: 추월 `A → B`, 충돌 `A ↔ B`, 출발·깃발은 없음, 그 밖은 중심 차만(하단 자막과 같은 규칙).
+/// 목록표 드라이버 칸의 차: 추월 `A → B`, 충돌 `A ↔ B`, 출발·깃발은 없음, 그 밖은 중심 차만(하단 자막과 같은 규칙).
 ({List<int> cars, String? join}) _sceneCars(HighlightClip clip) {
   final other = clip.otherCar;
   return switch (clip.kind) {
@@ -135,7 +135,7 @@ Color _kindColor(HighlightKind kind, AppPalette palette) => switch (kind) {
 const String _listIndexLabel = '#';
 const String _listLapLabel = '랩';
 const String _listKindLabel = '장면';
-const String _listTitleLabel = '내용';
+const String _listDriversLabel = '드라이버';
 
 /// 지금 장면 줄이 목록 밖이면 그 줄까지 굴리는 시간.
 const Duration _listRevealDuration = Duration(milliseconds: 200);
@@ -345,6 +345,8 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
   void initState() {
     super.initState();
     _load(0);
+    // 장면 칸 폭은 글자를 재서 정한다 — 한글 글꼴이 늦게 내려오면(웹) 다시 잰다.
+    PaintingBinding.instance.systemFonts.addListener(_onFontsChanged);
   }
 
   @override
@@ -358,10 +360,17 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
 
   @override
   void dispose() {
+    PaintingBinding.instance.systemFonts.removeListener(_onFontsChanged);
     _ticker.dispose();
     _time.dispose();
     _listScroll.dispose();
     super.dispose();
+  }
+
+  void _onFontsChanged() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   ReplayCircuit _buildCircuit() {
@@ -522,7 +531,7 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
     );
   }
 
-  /// 장면 목록표: 번호·랩·종류·내용. 지금 장면 줄을 강조하고, 줄을 누르면 그 장면으로 옮긴다.
+  /// 장면 목록표: 번호·랩·종류·드라이버. 지금 장면 줄을 강조하고, 줄을 누르면 그 장면으로 옮긴다.
   Widget _list(BuildContext context) {
     final palette = context.palette;
     final muted = kTabularStyle.copyWith(color: palette.textMuted);
@@ -541,8 +550,8 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
           columns: [
             CompactColumn(label: _listIndexLabel, width: _listIndexWidth, cell: (i) => cell('${i + 1}', style: muted)),
             CompactColumn(label: _listLapLabel, width: _listLapWidth, cell: (i) => cell('L${_clips[i].lap}', style: kTabularStyle)),
-            CompactColumn(label: _listKindLabel, flex: _listKindFlex, cell: (i) => _kindTag(i, palette)),
-            CompactColumn(label: _listTitleLabel, flex: _listTitleFlex, cell: (i) => _drivers(_clips[i], palette)),
+            CompactColumn(label: _listKindLabel, width: _kindColumnWidth(context), cell: (i) => _kindTag(i, palette)),
+            CompactColumn(label: _listDriversLabel, cell: (i) => _drivers(_clips[i], palette)),
           ],
         ),
       ),
@@ -562,12 +571,33 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
         kHighlightKindLabels[kind]!,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: TextStyle(fontSize: _kindFontSize, fontWeight: FontWeight.w800, letterSpacing: _kindLetterSpacing, color: ink),
+        style: _kindTextStyle.copyWith(color: ink),
       ),
     );
   }
 
-  /// 내용 칸: 드라이버마다 팀 색 막대 + 이름, 두 대면 사이에 → 또는 ↔.
+  /// 장면 칸 폭: 이 세션에 나온 종류 태그 가운데 가장 긴 것(최대 [_listKindMaxWidth]) — 짧은 태그 뒤에 빈 칸이 남지 않게.
+  double _kindColumnWidth(BuildContext context) {
+    final scaler = MediaQuery.textScalerOf(context);
+    final style = DefaultTextStyle.of(context).style.merge(_kindTextStyle);
+    var widest = 0.0;
+    for (final kind in {for (final clip in _clips) clip.kind}) {
+      final painter = TextPainter(
+        text: TextSpan(text: kHighlightKindLabels[kind], style: style),
+        textDirection: TextDirection.ltr,
+        textScaler: scaler,
+        maxLines: 1,
+      )..layout();
+      if (painter.width > widest) {
+        widest = painter.width;
+      }
+      painter.dispose();
+    }
+    final width = (widest + _kindTagPadding.horizontal).ceilToDouble();
+    return width < _listKindMaxWidth ? width : _listKindMaxWidth;
+  }
+
+  /// 드라이버 칸: 드라이버마다 팀 색 막대 + 이름, 두 대면 사이에 → 또는 ↔.
   /// 한 줄 글로 이어 써서 짧은 이름이 남긴 폭을 긴 이름이 쓰고, 넘치면 끝만 말줄임.
   Widget _drivers(HighlightClip clip, AppPalette palette) {
     final scene = _sceneCars(clip);

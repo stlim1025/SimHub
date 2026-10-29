@@ -369,6 +369,11 @@ void main() {
       // 종류마다 태그 색이 다르다(추월 ≠ 출발).
       Color chip(int i) => t.widget<Container>(find.byKey(ValueKey('highlights-list-kind-$i'))).color!;
       expect(chip(0), isNot(chip(1)));
+      // 장면 칸은 태그 폭에 맞춰 드라이버 칸이 칸 간격만 두고 바로 이어진다.
+      final tag = t.getRect(find.byKey(const ValueKey('highlights-list-kind-1')));
+      final bar = t.getRect(find.descendant(of: row1, matching: find.byKey(const ValueKey('highlights-list-team-21'))));
+      expect(bar.left - tag.right, lessThanOrEqualTo(13));
+      expect(find.text('드라이버'), findsOneWidget);
 
       await t.tap(find.byKey(const ValueKey('highlights-list-row-1')));
       await t.pump();
