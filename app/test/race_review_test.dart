@@ -139,6 +139,12 @@ void main() {
         '페이스가 좋았던 레이스예요.');
   });
 
+  test('순위 그래프 축 눈금: 범위에 맞는 간격, 양 끝은 늘 넣고 끝에 붙은 눈금은 뺀다', () {
+    expect(axisTicks(4, 21), [4, 10, 15, 21]);
+    expect(axisTicks(1, 33), [1, 5, 10, 15, 20, 25, 30, 33]);
+    expect(axisTicks(1, 5), [1, 2, 3, 4, 5]);
+  });
+
   for (final width in [1100.0, 360.0]) {
     testWidgets('카드: 항목마다 평가와 그림을 넘침 없이 그린다 (폭 $width)', (tester) async {
       tester.view.physicalSize = Size(width, 2400);

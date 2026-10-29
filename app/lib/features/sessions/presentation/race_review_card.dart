@@ -130,8 +130,12 @@ const double _lapBarMaxWidth = 10;
 const double _lapBarRadius = 1.5;
 const double _lapChartTickGap = 2;
 
-/// 랩별 순위 그래프: 높이, 선 두께·점 크기, 피트 점선 길이·간격.
-const double _positionChartHeight = 96;
+/// 랩별 순위 그래프: 높이, 세로축 칸 폭·글자 높이·그래프와의 간격, 기준선 두께, 선 두께·점 크기, 피트 점선 길이·간격.
+const double _positionChartHeight = 120;
+const double _positionAxisWidth = 32;
+const double _axisLabelHeight = 14;
+const double _axisLabelGap = 6;
+const double _gridLineWidth = 1;
 const double _positionLineWidth = 2;
 const double _positionDotRadius = 2.5;
 const double _pitDash = 3;
@@ -592,7 +596,11 @@ class _StrategyView extends StatelessWidget {
           ),
         if (stints.isNotEmpty) ...[
           const SizedBox(height: _innerGap),
-          _StintTimeline(stints: stints, pitLaps: [for (final s in strategy.pitStops) s.lap]),
+          Padding(
+            // 아래 순위 그래프의 세로축 칸만큼 비워 랩 자리를 맞춘다.
+            padding: EdgeInsets.only(left: strategy.lapPositions.length >= _lapChartMinLaps ? _positionAxisWidth : 0),
+            child: _StintTimeline(stints: stints, pitLaps: [for (final s in strategy.pitStops) s.lap]),
+          ),
         ],
         if (strategy.lapPositions.length >= _lapChartMinLaps) ...[
           const SizedBox(height: _innerGap),
@@ -1017,6 +1025,30 @@ Color _storeColor(double fraction, AppPalette palette) => fraction < kErsLowFrac
         ? AppColors.wearMedium
         : palette.success;
 
+/// 축 눈금: 범위가 좁으면 1, 넓어질수록 2·5·10 간격. 양 끝은 늘 넣고, 끝에 반 간격보다 가까운 눈금은 뺀다.
+List<int> axisTicks(int from, int to) {
+  final span = to - from;
+  final step = span <= _tickSpanOne
+      ? 1
+      : span <= _tickSpanTwo
+          ? 2
+          : span <= _tickSpanFive
+              ? 5
+              : 10;
+  final ticks = {from, to};
+  for (var t = (from ~/ step + 1) * step; t < to; t += step) {
+    if (t - from >= step / 2 && to - t >= step / 2) {
+      ticks.add(t);
+    }
+  }
+  return ticks.toList()..sort();
+}
+
+/// 축 눈금 간격을 1·2·5로 둘 최대 범위(넘으면 10).
+const int _tickSpanOne = 5;
+const int _tickSpanTwo = 12;
+const int _tickSpanFive = 40;
+
 /// 랩별 순위 그래프: 위가 1위. 그리드(왼쪽 끝)부터 랩 끝 순위를 잇고, 피트 랩 끝에 점선. 가로는 스틴트 타임라인과 같은 랩 칸.
 class _PositionChart extends StatelessWidget {
   const _PositionChart({required this.positions, required this.grid, required this.pitLaps, required this.totalLaps});
@@ -1039,29 +1071,86 @@ class _PositionChart extends StatelessWidget {
       if (start != null) (lap: 0, position: start),
       ...positions,
     ];
+    final positionTicks = axisTicks(best, worst);
+    final lapTicks = axisTicks(1, totalLaps);
+    final tickStyle = kTabularStyle.merge(captionStyle);
+    double yOf(int position) => (position - best) / math.max(1, worst - best) * _positionChartHeight;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // 순위 범위는 제목 줄에 — 그래프는 위 스틴트 타임라인과 같은 폭이라 랩 자리가 맞는다.
-        Text('$_positionChartCaption · P$best ~ P$worst', style: kTabularStyle.merge(captionStyle)),
+        Text(_positionChartCaption, style: captionStyle),
         const SizedBox(height: _noteGap),
         SizedBox(
           height: _positionChartHeight,
-          child: _HoverLayer(
-            count: points.length,
-            xOf: (i, width) => width * points[i].lap / totalLaps,
-            tooltipOf: (i) => _positionTooltip(points, i),
-            child: CustomPaint(
-              painter: _PositionPainter(
-                positions: positions,
-                grid: grid,
-                pitLaps: pitLaps,
-                totalLaps: totalLaps,
-                best: best,
-                worst: worst,
-                line: AppColors.accent,
-                guide: palette.border,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // 세로축: 순위 눈금(가로 보조선과 같은 높이).
+              SizedBox(
+                width: _positionAxisWidth,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    for (final p in positionTicks)
+                      Positioned(
+                        top: (yOf(p) - _axisLabelHeight / 2).clamp(0, _positionChartHeight - _axisLabelHeight).toDouble(),
+                        left: 0,
+                        right: _axisLabelGap,
+                        height: _axisLabelHeight,
+                        child: Text('P$p', textAlign: TextAlign.right, style: tickStyle),
+                      ),
+                  ],
+                ),
               ),
+              Expanded(
+                child: _HoverLayer(
+                  count: points.length,
+                  xOf: (i, width) => width * points[i].lap / totalLaps,
+                  tooltipOf: (i) => _positionTooltip(points, i),
+                  child: CustomPaint(
+                    painter: _PositionPainter(
+                      positions: positions,
+                      grid: grid,
+                      pitLaps: pitLaps,
+                      totalLaps: totalLaps,
+                      best: best,
+                      worst: worst,
+                      positionTicks: positionTicks,
+                      lapTicks: lapTicks,
+                      line: AppColors.accent,
+                      gridLine: palette.border,
+                      pitLine: palette.textMuted,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        // 가로축: 랩 눈금(세로 보조선과 같은 자리).
+        Padding(
+          padding: const EdgeInsets.only(left: _positionAxisWidth, top: _lapChartTickGap),
+          child: SizedBox(
+            height: _lapTickHeight,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final width = constraints.maxWidth;
+                return Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    for (final lap in lapTicks)
+                      Positioned(
+                        left: (width * lap / totalLaps - _lapTickWidth / 2).clamp(0, math.max(0, width - _lapTickWidth)).toDouble(),
+                        width: _lapTickWidth,
+                        child: Text(
+                          'L$lap',
+                          textAlign: lap == totalLaps ? TextAlign.right : TextAlign.center,
+                          style: tickStyle,
+                        ),
+                      ),
+                  ],
+                );
+              },
             ),
           ),
         ),
@@ -1190,8 +1279,11 @@ class _PositionPainter extends CustomPainter {
     required this.totalLaps,
     required this.best,
     required this.worst,
+    required this.positionTicks,
+    required this.lapTicks,
     required this.line,
-    required this.guide,
+    required this.gridLine,
+    required this.pitLine,
   });
 
   final List<RaceLapPosition> positions;
@@ -1200,8 +1292,11 @@ class _PositionPainter extends CustomPainter {
   final int totalLaps;
   final int best;
   final int worst;
+  final List<int> positionTicks;
+  final List<int> lapTicks;
   final Color line;
-  final Color guide;
+  final Color gridLine;
+  final Color pitLine;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1213,12 +1308,22 @@ class _PositionPainter extends CustomPainter {
     // 랩 끝 = 그 랩 칸의 오른쪽 끝(타임라인 눈금과 같은 자리), 그리드 = 왼쪽 끝.
     double x(int lap) => size.width * lap / totalLaps;
 
-    final guidePaint = Paint()
-      ..color = guide
-      ..strokeWidth = 1;
+    // 기준선: 순위 눈금마다 가로선, 랩 눈금마다 세로선. 피트 랩은 점선.
+    final gridPaint = Paint()
+      ..color = gridLine
+      ..strokeWidth = _gridLineWidth;
+    for (final p in positionTicks) {
+      canvas.drawLine(Offset(0, y(p)), Offset(size.width, y(p)), gridPaint);
+    }
+    for (final lap in lapTicks) {
+      canvas.drawLine(Offset(x(lap), 0), Offset(x(lap), size.height), gridPaint);
+    }
+    final pitPaint = Paint()
+      ..color = pitLine
+      ..strokeWidth = _gridLineWidth;
     for (final lap in pitLaps) {
       for (var top = 0.0; top < size.height; top += _pitDash + _pitDashGap) {
-        canvas.drawLine(Offset(x(lap), top), Offset(x(lap), math.min(size.height, top + _pitDash)), guidePaint);
+        canvas.drawLine(Offset(x(lap), top), Offset(x(lap), math.min(size.height, top + _pitDash)), pitPaint);
       }
     }
 
@@ -1252,7 +1357,8 @@ class _PositionPainter extends CustomPainter {
       old.pitLaps != pitLaps ||
       old.totalLaps != totalLaps ||
       old.line != line ||
-      old.guide != guide;
+      old.gridLine != gridLine ||
+      old.pitLine != pitLine;
 }
 
 /// 랩별 막대 계열 하나: 랩마다 값, 값 → 색.
