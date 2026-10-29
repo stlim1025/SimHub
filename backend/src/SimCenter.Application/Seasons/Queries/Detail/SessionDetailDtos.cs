@@ -124,7 +124,7 @@ public sealed record RaceStintReviewDto(
     double? WearPerLapPct,
     double? EndLifePct);
 
-/// <summary>배터리: 기록된 랩 수, 랩당 평균 배포·회수(J), 랩 끝 잔량 처음·끝·최저(J)와 그 랩, 거의 바닥·가득 찬 랩 수.</summary>
+/// <summary>배터리: 기록된 랩 수, 랩당 평균 배포·회수(J), 랩 끝 잔량 처음·끝·최저(J)와 그 랩, 거의 바닥·가득 찬 랩 수, 랩별 잔량·배포·회수.</summary>
 public sealed record RaceBatteryReviewDto(
     int Laps,
     double? AverageDeployJ,
@@ -134,7 +134,11 @@ public sealed record RaceBatteryReviewDto(
     double MinStoreJ,
     int MinStoreLap,
     int LowLaps,
-    int FullLaps);
+    int FullLaps,
+    IReadOnlyList<RaceBatteryLapDto> PerLap);
+
+/// <summary>배터리 한 랩: 랩 번호, 랩 끝 잔량(J), 그 랩의 배포·회수(J, 모르면 null).</summary>
+public sealed record RaceBatteryLapDto(int Lap, double StoreJ, double? DeployedJ, double? HarvestedJ);
 
 /// <summary>세션 상세의 F1Laps 카드 재료 묶음(D-53). 데이터가 없으면 null·빈 목록 — 오류로 만들지 않는다.</summary>
 public sealed record SessionDetailExtras(

@@ -207,7 +207,8 @@ public static class RaceReviewBuilder
             lowest.Row.ErsStoreEndJ!.Value,
             lowest.LapNumber,
             stores.Count(s => s < ErsCapacityJ * LowStoreFraction),
-            stores.Count(s => s >= ErsCapacityJ * FullStoreFraction));
+            stores.Count(s => s >= ErsCapacityJ * FullStoreFraction),
+            laps.Select(l => new RaceBatteryLapDto(l.LapNumber, l.Row.ErsStoreEndJ!.Value, l.Row.ErsDeployedJ, l.Row.ErsHarvestedJ)).ToList());
     }
 
     /// <summary>랩 번호에 대한 랩타임 최소제곱 기울기(ms/랩). 랩이 <see cref="MinTrendLaps"/>보다 적으면 null.</summary>

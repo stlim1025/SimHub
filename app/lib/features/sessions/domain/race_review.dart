@@ -213,7 +213,31 @@ class RaceStintReview {
   }
 }
 
-/// 배터리: 기록된 랩 수, 랩당 평균 배포·회수(J), 랩 끝 잔량 처음·끝·최저(J)와 그 랩, 거의 바닥·가득 찬 랩 수.
+/// 배터리 한 랩: 랩 번호, 랩 끝 잔량(J), 그 랩의 배포·회수(J, 모르면 null).
+class RaceBatteryLap {
+  const RaceBatteryLap({required this.lap, required this.storeJ, this.deployedJ, this.harvestedJ});
+
+  final int lap;
+  final double storeJ;
+  final double? deployedJ;
+  final double? harvestedJ;
+
+  static RaceBatteryLap? fromJsonOrNull(Map<String, dynamic> json) {
+    final lap = jsonInt(json['lap']);
+    final store = jsonDouble(json['storeJ']);
+    if (lap == null || store == null) {
+      return null;
+    }
+    return RaceBatteryLap(
+      lap: lap,
+      storeJ: store,
+      deployedJ: jsonDouble(json['deployedJ']),
+      harvestedJ: jsonDouble(json['harvestedJ']),
+    );
+  }
+}
+
+/// 배터리: 기록된 랩 수, 랩당 평균 배포·회수(J), 랩 끝 잔량 처음·끝·최저(J)와 그 랩, 거의 바닥·가득 찬 랩 수, 랩별 기록.
 class RaceBatteryReview {
   const RaceBatteryReview({
     required this.laps,
@@ -225,6 +249,7 @@ class RaceBatteryReview {
     required this.minStoreLap,
     this.lowLaps = 0,
     this.fullLaps = 0,
+    this.perLap = const [],
   });
 
   final int laps;
@@ -236,6 +261,7 @@ class RaceBatteryReview {
   final int minStoreLap;
   final int lowLaps;
   final int fullLaps;
+  final List<RaceBatteryLap> perLap;
 
   static RaceBatteryReview? fromJsonOrNull(Object? json) {
     if (json is! Map<String, dynamic>) {
@@ -259,6 +285,7 @@ class RaceBatteryReview {
       minStoreLap: minLap,
       lowLaps: jsonInt(json['lowLaps']) ?? 0,
       fullLaps: jsonInt(json['fullLaps']) ?? 0,
+      perLap: jsonObjects(json['perLap'], RaceBatteryLap.fromJsonOrNull),
     );
   }
 }
@@ -332,14 +359,12 @@ ReviewSection paceReview(RacePaceReview pace, RaceStrategyReview strategy) {
   return (grade: paceGrade(pace), lines: lines);
 }
 
-/// 피트 스톱 하나의 평가: 다른 차들보다 많이 잃었거나 순위를 잃으면 아쉬움, 순위를 얻으면 좋음.
+/// 피트 스톱 하나의 평가: 다른 차들보다 피트에서 시간을 많이 잃으면 아쉬움, 피트 뒤 순위를 얻으면 좋음.
+/// 피트 직후 순위가 떨어지는 것은 피트 손실만큼 당연하므로 평가하지 않는다.
 ReviewGrade pitStopGrade(RacePitStopReview stop, int? fieldLossMs) {
   final loss = stop.lossMs;
   final places = stop.placesGained;
   if (loss != null && fieldLossMs != null && loss - fieldLossMs >= kPitLossMarginMs) {
-    return ReviewGrade.poor;
-  }
-  if (places != null && places <= -_placesLost) {
     return ReviewGrade.poor;
   }
   return places != null && places > 0 ? ReviewGrade.good : ReviewGrade.fair;
@@ -360,9 +385,7 @@ ReviewSection strategyReview(RaceStrategyReview strategy) {
     switch (pitStopGrade(stop, fieldLoss)) {
       case ReviewGrade.poor:
         poor++;
-        lines.add(loss != null && fieldLoss != null && loss - fieldLoss >= kPitLossMarginMs
-            ? '${stop.lap}랩 피트에서 AI보다 ${_seconds(loss - fieldLoss)} 더 잃었어요 → 피트 진입 브레이킹과 아웃 랩 첫 코너를 점검하세요'
-            : '${stop.lap}랩 피트 뒤 ${-places!}계단 밀렸어요 → 언더컷을 당했거나 트래픽 속으로 나왔어요. 한두 랩 일찍 들어가는 걸 고려하세요');
+        lines.add('${stop.lap}랩 피트에서 AI보다 ${_seconds(loss! - fieldLoss!)} 더 잃었어요 → 피트 진입 브레이킹과 아웃 랩 첫 코너를 점검하세요');
       case ReviewGrade.good:
         good++;
         lines.add('${stop.lap}랩 피트로 $places계단 올라섰어요');

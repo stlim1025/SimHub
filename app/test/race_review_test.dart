@@ -36,6 +36,11 @@ void main() {
     'battery': {
       'laps': 10, 'averageDeployJ': 1100000, 'averageHarvestJ': 700000, 'firstStoreJ': 3900000, 'lastStoreJ': 2400000,
       'minStoreJ': 200000, 'minStoreLap': 8, 'lowLaps': 4, 'fullLaps': 0,
+      'perLap': [
+        {'lap': 1, 'storeJ': 3900000, 'deployedJ': 900000, 'harvestedJ': 800000},
+        {'lap': 8, 'storeJ': 200000, 'deployedJ': 1500000, 'harvestedJ': 600000},
+        {'lap': 10, 'storeJ': 2400000},
+      ],
     },
   })!;
 
@@ -44,6 +49,7 @@ void main() {
     expect(review.strategy.pitStops.single.placesGained, -2);
     expect(review.stints.single.extraTrendMs, 100);
     expect(review.battery!.lowLaps, 4);
+    expect(review.battery!.perLap.map((l) => (l.lap, l.storeJ, l.deployedJ)), [(1, 3900000.0, 900000.0), (8, 200000.0, 1500000.0), (10, 2400000.0, null)]);
     expect(RaceReview.fromJsonOrNull(null), isNull);
     expect(RaceReview.fromJsonOrNull({'pace': {'rank': 1}})!.pace, isNull);
   });
@@ -60,6 +66,10 @@ void main() {
     final strategy = sections[1].section;
     expect(strategy.grade, ReviewGrade.poor); // 피트에서 2.5초 더 잃음
     expect(pitStopGrade(review.strategy.pitStops.single, review.strategy.fieldPitLossMs), ReviewGrade.poor);
+    // 피트 직후 순위가 떨어진 것만으로는 아쉬움이 아니다 — 손실이 AI와 비슷하면 보통.
+    const normalStop = RacePitStopReview(lap: 5, positionBefore: 2, positionAfter: 6, lossMs: 43000, fromCompound: 'Medium', toCompound: 'Hard');
+    expect(pitStopGrade(normalStop, 42500), ReviewGrade.fair);
+    expect(strategyReview(RaceStrategyReview(gridPosition: 3, finishPosition: 3, stops: 1, pitStops: const [normalStop], fieldPitLossMs: 42500)).lines, isEmpty);
     expect(strategy.lines, [
       '5랩 피트에서 AI보다 2.500초 더 잃었어요 → 피트 진입 브레이킹과 아웃 랩 첫 코너를 점검하세요',
       '완주한 차 대부분(3대)과 같은 1스톱이었어요',
@@ -93,6 +103,8 @@ void main() {
       expect(find.text('L5'), findsWidgets); // 피트 랩
       expect(find.text('91%'), findsOneWidget); // 끝 수명
       expect(find.text('5%'), findsOneWidget); // 최저 잔량
+      expect(find.text('랩 끝 잔량'), findsOneWidget); // 랩별 그래프
+      expect(find.text('랩별 배포 · 회수'), findsOneWidget);
     });
   }
 }

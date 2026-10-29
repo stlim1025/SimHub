@@ -51,7 +51,11 @@ public class RaceReviewBuilderTests
         // Hard: 7~10랩 89.5→89.8초(+100ms/랩), 같은 Hard의 차 2는 91.0초 일정. 마모 97% → 91%(3랩).
         Assert.Equal(new RaceStintReviewDto("Hard", 6, 10, 89_650, 91_000, 100, 0, 2.0, 91.0), review.Stints[1]);
 
-        Assert.Equal(new RaceBatteryReviewDto(2, 1_100_000, 700_000, 3_900_000, 300_000, 300_000, 10, 1, 1), review.Battery);
+        var battery = review.Battery!;
+        Assert.Equal(new RaceBatteryReviewDto(2, 1_100_000, 700_000, 3_900_000, 300_000, 300_000, 10, 1, 1, battery.PerLap), battery);
+        Assert.Equal(
+            [new RaceBatteryLapDto(7, 3_900_000, 1_000_000, 800_000), new RaceBatteryLapDto(10, 300_000, 1_200_000, 600_000)],
+            battery.PerLap);
     }
 
     [Fact]

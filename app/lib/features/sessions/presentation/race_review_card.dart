@@ -29,6 +29,8 @@ const String _harvestLabel = '회수';
 const String _lowLapsLabel = '바닥 랩';
 const String _fullLapsLabel = '가득 찬 랩';
 const String _perLapCaption = '랩당';
+const String _storeChartCaption = '랩 끝 잔량';
+const String _flowChartCaption = '랩별 배포 · 회수';
 
 const Map<ReviewGrade, String> _gradeText = {
   ReviewGrade.good: '좋음',
@@ -113,6 +115,14 @@ const double _flowLabelWidth = 36;
 const double _flowValueWidth = 64;
 const double _flowBarHeight = 10;
 const double _batteryWideWidth = 380;
+
+/// 랩별 그래프: 그릴 최소 랩 수, 높이, 막대가 칸에서 차지하는 비율·최소 폭·모서리, 눈금 간격.
+const int _lapChartMinLaps = 2;
+const double _lapChartHeight = 64;
+const double _lapBarFill = 0.7;
+const double _lapBarMinWidth = 1;
+const double _lapBarRadius = 1.5;
+const double _lapChartTickGap = 2;
 
 const double _msPerSecond = 1000;
 const double _percent = 100;
@@ -847,7 +857,9 @@ class _BatteryView extends StatelessWidget {
         ]),
       ],
     );
-    return LayoutBuilder(
+    final perLap = battery.perLap;
+    final flowLaps = [for (final l in perLap) if (l.deployedJ != null || l.harvestedJ != null) l];
+    final summary = LayoutBuilder(
       builder: (context, constraints) => constraints.maxWidth >= _batteryWideWidth
           ? Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -857,6 +869,38 @@ class _BatteryView extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [Align(alignment: Alignment.centerLeft, child: gauges), const SizedBox(height: _innerGap), flows],
             ),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        summary,
+        if (perLap.length >= _lapChartMinLaps) ...[
+          const SizedBox(height: _blockGap),
+          _LapChart(
+            caption: _storeChartCaption,
+            laps: [for (final l in perLap) l.lap],
+            series: [
+              (
+                values: [for (final l in perLap) l.storeJ / kErsCapacityJ],
+                colorOf: (double v) => _storeColor(v, palette),
+              ),
+            ],
+            maxValue: 1,
+          ),
+        ],
+        if (flowLaps.length >= _lapChartMinLaps) ...[
+          const SizedBox(height: _innerGap),
+          _LapChart(
+            caption: _flowChartCaption,
+            laps: [for (final l in flowLaps) l.lap],
+            series: [
+              (values: [for (final l in flowLaps) l.deployedJ ?? 0], colorOf: (double _) => AppColors.accent),
+              (values: [for (final l in flowLaps) l.harvestedJ ?? 0], colorOf: (double _) => palette.success),
+            ],
+            maxValue: flowLaps.map((l) => math.max(l.deployedJ ?? 0, l.harvestedJ ?? 0)).fold(0, math.max),
+          ),
+        ],
+      ],
     );
   }
 
@@ -875,6 +919,96 @@ class _BatteryView extends StatelessWidget {
       );
 }
 
+/// 잔량 비율 → 색(거의 바닥 빨강, 가득 노랑, 그 외 초록).
+Color _storeColor(double fraction, AppPalette palette) => fraction < _batteryLowFraction
+    ? palette.danger
+    : fraction >= _batteryFullFraction
+        ? AppColors.wearMedium
+        : palette.success;
+
+/// 랩별 막대 계열 하나: 랩마다 값, 값 → 색.
+typedef _LapSeries = ({List<double> values, Color Function(double value) colorOf});
+
+/// 랩별 막대 그래프: 설명, 막대(계열이 여럿이면 한 랩에 나란히), 아래 첫·가운데·마지막 랩 눈금.
+class _LapChart extends StatelessWidget {
+  const _LapChart({required this.caption, required this.laps, required this.series, required this.maxValue});
+
+  final String caption;
+  final List<int> laps;
+  final List<_LapSeries> series;
+  final double maxValue;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final tickStyle = kTabularStyle.copyWith(fontSize: _captionSize, color: palette.textMuted);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(caption, style: TextStyle(fontSize: _captionSize, color: palette.textMuted)),
+        const SizedBox(height: _noteGap),
+        SizedBox(
+          height: _lapChartHeight,
+          child: CustomPaint(
+            painter: _LapBarsPainter(series: series, maxValue: maxValue, baseline: palette.border),
+          ),
+        ),
+        const SizedBox(height: _lapChartTickGap),
+        Row(
+          children: [
+            Text('L${laps.first}', style: tickStyle),
+            const Spacer(),
+            Text('L${laps[laps.length ~/ 2]}', style: tickStyle),
+            const Spacer(),
+            Text('L${laps.last}', style: tickStyle),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// 랩마다 한 칸, 칸 안에 계열 수만큼 막대를 나란히, 아래 기준선.
+class _LapBarsPainter extends CustomPainter {
+  _LapBarsPainter({required this.series, required this.maxValue, required this.baseline});
+
+  final List<_LapSeries> series;
+  final double maxValue;
+  final Color baseline;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final count = series.first.values.length;
+    if (count == 0 || maxValue <= 0) {
+      return;
+    }
+    final slot = size.width / count;
+    final barWidth = math.max(_lapBarMinWidth, slot * _lapBarFill / series.length);
+    final groupWidth = barWidth * series.length;
+    final paint = Paint();
+    for (var i = 0; i < count; i++) {
+      final left = slot * i + (slot - groupWidth) / 2;
+      for (final (k, s) in series.indexed) {
+        final value = s.values[i];
+        final height = (value / maxValue).clamp(0, 1) * size.height;
+        paint.color = s.colorOf(value);
+        canvas.drawRRect(
+          RRect.fromRectAndCorners(
+            Rect.fromLTWH(left + barWidth * k, size.height - height, barWidth, height),
+            topLeft: const Radius.circular(_lapBarRadius),
+            topRight: const Radius.circular(_lapBarRadius),
+          ),
+          paint,
+        );
+      }
+    }
+    canvas.drawLine(Offset(0, size.height), Offset(size.width, size.height), Paint()..color = baseline);
+  }
+
+  @override
+  bool shouldRepaint(_LapBarsPainter old) => old.series != series || old.maxValue != maxValue || old.baseline != baseline;
+}
+
 /// 배터리 모양 게이지: 잔량 비율만큼 아래부터 채운다(거의 바닥 빨강, 가득 노랑, 그 외 초록).
 class _BatteryGauge extends StatelessWidget {
   const _BatteryGauge({required this.label, required this.fraction});
@@ -886,11 +1020,7 @@ class _BatteryGauge extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final value = fraction.clamp(0, 1).toDouble();
-    final color = value < _batteryLowFraction
-        ? palette.danger
-        : value >= _batteryFullFraction
-            ? AppColors.wearMedium
-            : palette.success;
+    final color = _storeColor(value, palette);
     return SizedBox(
       width: _batteryGaugeWidth,
       child: Column(
