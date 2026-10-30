@@ -9,12 +9,14 @@ import 'package:simcenter_app/core/theme/app_colors.dart';
 import 'package:simcenter_app/core/theme/app_theme.dart';
 import 'package:simcenter_app/features/laps/domain/lap_models.dart';
 import 'package:simcenter_app/features/sessions/data/sessions_repository.dart';
+import 'package:simcenter_app/features/sessions/domain/race_analysis.dart';
 import 'package:simcenter_app/features/sessions/domain/race_review.dart';
 import 'package:simcenter_app/features/sessions/domain/session_models.dart';
 import 'package:simcenter_app/features/sessions/presentation/engine_painter.dart';
 import 'package:simcenter_app/features/sessions/presentation/session_detail_page.dart';
 import 'package:simcenter_app/features/sessions/presentation/stint_line_chart.dart';
 import 'package:simcenter_app/features/sessions/presentation/tyre_stints_view.dart';
+import 'package:simcenter_app/features/tracks/application/track_corners_provider.dart';
 
 import 'support/fakes.dart';
 
@@ -177,14 +179,20 @@ Future<GoRouter> _pumpPage(
   ]);
 
   await tester.pumpWidget(ProviderScope(
-    overrides: [sessionsRepositoryProvider.overrideWithValue(repo)],
+    overrides: [
+      sessionsRepositoryProvider.overrideWithValue(repo),
+      // 공식 코너 에셋은 테스트에서 실제 파일 읽기라 끝나지 않으므로 빈 목록으로 둔다.
+      trackCornersProvider.overrideWith((ref) async => const {}),
+    ],
     child: MaterialApp.router(theme: theme, routerConfig: router),
   ));
   await tester.pumpAndSettle();
   return router;
 }
 
-FakeSessionsRepository _repo(SessionDetail detail) => FakeSessionsRepository(details: {'d1': detail});
+/// [detail]과 그 세션의 (빈) 심층 분석을 주는 저장소.
+FakeSessionsRepository _repo(SessionDetail detail) =>
+    FakeSessionsRepository(details: {'d1': detail}, analyses: {'d1': RaceAnalysis.fromJson(const {})});
 
 String _location(GoRouter router) => router.routeInformationProvider.value.uri.toString();
 
@@ -249,6 +257,17 @@ void main() {
 
       expect(find.byKey(const ValueKey('race-review')), findsOneWidget);
       expect(find.text('Final Classification'), findsNothing);
+    });
+
+    testWidgets('심층 분석을 못 받으면 리뷰 대신 다시 시도', (t) async {
+      await _pumpPage(
+        t,
+        FakeSessionsRepository(details: {'d1': _fullDetail(raceReview: _review)}),
+        initialLocation: '/sessions/d1?tab=review',
+      );
+
+      expect(find.byKey(const ValueKey('race-review')), findsNothing);
+      expect(find.text('다시 시도'), findsOneWidget);
     });
 
     testWidgets('레이스 리뷰가 없으면 탭 없이 결과 카드만(주소에 tab=review가 있어도)', (t) async {

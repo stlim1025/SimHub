@@ -10,6 +10,7 @@ import '../../lap_detail/domain/lap_corners.dart' show OfficialCorner;
 import '../domain/race_analysis.dart';
 import '../domain/race_review.dart';
 import 'race_analysis_views.dart';
+import 'race_chart_hover.dart';
 import 'session_widgets.dart';
 import 'tyre_stints_view.dart';
 
@@ -166,13 +167,7 @@ const double _positionDotRadius = 2.5;
 const double _pitDash = 3;
 const double _pitDashGap = 3;
 
-/// 그래프 툴팁: 선과의 간격, 최대 폭, 안쪽 여백, 모서리, 글자 크기, 세로선 두께, 막대 칸 가운데 비율.
-const double _tooltipGap = 8;
-const double _tooltipMaxWidth = 240;
-const EdgeInsets _tooltipPadding = EdgeInsets.symmetric(horizontal: 8, vertical: 6);
-const double _tooltipRadius = 6;
-const double _tooltipFontSize = 12;
-const double _hoverLineWidth = 1;
+/// 랩별 막대 그래프 툴팁 자리: 막대 칸 가운데 비율.
 const double _half = 0.5;
 
 const double _msPerSecond = 1000;
@@ -195,15 +190,15 @@ Color _gradeColor(ReviewGrade grade, AppPalette palette) => switch (grade) {
     };
 
 /// 레이스 총평 카드: 한 줄 총평, 항목 탭(페이스·전략·타이어·배터리 — 탭마다 평가), 고른 항목의 그림 + 짚을 것.
-/// 심층 분석([analysis])이 있으면 항목마다 심층 줄과 그림(코너별 타이어 부담·구간별 배터리·스톱/대안 전략·랩별 페이스 기준)을 더한다.
+/// 항목마다 심층 분석([analysis])의 줄과 그림(코너별 타이어 부담·구간별 배터리·대안 전략·랩별 페이스 기준)을 함께 그린다.
 /// 제목 줄을 누르면 접고 편다(처음엔 펼침).
 class RaceReviewCard extends StatefulWidget {
-  const RaceReviewCard({super.key, required this.review, this.analysis, this.officialCorners, this.setup});
+  const RaceReviewCard({super.key, required this.review, required this.analysis, this.officialCorners, this.setup});
 
   final RaceReview review;
 
-  /// 심층 분석(읽는 중이거나 없으면 null — 총평만 그린다), 구간 이름에 쓸 공식 코너, 세팅 제안에 쓸 레이스 셋업.
-  final RaceAnalysis? analysis;
+  /// 심층 분석, 구간 이름에 쓸 공식 코너, 세팅 제안에 쓸 레이스 셋업.
+  final RaceAnalysis analysis;
   final List<OfficialCorner>? officialCorners;
   final Map<String, Object?>? setup;
 
@@ -225,10 +220,8 @@ class _RaceReviewCardState extends State<RaceReviewCard> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final analysis = widget.analysis;
-    final labels = analysis == null ? null : segmentLabels(analysis, widget.officialCorners);
-    final sections = analysis == null
-        ? raceReviewSections(review)
-        : raceReviewSectionsWithAnalysis(review, analysis, widget.officialCorners, widget.setup);
+    final labels = segmentLabels(analysis, widget.officialCorners);
+    final sections = raceReviewSectionsWithAnalysis(review, analysis, widget.officialCorners, widget.setup);
     final summary = raceReviewSummary(sections);
     final current = sections.where((s) => s.title == _selected).firstOrNull ?? sections.firstOrNull;
     return SessionCard(
@@ -267,7 +260,7 @@ class _RaceReviewCardState extends State<RaceReviewCard> {
     );
   }
 
-  Widget? _visualFor(String title, RaceAnalysis? analysis, List<String>? labels) {
+  Widget? _visualFor(String title, RaceAnalysis analysis, List<String> labels) {
     final pace = review.pace;
     final battery = review.battery;
     final base = switch (title) {
@@ -275,23 +268,21 @@ class _RaceReviewCardState extends State<RaceReviewCard> {
       kStrategySectionTitle => _StrategyView(
           strategy: review.strategy,
           stints: review.stints,
-          stopContexts: analysis?.strategy?.stops ?? const [],
+          stopContexts: analysis.strategy?.stops ?? const [],
         ),
       kTyreSectionTitle => _StintList(stints: review.stints),
       kBatterySectionTitle when battery != null => _BatteryView(battery: battery),
       _ => null,
     };
-    final strategy = analysis?.strategy;
-    final deep = analysis == null || labels == null
-        ? null
-        : switch (title) {
-            kPaceSectionTitle when analysis.lapPace.isNotEmpty => LapPaceView(analysis: analysis),
-            kStrategySectionTitle when strategy != null && strategy.options.length > 1 => StrategyAnalysisView(strategy: strategy),
-            kTyreSectionTitle when analysis.drivenStints.isNotEmpty => TyreLoadView(analysis: analysis, labels: labels),
-            kBatterySectionTitle when analysis.stints.any((s) => s.segments.any((d) => d.deployKj != null)) =>
-              BatterySegmentsView(analysis: analysis, labels: labels),
-            _ => null,
-          };
+    final strategy = analysis.strategy;
+    final deep = switch (title) {
+      kPaceSectionTitle when analysis.lapPace.isNotEmpty => LapPaceView(analysis: analysis),
+      kStrategySectionTitle when strategy != null && strategy.options.length > 1 => StrategyAnalysisView(strategy: strategy),
+      kTyreSectionTitle when analysis.drivenStints.isNotEmpty => TyreLoadView(analysis: analysis, labels: labels),
+      kBatterySectionTitle when analysis.stints.any((s) => s.segments.any((d) => d.deployKj != null)) =>
+        BatterySegmentsView(analysis: analysis, labels: labels),
+      _ => null,
+    };
     if (deep == null || base == null) {
       return deep ?? base;
     }
@@ -1322,7 +1313,7 @@ class _PositionChart extends StatelessWidget {
                 ),
               ),
               Expanded(
-                child: _HoverLayer(
+                child: RaceChartHover(
                   count: points.length,
                   xOf: (i, width) => width * points[i].lap / totalLaps,
                   tooltipOf: (i) => _positionTooltip(points, i),
@@ -1404,102 +1395,6 @@ class _PositionChart extends StatelessWidget {
       if (pitLaps.contains(point.lap)) _pitTooltip,
     ];
     return parts.join(', ');
-  }
-}
-
-/// 그래프 위 마우스·터치 툴팁: 포인터에서 가장 가까운 점([xOf]로 가로 자리)에 세로선과 설명([tooltipOf])을 띄운다.
-/// 설명은 그래프 왼쪽 절반이면 선 오른쪽, 오른쪽 절반이면 선 왼쪽에 둬 가장자리에서 잘리지 않게.
-class _HoverLayer extends StatefulWidget {
-  const _HoverLayer({required this.count, required this.xOf, required this.tooltipOf, required this.child});
-
-  final int count;
-  final double Function(int index, double width) xOf;
-  final String Function(int index) tooltipOf;
-  final Widget child;
-
-  @override
-  State<_HoverLayer> createState() => _HoverLayerState();
-}
-
-class _HoverLayerState extends State<_HoverLayer> {
-  int? _index;
-
-  void _pick(double dx, double width) {
-    if (widget.count == 0) {
-      return;
-    }
-    var nearest = 0;
-    for (var i = 1; i < widget.count; i++) {
-      if ((widget.xOf(i, width) - dx).abs() < (widget.xOf(nearest, width) - dx).abs()) {
-        nearest = i;
-      }
-    }
-    if (nearest != _index) {
-      setState(() => _index = nearest);
-    }
-  }
-
-  void _clear() {
-    if (_index != null) {
-      setState(() => _index = null);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        final index = _index;
-        final x = index == null ? 0.0 : widget.xOf(index, width);
-        final left = x < width / 2;
-        return MouseRegion(
-          onHover: (event) => _pick(event.localPosition.dx, width),
-          onExit: (_) => _clear(),
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTapDown: (details) => _pick(details.localPosition.dx, width),
-            onHorizontalDragUpdate: (details) => _pick(details.localPosition.dx, width),
-            onHorizontalDragEnd: (_) => _clear(),
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Positioned.fill(child: widget.child),
-                if (index != null) ...[
-                  Positioned(
-                    left: x - _hoverLineWidth / 2,
-                    top: 0,
-                    bottom: 0,
-                    width: _hoverLineWidth,
-                    child: ColoredBox(color: palette.textMuted),
-                  ),
-                  Positioned(
-                    top: 0,
-                    left: left ? x + _tooltipGap : null,
-                    right: left ? null : width - x + _tooltipGap,
-                    child: Container(
-                      key: const ValueKey('race-review-tooltip'),
-                      constraints: const BoxConstraints(maxWidth: _tooltipMaxWidth),
-                      padding: _tooltipPadding,
-                      decoration: BoxDecoration(
-                        color: palette.surface,
-                        border: Border.all(color: palette.border),
-                        borderRadius: BorderRadius.circular(_tooltipRadius),
-                      ),
-                      child: Text(
-                        widget.tooltipOf(index),
-                        style: kTabularStyle.copyWith(fontSize: _tooltipFontSize, color: palette.textPrimary),
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        );
-      },
-    );
   }
 }
 
@@ -1625,7 +1520,7 @@ class _LapChart extends StatelessWidget {
         const SizedBox(height: _noteGap),
         SizedBox(
           height: _lapChartHeight,
-          child: _HoverLayer(
+          child: RaceChartHover(
             count: laps.length,
             // 막대 칸 가운데.
             xOf: (i, width) => width / laps.length * (i + _half),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:simcenter_app/features/sessions/domain/race_analysis.dart';
 import 'package:simcenter_app/features/sessions/domain/race_review.dart';
 import 'package:simcenter_app/features/sessions/presentation/race_review_card.dart';
 
@@ -167,7 +168,7 @@ void main() {
       tester.view.physicalSize = Size(width, 2400);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
-      await tester.pumpWidget(MaterialApp(home: Scaffold(body: SingleChildScrollView(child: RaceReviewCard(review: review)))));
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: SingleChildScrollView(child: RaceReviewCard(review: review, analysis: RaceAnalysis.fromJson(const {}))))));
       Future<void> open(String title) async {
         await tester.tap(find.byKey(ValueKey('race-review-tab-$title')));
         await tester.pump();

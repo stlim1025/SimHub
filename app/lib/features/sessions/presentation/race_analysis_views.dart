@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../domain/race_analysis.dart';
 import '../domain/race_review.dart';
+import 'race_chart_hover.dart';
 import 'session_widgets.dart';
 import 'tyre_stints_view.dart';
 
@@ -33,6 +34,9 @@ const double _paceBarFill = 0.7;
 const int _paceCapMs = 1500;
 const double _zeroLineWidth = 1;
 const double _dimAlpha = 0.35;
+
+/// 랩별 페이스 툴팁 자리: 막대 칸 가운데 비율.
+const double _half = 0.5;
 const int _frontWheels = 2;
 
 const double _msPerSecond = 1000;
@@ -421,6 +425,15 @@ class _LapPaceViewState extends State<LapPaceView> {
     return basis == null ? null : p.lapTimeMs - basis;
   }
 
+  /// 랩 하나의 툴팁: AI와 차이(기준 값이 없으면 그렇다고), 흐리게 그린 랩이면 비교에서 뺀 랩이라고.
+  String _tooltipOf(RaceLapPace p) {
+    final g = _gapOf(p);
+    final gap = g == null
+        ? '비교할 AI 기록이 없어'
+        : 'AI보다 ${(g.abs() / _msPerSecond).toStringAsFixed(3)}초 ${g >= 0 ? '느림' : '빠름'}';
+    return '${p.lap}랩: $gap${p.isClean ? '' : '\n피트·출발·세이프티카 랩이라 비교에서 뺐어'}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
@@ -455,31 +468,34 @@ class _LapPaceViewState extends State<LapPaceView> {
         const SizedBox(height: _rowGap),
         SizedBox(
           height: _paceChartHeight,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final slot = constraints.maxWidth / laps.length;
-              final barWidth = math.min(_paceBarMaxWidth, slot * _paceBarFill);
-              final half = constraints.maxHeight / 2;
-              return Stack(
-                children: [
-                  Positioned(left: 0, right: 0, top: half, child: Container(height: _zeroLineWidth, color: palette.border)),
-                  for (final (i, p) in laps.indexed)
-                    if (_gapOf(p) case final g?)
-                      Positioned(
-                        left: slot * i + (slot - barWidth) / 2,
-                        width: barWidth,
-                        top: g >= 0 ? half - half * (g.clamp(0, cap) / cap) : half,
-                        height: math.max(1, half * (g.abs().clamp(0, cap) / cap)),
-                        child: Tooltip(
-                          message: '${p.lap}랩: ${(g.abs() / _msPerSecond).toStringAsFixed(3)}초 ${g >= 0 ? '느림' : '빠름'}',
+          // 다른 그래프와 같은 툴팁: 마우스를 올리거나(터치는 누르면) 가장 가까운 랩에 세로선과 설명.
+          child: RaceChartHover(
+            count: laps.length,
+            xOf: (i, width) => width / laps.length * (i + _half),
+            tooltipOf: (i) => _tooltipOf(laps[i]),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final slot = constraints.maxWidth / laps.length;
+                final barWidth = math.min(_paceBarMaxWidth, slot * _paceBarFill);
+                final half = constraints.maxHeight / 2;
+                return Stack(
+                  children: [
+                    Positioned(left: 0, right: 0, top: half, child: Container(height: _zeroLineWidth, color: palette.border)),
+                    for (final (i, p) in laps.indexed)
+                      if (_gapOf(p) case final g?)
+                        Positioned(
+                          left: slot * i + (slot - barWidth) / 2,
+                          width: barWidth,
+                          top: g >= 0 ? half - half * (g.clamp(0, cap) / cap) : half,
+                          height: math.max(1, half * (g.abs().clamp(0, cap) / cap)),
                           child: Container(
                             color: (g >= 0 ? palette.danger : palette.success).withValues(alpha: p.isClean ? 1 : _dimAlpha),
                           ),
                         ),
-                      ),
-                ],
-              );
-            },
+                  ],
+                );
+              },
+            ),
           ),
         ),
         Row(

@@ -34,6 +34,7 @@ const String _backToSeasonTooltip = '시즌으로';
 const String _notFoundMessage = '찾을 수 없는 세션입니다.';
 const String _notFoundBackLabel = 'Sessions';
 const String _highlightsLabel = '하이라이트';
+const String _analysisErrorMessage = '레이스 분석을 불러오지 못했어요.';
 
 /// 세션 이름을 알 수 없을 때(로딩 중·조회 실패)의 제목.
 const String _fallbackTitle = 'Session';
@@ -230,7 +231,7 @@ class _SessionCards extends StatelessWidget {
   }
 }
 
-/// Race Review 탭: 총평을 먼저 그리고, 심층 분석·공식 코너가 오면 그것까지 얹어 다시 그린다(분석을 못 받으면 총평만).
+/// Race Review 탭: 심층 분석과 공식 코너를 다 받은 뒤 한 번에 그린다(받는 동안은 불러오는 중 막대, 분석을 못 받으면 다시 시도).
 class _RaceReviewTab extends ConsumerWidget {
   const _RaceReviewTab({required this.detail, required this.review});
 
@@ -238,12 +239,28 @@ class _RaceReviewTab extends ConsumerWidget {
   final RaceReview review;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => RaceReviewCard(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sessionId = detail.header.sessionId;
+    final analysis = ref.watch(raceAnalysisProvider(sessionId));
+    final corners = ref.watch(trackCornersProvider);
+    if (analysis.isLoading || corners.isLoading) {
+      return const PageLoadingBar();
+    }
+    return analysis.when(
+      loading: () => const PageLoadingBar(),
+      error: (e, _) => ErrorRetry(
+        error: e,
+        fallbackMessage: _analysisErrorMessage,
+        onRetry: () => ref.invalidate(raceAnalysisProvider(sessionId)),
+      ),
+      data: (data) => RaceReviewCard(
         review: review,
-        analysis: ref.watch(raceAnalysisProvider(detail.header.sessionId)).valueOrNull,
-        officialCorners: ref.watch(trackCornersProvider).valueOrNull?[detail.header.trackName],
+        analysis: data,
+        officialCorners: corners.valueOrNull?[detail.header.trackName],
         setup: detail.setup,
-      );
+      ),
+    );
+  }
 }
 
 /// 결과 카드 7장(Results 탭, 레이스 리뷰가 없으면 화면 전체).
