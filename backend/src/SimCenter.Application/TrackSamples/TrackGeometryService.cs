@@ -10,8 +10,11 @@ namespace SimCenter.Application.TrackSamples;
 /// </summary>
 /// <param name="Y">높이(m). 높이를 모으지 못했으면 null.</param>
 /// <param name="PitX">피트 레인 선(입구 → 출구, 월드 X·Z·높이). 피트 레인 표본이 모자라면 셋 다 null.</param>
-/// <param name="EdgeLeftM">레이싱 라인에서 아스팔트 가장자리까지(m): 네 바퀴가 모두 아스팔트에 있던 차의 바깥 바퀴가 닿은 가장 먼 자리. 표본이 없는 칸은 0.</param>
-/// <param name="KerbOuterLeftM">연석을 밟은 차의 바깥 바퀴가 닿은 가장 먼 자리(m) = 연석 바깥 끝. 없으면 0.</param>
+/// <param name="EdgeLeftM">
+/// 레이싱 라인에서 아스팔트 가장자리까지(m): 네 바퀴가 모두 아스팔트에 있던 차의 바깥 바퀴가 닿은 먼 자리
+/// (표본이 많은 칸은 가장 먼 1%를 뺀다). 표본이 없는 칸은 0.
+/// </param>
+/// <param name="KerbOuterLeftM">연석을 밟은 차의 바깥 바퀴가 닿은 먼 자리(m, 같은 규칙) = 연석 바깥 끝. 없으면 0.</param>
 /// <param name="ReachLeftM">차 몸체가 닿은 가장 먼 자리(m): 코스를 벗어난 차, 멈춘 차까지 모두. 방호벽은 이보다 바깥이다.</param>
 public sealed record TrackGeometryResponse(
     Guid TrackId,

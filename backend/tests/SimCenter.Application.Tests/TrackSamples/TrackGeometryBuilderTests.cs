@@ -188,6 +188,38 @@ public sealed class TrackGeometryBuilderTests
     }
 
     [Fact]
+    public void Build_AWheelOnceOnPavedRunOff_DoesNotWidenTheAsphalt_ButMovesTheWallReach()
+    {
+        // 50대가 레이싱 라인에서 안쪽 0~4m 아스팔트를 달리고(한 칸에 표본 150개), 50번 차만 250m에서 한 번 안쪽 15m 포장 런오프에 있다.
+        var frames = new List<Sample[]>();
+        for (var d = 0.0; d < LapLength; d += 2)
+        {
+            var angle = d / Radius;
+            var cars = new List<Sample>();
+            for (byte car = 0; car < 50; car++)
+            {
+                var radius = Radius - car % 5;
+                cars.Add(new Sample(car, d, radius * Math.Cos(angle), radius * Math.Sin(angle)));
+            }
+
+            if (d == 250)
+            {
+                cars.Add(new Sample(50, d, (Radius - 15) * Math.Cos(angle), (Radius - 15) * Math.Sin(angle)));
+            }
+
+            frames.Add([.. cars]);
+        }
+
+        var geometry = TrackGeometryBuilder.Build([TrackSampleDecoder.Decode(Encode(frames), format: 5)])!;
+
+        double OffsetAt(int bin, double radius) => Math.Sqrt(geometry.X[bin] * geometry.X[bin] + geometry.Z[bin] * geometry.Z[bin]) - radius;
+        void Near(double expected, double actual) => Assert.InRange(actual, expected - 0.2, expected + 0.2);
+        const int bin = 50; // 250m
+        Near(OffsetAt(bin, Radius - 4) + 1, geometry.EdgeLeftM[bin]);                         // 가장 먼 1%(런오프 한 번)는 뺀다
+        Near(OffsetAt(bin, Radius - 15) + Math.Sqrt(1 + 2.8 * 2.8), geometry.ReachLeftM[bin]); // 방호벽 자리는 그 차까지 담는다(방향 모름)
+    }
+
+    [Fact]
     public void Build_TooFewSamples_ReturnsNull()
         => Assert.Null(TrackGeometryBuilder.Build([TrackSampleDecoder.Decode(Encode([[new Sample(0, 500, 1, 1)]]), format: 5)]));
 }

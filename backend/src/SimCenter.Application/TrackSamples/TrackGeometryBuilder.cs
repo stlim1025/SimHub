@@ -9,8 +9,11 @@ namespace SimCenter.Application.TrackSamples;
 /// <param name="Y">높이(m). 높이 열이 있는 표본이 없으면 null.</param>
 /// <param name="BandLeftM">레이싱 라인에서 왼쪽(진행 방향 기준 법선 (−sin, cos))으로 차들이 달린 끝(m, 0 이상).</param>
 /// <param name="BandRightM">오른쪽 끝(m, 0 이상).</param>
-/// <param name="EdgeLeftM">네 바퀴가 모두 아스팔트(연석이 아닌 포장 노면)에 있던 차의 바깥 바퀴가 닿은 가장 먼 자리 = 아스팔트 왼쪽 가장자리.</param>
-/// <param name="KerbOuterLeftM">연석을 밟은 차(네 바퀴 모두 포장 노면)의 바깥 바퀴가 닿은 가장 먼 자리 = 왼쪽 연석 바깥 끝.</param>
+/// <param name="EdgeLeftM">
+/// 네 바퀴가 모두 아스팔트(연석이 아닌 포장 노면)에 있던 차의 바깥 바퀴가 닿은 먼 자리 = 아스팔트 왼쪽 가장자리.
+/// 표본이 많은 칸은 가장 먼 1%를 뺀다(포장 런오프·탈출로로 한두 번 나간 차가 도로를 부풀리지 않게).
+/// </param>
+/// <param name="KerbOuterLeftM">연석을 밟은 차(네 바퀴 모두 포장 노면)의 바깥 바퀴가 닿은 먼 자리(같은 규칙) = 왼쪽 연석 바깥 끝.</param>
 /// <param name="ReachLeftM">차 몸체가 닿은 가장 먼 자리: 잔디·그래블로 나간 차, 느리거나 멈춘 차까지 모두. 방호벽은 이보다 바깥에 있다.</param>
 /// <param name="PitX">피트 레인 선(피트 입구 → 출구 순, 피트 레인 표본의 칸별 중앙값). 피트 레인 표본이 모자라면 null.</param>
 public sealed record TrackGeometry(
@@ -72,6 +75,12 @@ public static class TrackGeometryBuilder
     private const int MinPitSpeedKph = 10;
     private const int MinPitBinSamples = 3;
     private const int MinPitBins = 10;
+
+    /// <summary>
+    /// 가장자리·연석 바깥 끝: 칸 표본의 바퀴 자리 가운데 이 비율 위치(가장 먼 1%는 런오프·탈출로로 잠깐 나간 차로 보고 뺀다).
+    /// 표본이 100개 이하인 칸은 가장 먼 자리 그대로다.
+    /// </summary>
+    private const double EdgePercentile = 0.99;
 
     /// <summary>바퀴: 차 가운데에서 바깥 바퀴 바깥 면까지 옆 거리(m)·앞뒤 바퀴 축까지 거리(m).</summary>
     private const double WheelOuterHalfWidthM = 1.0;
@@ -175,6 +184,8 @@ public static class TrackGeometryBuilder
         var edgeRight = new double[n];
         var kerbOuterLeft = new double[n];
         var kerbOuterRight = new double[n];
+        var tarmacWheels = (Left: new List<double>(), Right: new List<double>());
+        var kerbWheels = (Left: new List<double>(), Right: new List<double>());
         var reachLeft = new double[n];
         var reachRight = new double[n];
         for (var k = 0; k < n; k++)
@@ -194,6 +205,10 @@ public static class TrackGeometryBuilder
             var nx = -uz;
             var nz = ux;
             var offsets = new List<double>();
+            tarmacWheels.Left.Clear();
+            tarmacWheels.Right.Clear();
+            kerbWheels.Left.Clear();
+            kerbWheels.Right.Clear();
             foreach (var p in bins[k])
             {
                 var offset = (p.X - lineX[k]) * nx + (p.Z - lineZ[k]) * nz;
@@ -228,11 +243,16 @@ public static class TrackGeometryBuilder
                 if (p.Paved && inStretch)
                 {
                     var wheel = Extent(p.Heading, ux, uz, WheelOuterHalfWidthM, WheelHalfBaseM) ?? WheelOuterHalfWidthM;
-                    var (left, right) = p.Rumble ? (kerbOuterLeft, kerbOuterRight) : (edgeLeft, edgeRight);
-                    left[k] = Math.Max(left[k], offset + wheel);
-                    right[k] = Math.Max(right[k], -offset + wheel);
+                    var wheels = p.Rumble ? kerbWheels : tarmacWheels;
+                    wheels.Left.Add(offset + wheel);
+                    wheels.Right.Add(-offset + wheel);
                 }
             }
+
+            edgeLeft[k] = FarEnd(tarmacWheels.Left);
+            edgeRight[k] = FarEnd(tarmacWheels.Right);
+            kerbOuterLeft[k] = FarEnd(kerbWheels.Left);
+            kerbOuterRight[k] = FarEnd(kerbWheels.Right);
 
             if (offsets.Count == 0)
             {
@@ -248,6 +268,18 @@ public static class TrackGeometryBuilder
         return new TrackGeometry(
             ResolutionM, sampleCount, lineX, lineZ, heightsOut, bandLeft, bandRight, kerbLeft, kerbRight,
             edgeLeft, edgeRight, kerbOuterLeft, kerbOuterRight, reachLeft, reachRight, pit?.X, pit?.Z, pit?.Y);
+    }
+
+    /// <summary>바퀴 자리 가운데 <see cref="EdgePercentile"/> 위치(0 이상). 없으면 0.</summary>
+    private static double FarEnd(List<double> reaches)
+    {
+        if (reaches.Count == 0)
+        {
+            return 0;
+        }
+
+        reaches.Sort();
+        return Math.Max(0, reaches[Math.Min(reaches.Count - 1, (int)(reaches.Count * EdgePercentile))]);
     }
 
     /// <summary>

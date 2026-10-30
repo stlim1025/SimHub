@@ -102,6 +102,24 @@ void main() {
     expect(circuit.asphalt.contains(at(107.5)), isFalse);
   });
 
+  test('연석이 있는 칸은 아스팔트가 연석 바깥 끝을 넘지 않는다(그 너머 포장 런오프는 도로가 아니다)', () {
+    final json = _geometryJson(
+      pit: false,
+      columns: {'edgeLeftM': 2, 'edgeRightM': 20, 'kerbOuterLeftM': 0, 'kerbOuterRightM': 8},
+    );
+    json['kerbRight'] = [for (var i = 0; i < (json['x'] as List).length; i++) true];
+    final circuit = ReplayCircuit.build(
+      LapReplay(_circleLap()),
+      samples: TrackSampleGeometry.fromJsonOrNull(json)!,
+      baseWidthM: 10,
+    );
+    Offset at(double radius) => Offset(radius * math.cos(1.0), radius * math.sin(1.0));
+
+    // 오른쪽(바깥): 포장 런오프로 20m까지 나간 차가 있어도 아스팔트는 연석 바깥 끝 8m까지.
+    expect(circuit.asphalt.contains(at(107.5)), isTrue);
+    expect(circuit.asphalt.contains(at(115)), isFalse);
+  });
+
   test('표본 형상은 주행선에 다시 맞추지 않고 그 칸 그대로 쓰고, 주행선은 폭을 넓혀 담는다', () {
     final geometry = TrackSampleGeometry.fromJsonOrNull(_geometryJson(pit: false))!;
     // 내 랩: 6m 바깥을 10m 간격으로 돈다(예전에는 표본 형상을 이 선에 맞춰 키우고 내 랩 점으로 옮겨 담았다).

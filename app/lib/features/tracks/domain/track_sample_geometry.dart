@@ -12,6 +12,9 @@ const double _offsetFadeM = 100;
 /// 도로 가운데 이동량을 고르는 이동 평균 반폭(칸).
 const int _offsetSmoothBins = 3;
 
+/// 가장자리를 고르는 반폭(칸): 앞뒤 가장 먼 값으로 넓힌 뒤 같은 범위로 평균해 칸마다 튀지 않게 한다(점마다 원래 값 이상).
+const int _edgeSmoothBins = 3;
+
 /// 모든 차 표본으로 서버가 만든 트랙 형상(`GET /tracks/{trackId}/geometry`). 칸 i = 랩 거리 i × [resolutionM].
 /// 선([x]·[z])은 레이싱 라인(차들이 달린 위치의 중앙값)이고 도로 한가운데가 아니다. 띠는 그 선에서 차들이 달린 왼쪽·오른쪽 끝(m),
 /// 연석은 그 쪽을 밟은 적이 있는지. 왼쪽 = 진행 방향 법선 (−sin, cos) 쪽(앱 서킷 그림과 같은 규칙).
@@ -55,8 +58,9 @@ class TrackSampleGeometry {
   final List<double>? pitZ;
   final List<double>? pitY;
 
-  /// 아스팔트 가장자리: 네 바퀴가 모두 아스팔트(연석이 아닌 포장 노면)에 있던 차의 바깥 바퀴가 닿은 가장 먼 자리.
-  /// [kerbOuterLeftM]·[kerbOuterRightM]은 연석을 밟은 차의 바깥 바퀴가 닿은 가장 먼 자리 = 연석 바깥 끝. 예전 서버 응답이면 넷 다 null.
+  /// 아스팔트 가장자리: 네 바퀴가 모두 아스팔트(연석이 아닌 포장 노면)에 있던 차의 바깥 바퀴가 닿은 먼 자리
+  /// (표본이 많은 칸은 런오프로 잠깐 나간 가장 먼 1%를 뺀다). [kerbOuterLeftM]·[kerbOuterRightM]은 연석을 밟은 차의
+  /// 바깥 바퀴가 닿은 먼 자리 = 연석 바깥 끝(같은 규칙). 예전 서버 응답이면 넷 다 null.
   final List<double>? edgeLeftM;
   final List<double>? edgeRightM;
   final List<double>? kerbOuterLeftM;
@@ -140,8 +144,10 @@ class TrackSampleGeometry {
 }
 
 /// 표본 형상 → 도로(가운데 선·좌우 폭, 순수 함수). 도로 폭은 [widthM](넓게 달린 곳은 그만큼 넓힌다).
-/// 가장자리는 바퀴가 아스팔트를 밟은 가장 먼 자리이고, 연석을 밟은 차가 연석(가장자리 바깥에 [kerbWidthM] 폭으로 그린다) 위에
-/// 오도록 연석 바깥 끝 − 연석 폭까지는 넓힌다(바퀴 열이 없는 예전 응답은 차들이 달린 띠 + 여유).
+/// 가장자리는 바퀴가 아스팔트를 밟은 먼 자리이고, 연석을 밟은 차가 연석(가장자리 바깥에 [kerbWidthM] 폭으로 그린다) 위에
+/// 오도록 연석 바깥 끝 − 연석 폭까지는 넓힌다(바퀴 열이 없는 예전 응답은 차들이 달린 띠 + 여유). 연석이 있는 칸은 연석 바깥 끝을
+/// 넘지 않는다 — 그 너머 포장 런오프·탈출로로 나간 차는 도로 밖에 그린다(방호벽은 그 차까지 담는다).
+/// 가장자리는 앞뒤로 넓힌 뒤 평균해 칸마다 튀어 접히지 않게 한다.
 /// 연석을 밟은 칸에서는 그 쪽 가장자리가 그 자리라 보고 도로 가운데를 레이싱 라인에서 옮기고,
 /// 단서 사이는 이어 메운다(멀어지면 레이싱 라인 = 가운데로 돌아간다). 그래서 코너에서 레이싱 라인이 바깥 → 안쪽 → 바깥으로 지난다.
 /// 차 몸체가 닿은 끝(있으면)은 옮긴 도로 가운데에서 잰 값으로 바꿔 함께 싣는다.
@@ -157,14 +163,28 @@ TrackWidthProfile trackProfileFromSamples(TrackSampleGeometry geometry, {require
         return d.distance == 0 ? Offset.zero : Offset(-d.dy, d.dx) / d.distance;
       }(),
   ];
-  List<double> edge(List<double>? wheels, List<double>? kerbOuter, List<double> band) => [
-        for (var k = 0; k < n; k++)
-          wheels != null && kerbOuter != null
-              ? math.max(wheels[k], kerbOuter[k] - kerbWidthM)
-              : band[k] + _kerbEdgeAllowanceM,
-      ];
-  final leftEdge = edge(geometry.edgeLeftM, geometry.kerbOuterLeftM, geometry.bandLeftM);
-  final rightEdge = edge(geometry.edgeRightM, geometry.kerbOuterRightM, geometry.bandRightM);
+  List<double> edge(List<double>? wheels, List<double>? kerbOuter, List<bool> kerbs, List<double> band) {
+    final raw = [
+      for (var k = 0; k < n; k++)
+        if (wheels == null || kerbOuter == null)
+          band[k] + _kerbEdgeAllowanceM
+        else if (kerbs[k] && kerbOuter[k] > 0)
+          math.min(math.max(wheels[k], kerbOuter[k] - kerbWidthM), kerbOuter[k])
+        else
+          math.max(wheels[k], kerbOuter[k] - kerbWidthM),
+    ];
+    final widened = [
+      for (var k = 0; k < n; k++) [for (var j = -_edgeSmoothBins; j <= _edgeSmoothBins; j++) raw[at(k + j)]].reduce(math.max),
+    ];
+    return [
+      for (var k = 0; k < n; k++)
+        [for (var j = -_edgeSmoothBins; j <= _edgeSmoothBins; j++) widened[at(k + j)]].reduce((a, b) => a + b) /
+            (_edgeSmoothBins * 2 + 1),
+    ];
+  }
+
+  final leftEdge = edge(geometry.edgeLeftM, geometry.kerbOuterLeftM, geometry.kerbLeft, geometry.bandLeftM);
+  final rightEdge = edge(geometry.edgeRightM, geometry.kerbOuterRightM, geometry.kerbRight, geometry.bandRightM);
 
   // 연석 단서가 있는 칸의 도로 가운데 이동량(+ = 왼쪽).
   final known = <int, double>{};
