@@ -6,6 +6,9 @@ namespace SimCenter.Application.Common.Interfaces;
 /// <summary>같은 주말 예선 세션 1건의 내 순위(내 결과가 없으면 null).</summary>
 public sealed record WeekendQualifyingRow(Guid SessionId, SessionKind SessionKind, DateTime ClassifiedAt, int? MyPosition);
 
+/// <summary>내 랩 하나의 저장된 트레이스(gzip 채널 JSON — <c>LapTraceCodec</c>로 푼다)와 표본 간격(m).</summary>
+public sealed record SessionTraceRow(Guid LapId, int ResolutionM, byte[] Payload);
+
 /// <summary>
 /// 세션 상세 F1Laps 카드용 조회 포트(P8, docs/15 §11.4 D-53). 읽기 전용(no tracking), 메서드마다 쿼리 1회 — 랩마다 따로 읽지 않는다.
 /// </summary>
@@ -30,4 +33,9 @@ public interface ISessionDetailQueryRepository
     /// <summary>그 세션의 모든 차 표본(트랙 형상·다른 차 랩 복원용)이 있는지. 모르는 구현은 없다고 본다.</summary>
     Task<bool> HasMyTrackSamplesAsync(Guid userId, string sessionRef, CancellationToken cancellationToken = default)
         => Task.FromResult(false);
+
+    /// <summary>내 랩([lapIds] 중 내 것만)의 저장된 트레이스(레이스 심층 분석용). 트레이스가 없는 랩은 빠진다. 모르는 구현은 빈 목록.</summary>
+    Task<IReadOnlyList<SessionTraceRow>> GetMyLapTracesAsync(
+        Guid userId, IReadOnlyCollection<Guid> lapIds, CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyList<SessionTraceRow>>([]);
 }

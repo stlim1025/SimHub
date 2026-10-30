@@ -28,7 +28,10 @@ public readonly record struct RaceSample(
     private const byte RawWet = 8;
 
     /// <summary>보이는 컴파운드(<see cref="TyreCompound"/> 값, 모르면 0 — format 3 이전 표본·클래식 타이어).</summary>
-    public int Tyre => (int)(TyreVisualRaw switch
+    public int Tyre => (int)VisualCompoundOf(TyreVisualRaw);
+
+    /// <summary>게임 보이는 컴파운드 원시 값 → <see cref="TyreCompound"/>(모르는 값은 Unknown). 스냅샷 <c>tyreSets</c>도 같은 값을 쓴다.</summary>
+    public static TyreCompound VisualCompoundOf(int raw) => raw switch
     {
         RawSoft => TyreCompound.Soft,
         RawMedium => TyreCompound.Medium,
@@ -36,7 +39,7 @@ public readonly record struct RaceSample(
         RawInter => TyreCompound.Intermediate,
         RawWet => TyreCompound.Wet,
         _ => TyreCompound.Unknown,
-    });
+    };
 
     /// <summary>상태 비트: 차 대 차 충돌·충격 순간.</summary>
     public const byte CollisionFlag = 0x20;
@@ -50,7 +53,10 @@ public readonly record struct RaceSample(
     private const int PitStatusMask = 0x3;
 
     /// <summary>피트 레인에 있는지(게임 Pit Status가 0이 아님).</summary>
-    public bool InPit => ((Status >> PitStatusShift) & PitStatusMask) != 0;
+    public bool InPit => IsInPit(Status);
+
+    /// <summary>표본 상태 바이트가 피트 레인을 뜻하는지.</summary>
+    public static bool IsInPit(byte status) => ((status >> PitStatusShift) & PitStatusMask) != 0;
 }
 
 /// <summary>

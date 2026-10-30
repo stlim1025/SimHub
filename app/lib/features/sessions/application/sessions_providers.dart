@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../profile/application/selected_game_provider.dart';
 import '../data/sessions_repository.dart';
+import '../domain/race_analysis.dart';
 import '../domain/race_highlights.dart';
 import '../domain/session_display.dart';
 import '../domain/session_models.dart';
@@ -47,4 +48,9 @@ final sessionDetailProvider = FutureProvider.autoDispose.family<SessionDetail, S
 /// 레이스 세션 하나의 하이라이트.
 final raceHighlightsProvider = FutureProvider.autoDispose.family<RaceHighlights, String>(
   (ref, sessionId) => ref.watch(sessionsRepositoryProvider).getHighlights(sessionId),
+);
+
+/// 레이스 세션 하나의 심층 분석(Race Review 탭을 열 때 읽는다).
+final raceAnalysisProvider = FutureProvider.autoDispose.family<RaceAnalysis, String>(
+  (ref, sessionId) => ref.watch(sessionsRepositoryProvider).getRaceAnalysis(sessionId),
 );

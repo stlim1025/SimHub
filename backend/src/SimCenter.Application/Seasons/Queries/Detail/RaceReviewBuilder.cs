@@ -311,7 +311,7 @@ public static class RaceReviewBuilder
     }
 
     /// <summary>랩 번호에 대한 랩타임 최소제곱 기울기(ms/랩). 랩이 <see cref="MinTrendLaps"/>보다 적으면 null.</summary>
-    private static double? Trend(IReadOnlyList<HistoryLap> laps)
+    internal static double? Trend(IReadOnlyList<HistoryLap> laps)
     {
         if (laps.Count < MinTrendLaps)
         {
@@ -324,19 +324,19 @@ public static class RaceReviewBuilder
         return spread == 0 ? null : laps.Sum(l => (l.LapNumber - meanLap) * (l.LapTimeMs - meanTime)) / spread;
     }
 
-    private static double Median(IEnumerable<double> values)
+    internal static double Median(IEnumerable<double> values)
     {
         var sorted = values.Order().ToList();
         var middle = sorted.Count / 2;
         return sorted.Count % 2 == 1 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
     }
 
-    private static int Round(double value) => (int)Math.Round(value, MidpointRounding.AwayFromZero);
+    internal static int Round(double value) => (int)Math.Round(value, MidpointRounding.AwayFromZero);
 
     private static int? NullIfZero(int value) => value > 0 ? value : null;
 
-    /// <summary>차 한 대의 레이스: 스틴트 범위, 기록된 랩(진행 중 0 제외), 깨끗한 랩과 그 중앙값.</summary>
-    private sealed class CarRace
+    /// <summary>차 한 대의 레이스: 스틴트 범위, 기록된 랩(진행 중 0 제외), 깨끗한 랩과 그 중앙값. 심층 분석(<see cref="RaceAnalysisBuilder"/>)도 같은 깨끗한 랩을 쓴다.</summary>
+    internal sealed class CarRace
     {
         private CarRace(SessionResult result, IReadOnlyList<StintSpan> spans, IReadOnlyList<HistoryLap> laps, IReadOnlyList<HistoryLap> clean)
         {

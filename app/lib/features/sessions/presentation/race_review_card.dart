@@ -6,7 +6,10 @@ import '../../../core/layout/equal_height.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/util/lap_time.dart';
+import '../../lap_detail/domain/lap_corners.dart' show OfficialCorner;
+import '../domain/race_analysis.dart';
 import '../domain/race_review.dart';
+import 'race_analysis_views.dart';
 import 'session_widgets.dart';
 import 'tyre_stints_view.dart';
 
@@ -171,11 +174,17 @@ Color _gradeColor(ReviewGrade grade, AppPalette palette) => switch (grade) {
     };
 
 /// 레이스 총평 카드: 한 줄 총평, 항목(페이스·전략·타이어·배터리)마다 평가 + 그림 + 짚을 것. 넓으면 두 열.
+/// 심층 분석([analysis])이 있으면 항목마다 심층 줄과 그림(코너별 타이어 부담·구간별 배터리·스톱/대안 전략·랩별 페이스 기준)을 더한다.
 /// 제목 줄을 누르면 접고 편다(처음엔 펼침).
 class RaceReviewCard extends StatefulWidget {
-  const RaceReviewCard({super.key, required this.review});
+  const RaceReviewCard({super.key, required this.review, this.analysis, this.officialCorners, this.setup});
 
   final RaceReview review;
+
+  /// 심층 분석(읽는 중이거나 없으면 null — 총평만 그린다), 구간 이름에 쓸 공식 코너, 세팅 제안에 쓸 레이스 셋업.
+  final RaceAnalysis? analysis;
+  final List<OfficialCorner>? officialCorners;
+  final Map<String, Object?>? setup;
 
   @override
   State<RaceReviewCard> createState() => _RaceReviewCardState();
@@ -191,10 +200,14 @@ class _RaceReviewCardState extends State<RaceReviewCard> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final sections = raceReviewSections(review);
+    final analysis = widget.analysis;
+    final labels = analysis == null ? null : segmentLabels(analysis, widget.officialCorners);
+    final sections = analysis == null
+        ? raceReviewSections(review)
+        : raceReviewSectionsWithAnalysis(review, analysis, widget.officialCorners, widget.setup);
     final summary = raceReviewSummary(sections);
     final blocks = [
-      for (final s in sections) _SectionBlock(title: s.title, section: s.section, visual: _visualFor(s.title)),
+      for (final s in sections) _SectionBlock(title: s.title, section: s.section, visual: _visualFor(s.title, analysis, labels)),
     ];
     return SessionCard(
       key: const ValueKey('race-review'),
@@ -244,16 +257,34 @@ class _RaceReviewCardState extends State<RaceReviewCard> {
     );
   }
 
-  Widget? _visualFor(String title) {
+  Widget? _visualFor(String title, RaceAnalysis? analysis, List<String>? labels) {
     final pace = review.pace;
     final battery = review.battery;
-    return switch (title) {
+    final base = switch (title) {
       kPaceSectionTitle when pace != null => _PaceChart(pace: pace),
       kStrategySectionTitle => _StrategyView(strategy: review.strategy, stints: review.stints),
       kTyreSectionTitle => _StintList(stints: review.stints),
       kBatterySectionTitle when battery != null => _BatteryView(battery: battery),
       _ => null,
     };
+    final strategy = analysis?.strategy;
+    final deep = analysis == null || labels == null
+        ? null
+        : switch (title) {
+            kPaceSectionTitle when analysis.lapPace.isNotEmpty => LapPaceView(analysis: analysis),
+            kStrategySectionTitle when strategy != null => StrategyAnalysisView(strategy: strategy),
+            kTyreSectionTitle when analysis.drivenStints.isNotEmpty => TyreLoadView(analysis: analysis, labels: labels),
+            kBatterySectionTitle when analysis.stints.any((s) => s.segments.any((d) => d.deployKj != null)) =>
+              BatterySegmentsView(analysis: analysis, labels: labels),
+            _ => null,
+          };
+    if (deep == null || base == null) {
+      return deep ?? base;
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [base, const SizedBox(height: _blockGap), deep],
+    );
   }
 }
 

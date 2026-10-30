@@ -659,7 +659,6 @@ ReviewSection tyreReview(List<RaceStintReview> stints) {
     final last = i == stints.length - 1;
     final label = '${stint.compound} ${stint.startLap}–${stint.endLap}랩';
     final wear = stint.wearPerLapPct;
-    final life = stint.endLifePct;
     final extra = stint.extraTrendMs;
     final fastWear = stint.wearsFast;
     final lostGrip = extra != null && extra >= kTrendMarginMs;
@@ -676,13 +675,8 @@ ReviewSection tyreReview(List<RaceStintReview> stints) {
       better++;
       lines.add('$label: AI보다 랩당 ${_seconds(extra)}씩 덜 떨어졌어 — 타이어 관리 좋았어');
     }
-    final slower = stint.endLapsSlowerMs;
-    if (life != null && life < _lowLifePct) {
-      lines.add(slower != null && slower > 0
-          ? '$label: 수명 ${life.round()}%까지 탔고 마지막 랩들이 스틴트 중앙값보다 ${_seconds(slower)} 느렸어 → 한두 랩 일찍 박스하면 그만큼 아낄 수 있어'
-          : '$label: 수명 ${life.round()}%까지 탔는데 마지막 랩 페이스는 지켰어');
-    } else if (life != null && !last && life >= _earlyStopLifePct) {
-      lines.add('$label: 수명 ${life.round()}% 남기고 들어왔어 → 스틴트 더 끌면 스톱 하나 줄일 수 있어');
+    if (tyreLifeLine(stint, last: last) case final lifeLine?) {
+      lines.add(lifeLine);
     }
   }
   final grade = worse > 0
@@ -691,6 +685,22 @@ ReviewSection tyreReview(List<RaceStintReview> stints) {
           ? ReviewGrade.good
           : ReviewGrade.fair;
   return (grade: grade, lines: lines);
+}
+
+/// 스틴트 끝 수명 줄: 수명을 너무 낮게까지 탔으면(마지막 랩 페이스와 함께) 또는 넉넉히 남기고 들어왔으면(마지막 스틴트 제외). 짚을 게 없으면 null.
+String? tyreLifeLine(RaceStintReview stint, {required bool last}) {
+  final label = '${stint.compound} ${stint.startLap}–${stint.endLap}랩';
+  final life = stint.endLifePct;
+  final slower = stint.endLapsSlowerMs;
+  if (life != null && life < _lowLifePct) {
+    return slower != null && slower > 0
+        ? '$label: 수명 ${life.round()}%까지 탔고 마지막 랩들이 스틴트 중앙값보다 ${_seconds(slower)} 느렸어 → 한두 랩 일찍 박스하면 그만큼 아낄 수 있어'
+        : '$label: 수명 ${life.round()}%까지 탔는데 마지막 랩 페이스는 지켰어';
+  }
+  if (life != null && !last && life >= _earlyStopLifePct) {
+    return '$label: 수명 ${life.round()}% 남기고 들어왔어 → 스틴트 더 끌면 스톱 하나 줄일 수 있어';
+  }
+  return null;
 }
 
 /// 랩 번호 목록 `L12·L13·L20`(많으면 앞 몇 개와 나머지 수).
@@ -745,9 +755,9 @@ ReviewSection batteryReview(RaceBatteryReview battery) {
         ? '$where에서 배터리가 꽉 찼어. 그 랩들 배포가 평균보다 ${-deploy}kJ 적었어 → 꽉 차면 더 못 모아. 그 랩들은 Overtake 모드로 더 써'
         : '$where에서 배터리가 꽉 찼어');
   }
-  if (battery.lastStoreJ >= kErsCapacityJ * _ersLeftoverFraction) {
+  if (batteryLeftoverLine(battery) case final leftover?) {
     issues++;
-    lines.add('체커 받을 때 ${_pct(battery.lastStoreJ / kErsCapacityJ)} 남겼어 → 마지막 두세 랩은 다 털어 써도 돼');
+    lines.add(leftover);
   }
   if (issues == 0) {
     lines.add('바닥나거나 꽉 찬 랩 없이 잘 썼어. 끝 잔량 ${_pct(battery.lastStoreJ / kErsCapacityJ)}');
@@ -759,6 +769,11 @@ ReviewSection batteryReview(RaceBatteryReview battery) {
           : ReviewGrade.poor;
   return (grade: grade, lines: lines);
 }
+
+/// 레이스 끝에 배터리를 많이 남겼으면 그 줄(아니면 null).
+String? batteryLeftoverLine(RaceBatteryReview battery) => battery.lastStoreJ >= kErsCapacityJ * _ersLeftoverFraction
+    ? '체커 받을 때 ${_pct(battery.lastStoreJ / kErsCapacityJ)} 남겼어 → 마지막 두세 랩은 다 털어 써도 돼'
+    : null;
 
 /// 배터리가 거의 바닥·가득 찬 랩을 짚기 시작하는 횟수.
 const int kErsFlagLaps = _ersFlagLaps;

@@ -26,6 +26,7 @@ import 'package:simcenter_app/features/seasons/domain/season_display.dart';
 import 'package:simcenter_app/features/seasons/domain/season_import_models.dart';
 import 'package:simcenter_app/features/seasons/domain/season_models.dart';
 import 'package:simcenter_app/features/sessions/data/sessions_repository.dart';
+import 'package:simcenter_app/features/sessions/domain/race_analysis.dart';
 import 'package:simcenter_app/features/sessions/domain/race_highlights.dart';
 import 'package:simcenter_app/features/sessions/domain/race_review.dart';
 import 'package:simcenter_app/features/sessions/domain/session_display.dart';
@@ -494,13 +495,14 @@ AgentDevice deviceOf(String id, String name, {DateTime? lastSeenAt, DateTime? cr
 
 /// 요청을 기록하고 미리 정한 세션을 돌려주는 세션 저장소.
 /// [sessionType]이 있으면 그 유형만 거르고, page/pageSize만큼 잘라 돌려준다(서버 계약 흉내).
-/// [details]·[highlights]에 없는 Id의 상세·하이라이트 조회는 404 [ApiException]으로 실패한다.
+/// [details]·[highlights]·[analyses]에 없는 Id의 상세·하이라이트·심층 분석 조회는 404 [ApiException]으로 실패한다.
 class FakeSessionsRepository implements SessionsRepository {
-  FakeSessionsRepository({this.sessions = const [], this.details = const {}, this.highlights = const {}});
+  FakeSessionsRepository({this.sessions = const [], this.details = const {}, this.highlights = const {}, this.analyses = const {}});
 
   final List<SessionSummary> sessions;
   final Map<String, SessionDetail> details;
   final Map<String, RaceHighlights> highlights;
+  final Map<String, RaceAnalysis> analyses;
   final requests = <({String? sessionType, int page, int pageSize})>[];
   final gameCodes = <String?>[];
   final detailRequests = <String>[];
@@ -535,6 +537,15 @@ class FakeSessionsRepository implements SessionsRepository {
   @override
   Future<RaceHighlights> getHighlights(String sessionId) async {
     final value = highlights[sessionId];
+    if (value == null) {
+      throw ApiException('대상을 찾을 수 없어요.', statusCode: 404);
+    }
+    return value;
+  }
+
+  @override
+  Future<RaceAnalysis> getRaceAnalysis(String sessionId) async {
+    final value = analyses[sessionId];
     if (value == null) {
       throw ApiException('대상을 찾을 수 없어요.', statusCode: 404);
     }

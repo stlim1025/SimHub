@@ -5,6 +5,7 @@ using SimCenter.Application.Common.Exceptions;
 using SimCenter.Application.Laps;
 using SimCenter.Application.Rankings;
 using SimCenter.Application.Seasons.Queries;
+using SimCenter.Application.Seasons.Queries.Detail;
 using SimCenter.Application.TrackSamples;
 using SimCenter.Domain.Enums;
 
@@ -18,7 +19,10 @@ namespace SimCenter.Api.Controllers;
 [Route("api/v1/me/sessions")]
 [Authorize]
 public sealed class MySessionsController(
-    ISessionQueryService sessionService, IFieldLapService fieldLapService, IHighlightsService highlightsService) : ControllerBase
+    ISessionQueryService sessionService,
+    IFieldLapService fieldLapService,
+    IHighlightsService highlightsService,
+    IRaceAnalysisService raceAnalysisService) : ControllerBase
 {
     private const string SessionTypeField = "sessionType";
     private const string SessionTypeError = "sessionType는 Practice/Qualifying/Race 중 하나여야 합니다.";
@@ -74,6 +78,16 @@ public sealed class MySessionsController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<HighlightsResponse>> GetHighlights(Guid sessionId, CancellationToken cancellationToken)
         => Ok(await highlightsService.GetHighlightsAsync(User.GetRequiredUserId(), sessionId, cancellationToken));
+
+    /// <summary>
+    /// 레이스 심층 분석: 내 랩 트레이스로 나눈 구간마다 스틴트별 타이어 부담·입력·배터리, 다른 차들의 구간별 배터리, 타이어로 본 전략(추정 대안 포함),
+    /// 랩마다 페이스 기준(같은 랩·같은 타이어). 남의 세션·없는 세션·레이스가 아닌 세션·내 차 기록 없음은 404.
+    /// </summary>
+    [HttpGet("{sessionId:guid}/race-analysis")]
+    [ProducesResponseType(typeof(RaceAnalysisDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<RaceAnalysisDto>> GetRaceAnalysis(Guid sessionId, CancellationToken cancellationToken)
+        => Ok(await raceAnalysisService.GetMyRaceAnalysisAsync(User.GetRequiredUserId(), sessionId, cancellationToken));
 
     /// <summary>
     /// 명시적 이름 목록(Practice·Qualifying·Race, 대소문자 무시)만 받는다. 비어 있으면 필터 없음.

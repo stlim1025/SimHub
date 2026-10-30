@@ -13,6 +13,7 @@ import '../../../core/widgets/track_flag.dart';
 import '../../lap_detail/domain/lap_compare.dart';
 import '../../lap_detail/domain/lap_detail_display.dart';
 import '../../seasons/domain/season_display.dart';
+import '../../tracks/application/track_corners_provider.dart';
 import '../application/sessions_providers.dart';
 import '../domain/race_review.dart';
 import '../domain/session_detail_display.dart';
@@ -223,10 +224,26 @@ class _SessionCards extends StatelessWidget {
           tabs: [for (final tab in kSessionTabs) Tab(text: _tabLabels[tab])],
         ),
         const SizedBox(height: _sectionGap),
-        if (tab == kSessionTabReview) RaceReviewCard(review: review) else _ResultCards(detail: detail),
+        if (tab == kSessionTabReview) _RaceReviewTab(detail: detail, review: review) else _ResultCards(detail: detail),
       ],
     );
   }
+}
+
+/// Race Review 탭: 총평을 먼저 그리고, 심층 분석·공식 코너가 오면 그것까지 얹어 다시 그린다(분석을 못 받으면 총평만).
+class _RaceReviewTab extends ConsumerWidget {
+  const _RaceReviewTab({required this.detail, required this.review});
+
+  final SessionDetail detail;
+  final RaceReview review;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => RaceReviewCard(
+        review: review,
+        analysis: ref.watch(raceAnalysisProvider(detail.header.sessionId)).valueOrNull,
+        officialCorners: ref.watch(trackCornersProvider).valueOrNull?[detail.header.trackName],
+        setup: detail.setup,
+      );
 }
 
 /// 결과 카드 7장(Results 탭, 레이스 리뷰가 없으면 화면 전체).

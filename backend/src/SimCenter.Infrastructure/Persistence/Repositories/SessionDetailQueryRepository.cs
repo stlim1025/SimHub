@@ -105,6 +105,21 @@ public sealed class SessionDetailQueryRepository : ISessionDetailQueryRepository
             .AsNoTracking()
             .AnyAsync(c => c.UserId == userId && c.SessionRef == sessionRef && !c.IsDeleted, cancellationToken);
 
+    public async Task<IReadOnlyList<SessionTraceRow>> GetMyLapTracesAsync(
+        Guid userId, IReadOnlyCollection<Guid> lapIds, CancellationToken cancellationToken = default)
+    {
+        if (lapIds.Count == 0)
+        {
+            return [];
+        }
+
+        return await (from trace in _context.LapTelemetryTraces.AsNoTracking()
+                      join lap in _context.Laps.AsNoTracking() on trace.LapId equals lap.Id
+                      where lap.UserId == userId && lapIds.Contains(lap.Id)
+                      select new SessionTraceRow(trace.LapId, trace.ResolutionM, trace.Payload))
+            .ToListAsync(cancellationToken);
+    }
+
     public Task<bool> IsMySprintWeekendAsync(Guid userId, Guid raceWeekendId, CancellationToken cancellationToken = default)
         => _context.GameSessions
             .AsNoTracking()

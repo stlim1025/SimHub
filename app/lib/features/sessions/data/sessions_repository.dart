@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_provider.dart';
+import '../domain/race_analysis.dart';
 import '../domain/race_highlights.dart';
 import '../domain/session_display.dart';
 import '../domain/session_models.dart';
@@ -52,6 +53,16 @@ class SessionsRepository {
     try {
       final res = await _dio.get<Map<String, dynamic>>('/me/sessions/${Uri.encodeComponent(sessionId)}/highlights');
       return RaceHighlights.fromJson(res.data!);
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// 내 레이스 세션의 심층 분석(구간별 타이어 부담·배터리, 타이어로 본 전략, 페이스 기준). 레이스가 아니거나 내 기록이 없으면 404 [ApiException].
+  Future<RaceAnalysis> getRaceAnalysis(String sessionId) async {
+    try {
+      final res = await _dio.get<Map<String, dynamic>>('/me/sessions/${Uri.encodeComponent(sessionId)}/race-analysis');
+      return RaceAnalysis.fromJson(res.data!);
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }
