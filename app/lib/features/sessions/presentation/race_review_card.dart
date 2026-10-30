@@ -2,7 +2,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../../../core/layout/equal_height.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/util/lap_time.dart';
@@ -48,11 +47,17 @@ const Map<ReviewGrade, String> _gradeText = {
   ReviewGrade.poor: '아쉬움',
 };
 
-/// 넓으면 항목 블록을 두 열로.
+/// 넓으면 고른 항목의 그림과 짚을 것을 나란히.
 const double _twoColumnWidth = 760;
+const double _sideBySideGap = 24;
 const double _blockGap = 16;
-const double _blockPadding = 16;
 const double _blockRadius = 10;
+
+/// 항목 탭 칸: 안쪽 여백, 제목과 평가 사이, 아래 강조선 두께, 칸 구분선 두께.
+const EdgeInsets _tabPadding = EdgeInsets.symmetric(horizontal: 6, vertical: 10);
+const double _tabGap = 6;
+const double _tabIndicatorWidth = 2;
+const double _tabDividerWidth = 1;
 const double _innerGap = 12;
 const double _noteGap = 6;
 const double _noteIconSize = 16;
@@ -173,7 +178,7 @@ Color _gradeColor(ReviewGrade grade, AppPalette palette) => switch (grade) {
       ReviewGrade.poor => palette.danger,
     };
 
-/// 레이스 총평 카드: 한 줄 총평, 항목(페이스·전략·타이어·배터리)마다 평가 + 그림 + 짚을 것. 넓으면 두 열.
+/// 레이스 총평 카드: 한 줄 총평, 항목 탭(페이스·전략·타이어·배터리 — 탭마다 평가), 고른 항목의 그림 + 짚을 것.
 /// 심층 분석([analysis])이 있으면 항목마다 심층 줄과 그림(코너별 타이어 부담·구간별 배터리·스톱/대안 전략·랩별 페이스 기준)을 더한다.
 /// 제목 줄을 누르면 접고 편다(처음엔 펼침).
 class RaceReviewCard extends StatefulWidget {
@@ -193,6 +198,9 @@ class RaceReviewCard extends StatefulWidget {
 class _RaceReviewCardState extends State<RaceReviewCard> {
   var _expanded = true;
 
+  /// 고른 항목 제목(없거나 사라졌으면 첫 항목).
+  String? _selected;
+
   RaceReview get review => widget.review;
 
   void _toggle() => setState(() => _expanded = !_expanded);
@@ -206,9 +214,7 @@ class _RaceReviewCardState extends State<RaceReviewCard> {
         ? raceReviewSections(review)
         : raceReviewSectionsWithAnalysis(review, analysis, widget.officialCorners, widget.setup);
     final summary = raceReviewSummary(sections);
-    final blocks = [
-      for (final s in sections) _SectionBlock(title: s.title, section: s.section, visual: _visualFor(s.title, analysis, labels)),
-    ];
+    final current = sections.where((s) => s.title == _selected).firstOrNull ?? sections.firstOrNull;
     return SessionCard(
       key: const ValueKey('race-review'),
       title: _title,
@@ -227,31 +233,19 @@ class _RaceReviewCardState extends State<RaceReviewCard> {
             Text(summary, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
             const SizedBox(height: _blockGap),
           ],
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final columns = constraints.maxWidth >= _twoColumnWidth ? 2 : 1;
-              final rows = <Widget>[
-                for (var i = 0; i < blocks.length; i += columns)
-                  // 나란한 블록은 같은 높이로(내용이 짧은 쪽도 바닥을 맞춘다).
-                  EqualHeightRow(
-                    gap: _blockGap,
-                    children: [
-                      for (var j = 0; j < columns; j++)
-                        i + j < blocks.length ? blocks[i + j] : const SizedBox.shrink(),
-                    ],
-                  ),
-              ];
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  for (var i = 0; i < rows.length; i++) ...[
-                    if (i > 0) const SizedBox(height: _blockGap),
-                    rows[i],
-                  ],
-                ],
-              );
-            },
-          ),
+          if (current != null) ...[
+            _SectionTabs(
+              sections: sections,
+              selected: current.title,
+              onSelected: (title) => setState(() => _selected = title),
+            ),
+            const SizedBox(height: _blockGap),
+            _SectionBody(
+              key: ValueKey('race-review-section-${current.title}'),
+              section: current.section,
+              visual: _visualFor(current.title, analysis, labels),
+            ),
+          ],
         ],
       ),
     );
@@ -288,59 +282,149 @@ class _RaceReviewCardState extends State<RaceReviewCard> {
   }
 }
 
-/// 항목 블록: 제목·평가 알약, 그림, 짚을 것(관찰 → 할 것).
-class _SectionBlock extends StatelessWidget {
-  const _SectionBlock({required this.title, required this.section, this.visual});
+/// 항목 탭: 항목마다 같은 폭 칸(제목 + 평가 알약)을 한 줄로. 고른 칸은 바탕색과 아래 강조선.
+class _SectionTabs extends StatelessWidget {
+  const _SectionTabs({required this.sections, required this.selected, required this.onSelected});
+
+  final List<({String title, ReviewSection section})> sections;
+  final String selected;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: palette.border),
+        borderRadius: BorderRadius.circular(_blockRadius),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(_blockRadius),
+        // 제목이 두 줄로 접히는 칸이 있어도 칸 높이·구분선을 맞춘다.
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final (i, s) in sections.indexed) ...[
+                if (i > 0) Container(width: _tabDividerWidth, color: palette.border),
+                Expanded(
+                  child: _SectionTab(
+                    title: s.title,
+                    grade: s.section.grade,
+                    selected: s.title == selected,
+                    onTap: () => onSelected(s.title),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 항목 탭 칸 하나.
+class _SectionTab extends StatelessWidget {
+  const _SectionTab({required this.title, required this.grade, required this.selected, required this.onTap});
 
   final String title;
+  final ReviewGrade grade;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final color = _gradeColor(grade, palette);
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: Material(
+        color: selected ? palette.tableHeader : Colors.transparent,
+        child: InkWell(
+          key: ValueKey('race-review-tab-$title'),
+          onTap: onTap,
+          child: Container(
+            padding: _tabPadding,
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: selected ? AppColors.accent : Colors.transparent, width: _tabIndicatorWidth),
+              ),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: _blockTitleSize,
+                    color: selected ? palette.textPrimary : palette.textMuted,
+                  ),
+                ),
+                const SizedBox(height: _tabGap),
+                Container(
+                  padding: _pillPadding,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: _pillAlpha),
+                    borderRadius: BorderRadius.circular(_pillRadius),
+                  ),
+                  child: Text(
+                    _gradeText[grade]!,
+                    key: ValueKey('race-review-grade-$title'),
+                    style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: _pillFontSize),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 고른 항목: 그림과 짚을 것(관찰 → 할 것). 넓으면 그림(왼쪽)과 짚을 것(오른쪽)을 나란히, 좁으면 위아래로.
+class _SectionBody extends StatelessWidget {
+  const _SectionBody({super.key, required this.section, this.visual});
+
   final ReviewSection section;
   final Widget? visual;
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.palette;
-    final color = _gradeColor(section.grade, palette);
     final visual = this.visual;
-    return Container(
-      padding: const EdgeInsets.all(_blockPadding),
-      decoration: BoxDecoration(
-        border: Border.all(color: palette.border),
-        borderRadius: BorderRadius.circular(_blockRadius),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
+    final notes = section.lines.isEmpty
+        ? null
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                child: Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: _blockTitleSize)),
-              ),
-              Container(
-                padding: _pillPadding,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: _pillAlpha),
-                  borderRadius: BorderRadius.circular(_pillRadius),
+              for (final (i, line) in section.lines.indexed)
+                Padding(
+                  padding: EdgeInsets.only(top: i == 0 ? 0 : _noteGap),
+                  child: _Note(line: line),
                 ),
-                child: Text(
-                  _gradeText[section.grade]!,
-                  key: ValueKey('race-review-grade-$title'),
-                  style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: _pillFontSize),
-                ),
-              ),
             ],
-          ),
-          if (visual != null) ...[
-            const SizedBox(height: _innerGap),
-            visual,
-          ],
-          if (section.lines.isNotEmpty) const SizedBox(height: _innerGap),
-          for (final (i, line) in section.lines.indexed)
-            Padding(
-              padding: EdgeInsets.only(top: i == 0 ? 0 : _noteGap),
-              child: _Note(line: line),
+          );
+    if (visual == null || notes == null) {
+      return visual ?? notes ?? const SizedBox.shrink();
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) => constraints.maxWidth >= _twoColumnWidth
+          ? Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: visual),
+                const SizedBox(width: _sideBySideGap),
+                Expanded(child: notes),
+              ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [visual, const SizedBox(height: _blockGap), notes],
             ),
-        ],
-      ),
     );
   }
 }
@@ -615,12 +699,12 @@ class _StrategyView extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
-              _BigStat(value: 'P$grid', caption: _gridLabel),
+              _BigStat(value: '$grid위', caption: _gridLabel),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: _innerGap),
                 child: Icon(Icons.arrow_forward, color: palette.textMuted),
               ),
-              _BigStat(value: 'P$finish', caption: _finishLabel, color: palette.podiumFor(finish)),
+              _BigStat(value: '$finish위', caption: _finishLabel, color: palette.podiumFor(finish)),
               const SizedBox(width: _innerGap),
               PositionChangeText(change: grid - finish),
             ],
@@ -728,7 +812,9 @@ class _StintTimeline extends StatelessWidget {
                       child: segment.compound == null
                           ? null
                           : Text(
-                              segment.laps >= _segmentNameMinLaps ? segment.compound! : segment.compound![0],
+                              segment.laps >= _segmentNameMinLaps
+                                  ? compoundName(segment.compound!)
+                                  : compoundName(segment.compound!).characters.first,
                               maxLines: 1,
                               overflow: TextOverflow.clip,
                               style: const TextStyle(
@@ -759,7 +845,7 @@ class _StintTimeline extends StatelessWidget {
                           .toDouble(),
                       width: _lapTickWidth,
                       child: Text(
-                        'L$lap',
+                        '$lap랩',
                         textAlign: lap == 1
                             ? TextAlign.left
                             : lap == total
@@ -1128,7 +1214,7 @@ class _PositionChart extends StatelessWidget {
                         left: 0,
                         right: _axisLabelGap,
                         height: _axisLabelHeight,
-                        child: Text('P$p', textAlign: TextAlign.right, style: tickStyle),
+                        child: Text('$p위', textAlign: TextAlign.right, style: tickStyle),
                       ),
                   ],
                 ),
@@ -1166,15 +1252,28 @@ class _PositionChart extends StatelessWidget {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final width = constraints.maxWidth;
+                double leftOf(int lap) =>
+                    (width * lap / totalLaps - _lapTickWidth / 2).clamp(0, math.max(0, width - _lapTickWidth)).toDouble();
+                // 좁으면 앞 글자와 겹치는 눈금 글자는 뺀다(마지막 랩은 남기고 그 앞을 뺀다).
+                final shown = <int>[];
+                for (final lap in lapTicks) {
+                  if (shown.isNotEmpty && leftOf(lap) - leftOf(shown.last) < _lapTickWidth) {
+                    if (lap != lapTicks.last) {
+                      continue;
+                    }
+                    shown.removeLast();
+                  }
+                  shown.add(lap);
+                }
                 return Stack(
                   clipBehavior: Clip.none,
                   children: [
-                    for (final lap in lapTicks)
+                    for (final lap in shown)
                       Positioned(
-                        left: (width * lap / totalLaps - _lapTickWidth / 2).clamp(0, math.max(0, width - _lapTickWidth)).toDouble(),
+                        left: leftOf(lap),
                         width: _lapTickWidth,
                         child: Text(
-                          'L$lap',
+                          '$lap랩',
                           textAlign: lap == totalLaps ? TextAlign.right : TextAlign.center,
                           style: tickStyle,
                         ),

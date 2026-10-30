@@ -3,6 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:simcenter_app/features/sessions/domain/race_review.dart';
 import 'package:simcenter_app/features/sessions/presentation/race_review_card.dart';
 
+/// 전략 그림의 출발 순위 설명 글자.
+const String _gridLabelText = '출발';
+
 void main() {
   final review = RaceReview.fromJsonOrNull({
     'pace': {
@@ -160,18 +163,35 @@ void main() {
   });
 
   for (final width in [1100.0, 360.0]) {
-    testWidgets('카드: 항목마다 평가와 그림을 넘침 없이 그린다 (폭 $width)', (tester) async {
+    testWidgets('카드: 항목 탭마다 평가, 고른 항목의 그림을 넘침 없이 그린다 (폭 $width)', (tester) async {
       tester.view.physicalSize = Size(width, 2400);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
       await tester.pumpWidget(MaterialApp(home: Scaffold(body: SingleChildScrollView(child: RaceReviewCard(review: review)))));
+      Future<void> open(String title) async {
+        await tester.tap(find.byKey(ValueKey('race-review-tab-$title')));
+        await tester.pump();
+        expect(tester.takeException(), isNull);
+      }
 
+      // 처음엔 첫 항목(페이스)만 그린다. 평가는 탭마다 늘 보인다.
       expect(tester.takeException(), isNull);
-      expect(find.byKey(const ValueKey('race-review-grade-$kStrategySectionTitle')), findsOneWidget);
+      for (final title in [kPaceSectionTitle, kStrategySectionTitle, kTyreSectionTitle, kBatterySectionTitle]) {
+        expect(find.byKey(ValueKey('race-review-grade-$title')), findsOneWidget);
+      }
       expect(find.textContaining('2위 /', findRichText: true), findsOneWidget); // 페이스 순위
-      expect(find.textContaining('P3', findRichText: true), findsOneWidget); // 출발
+      expect(find.text(_gridLabelText), findsNothing);
+
+      await open(kStrategySectionTitle);
+      expect(find.textContaining('2위 /', findRichText: true), findsNothing);
+      expect(find.text(_gridLabelText), findsOneWidget);
+      expect(find.textContaining('3위', findRichText: true), findsWidgets); // 출발 순위
       expect(find.text('5랩'), findsWidgets); // 피트 랩
+
+      await open(kTyreSectionTitle);
       expect(find.text('91%'), findsOneWidget); // 끝 수명
+
+      await open(kBatterySectionTitle);
       expect(find.text('5%'), findsOneWidget); // 최저 잔량
       expect(find.text('랩이 끝날 때 배터리'), findsOneWidget); // 랩별 그래프
       expect(find.text('랩마다 쓴 양과 채운 양'), findsOneWidget);

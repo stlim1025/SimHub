@@ -244,20 +244,34 @@ void main() {
         ),
       ));
 
+      Future<void> open(String title) async {
+        await tester.tap(find.byKey(ValueKey('race-review-tab-$title')));
+        await tester.pump();
+        expect(tester.takeException(), isNull);
+      }
+
+      // 페이스(첫 탭): 랩별 기준을 바꾼다.
       expect(tester.takeException(), isNull);
+      expect(find.byKey(const ValueKey('analysis-pace-basis')), findsOneWidget);
+      expect(find.text(kPaceBasisLine), findsOneWidget);
+      await tester.tap(find.text('같은 랩'));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+
+      await open(kStrategySectionTitle);
+      expect(find.text('실제 전략'), findsOneWidget); // 전략 비교
+      expect(find.byKey(const ValueKey('analysis-pace-basis')), findsNothing);
+
+      await open(kTyreSectionTitle);
       expect(find.textContaining('가장 빨리 닳는 건 앞왼 타이어야'), findsOneWidget);
       expect(find.text('T1~T2'), findsWidgets);
-      expect(find.byKey(const ValueKey('analysis-pace-basis')), findsOneWidget);
-      expect(find.text('실제 전략'), findsOneWidget); // 전략 비교
-
       expect(find.text('1.0%'), findsOneWidget); // 앞 스틴트의 T1~T2 앞왼: 200kJ × 5%/MJ
       await tester.tap(find.byKey(const ValueKey('analysis-stint-6')));
       await tester.pump();
       expect(find.text('1.0%'), findsNothing); // 뒤 스틴트는 170kJ라 0.8~0.9%
 
-      await tester.tap(find.text('같은 랩'));
-      await tester.pump();
-      expect(tester.takeException(), isNull);
+      await open(kBatterySectionTitle);
+      expect(find.textContaining('한 랩에 배터리를'), findsOneWidget);
     });
   }
 }
