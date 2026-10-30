@@ -47,6 +47,14 @@ const double _ersGapKj = 150;
 const double _emptyM = 20;
 const int _emptyLapsMin = 2;
 
+/// 배터리 줄일 곳: Overtake로 280km/h 이상 달린 거리가 이 이상(m)인 직선. 덜 떼는 코너: AI가 스로틀을 이만큼(m) 더 오래 완전히 떼며
+/// [_ersGapKj] 이상 더 채우는 코너(최대 [_partialLiftCorners]곳) — 단 AI가 그 구간에서 더 걸린 시간이 더 채운 1MJ당 이 초 이하일 때만
+/// (카탈루냐 실측: 코너 탈출에서 Overtake로 쓴 1MJ는 1.2~2.9초를 번다).
+const double _fastOvertakeM = 20;
+const double _liftGapM = 20;
+const int _partialLiftCorners = 2;
+const double _maxLiftCostSPerMj = 0.6;
+
 /// 전략: 남은 수명이 이 랩 이하이거나 마모가 이 % 이상이면 타이어 때문에 들어온 것, 게임이 본 쓸 수 있는 랩보다 이만큼 덜 탔으면 짚는다,
 /// 대안이 이만큼(ms) 이상 빨라야 말한다.
 const int _forcedLifeLaps = 2;
@@ -142,6 +150,8 @@ class RaceSegmentDriving {
     this.storeEndKj,
     this.emptyM,
     this.emptyLaps,
+    this.liftM = 0,
+    this.fastOvertakeM,
   });
 
   final int index;
@@ -168,6 +178,10 @@ class RaceSegmentDriving {
 
   /// 이 구간에서 배터리가 바닥났던 랩 수(모르면 null).
   final int? emptyLaps;
+
+  /// 스로틀을 완전히 뗀(5% 미만) 거리(m), Overtake로 280km/h 이상 달린 거리(m, 모르면 null).
+  final double liftM;
+  final double? fastOvertakeM;
 
   static RaceSegmentDriving? fromJsonOrNull(Map<String, dynamic> json) {
     final index = jsonInt(json['index']);
@@ -197,6 +211,8 @@ class RaceSegmentDriving {
       storeEndKj: jsonDouble(json['storeEndKj']),
       emptyM: jsonDouble(json['emptyM']),
       emptyLaps: jsonInt(json['emptyLaps']),
+      liftM: jsonDouble(json['liftM']) ?? 0,
+      fastOvertakeM: jsonDouble(json['fastOvertakeM']),
     );
   }
 }
@@ -259,14 +275,23 @@ class RaceStintDriving {
   }
 }
 
-/// 다른 차들이 구간에서 랩마다 배터리를 채운·쓴 양의 중앙값(kJ)과 본 차 수.
+/// 다른 차들이 구간에서 랩마다 배터리를 채운·쓴 양의 중앙값(kJ)과 본 차 수, 스로틀을 완전히 뗀 거리(m)·구간 통과 시간(ms)의 중앙값(모르면 null).
 class FieldSegmentErs {
-  const FieldSegmentErs({required this.index, required this.harvestKj, required this.deployKj, required this.cars});
+  const FieldSegmentErs({
+    required this.index,
+    required this.harvestKj,
+    required this.deployKj,
+    required this.cars,
+    this.liftM,
+    this.timeMs,
+  });
 
   final int index;
   final double harvestKj;
   final double deployKj;
   final int cars;
+  final double? liftM;
+  final int? timeMs;
 
   static FieldSegmentErs? fromJsonOrNull(Map<String, dynamic> json) {
     final index = jsonInt(json['index']);
@@ -274,7 +299,14 @@ class FieldSegmentErs {
     final deploy = jsonDouble(json['deployKj']);
     return index == null || harvest == null || deploy == null
         ? null
-        : FieldSegmentErs(index: index, harvestKj: harvest, deployKj: deploy, cars: jsonInt(json['cars']) ?? 0);
+        : FieldSegmentErs(
+            index: index,
+            harvestKj: harvest,
+            deployKj: deploy,
+            cars: jsonInt(json['cars']) ?? 0,
+            liftM: jsonDouble(json['liftM']),
+            timeMs: jsonInt(json['timeMs']),
+          );
   }
 }
 
@@ -668,6 +700,8 @@ RaceSegmentDriving? averagedSegment(List<RaceStintDriving> stints, int index) {
     noDeployM: avg((d) => d.noDeployM),
     storeEndKj: avg((d) => d.storeEndKj),
     emptyM: avg((d) => d.emptyM),
+    liftM: avg((d) => d.liftM) ?? 0,
+    fastOvertakeM: avg((d) => d.fastOvertakeM),
   );
 }
 
@@ -859,8 +893,9 @@ List<String> _setupLines(Map<String, Object?>? setup, RaceAnalysis analysis, Lis
 /// 배터리가 순으로 남거나 줄어든 양(kJ, 채움 − 씀).
 double _net(double harvest, double deploy) => harvest - deploy;
 
-/// 배터리 심층 줄: 랩당 사용·채움을 AI와, 스틴트마다 바닥난 구간과 AI보다 더 쓴 곳(→ 거기서 아껴) 또는 여유가 있는데 AI보다 덜 쓴 직선(→ 더 써),
-/// AI보다 배터리를 가장 많이 잃고 나온 코너(Overtake·브레이킹 여부에 맞춘 할 것), 체커 때 남긴 양. 구간 배터리 값이 없으면 빈 목록.
+/// 배터리 심층 줄: 랩당 사용·채움을 AI와, 스틴트마다 바닥난 구간과 줄일 곳(280km/h 넘는 Overtake를 짧은 직선부터 — 코너 탈출은 지킨다)
+/// 또는 여유가 있는데 AI보다 덜 쓴 직선(→ 더 써), 완전히 떼는 거리가 짧아 AI보다 덜 채우는 코너(→ 완전히 떼고 브레이크를 짧게), AI보다 배터리를 가장 많이 잃고 나온
+/// 코너(Overtake·브레이킹 여부에 맞춘 할 것), 체커 때 남긴 양. 구간 배터리 값이 없으면 빈 목록.
 List<String> deepBatteryLines(RaceBatteryReview? battery, RaceAnalysis analysis, List<String> labels) {
   final driven = [for (final s in analysis.stints) if (s.segments.any((d) => d.deployKj != null)) s];
   if (driven.isEmpty || labels.length != analysis.segments.length) {
@@ -901,23 +936,73 @@ List<String> deepBatteryLines(RaceBatteryReview? battery, RaceAnalysis analysis,
       final entryText = entry == null
           ? ''
           : '(들어갈 때 잔량 ${_kj(entry)}${others.isEmpty ? '' : ', 바닥 안 난 스틴트 ${_kjRange(others)}'})';
+      // 줄일 곳: 280km/h 넘는 Overtake(같은 배터리로 버는 시간이 가장 적다)를 짧은 직선부터. 코너 탈출 Overtake는 지킨다.
+      final fast = [
+        for (final d in stint.segments)
+          if (_segmentOf(analysis, d.index) case final s? when !s.isCorner && (d.fastOvertakeM ?? 0) >= _fastOvertakeM)
+            (d: d, length: _lengthOf(s, analysis.trackLengthM)),
+      ]..sort((a, b) => a.length.compareTo(b.length));
+      final advice = fast.isNotEmpty
+          ? '280km/h 넘는 Overtake부터 줄여 — ${fast.map((f) => '${labels[f.d.index]}(${f.d.fastOvertakeM!.round()}m)').join(' → ')} 순서로'
+              '(짧은 직선일수록 같은 배터리로 버는 시간이 적어), 코너 탈출 Overtake는 그대로 둬'
+          : over == null
+              ? '앞 구간에서 Overtake를 줄여 잔량을 채운 채로 들어가'
+              : '${labels[over.d.index]}에선 Medium으로 두고 $where까지 남겨';
       lines.add('$head$entryText'
           '${over == null ? '' : ' — ${labels[over.d.index]}에서 AI보다 ${_kj(over.more)} 더 썼어${overtake > 0 ? '(Overtake ${overtake.round()}m)' : ''}'}'
-          ' → ${over == null ? '앞 구간에서 Overtake를 줄여 잔량을 채운 채로 들어가' : '${labels[over.d.index]}에선 Medium으로 두고 $where까지 남겨'}');
+          ' → $advice');
       continue;
     }
-    // 바닥나지 않았으면: AI보다 덜 쓴 직선이 있을 때 그 직선에서 더 쓰라고 한다.
+    // 바닥나지 않았으면: AI보다 덜 쓴 직선이 있을 때 그 직선에서 더 쓰라고 한다(배터리가 남으면 직선 끝까지 써도 된다).
     final under = overs.reversed
-        .where((o) => !analysis.segments[o.d.index].isCorner && -o.more >= _ersGapKj)
+        .where((o) => _segmentOf(analysis, o.d.index)?.isCorner == false && -o.more >= _ersGapKj)
         .firstOrNull;
     if (under != null) {
       lines.add('${stint.label}: ${labels[under.d.index]}에서 AI보다 랩당 ${_kj(-under.more)} 덜 썼어(바닥난 곳 없음) → 거기선 Overtake로 더 써');
     }
   }
 
+  final halfLifted = <int>{};
   if (hasField) {
-    ({int index, double myNet, double aiNet, double overtake, double brake})? worst;
+    // 덜 떼는 코너: 진입에서 스로틀을 완전히 떼는 거리가 짧아 회수가 적은데, AI는 더 오래 완전히 떼고(브레이크를 짧게 찍고) 훨씬 많이 채운다.
+    final partial = <({int index, double gap, String line})>[];
     for (final s in analysis.segments.where((s) => s.isCorner)) {
+      final ai = analysis.fieldErsAt(s.index);
+      final mine = averagedSegment(driven, s.index);
+      final aiLift = ai?.liftM;
+      final harvest = mine?.harvestKj;
+      if (ai == null || mine == null || aiLift == null || harvest == null) {
+        continue;
+      }
+      final gap = ai.harvestKj - harvest;
+      if (gap < _ersGapKj || aiLift - mine.liftM < _liftGapM) {
+        continue;
+      }
+      final aiTime = ai.timeMs;
+      final slower = aiTime == null ? 0 : aiTime - mine.timeMs;
+      // 더 채우는 대가로 내주는 시간이 비싸면(1MJ당 [_maxLiftCostSPerMj]초 초과) 권하지 않는다 — 코너 탈출에서 1MJ로 버는 시간보다 손해일 수 있다.
+      if (slower > 0 && slower / _msPerSecond / (gap / _kjPerMj) > _maxLiftCostSPerMj) {
+        continue;
+      }
+      final time = aiTime == null
+          ? ''
+          : '(이 구간 AI ${_sec(aiTime)} · 너 ${_sec(mine.timeMs)}'
+              '${slower > 0 ? ' — ${_sec(slower)} 내주고 ${_kj(gap)} 더 채우는 셈' : ' — 시간도 안 잃어'})';
+      partial.add((
+        index: s.index,
+        gap: gap,
+        line: '${labels[s.index]}: 진입에서 완전히 뗀 거리가 ${mine.liftM.round()}m라 랩당 ${_kj(harvest)}만 채워'
+            ' — AI는 ${aiLift.round()}m 완전히 떼고 ${_kj(ai.harvestKj)} 채워$time → 반만 떼고 버티지 말고 완전히 떼고 브레이크를 짧게 찍어',
+      ));
+    }
+    partial.sort((a, b) => b.gap.compareTo(a.gap));
+    for (final p in partial.take(_partialLiftCorners)) {
+      lines.add(p.line);
+      halfLifted.add(p.index);
+    }
+
+    ({int index, double myNet, double aiNet, double overtake, double brake})? worst;
+    for (final s in analysis.segments.where((s) => s.isCorner && !halfLifted.contains(s.index))) {
       final harvest = avg(s.index, (d) => d.harvestKj);
       final deploy = avg(s.index, (d) => d.deployKj);
       final ai = analysis.fieldErsAt(s.index);
@@ -955,6 +1040,20 @@ List<String> deepBatteryLines(RaceBatteryReview? battery, RaceAnalysis analysis,
 }
 
 String _signedKj(double kj) => '${kj >= 0 ? '+' : '−'}${_kj(kj.abs())}';
+
+/// 구간 번호의 구간(없으면 null).
+RaceSegment? _segmentOf(RaceAnalysis analysis, int index) {
+  for (final s in analysis.segments) {
+    if (s.index == index) {
+      return s;
+    }
+  }
+  return null;
+}
+
+/// 구간 길이(m, 결승선을 넘는 직선은 두 덩어리 합).
+int _lengthOf(RaceSegment segment, int trackLengthM) =>
+    segment.wraps ? trackLengthM - segment.startM + segment.endM : segment.endM - segment.startM;
 
 String _kjRange(List<double> values) {
   final low = values.reduce(math.min).round();

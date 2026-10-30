@@ -20,7 +20,9 @@ internal sealed record SegmentLap(
     double? OvertakeM,
     double? NoDeployM,
     double? StoreEndJ,
-    double? EmptyM);
+    double? EmptyM,
+    double LiftM = 0,
+    double? FastOvertakeM = null);
 
 /// <summary>한 랩 전체의 타이어 값: 바퀴별 마찰 일(J)·최고 표면 온도·평균 속 온도(°C). 채널이 없으면 null.</summary>
 internal sealed record LapTyreLoad(double[]? WheelWorkJ, double[]? PeakSurfaceTempC, double[]? InnerTempC);
@@ -30,7 +32,9 @@ internal sealed record LapTyreLoad(double[]? WheelWorkJ, double[]? PeakSurfaceTe
 /// 타이어가 미끄러지며 노면에 한 일이라 마모·발열과 함께 간다(실제 레이스에서 랩·바퀴별 마모와 상관 0.8).
 /// 입력 판정: 앞 바퀴 슬립률 ≤ <see cref="LockupSlipPct"/>%면 락업, 스로틀 ≥ <see cref="WheelspinThrottlePct"/>%에서 뒤 바퀴 슬립률 ≥
 /// <see cref="WheelspinSlipPct"/>%면 휠스핀, 브레이크 ≥ <see cref="TrailBrakePct"/>%에 조향 ≥ <see cref="TrailSteerPct"/>%면 브레이크 밟은 채 조향,
-/// 스로틀 ≥ <see cref="FullThrottlePct"/>%에 조향 ≥ <see cref="ThrottleSteerPct"/>%면 풀 스로틀로 조향, 노면 1(럼블)이면 연석.
+/// 스로틀 ≥ <see cref="FullThrottlePct"/>%에 조향 ≥ <see cref="ThrottleSteerPct"/>%면 풀 스로틀로 조향, 노면 1(럼블)이면 연석,
+/// 스로틀 &lt; <see cref="LiftThrottlePct"/>%면 완전히 뗀 것(브레이크 포함 — 회수가 크게 일어나는 상태),
+/// Overtake 모드로 <see cref="FastSpeedKph"/>km/h 이상 달린 거리(같은 배터리로 버는 시간이 가장 적은 사용).
 /// 시간·배터리는 표본과 바로 앞 표본 사이 변화를 더한다(구간에 들어서는 한 칸 포함, 랩 첫 표본은 짝이 없다).
 /// 배터리 채움·씀 = 잔량이 늘어난·줄어든 양의 합 — 다른 차들(<see cref="FieldErsProfile"/>, 표본에 잔량만 있다)과 같은 기준으로 견주려고
 /// 게임의 랩 누적 회수·배포 채널 대신 잔량 변화를 쓴다.
@@ -45,6 +49,8 @@ internal static class SegmentMeter
     private const int FullThrottlePct = 80;
     private const int ThrottleSteerPct = 20;
     private const int RumbleSurface = 1;
+    private const int LiftThrottlePct = 5;
+    private const int FastSpeedKph = 280;
 
     /// <summary>코너링 중으로 볼 횡 G(언더스티어는 이 표본만 본다).</summary>
     private const double CorneringLateralG = 1.5;
@@ -88,7 +94,7 @@ internal static class SegmentMeter
         var work = hasWork ? new double[wheelCount] : null;
         var peak = surfaceTemp is null ? null : Enumerable.Repeat(double.MinValue, wheelCount).ToArray();
         double time = 0, steer = 0, understeer = 0, lockup = 0, wheelspin = 0, trail = 0, throttleSteer = 0, braking = 0, kerb = 0;
-        double harvest = 0, deploy = 0, overtake = 0, noDeploy = 0, empty = 0;
+        double harvest = 0, deploy = 0, overtake = 0, fastOvertake = 0, noDeploy = 0, empty = 0, lift = 0;
         int samples = 0, cornering = 0, minSpeed = int.MaxValue, endIndex = -1;
 
         foreach (var (from, to) in segment.Runs(lap.Count))
@@ -110,6 +116,10 @@ internal static class SegmentMeter
                 steer += Math.Abs(c.Steer[i]);
                 minSpeed = Math.Min(minSpeed, c.SpeedKph[i]);
                 endIndex = i;
+                if (c.Throttle[i] < LiftThrottlePct)
+                {
+                    lift += resolution;
+                }
                 if (c.Brake[i] >= TrailBrakePct)
                 {
                     braking += resolution;
@@ -170,6 +180,7 @@ internal static class SegmentMeter
                 if (mode is not null)
                 {
                     overtake += (int)mode[i] == DeployModeOvertake ? resolution : 0;
+                    fastOvertake += (int)mode[i] == DeployModeOvertake && c.SpeedKph[i] >= FastSpeedKph ? resolution : 0;
                     noDeploy += (int)mode[i] == DeployModeNone ? resolution : 0;
                 }
 
@@ -205,7 +216,9 @@ internal static class SegmentMeter
             mode is null ? null : overtake,
             mode is null ? null : noDeploy,
             store?[endIndex],
-            store is null ? null : empty);
+            store is null ? null : empty,
+            lift,
+            mode is null ? null : fastOvertake);
     }
 
     /// <summary>랩 전체의 바퀴별 마찰 일·최고 표면 온도·평균 속 온도.</summary>

@@ -92,7 +92,9 @@ internal static class RaceDrivingAnalyzer
             Mean(m.Select(x => x.NoDeployM)),
             Mean(m.Select(x => x.StoreEndJ / JoulesPerKilojoule)),
             Mean(m.Select(x => x.EmptyM)),
-            m.Any(x => x.EmptyM.HasValue) ? m.Count(x => x.EmptyM >= EmptyLapM) : null);
+            m.Any(x => x.EmptyM.HasValue) ? m.Count(x => x.EmptyM >= EmptyLapM) : null,
+            Math.Round(m.Average(x => x.LiftM), ValueDecimals),
+            Mean(m.Select(x => x.FastOvertakeM)));
     }
 
     /// <summary>[lap]랩 동안 바퀴별 마모(%p) = 이 랩 끝 − 앞 랩 끝. 둘 중 하나라도 모르거나 줄었으면(새 타이어) null.</summary>

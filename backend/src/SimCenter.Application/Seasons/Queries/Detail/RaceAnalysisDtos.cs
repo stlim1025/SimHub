@@ -40,7 +40,8 @@ public sealed record RaceStintDrivingDto(
 /// 스틴트 안 한 구간의 랩 평균: 구간 시간(ms)과 랩마다 늘어난 정도(ms/랩, 최소제곱), 바퀴별 마찰 일(kJ), 평균 조향(%, 0~100),
 /// 언더스티어(앞 − 뒤 평균 슬립각, °, +면 앞이 더 미끄러진다 — 코너링 중 표본만), 앞 바퀴 락업·뒤 휠스핀·브레이크 밟은 채 조향·
 /// 풀 스로틀로 조향·브레이크(10% 이상) 밟은·연석 거리(m), 바퀴별 최고 표면 온도(°C), 최저·끝 속도(km/h),
-/// 배터리 채움·씀(kJ)·Overtake 모드 거리·배포 없음 모드 거리(m)·구간 끝 잔량(kJ)·거의 바닥이던 거리(m)와 그런 랩 수. 채널이 없으면 null.
+/// 배터리 채움·씀(kJ)·Overtake 모드 거리·배포 없음 모드 거리(m)·구간 끝 잔량(kJ)·거의 바닥이던 거리(m)와 그런 랩 수,
+/// 스로틀을 완전히 뗀(5% 미만) 거리(m)·Overtake로 280km/h 이상 달린 거리(m). 채널이 없으면 null.
 /// </summary>
 public sealed record RaceSegmentDrivingDto(
     int Index,
@@ -64,10 +65,15 @@ public sealed record RaceSegmentDrivingDto(
     double? NoDeployM,
     double? StoreEndKj,
     double? EmptyM,
-    int? EmptyLaps = null);
+    int? EmptyLaps = null,
+    double LiftM = 0,
+    double? FastOvertakeM = null);
 
-/// <summary>다른 차들(모든 차 표본)이 그 구간에서 랩마다 배터리를 채운·쓴 양의 중앙값(kJ)과 본 차 수.</summary>
-public sealed record FieldSegmentErsDto(int Index, double HarvestKj, double DeployKj, int Cars);
+/// <summary>
+/// 다른 차들(모든 차 표본)이 그 구간에서 랩마다 배터리를 채운·쓴 양의 중앙값(kJ)과 본 차 수,
+/// 스로틀을 완전히 뗀(5% 미만) 거리(m)·구간 통과 시간(ms)의 중앙값(표본에 스로틀이 없으면 거리는 null).
+/// </summary>
+public sealed record FieldSegmentErsDto(int Index, double HarvestKj, double DeployKj, int Cars, double? LiftM = null, int? TimeMs = null);
 
 /// <summary>
 /// 타이어로 본 전략: 레이스 랩 수, 출발 때 게임 피트 창(이상·최대 랩), 내 스톱 손실 중앙값(ms), 스톱마다 타이어 사정,

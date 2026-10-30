@@ -53,6 +53,7 @@ public class RaceAnalysisBuilderTests
         Assert.Equal(2100, cornerA.TimeMs);
         Assert.Equal((60.0, 60.0, 60.0, 60.0, 30.0), (cornerA.LockupM!.Value, cornerA.WheelspinM!.Value, cornerA.TrailBrakeM, cornerA.ThrottleSteerM, cornerA.KerbM!.Value));
         Assert.Equal(60, cornerA.BrakeM);
+        Assert.Equal(150, cornerA.LiftM);   // 300~440m 스로틀 0 = 완전히 뗌
         Assert.Equal(22.5, cornerA.UndersteerDeg);   // 코너링 중 앞 슬립각 (45 + 0)/2 − 뒤 0
         Assert.Equal([120.0, 90, 90, 90], cornerA.PeakSurfaceTempC);
         Assert.Equal((100, 120), (cornerA.MinSpeedKph, cornerA.EndSpeedKph));
@@ -60,6 +61,7 @@ public class RaceAnalysisBuilderTests
         Assert.Equal((0.0, 290.0, 290.0, 1710.0), (straight.HarvestKj!.Value, straight.DeployKj!.Value, straight.OvertakeM!.Value, straight.StoreEndKj!.Value));
         Assert.Equal((55.0, 1765.0), (medium.Segments[3].HarvestKj!.Value, medium.Segments[3].StoreEndKj!.Value));
         Assert.Equal(0, straight.EmptyLaps);   // 잔량이 200kJ 아래로 내려간 랩 없음
+        Assert.Equal(290, straight.FastOvertakeM);   // 300km/h로 Overtake 290m
 
         // Hard: 깨끗한 랩 6~10, 코너 A가 랩마다 210ms씩 느려진다.
         var hard = analysis.Stints[1];
@@ -71,8 +73,9 @@ public class RaceAnalysisBuilderTests
         Assert.Equal(38.1, analysis.WearPctPerMj);
 
         var aiErs = analysis.FieldErs;
-        Assert.Equal(new FieldSegmentErsDto(2, 0, 290, 1), aiErs[2]);
-        Assert.Equal(new FieldSegmentErsDto(3, 55, 0, 1), aiErs[3]);
+        // AI 표본은 100ms 간격 — 직선 29칸 2.9초, 코너 B 11칸 1.1초. 스로틀 열이 없는 표본이라 뗀 거리는 모른다.
+        Assert.Equal(new FieldSegmentErsDto(2, 0, 290, 1, null, 2900), aiErs[2]);
+        Assert.Equal(new FieldSegmentErsDto(3, 55, 0, 1, null, 1100), aiErs[3]);
 
         var strategy = analysis.Strategy!;
         Assert.Equal((10, 4, 6, 42_000), (strategy.TotalLaps, strategy.IdealLap!.Value, strategy.LatestLap!.Value, strategy.PitLossMs!.Value));

@@ -19,7 +19,8 @@ Map<String, dynamic> _segment(int index, {List<double>? work, Map<String, dynami
       ...more,
     };
 
-final RaceAnalysis _analysis = RaceAnalysis.fromJson({
+/// [aiT4TimeMs] = AI가 T4를 지나는 시간(ms, 내 T4는 3.450초).
+RaceAnalysis _build({int aiT4TimeMs = 3400}) => RaceAnalysis.fromJson({
   'trackLengthM': 1000,
   'referenceLap': 2,
   'wearPctPerMj': 5.0,
@@ -35,14 +36,16 @@ final RaceAnalysis _analysis = RaceAnalysis.fromJson({
       'compound': 'Soft', 'startLap': 1, 'endLap': 5, 'laps': [2, 3, 4],
       'wheelWorkKj': [500, 300, 400, 300], 'wheelWearPerLapPct': [4.0, 2.0, 3.0, 2.0], 'peakSurfaceTempC': [140, 100, 110, 100],
       'segments': [
-        _segment(0, work: [5, 5, 40, 40], more: {'deployKj': 1200, 'harvestKj': 300, 'overtakeM': 300, 'emptyM': 150, 'emptyLaps': 3, 'storeEndKj': 400}),
+        _segment(0, work: [5, 5, 40, 40], more: {'deployKj': 1200, 'harvestKj': 300, 'overtakeM': 300, 'fastOvertakeM': 150, 'emptyM': 150, 'emptyLaps': 3, 'storeEndKj': 400}),
         _segment(1, work: [200, 100, 150, 100], more: {
           'understeerDeg': 2.5, 'trailBrakeM': 30, 'throttleSteerM': 50, 'lockupM': 12, 'kerbM': 20, 'timeTrendMsPerLap': 40,
           'deployKj': 100, 'harvestKj': 800, 'brakeM': 60, 'storeEndKj': 1100,
         }),
-        _segment(2, work: [5, 5, 30, 30], more: {'deployKj': 900, 'harvestKj': 50, 'overtakeM': 200, 'storeEndKj': 250}),
+        _segment(2, work: [5, 5, 30, 30], more: {'deployKj': 900, 'harvestKj': 50, 'overtakeM': 200, 'fastOvertakeM': 60, 'storeEndKj': 250}),
         _segment(3, work: [150, 80, 120, 90], more: {'understeerDeg': 1.0, 'throttleSteerM': 45, 'deployKj': 200, 'harvestKj': 700, 'brakeM': 50, 'storeEndKj': 750}),
-        _segment(4, work: [100, 70, 80, 60], more: {'understeerDeg': 3.0, 'deployKj': 400, 'harvestKj': 50, 'overtakeM': 60, 'storeEndKj': 600}),
+        _segment(4, work: [100, 70, 80, 60], more: {
+          'understeerDeg': 3.0, 'deployKj': 400, 'harvestKj': 50, 'overtakeM': 60, 'storeEndKj': 600, 'timeMs': 3450,
+        }),
       ],
     },
     {
@@ -53,7 +56,9 @@ final RaceAnalysis _analysis = RaceAnalysis.fromJson({
         _segment(1, work: [170, 100, 150, 100], more: {'understeerDeg': 2.0, 'trailBrakeM': 20, 'throttleSteerM': 30, 'deployKj': 100, 'harvestKj': 800, 'brakeM': 60, 'storeEndKj': 1700}),
         _segment(2, work: [5, 5, 30, 30], more: {'deployKj': 400, 'harvestKj': 50, 'overtakeM': 0, 'storeEndKj': 1350}),
         _segment(3, work: [140, 80, 120, 90], more: {'understeerDeg': 1.0, 'throttleSteerM': 35, 'deployKj': 200, 'harvestKj': 700, 'brakeM': 50, 'storeEndKj': 1850}),
-        _segment(4, work: [95, 70, 80, 60], more: {'understeerDeg': 2.6, 'deployKj': 380, 'harvestKj': 50, 'overtakeM': 40, 'storeEndKj': 1400}),
+        _segment(4, work: [95, 70, 80, 60], more: {
+          'understeerDeg': 2.6, 'deployKj': 380, 'harvestKj': 50, 'overtakeM': 40, 'storeEndKj': 1400, 'timeMs': 3450,
+        }),
       ],
     },
   ],
@@ -62,7 +67,7 @@ final RaceAnalysis _analysis = RaceAnalysis.fromJson({
     {'index': 1, 'harvestKj': 900, 'deployKj': 300, 'cars': 19},
     {'index': 2, 'harvestKj': 100, 'deployKj': 900, 'cars': 19},
     {'index': 3, 'harvestKj': 800, 'deployKj': 300, 'cars': 19},
-    {'index': 4, 'harvestKj': 300, 'deployKj': 100, 'cars': 19},
+    {'index': 4, 'harvestKj': 300, 'deployKj': 100, 'cars': 19, 'liftM': 80, 'timeMs': aiT4TimeMs},
   ],
   'strategy': {
     'totalLaps': 10, 'idealLap': 5, 'latestLap': 8, 'pitLossMs': 20000,
@@ -90,6 +95,8 @@ final RaceAnalysis _analysis = RaceAnalysis.fromJson({
       },
   ],
 });
+
+final RaceAnalysis _analysis = _build();
 
 const List<OfficialCorner> _corners = [
   (number: 1, letter: '', fraction: 0.2),
@@ -136,16 +143,30 @@ void main() {
     expect(deepTyreLines(_stints, RaceAnalysis.fromJson(const {}), const [], _setup), isEmpty);
   });
 
-  test('배터리: 바닥난 스틴트는 AI보다 더 쓴 곳을, 여유 있는 스틴트는 덜 쓴 직선을, 배터리를 잃고 나온 코너', () {
+  test('배터리: 바닥난 스틴트는 고속 Overtake를 짧은 직선부터, 여유 있는 스틴트는 덜 쓴 직선을, 반만 떼는 코너는 완전히 떼라고', () {
     final lines = deepBatteryLines(null, _analysis, labels);
     expect(lines.first, startsWith('랩당 배터리 사용'));
+    // 280km/h 넘는 Overtake: T2→T3 직선(190m) 60m, 메인 직선(200m) 150m → 짧은 직선부터.
     expect(
       lines,
       contains('Soft 1–5랩: 3랩 중 3랩은 메인 직선에서 배터리가 바닥났어(들어갈 때 잔량 600kJ, 바닥 안 난 스틴트 1400kJ)'
-          ' — T4에서 AI보다 300kJ 더 썼어(Overtake 60m) → T4에선 Medium으로 두고 메인 직선까지 남겨'),
+          ' — T4에서 AI보다 300kJ 더 썼어(Overtake 60m)'
+          ' → 280km/h 넘는 Overtake부터 줄여 — T2→T3 직선(60m) → 메인 직선(150m) 순서로(짧은 직선일수록 같은 배터리로 버는 시간이 적어), 코너 탈출 Overtake는 그대로 둬'),
     );
     expect(lines, contains('Soft 6–10랩: T2→T3 직선에서 AI보다 랩당 500kJ 덜 썼어(바닥난 곳 없음) → 거기선 Overtake로 더 써'));
-    expect(lines, contains('T4: 이 구간에서 배터리가 넌 랩당 −340kJ, AI는 +200kJ → Overtake(50m)를 끄고 Medium으로 지나가'));
+    // T4: 완전히 뗀 거리 0m로 50kJ — AI는 80m 완전히 떼고 300kJ(AI가 0.05초 빠르다).
+    expect(
+      lines,
+      contains('T4: 진입에서 완전히 뗀 거리가 0m라 랩당 50kJ만 채워 — AI는 80m 완전히 떼고 300kJ 채워(이 구간 AI 3.400초 · 너 3.450초 — 시간도 안 잃어)'
+          ' → 반만 떼고 버티지 말고 완전히 떼고 브레이크를 짧게 찍어'),
+    );
+    expect(lines.where((l) => l.startsWith('T4: 이 구간에서 배터리가')), isEmpty);   // 같은 코너를 두 번 짚지 않는다
+
+    // AI가 T4에서 0.15초 더 걸려 250kJ를 더 채우면(1MJ당 0.6초) 아직 권하고, 0.25초 더 걸리면(1MJ당 1.0초) 비싸서 권하지 않는다.
+    expect(deepBatteryLines(null, _build(aiT4TimeMs: 3600), labels), contains(contains('0.150초 내주고 250kJ 더 채우는 셈')));
+    final costly = deepBatteryLines(null, _build(aiT4TimeMs: 3700), labels);
+    expect(costly.where((l) => l.contains('완전히 뗀 거리')), isEmpty);
+    expect(costly, contains('T4: 이 구간에서 배터리가 넌 랩당 −340kJ, AI는 +200kJ → Overtake(50m)를 끄고 Medium으로 지나가'));
   });
 
   test('전략: 피트 창과 스톱, 남은 랩으로 못 되찾는 스톱, 짧게 탄 컴파운드, 추정 대안', () {
