@@ -31,7 +31,9 @@ public static class ResponseCompressionSetup
 
     public static IApplicationBuilder UseSimCenterResponseCompression(this IApplicationBuilder app)
     {
-        app.Use((context, next) =>
+        // 압축 미들웨어가 요청마다 IHttpsCompressionFeature를 붙이므로, HTTPS 압축을 켜는 건 그 뒤에서 해야 한다.
+        app.UseResponseCompression();
+        return app.Use((context, next) =>
         {
             if (HttpMethods.IsGet(context.Request.Method)
                 && context.Request.Path.StartsWithSegments(ApiPathPrefix, StringComparison.OrdinalIgnoreCase)
@@ -42,6 +44,5 @@ public static class ResponseCompressionSetup
 
             return next(context);
         });
-        return app.UseResponseCompression();
     }
 }

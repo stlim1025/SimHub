@@ -66,7 +66,9 @@ public sealed class LapDetailApiE2ETests : IClassFixture<ApiFactory>
         var items = Items(await client.GetFromJsonAsync<JsonElement>($"/api/v1/me/laps?trackId={trackId}"));
 
         // 트레이스가 있는 랩: 브라우저처럼 압축을 받겠다고 하면 brotli로 오고, 그 브라우저에만 캐시된다(사용자마다 따로).
-        using var request = new HttpRequestMessage(HttpMethod.Get, $"/api/v1/me/laps/{items[0].GetProperty("lapId").GetGuid()}/trace");
+        // 운영처럼 HTTPS 요청으로 보낸다 — HTTPS 응답은 기본으로 압축하지 않으므로 GET API만 켜는지 봐야 한다.
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get, new Uri($"https://localhost/api/v1/me/laps/{items[0].GetProperty("lapId").GetGuid()}/trace"));
         request.Headers.AcceptEncoding.ParseAdd("br, gzip");
         using var found = await client.SendAsync(request);
         Assert.Equal(HttpStatusCode.OK, found.StatusCode);
