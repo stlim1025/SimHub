@@ -9,8 +9,14 @@ const double _kerbEdgeAllowanceM = 0.5;
 /// 연석 단서가 없는 구간은 가장 가까운 단서에서 이 거리(m)에 걸쳐 레이싱 라인 = 도로 가운데로 돌아간다.
 const double _offsetFadeM = 100;
 
-/// 도로 가운데 이동량을 고르는 이동 평균 반폭(칸).
-const int _offsetSmoothBins = 3;
+/// 도로 가운데 이동량을 고르는 이동 평균 반폭(칸). 연석 단서가 칸마다 조금씩 달라 가운데가 좌우로 흔들리지 않게 넓게 고른다.
+const int _offsetSmoothBins = 6;
+
+/// 연석 안쪽 끝(연석 바깥 끝 − 연석 폭)을 고르는 가운데값 반폭(칸, 연석 칸끼리만): 칸마다 튀는 연석 측정값이 가장자리를 톱니처럼 만들지 않게.
+const int _kerbMedianBins = 2;
+
+/// 마지막 가장자리를 고르는 이동 평균 반폭(칸): 연석 깔때기로 자른 계단과 남은 잔물결을 둥글게 편다.
+const int _edgeFinalSmoothBins = 2;
 
 /// 가장자리를 고르는 반폭(칸): 앞뒤 가장 먼 값으로 넓힌 뒤 같은 범위로 평균해 칸마다 튀지 않게 한다(점마다 원래 값 이상).
 const int _edgeSmoothBins = 3;
@@ -171,10 +177,21 @@ TrackWidthProfile trackProfileFromSamples(TrackSampleGeometry geometry, {require
       }(),
   ];
   List<double> edge(List<double>? wheels, List<double>? kerbOuter, List<bool> kerbs, List<double> band) {
-    // 연석 칸의 가장자리 = 연석 안쪽 끝(그 너머 표본은 연석 위나 연석 밖이다).
-    final kerbInner = [
+    // 연석 칸의 가장자리 = 연석 안쪽 끝(그 너머 표본은 연석 위나 연석 밖이다). 칸마다 튀는 측정값은 앞뒤 연석 칸의 가운데값으로 누른다.
+    final rawKerbInner = [
       for (var k = 0; k < n; k++)
         wheels != null && kerbOuter != null && kerbs[k] && kerbOuter[k] > 0 ? kerbOuter[k] - kerbWidthM : null,
+    ];
+    final kerbInner = [
+      for (var k = 0; k < n; k++)
+        rawKerbInner[k] == null
+            ? null
+            : () {
+                final near = [
+                  for (var j = -_kerbMedianBins; j <= _kerbMedianBins; j++) ?rawKerbInner[at(k + j)],
+                ]..sort();
+                return near[near.length ~/ 2];
+              }(),
     ];
     final raw = [
       for (var k = 0; k < n; k++)
@@ -207,7 +224,12 @@ TrackWidthProfile trackProfileFromSamples(TrackSampleGeometry geometry, {require
         funnel[k] = math.min(funnel[k], funnel[at(k + 1)] + step);
       }
     }
-    return [for (var k = 0; k < n; k++) math.min(smoothed[k], funnel[k])];
+    final limited = [for (var k = 0; k < n; k++) math.min(smoothed[k], funnel[k])];
+    return [
+      for (var k = 0; k < n; k++)
+        [for (var j = -_edgeFinalSmoothBins; j <= _edgeFinalSmoothBins; j++) limited[at(k + j)]].reduce((a, b) => a + b) /
+            (_edgeFinalSmoothBins * 2 + 1),
+    ];
   }
 
   final leftEdge = edge(geometry.edgeLeftM, geometry.kerbOuterLeftM, geometry.kerbLeft, geometry.bandLeftM);

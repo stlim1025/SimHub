@@ -251,12 +251,13 @@ class ReplayCircuit {
     final traceKerbs = _kerbSides(lines, center, normals, curvatures, spacing: spacing, closed: closed);
     final sampleKerbs = samples == null ? null : _sampleKerbs(samples, center, spacing: spacing, closed: closed);
     // 안쪽 연석 기록이 하나도 없는 급한 코너는 곡률로 안쪽 연석을 그린다 — 게임이 연석을 연석 노면으로 알려 주지 않는 곳(모나코 라스카스 등).
+    // 몇 m만 잡힌 연석 조각(한두 칸만 밟힌 자리)은 빼서 연석이 끊어진 토막으로 흩어져 보이지 않게 한다.
     final kerbs = _withInsideKerbs(
       sampleKerbs == null
           ? traceKerbs
           : (
-              left: [for (var i = 0; i < n; i++) traceKerbs.left[i] || sampleKerbs.left[i]],
-              right: [for (var i = 0; i < n; i++) traceKerbs.right[i] || sampleKerbs.right[i]],
+              left: _dropShortRuns([for (var i = 0; i < n; i++) traceKerbs.left[i] || sampleKerbs.left[i]], closed: closed),
+              right: _dropShortRuns([for (var i = 0; i < n; i++) traceKerbs.right[i] || sampleKerbs.right[i]], closed: closed),
             ),
       curvatures,
       closed: closed,

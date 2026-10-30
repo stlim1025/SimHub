@@ -42,6 +42,12 @@ const double _sameStretchM = 10;
 /// 다른 구간과 겹칠 때 방호벽 거리를 줄여 보는 비율(큰 것부터). 끝까지 겹치면 그 자리에는 벽을 세우지 않는다.
 const List<double> _wallShrinkSteps = [0.8, 0.6, 0.4, 0.25, 0.1];
 
+/// 피트 레인과 나란한 쪽 방호벽: 도로 가장자리에서 바깥쪽으로 이 거리(m) 안, 옆으로 이 거리(m) 안의 피트 레인 점을 본다.
+/// 도로와 피트 레인 사이가 이보다(m) 좁으면 피트 입구·출구로 보고 벽을 세우지 않는다.
+const double _pitWallSearchOutM = 25;
+const double _pitWallSearchAlongM = 6;
+const double _pitWallMinGapM = 1.2;
+
 /// 가까운 중심선 점을 찾는 격자 칸 크기(m).
 const double _gridCellM = 20;
 
@@ -461,6 +467,28 @@ class ReplayTrack3d {
       return false;
     }
 
+    // 도로 가장자리 [edge]에서 바깥쪽 [outward]으로 피트 레인 가장자리까지 거리(m). 그 쪽 가까이에 피트 레인이 없으면 null.
+    final lane = circuit.pitLane;
+    double? pitGapAt(Offset edge, Offset outward) {
+      double? best;
+      for (final p in lane) {
+        final d = p - edge;
+        final ahead = d.dx * outward.dx + d.dy * outward.dy;
+        if (ahead <= 0) {
+          continue;
+        }
+        final sideways = (d - outward * ahead).distance;
+        if (sideways > _pitWallSearchAlongM || ahead > _pitWallSearchOutM) {
+          continue;
+        }
+        final gap = math.max(0.0, ahead - kCircuitPitLaneWidthM / 2);
+        if (best == null || gap < best) {
+          best = gap;
+        }
+      }
+      return best;
+    }
+
     // 차 몸체가 닿은 자리([reach], 중심선에서 m)보다 안쪽에는 벽을 세우지 않는다. 그 자리가 다른 구간 도로에 걸리면 벽을 빼고,
     // 그 밖에는 런오프 끝까지 두되 다른 구간 도로와 겹치면 차가 닿은 자리까지만 줄인다.
     ({List<double> offsets, List<bool> standing}) wall(
@@ -477,6 +505,7 @@ class ReplayTrack3d {
       ]);
       final offsets = <double>[];
       final standing = <bool>[];
+      final pitWall = List<bool>.filled(n, false);
       for (var i = 0; i < n; i++) {
         var offset = math.max(smooth[i], need[i]);
         var clear = !onOtherRoad(edges[i] + outward[i] * offset, i);
@@ -488,10 +517,36 @@ class ReplayTrack3d {
           offset = shrunk;
           clear = !onOtherRoad(edges[i] + outward[i] * offset, i);
         }
+        // 이 쪽에 피트 레인이 나란히 있으면 벽은 도로와 피트 레인 사이 가운데(피트 월)에 세운다 — 피트 레인을 가로지르지 않게.
+        // 사이가 거의 없는 피트 입구·출구는 벽을 뺀다(차가 드나드는 길이다).
+        if (pitGapAt(edges[i], outward[i]) case final gap?) {
+          pitWall[i] = true;
+          if (gap < _pitWallMinGapM) {
+            clear = false;
+          } else {
+            offset = math.min(offset, gap / 2);
+          }
+        }
         offsets.add(offset);
         standing.add(clear);
       }
-      return (offsets: offsets, standing: standing);
+      // 피트 월 둘레는 앞뒤 가장 가까운 값으로 좁힌 뒤 평균해, 피트 레인이 끝나는 곳에서 벽이 계단처럼 꺾이지 않고 비스듬히 이어지게 한다
+      // (같은 범위로 좁히고 평균하므로 점마다 원래 값 이하 — 피트 레인 쪽으로 나가지 않는다).
+      const span = _wallSmoothSamples * 2;
+      final narrowed = [
+        for (var i = 0; i < n; i++) [for (var k = i - span; k <= i + span; k++) offsets[at(k)]].reduce(math.min),
+      ];
+      final eased = [
+        for (var i = 0; i < n; i++)
+          [for (var k = i - span; k <= i + span; k++) narrowed[at(k)]].reduce((a, b) => a + b) / (span * 2 + 1),
+      ];
+      return (
+        offsets: [
+          for (var i = 0; i < n; i++)
+            [for (var k = i - span; k <= i + span; k++) pitWall[at(k)]].contains(true) ? eased[i] : offsets[i],
+        ],
+        standing: standing,
+      );
     }
 
     final outwardLeft = [for (var i = 0; i < n; i++) outward(circuit.leftPoints[i], i)];

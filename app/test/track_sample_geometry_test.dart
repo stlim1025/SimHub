@@ -8,9 +8,9 @@ import 'package:simcenter_app/features/lap_detail/presentation/replay_circuit.da
 import 'package:simcenter_app/features/tracks/domain/track_sample_geometry.dart';
 import 'package:simcenter_app/features/tracks/domain/track_width_profile.dart';
 
-/// 원 서킷(반지름 100m) 표본 형상. [pit]이면 바깥 15m에 피트 레인(점 10개)을 붙인다.
+/// 원 서킷(반지름 100m) 표본 형상. [pit]이면 반지름 [pitRadius]m에 피트 레인(점 10개)을 붙인다.
 /// [columns]는 칸마다 같은 값으로 채울 열(가장자리·연석 바깥·도달 폭).
-Map<String, dynamic> _geometryJson({bool pit = true, Map<String, double> columns = const {}}) {
+Map<String, dynamic> _geometryJson({bool pit = true, double pitRadius = 115, Map<String, double> columns = const {}}) {
   const n = 126;
   double angle(int i) => i * 5 / 100;
   return {
@@ -25,8 +25,8 @@ Map<String, dynamic> _geometryJson({bool pit = true, Map<String, double> columns
     'kerbRight': [for (var i = 0; i < n; i++) false],
     for (final MapEntry(:key, :value) in columns.entries) key: [for (var i = 0; i < n; i++) value],
     if (pit) ...{
-      'pitX': [for (var i = 0; i < 10; i++) 115 * math.cos(angle(i))],
-      'pitZ': [for (var i = 0; i < 10; i++) 115 * math.sin(angle(i))],
+      'pitX': [for (var i = 0; i < 10; i++) pitRadius * math.cos(angle(i))],
+      'pitZ': [for (var i = 0; i < 10; i++) pitRadius * math.sin(angle(i))],
       'pitY': [for (var i = 0; i < 10; i++) 1.5],
     },
   };
@@ -204,5 +204,29 @@ void main() {
       expect(track.wallLeftM[i], closeTo(plain.wallLeftM[i], 1e-9));
     }
     expect(track.hasWallRight.every((standing) => standing), isTrue);
+  });
+
+  test('피트 레인이 나란한 쪽 방호벽은 피트 레인을 가로지르지 않고 도로와 피트 레인 사이에 선다', () {
+    // 도로(반지름 100m, 폭 10m) 바깥 10m에 피트 레인(폭 7m): 도로 가장자리 105m, 피트 레인 안쪽 끝 106.5m —
+    // 런오프(3m)대로 세우면 108m라 피트 레인 한가운데를 지난다.
+    final geometry = TrackSampleGeometry.fromJsonOrNull(_geometryJson(pitRadius: 110))!;
+    final circuit = ReplayCircuit.build(LapReplay(_circleLap()), samples: geometry, baseWidthM: 10);
+    final track = ReplayTrack3d.build(circuit);
+    final plain = ReplayTrack3d.build(ReplayCircuit.build(
+      LapReplay(_circleLap()),
+      samples: TrackSampleGeometry.fromJsonOrNull(_geometryJson(pit: false))!,
+      baseWidthM: 10,
+    ));
+
+    for (var i = 2; i <= 7; i++) {
+      final wallRadius = 100 + circuit.rightWidths[i] + track.wallRightM[i];
+      expect(track.hasWallRight[i], isTrue);
+      expect(wallRadius, lessThan(106.5));
+      expect(wallRadius, greaterThan(100 + circuit.rightWidths[i]));
+    }
+    // 피트 레인과 먼 곳(반대편)은 피트 레인이 없는 서킷과 같다.
+    final far = circuit.center.length ~/ 2;
+    expect(track.wallRightM[far], closeTo(plain.wallRightM[far], 1e-9));
+    expect(track.wallLeftM[far], closeTo(plain.wallLeftM[far], 1e-9));
   });
 }
