@@ -23,9 +23,9 @@ public static class ResponseCompressionSetup
             options.Providers.Add<GzipCompressionProvider>();
         });
 
-        // 가장 빠른 수준: 트레이스는 반복이 많아 이 수준으로도 충분히 줄고, 상시 켜 둔 PC의 CPU를 아낀다.
-        services.Configure<BrotliCompressionProviderOptions>(options => options.Level = CompressionLevel.Fastest);
-        services.Configure<GzipCompressionProviderOptions>(options => options.Level = CompressionLevel.Fastest);
+        // Optimal(brotli 4·gzip 6): 트레이스 한 개(약 500KB)를 수 ms에 압축하면서 Fastest보다 한참 더 줄인다(Funnel 중계로 나가는 바이트가 대기 시간).
+        services.Configure<BrotliCompressionProviderOptions>(options => options.Level = CompressionLevel.Optimal);
+        services.Configure<GzipCompressionProviderOptions>(options => options.Level = CompressionLevel.Optimal);
         return services;
     }
 
