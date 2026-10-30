@@ -44,6 +44,9 @@ class _FakeAuthRepository implements AuthRepository {
 
   /// null이 아니면 me()가 이 오류로 실패한다. 테스트 도중에 바꿀 수 있다.
   Object? meError;
+
+  /// [meError]보다 먼저, 이 오류들을 차례로 한 번씩 던진다(일시적인 실패 뒤 성공).
+  final meFailures = <Object>[];
   int meCalls = 0;
 
   @override
@@ -59,6 +62,9 @@ class _FakeAuthRepository implements AuthRepository {
   @override
   Future<AppUser> me() async {
     meCalls++;
+    if (meFailures.isNotEmpty) {
+      throw meFailures.removeAt(0);
+    }
     final error = meError;
     if (error != null) {
       throw error;
@@ -303,6 +309,53 @@ void main() {
       final light = _container(user: AppUser.fromJson(_meJson));
       await light.read(authControllerProvider.future);
       expect(light.read(themeModeProvider), ThemeMode.light);
+    });
+  });
+
+  group('AuthController 세션 복원', () {
+    ({ProviderContainer container, _MemoryTokenStore store}) restoring(_FakeAuthRepository repo) {
+      final store = _MemoryTokenStore()..token = 'jwt';
+      final container = ProviderContainer(overrides: [
+        tokenStoreProvider.overrideWithValue(store),
+        authRepositoryProvider.overrideWithValue(repo),
+        authRestoreRetryDelaysProvider.overrideWithValue(const [Duration.zero, Duration.zero]),
+      ]);
+      addTearDown(container.dispose);
+      return (container: container, store: store);
+    }
+
+    test('서버가 잠깐 응답하지 않아도(배포·네트워크) 토큰을 지우지 않고 다시 물어 로그인을 이어 간다', () async {
+      final repo = _FakeAuthRepository();
+      repo.meFailures.addAll([
+        ApiException('서버에 연결할 수 없어요.'),
+        ApiException('서버가 아파요.', statusCode: 502),
+      ]);
+      final (:container, :store) = restoring(repo);
+
+      final user = await container.read(authControllerProvider.future);
+
+      expect(user?.email, 'driver@simcenter.test');
+      expect(repo.meCalls, 3);
+      expect(store.token, 'jwt');
+    });
+
+    test('끝내 응답하지 않으면 오류로 남고(스플래시가 다시 시도) 토큰은 그대로다', () async {
+      final repo = _FakeAuthRepository(meError: ApiException('서버에 연결할 수 없어요.'));
+      final (:container, :store) = restoring(repo);
+
+      await expectLater(container.read(authControllerProvider.future), throwsA(isA<ApiException>()));
+
+      expect(repo.meCalls, 3); // 처음 + 다시 두 번
+      expect(store.token, 'jwt');
+    });
+
+    test('서버가 토큰을 거부하면(401) 바로 로그아웃하고 토큰을 지운다', () async {
+      final repo = _FakeAuthRepository(meError: ApiException('로그인이 필요해요.', statusCode: 401));
+      final (:container, :store) = restoring(repo);
+
+      expect(await container.read(authControllerProvider.future), isNull);
+      expect(repo.meCalls, 1);
+      expect(store.token, isNull);
     });
   });
 

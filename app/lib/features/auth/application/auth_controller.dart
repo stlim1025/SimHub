@@ -1,15 +1,33 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../../../core/network/auth_events.dart';
 import '../../../core/storage/token_store.dart';
 import '../data/auth_repository.dart';
 import '../domain/auth_models.dart';
 
+/// 세션 복원 때 `GET /me`가 401이 아닌 이유(서버 재시작·네트워크 끊김·응답 지연)로 실패하면 이 간격으로 다시 묻는다.
+/// 그동안 토큰은 지우지 않는다 — 배포로 서버가 잠깐 내려간 사이 새로고침해도 로그인이 풀리지 않게. 테스트는 짧게 덮어쓴다.
+final authRestoreRetryDelaysProvider = Provider<List<Duration>>(
+  (ref) => const [
+    Duration(seconds: 1),
+    Duration(seconds: 2),
+    Duration(seconds: 4),
+    Duration(seconds: 8),
+    Duration(seconds: 15),
+    Duration(seconds: 30),
+  ],
+);
+
 /// 인증 상태(현재 사용자, null=로그아웃). 초기 build는 저장된 토큰으로 세션 복원.
+/// 토큰을 지우고 로그아웃하는 건 서버가 401(토큰이 무효)을 줄 때뿐이다. 그 밖의 실패는 [authRestoreRetryDelaysProvider] 간격으로
+/// 다시 묻고, 끝내 실패하면 오류 상태로 남아 스플래시가 다시 시도를 띄운다(토큰은 그대로).
 /// login/register는 전역 로딩을 유발하지 않고(라우터가 splash로 튀지 않도록) 성공 시에만 상태를 갱신한다.
 /// 상태의 사용자는 `GET /me`의 프로필(이메일·설정 포함)이다 — 사이드바 사진·테마가 이 값을 따른다(docs/14 §8).
 class AuthController extends AsyncNotifier<AppUser?> {
+  static const int _unauthorized = 401;
+
   @override
   Future<AppUser?> build() async {
     // 401 → 강제 로그아웃 구독.
@@ -19,15 +37,29 @@ class AuthController extends AsyncNotifier<AppUser?> {
     ref.onDispose(sub.cancel);
 
     final store = ref.watch(tokenStoreProvider);
+    final repo = ref.watch(authRepositoryProvider);
+    final delays = ref.watch(authRestoreRetryDelaysProvider);
     if (!await store.hasValidToken()) {
       return null;
     }
 
-    try {
-      return await ref.watch(authRepositoryProvider).me();
-    } catch (_) {
-      await store.clear();
-      return null;
+    for (var attempt = 0;; attempt++) {
+      try {
+        return await repo.me();
+      } on ApiException catch (e) {
+        if (e.statusCode == _unauthorized) {
+          await store.clear();
+          return null;
+        }
+        if (attempt >= delays.length) {
+          rethrow;
+        }
+      } catch (_) {
+        if (attempt >= delays.length) {
+          rethrow;
+        }
+      }
+      await Future<void>.delayed(delays[attempt]);
     }
   }
 
