@@ -118,8 +118,8 @@ void main() {
   test('JSON → 심층 분석, 구간 이름(공식 코너는 한 구간에만, 없으면 순서 번호)', () {
     expect(_analysis.segments.where((s) => s.isCorner).length, 3);
     expect(_analysis.stints.first.segment(0)!.emptyLaps, 3);
-    expect(_analysis.strategy!.options.last.plan, 'S4→S3→S3');
-    expect(labels, ['메인 직선', 'T1–T2', 'T2→T3 직선', 'T3', 'T4']);
+    expect(_analysis.strategy!.options.last.plan, '소프트 4랩, 소프트 3랩, 소프트 3랩');
+    expect(labels, ['메인 직선', 'T1~T2', 'T2→T3 직선', 'T3', 'T4']);
     expect(segmentLabels(_analysis, null), ['메인 직선', '코너 1', '직선 1', '코너 2', '코너 3']);
     // 두 구간 사이 빈틈(700~710m)의 코너는 앞뒤 여유 안 첫 구간 하나에만 든다.
     final between = segmentLabels(_analysis, const [(number: 9, letter: '', fraction: 0.705)]);
@@ -128,54 +128,71 @@ void main() {
 
   test('타이어: 리미터 바퀴, 부담 큰 코너의 원인과 할 것, 그립이 빠진 코너, 같은 컴파운드 비교, 세팅', () {
     final lines = deepTyreLines(_stints, _analysis, labels, _setup);
-    expect(lines.first, startsWith('리미터는 앞왼 — 랩당 마모 3.8%p(다음 뒤왼 3.0%p), 마찰 일 475kJ'));
-    // T1–T2: 앞왼 (200 + 170) / 2 = 185kJ, 랩의 39%, 마모 ≈ 0.185MJ × 5%/MJ.
-    expect(lines[1], startsWith('T1–T2: 앞왼 185kJ(랩의 39%, 마모 ≈0.9%p) — 앞이 뒤보다'));
-    expect(lines[1], endsWith('→ 진입 속도를 조금 낮추고 감은 채로 버티지 마 — 앞이 물릴 때 돌려'));
-    expect(lines[2], contains('T3: 앞왼 145kJ'));
-    expect(lines[2], endsWith('풀 스로틀로 꺾은 거리 40m → 탈출에서 핸들을 먼저 풀고 그다음 풀 스로틀'));   // (45 + 35) / 2 = 문턱 40m
-    expect(lines, contains(startsWith('Soft 1–5랩: AI보다 랩당 0.100초씩 더 떨어졌어 — 시간이 늘어난 곳은 T1–T2(+0.040초/랩)')));
-    expect(lines, contains(startsWith('Soft 1–5랩은 6–10랩보다 앞왼 일이 랩당 50kJ 많았어(마모 ≈+0.3%p) — 차이는 T1–T2(풀 스로틀 조향 50m vs 30m)')));
-    expect(lines, contains('세팅: 앞 캠버 -3.50°는 코너 그립엔 좋지만 앞 타이어를 더 달궈 → 레이스에선 0.1~0.2° 세워 봐'));
-    // 부담 큰 코너(T1–T2 2.25° · T3 1.0° · T4 2.8°)의 평균 언더스티어 2.0° → 앞 날개·안티롤바.
-    expect(lines, contains('세팅: 부담이 큰 코너에서 앞이 평균 2.0° 더 미끄러져 → 앞 날개 +1~2 또는 앞 안티롤바를 낮춰 앞 그립을 올려 봐(지금 앞 날개 40, 앞 안티롤바 7)'));
+    expect(lines.first, '가장 빨리 닳는 건 앞왼 타이어야. 한 랩에 3.8%씩 닳아. 그다음은 뒤왼 타이어로 3.0%야');
+    // T1~T2: 앞왼 (200 + 170) / 2 = 185kJ, 랩의 39%, 마모 ≈ 0.185MJ × 5%/MJ.
+    expect(lines[1], startsWith('T1~T2: 앞왼 타이어가 여기서 랩마다 0.9%쯤 닳아. 한 랩에 닳는 양의 39%가 이 구간이야. 핸들을 평균 20% 꺾은 상태에서 앞바퀴가'));
+    expect(lines[1], endsWith('→ 진입 속도를 조금 줄여. 핸들을 감은 채로 버티지 말고, 앞바퀴가 다시 노면을 잡으면 그때 돌려'));
+    expect(lines[2], contains('T3: 앞왼 타이어가 여기서 랩마다 0.7%쯤 닳아'));
+    // (45 + 35) / 2 = 문턱 40m
+    expect(lines[2], endsWith('스로틀을 끝까지 밟은 채로 핸들을 꺾은 거리가 40m야 → 코너를 나갈 때 핸들을 먼저 풀고, 그다음에 스로틀을 끝까지 밟아'));
+    expect(lines, contains('소프트(1~5랩): 랩이 지날수록 AI보다 랩당 0.100초씩 더 느려졌어. 특히 T1~T2에서 랩마다 0.040초씩 늘었어'));
+    expect(
+      lines,
+      contains(startsWith('소프트(1~5랩)에는 소프트(6~10랩)보다 앞왼 타이어가 랩마다 0.3% 더 닳았어. '
+          'T1~T2에서는 스로틀을 끝까지 밟은 채로 핸들을 꺾은 거리가 길었어(50m, 그때는 30m)')),
+    );
+    expect(lines, contains('세팅: 앞 캠버가 -3.50도면 코너 그립에는 좋지만 앞 타이어가 더 뜨거워져 → 레이스에서는 캠버를 0.1~0.2도 세워 봐(마이너스 값을 줄이는 쪽)'));
+    // 부담 큰 코너(T1~T2 2.25° · T3 1.0° · T4 2.8°)의 평균 언더스티어 2.0° → 앞 날개·안티롤바.
+    expect(
+      lines,
+      contains('세팅: 부담이 큰 코너들에서 앞바퀴가 뒷바퀴보다 평균 2.0도 더 미끄러져 → 앞 날개를 1~2 올리거나 앞 안티롤바를 낮춰서 앞쪽 그립을 높여 봐(지금 앞 날개 40, 앞 안티롤바 7)'),
+    );
     // 트레이스로 분석한 스틴트가 없으면 줄이 없다.
     expect(deepTyreLines(_stints, RaceAnalysis.fromJson(const {}), const [], _setup), isEmpty);
   });
 
   test('배터리: 바닥난 스틴트는 고속 Overtake를 짧은 직선부터, 여유 있는 스틴트는 덜 쓴 직선을, 반만 떼는 코너는 완전히 떼라고', () {
     final lines = deepBatteryLines(null, _analysis, labels);
-    expect(lines.first, startsWith('랩당 배터리 사용'));
+    // 배터리 양은 배터리 게이지 %(한 통 4MJ = 100%)로 말한다.
+    expect(lines.first, '한 랩에 배터리를 64% 쓰고 48% 채웠어. AI는 73% 쓰고 73% 채웠어');
     // 280km/h 넘는 Overtake: T2→T3 직선(190m) 60m, 메인 직선(200m) 150m → 짧은 직선부터.
     expect(
       lines,
-      contains('Soft 1–5랩: 3랩 중 3랩은 메인 직선에서 배터리가 바닥났어(들어갈 때 잔량 600kJ, 바닥 안 난 스틴트 1400kJ)'
-          ' — T4에서 AI보다 300kJ 더 썼어(Overtake 60m)'
-          ' → 280km/h 넘는 Overtake부터 줄여 — T2→T3 직선(60m) → 메인 직선(150m) 순서로(짧은 직선일수록 같은 배터리로 버는 시간이 적어), 코너 탈출 Overtake는 그대로 둬'),
+      contains('소프트(1~5랩): 3랩 중 3랩은 메인 직선에서 배터리가 바닥났어. 메인 직선에 들어갈 때 배터리가 15%였어. 바닥나지 않은 스틴트에서는 35%였어. '
+          'T4에서 AI보다 배터리를 8% 더 썼어. 거기서 Overtake를 켠 거리가 60m야 '
+          '→ 280km/h가 넘을 때 켜는 Overtake부터 줄여. T2→T3 직선에서 60m, 메인 직선에서 150m 순서로 줄이면 돼. '
+          '짧은 직선일수록 같은 배터리로 버는 시간이 적어. 코너를 빠져나갈 때 켜는 Overtake는 그대로 둬'),
     );
-    expect(lines, contains('Soft 6–10랩: T2→T3 직선에서 AI보다 랩당 500kJ 덜 썼어(바닥난 곳 없음) → 거기선 Overtake로 더 써'));
+    expect(lines, contains('소프트(6~10랩): 배터리가 바닥난 곳이 없는데 T2→T3 직선에서는 AI보다 배터리를 랩마다 13% 덜 썼어 → 거기서는 Overtake로 더 써'));
     // T4: 완전히 뗀 거리 0m로 50kJ — AI는 80m 완전히 떼고 300kJ(AI가 0.05초 빠르다).
     expect(
       lines,
-      contains('T4: 진입에서 완전히 뗀 거리가 0m라 랩당 50kJ만 채워 — AI는 80m 완전히 떼고 300kJ 채워(이 구간 AI 3.400초 · 너 3.450초 — 시간도 안 잃어)'
-          ' → 반만 떼고 버티지 말고 완전히 떼고 브레이크를 짧게 찍어'),
+      contains('T4: 코너에 들어갈 때 스로틀을 완전히 뗀 거리가 0m뿐이라 배터리를 랩마다 1%밖에 못 채워. AI는 80m를 완전히 떼고 8%를 채워. '
+          '그러면서도 이 구간에서 시간을 잃지 않아 → 스로틀을 반만 떼고 버티지 말고, 완전히 뗀 다음 브레이크를 짧게 한 번 밟아'),
     );
-    expect(lines.where((l) => l.startsWith('T4: 이 구간에서 배터리가')), isEmpty);   // 같은 코너를 두 번 짚지 않는다
+    expect(lines.where((l) => l.startsWith('T4: 이 구간을 지나면서')), isEmpty);   // 같은 코너를 두 번 짚지 않는다
 
     // AI가 T4에서 0.15초 더 걸려 250kJ를 더 채우면(1MJ당 0.6초) 아직 권하고, 0.25초 더 걸리면(1MJ당 1.0초) 비싸서 권하지 않는다.
-    expect(deepBatteryLines(null, _build(aiT4TimeMs: 3600), labels), contains(contains('0.150초 내주고 250kJ 더 채우는 셈')));
+    expect(
+      deepBatteryLines(null, _build(aiT4TimeMs: 3600), labels),
+      contains(contains('그 대신 이 구간을 0.150초 더 걸려 지나가. 시간을 조금 내주고 배터리를 6% 더 채우는 셈이야')),
+    );
     final costly = deepBatteryLines(null, _build(aiT4TimeMs: 3700), labels);
     expect(costly.where((l) => l.contains('완전히 뗀 거리')), isEmpty);
-    expect(costly, contains('T4: 이 구간에서 배터리가 넌 랩당 −340kJ, AI는 +200kJ → Overtake(50m)를 끄고 Medium으로 지나가'));
+    expect(costly, contains('T4: 이 구간을 지나면서 너는 배터리가 랩마다 9% 줄고, AI는 5% 늘어. 여기서 Overtake를 켠 거리가 50m야 → 여기서는 Overtake를 끄고 지나가'));
   });
 
   test('전략: 피트 창과 스톱, 남은 랩으로 못 되찾는 스톱, 짧게 탄 컴파운드, 추정 대안', () {
     final lines = deepStrategyLines(_analysis, _stints);
-    expect(lines[0], '출발 때 게임 피트 창은 5~8랩 — 1스톱으로 5랩에 들어왔어, 모두 그때 창의 이상 랩이야');
-    expect(lines[1], '5랩 Soft→Soft: 마모 40%. 게임은 3랩 더 간다고 봤어(창 끝 8랩). 새 Soft 세트가 랩당 2.000초 빨라 스톱 손실 20.0초를 되찾는 데 10랩인데 남은 건 5랩이야'
-        ' → 타이어 한계가 아니라 계획대로 들어온 거야');
-    expect(lines[2], '게임 기준 쓸 수 있는 랩보다 짧게 탔어(탄 랩/쓸 수 있는 랩): Soft 5/9랩 — 스틴트를 늘리면 스톱을 줄일 수 있어');
-    expect(lines.last, '추정으로도 지금 전략이 가장 빨랐어 — 다른 스톱 수와 1.0초 안이야');
+    expect(lines[0], '출발할 때 게임이 알려 준 피트 시기는 5~8랩이었어. 피트에는 5랩에 1번 들어갔어. 모두 그때 게임이 가장 좋다고 본 랩이야');
+    expect(
+      lines[1],
+      '5랩에 새 소프트로 바꿨어. 그때 타이어는 40% 닳아 있었어. 게임은 이 타이어로 3랩 더 갈 수 있다고 봤어(피트 시기 마지막은 8랩). '
+      '새 소프트가 랩당 2.000초 빨라도, 피트 스톱 한 번에 잃는 20.0초를 되찾으려면 10랩이 필요한데 남은 랩은 5랩뿐이야 '
+      '→ 타이어가 한계라서가 아니라 계획대로 들어온 거야',
+    );
+    expect(lines[2], '게임이 본 타이어 수명보다 일찍 바꾼 타이어가 있어. 소프트는 9랩까지 탈 수 있는데 5랩만 탔어 → 스틴트를 더 길게 가져가면 피트 스톱을 줄일 수 있어');
+    expect(lines.last, '계산해 봐도 지금 전략이 가장 빨랐어. 피트에 들어가는 횟수를 바꿔도 차이가 1.0초도 안 나');
 
     // 대안이 빠르면: 스톱을 줄여 아낀 시간과 새 타이어로 되찾던 시간, 같은 스톱 수의 더 나은 배분.
     final faster = RaceAnalysis.fromJson({
@@ -189,17 +206,18 @@ void main() {
       },
     });
     expect(deepStrategyLines(faster, const []), [
-      '추정(게임 타이어 델타·내 마모 기준): M11→S11→S11(2스톱)이면 12.6초 빨랐어 — 스톱을 1번 덜 해서 21.5초를 아끼고, 새 타이어로 되찾던 건 8.9초뿐이야',
-      '3스톱으로 갈 거면 M8→S8→S8→S9로 나눠야 3.4초 빨랐어',
+      '계산해 보면(게임의 타이어 성능 정보와 내 타이어 마모로 추정) 미디엄 11랩, 소프트 11랩, 소프트 11랩으로 나눠서 피트에 2번 들어갔으면 12.6초 빨랐어. '
+          '피트에 1번 덜 들어가니 21.5초를 아끼고, 새 타이어로 벌던 시간은 8.9초만 줄어',
+      '피트에 3번 들어갈 거라면 미디엄 8랩, 소프트 8랩, 소프트 8랩, 소프트 9랩으로 나눴어야 3.4초 빨랐어',
     ]);
   });
 
   test('페이스: 기준 읽는 법, 스틴트마다 같은 타이어·같은 랩·스틴트 기준, 가장 느린 스틴트', () {
     final lines = deepPaceLines(_analysis, _stints);
     expect(lines.first, kPaceBasisLine);
-    expect(lines[1], 'Soft 1–5랩: 같은 타이어 +0.500초 · 같은 랩 +0.200초 · 스틴트 +0.200초');
-    expect(lines[2], 'Soft 6–10랩: 같은 타이어 −0.100초 · 같은 랩 −0.300초 · 스틴트 −0.300초');
-    expect(lines.last, '같은 타이어로 보면 Soft 1–5랩이 가장 느렸어(랩당 +0.500초) → 이 스틴트의 코너별 타이어 부담부터 봐');
+    expect(lines[1], '소프트(1~5랩): AI와 비교하면 같은 타이어 기준으로 랩당 0.500초 느렸고, 같은 랩 기준으로 0.200초 느렸고, 스틴트 전체로는 0.200초 느렸어');
+    expect(lines[2], '소프트(6~10랩): AI와 비교하면 같은 타이어 기준으로 랩당 0.100초 빨랐고, 같은 랩 기준으로 0.300초 빨랐고, 스틴트 전체로는 0.300초 빨랐어');
+    expect(lines.last, '같은 타이어로 비교하면 소프트(1~5랩)가 가장 느렸어(AI보다 랩당 0.500초) → 이 스틴트에서 코너별 타이어 부담부터 봐');
   });
 
   for (final width in [1100.0, 360.0]) {
@@ -227,14 +245,15 @@ void main() {
       ));
 
       expect(tester.takeException(), isNull);
-      expect(find.textContaining('리미터는 앞왼'), findsOneWidget);
-      expect(find.text('T1–T2'), findsWidgets);
+      expect(find.textContaining('가장 빨리 닳는 건 앞왼 타이어야'), findsOneWidget);
+      expect(find.text('T1~T2'), findsWidgets);
       expect(find.byKey(const ValueKey('analysis-pace-basis')), findsOneWidget);
-      expect(find.text('실제'), findsOneWidget); // 전략 비교
+      expect(find.text('실제 전략'), findsOneWidget); // 전략 비교
 
+      expect(find.text('1.0%'), findsOneWidget); // 앞 스틴트의 T1~T2 앞왼: 200kJ × 5%/MJ
       await tester.tap(find.byKey(const ValueKey('analysis-stint-6')));
       await tester.pump();
-      expect(find.text('170kJ'), findsOneWidget); // 뒤 스틴트의 T1–T2 앞왼
+      expect(find.text('1.0%'), findsNothing); // 뒤 스틴트는 170kJ라 0.8~0.9%
 
       await tester.tap(find.text('같은 랩'));
       await tester.pump();

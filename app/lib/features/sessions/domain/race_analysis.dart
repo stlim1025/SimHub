@@ -63,13 +63,15 @@ const int _spareLaps = 3;
 const int kStrategyGainMs = 1000;
 
 const double _kjPerMj = 1000;
+const double _jPerKj = 1000;
 const double _msPerSecond = 1000;
 const double _percent = 100;
 
 const String kCornerKind = 'Corner';
 
 /// 페이스 기준을 어떻게 읽는지(페이스 줄 맨 앞).
-const String kPaceBasisLine = '기준: 같은 타이어(같은 컴파운드·나이, ±5랩 안 AI)가 실력 비교에 가장 공정해 — 같은 랩은 그 순간 레이스 상황, 스틴트는 전략 묶음 결과야';
+const String kPaceBasisLine = '비교 기준은 세 가지야. 같은 타이어 기준은 종류가 같고 쓴 랩 수도 거의 같은 타이어를 낀 AI를 앞뒤 5랩 안에서 찾아 비교해서, '
+    '실력을 보기에 가장 공정해. 같은 랩 기준에는 그 랩의 레이스 상황이 섞이고, 스틴트 전체 기준에는 전략에 따른 결과까지 섞여';
 
 List<double>? _wheelList(Object? json) {
   if (json is! List || json.length != kWheelNames.length) {
@@ -241,7 +243,7 @@ class RaceStintDriving {
   final List<double>? wheelWearPerLapPct;
   final List<RaceSegmentDriving> segments;
 
-  String get label => '$compound $startLap–$endLap랩';
+  String get label => stintName(compound, startLap, endLap);
 
   /// 구간 번호의 평균(없으면 null).
   RaceSegmentDriving? segment(int index) {
@@ -389,8 +391,8 @@ class RaceStrategyOption {
 
   int get stops => math.max(0, stints.length - 1);
 
-  /// `M11→S11→S11`.
-  String get plan => stints.map((s) => '${s.compound.isEmpty ? '?' : s.compound[0]}${s.laps}').join('→');
+  /// `미디엄 11랩, 소프트 11랩, 소프트 11랩`.
+  String get plan => stints.map((s) => '${compoundName(s.compound)} ${s.laps}랩').join(', ');
 
   static RaceStrategyOption? fromJsonOrNull(Map<String, dynamic> json) {
     final stints = jsonObjects<RaceStrategyStint>(json['stints'], (j) {
@@ -525,7 +527,7 @@ class RaceAnalysis {
   }
 }
 
-/// 구간 이름(구간 번호 순서). 코너는 그 안의 공식 코너(`T1–T3`·`T10`), 직선은 결승선을 넘으면 `메인 직선`, 아니면 앞뒤 코너 사이
+/// 구간 이름(구간 번호 순서). 코너는 그 안의 공식 코너(`T1~T3`·`T10`), 직선은 결승선을 넘으면 `메인 직선`, 아니면 앞뒤 코너 사이
 /// (`T9→T10 직선`). 공식 코너는 한 구간에만 든다 — 그 지점을 덮는 코너 구간, 없으면 앞뒤 [_cornerMarginM]m 안의 가장 가까운 코너 구간.
 /// 공식 코너를 모르거나 구간에 없으면 순서 번호(`코너 3`·`직선 2`).
 List<String> segmentLabels(RaceAnalysis analysis, List<OfficialCorner>? corners) {
@@ -555,7 +557,7 @@ List<String> segmentLabels(RaceAnalysis analysis, List<OfficialCorner>? corners)
     for (final s in segments)
       if (s.isCorner)
         switch (official[s.index]) {
-          (first: final first, last: final last) => first == last ? first : '$first–$last',
+          (first: final first, last: final last) => first == last ? first : '$first~$last',
           null => '코너 ${++cornerNumber}',
         }
       else if (s.wraps)
@@ -577,12 +579,16 @@ String? _straightLabel(int index, List<int> cornerIndexes, Map<int, ({String fir
   return a == null || b == null ? null : '$a→$b 직선';
 }
 
-String _kj(double kj) => '${kj.round()}kJ';
 String _f1(double value) => value.toStringAsFixed(1);
 String _sec(int ms) => '${(ms.abs() / _msPerSecond).toStringAsFixed(3)}초';
 String _sec1(int ms) => '${(ms.abs() / _msPerSecond).toStringAsFixed(1)}초';
-String _signed(int ms) => '${ms >= 0 ? '+' : '−'}${_sec(ms)}';
 String _pct(double fraction) => '${(fraction * _percent).round()}%';
+
+/// 배터리 양(kJ)을 배터리 게이지 %로(한 통 = 100%).
+String _bat(double kj) => batteryShareOfKj(kj);
+
+/// 바퀴 이름 + `타이어`(`앞왼 타이어`).
+String _tyre(String wheel) => '$wheel 타이어';
 
 int? _medianOf(List<int> values) {
   if (values.isEmpty) {
@@ -651,21 +657,24 @@ List<CornerCause> cornerCauses(RaceSegmentDriving d, {required bool front}) {
   final wheelspin = d.wheelspinM;
   final kerb = d.kerbM;
   final understeerCause = understeer != null && understeer >= kUndersteerDeg
-      ? (fact: '앞이 뒤보다 ${_f1(understeer)}° 더 미끄러져(조향 ${d.steerPct.round()}%)', advice: '진입 속도를 조금 낮추고 감은 채로 버티지 마 — 앞이 물릴 때 돌려')
+      ? (
+          fact: '핸들을 평균 ${d.steerPct.round()}% 꺾은 상태에서 앞바퀴가 뒷바퀴보다 ${_f1(understeer)}도 더 미끄러져. 앞이 바깥으로 밀리는 언더스티어야',
+          advice: '진입 속도를 조금 줄여. 핸들을 감은 채로 버티지 말고, 앞바퀴가 다시 노면을 잡으면 그때 돌려',
+        )
       : null;
   final trailCause = d.trailBrakeM >= kTrailBrakeM
-      ? (fact: '브레이크 밟은 채 꺾은 거리 ${d.trailBrakeM.round()}m', advice: '브레이크를 조금 일찍 끝내고 꺾어')
+      ? (fact: '브레이크를 밟은 채로 핸들을 꺾은 거리가 ${d.trailBrakeM.round()}m야', advice: '브레이크를 조금 일찍 끝내고 나서 핸들을 꺾어')
       : null;
   final throttleCause = d.throttleSteerM >= kThrottleSteerM
-      ? (fact: '풀 스로틀로 꺾은 거리 ${d.throttleSteerM.round()}m', advice: '탈출에서 핸들을 먼저 풀고 그다음 풀 스로틀')
+      ? (fact: '스로틀을 끝까지 밟은 채로 핸들을 꺾은 거리가 ${d.throttleSteerM.round()}m야', advice: '코너를 나갈 때 핸들을 먼저 풀고, 그다음에 스로틀을 끝까지 밟아')
       : null;
   final lockupCause = lockup != null && lockup >= kLockupM
-      ? (fact: '앞 락업 ${lockup.round()}m', advice: '첫 브레이크 압력을 조금 줄여서 락업 없이 세워')
+      ? (fact: '앞바퀴가 잠긴 채로 미끄러진 거리가 ${lockup.round()}m야', advice: '처음 브레이크를 밟는 힘을 조금 줄여서 바퀴가 잠기지 않게 세워')
       : null;
   final spinCause = wheelspin != null && wheelspin >= kWheelspinM
-      ? (fact: '탈출 휠스핀 ${wheelspin.round()}m', advice: '탈출 스로틀을 두 번에 나눠 열어')
+      ? (fact: '코너를 나갈 때 뒷바퀴가 헛돈 거리가 ${wheelspin.round()}m야', advice: '코너를 나갈 때 스로틀을 두 번에 나눠서 열어')
       : null;
-  final kerbCause = kerb != null && kerb >= kKerbM ? (fact: '연석 ${kerb.round()}m', advice: '연석은 덜 타') : null;
+  final kerbCause = kerb != null && kerb >= kKerbM ? (fact: '연석을 밟고 지나간 거리가 ${kerb.round()}m야', advice: '연석을 덜 밟아') : null;
   final ordered = front
       ? [understeerCause, trailCause, throttleCause, lockupCause, kerbCause, spinCause]
       : [spinCause, throttleCause, trailCause, kerbCause, understeerCause, lockupCause];
@@ -738,8 +747,9 @@ List<String> deepTyreLines(
 
   final next = _maxIndex(wear ?? work, except: limiter);
   lines.add(wear != null
-      ? '리미터는 $name — 랩당 마모 ${_f1(wear[limiter])}%p(다음 ${kWheelNames[next]} ${_f1(wear[next])}%p), 마찰 일 ${_kj(work[limiter])}'
-      : '리미터는 $name — 랩당 마찰 일 ${_kj(work[limiter])}(다음 ${kWheelNames[next]} ${_kj(work[next])})');
+      ? '가장 빨리 닳는 건 ${_tyre(name)}야. 한 랩에 ${_f1(wear[limiter])}%씩 닳아. 그다음은 ${_tyre(kWheelNames[next])}로 ${_f1(wear[next])}%야'
+      : '가장 부담을 많이 받는 건 ${_tyre(name)}야. 다음으로 부담이 큰 ${_tyre(kWheelNames[next])}보다 '
+          '${_pct(work[limiter] / work[next] - 1)} 더 받아');
 
   final top = loadRankedCorners(analysis, limiter).take(kTopLoadCorners).toList();
   for (final corner in top) {
@@ -748,22 +758,24 @@ List<String> deepTyreLines(
     if (averaged == null || load == null) {
       continue;
     }
-    final wearShare = perMj == null ? '' : ', 마모 ≈${_f1(load / _kjPerMj * perMj)}%p';
-    final head = '${labels[corner.index]}: $name ${_kj(load)}(랩의 ${_pct(load / work[limiter])}$wearShare)';
+    final share = _pct(load / work[limiter]);
+    final head = perMj == null
+        ? '${labels[corner.index]}: 한 랩 동안 ${_tyre(name)}가 받는 부담의 $share가 이 구간이야'
+        : '${labels[corner.index]}: ${_tyre(name)}가 여기서 랩마다 ${_f1(load / _kjPerMj * perMj)}%쯤 닳아. 한 랩에 닳는 양의 $share가 이 구간이야';
     final causes = cornerCauses(averaged, front: front);
-    lines.add(causes.isEmpty ? head : '$head — ${causes.map((c) => c.fact).join(', ')} → ${causes.first.advice}');
+    lines.add(causes.isEmpty ? head : '$head. ${causes.map((c) => c.fact).join('. ')} → ${causes.first.advice}');
   }
 
   final peak = _weightedWheels(driven, (s) => s.peakSurfaceTempC);
   if (peak != null) {
     final others = [for (var w = 0; w < peak.length; w++) if (w != limiter) peak[w]].reduce(math.max);
     if (peak[limiter] - others >= _tempGapC) {
-      lines.add('$name 표면 온도가 랩마다 ${peak[limiter].round()}°C까지 올라 — 다른 바퀴는 최고 ${others.round()}°C');
+      lines.add('${_tyre(name)} 표면 온도가 랩마다 ${peak[limiter].round()}°C까지 올라가. 다른 바퀴는 가장 높아도 ${others.round()}°C야');
     }
   }
 
   for (final (k, stint) in reviewStints.indexed) {
-    final label = '${stint.compound} ${stint.startLap}–${stint.endLap}랩';
+    final label = stintName(stint.compound, stint.startLap, stint.endLap);
     final extra = stint.extraTrendMs;
     RaceStintDriving? drivenStint;
     for (final s in driven) {
@@ -776,10 +788,10 @@ List<String> deepTyreLines(
           ? <RaceSegmentDriving>[]
           : ([for (final d in drivenStint.segments) if ((d.timeTrendMsPerLap ?? 0) >= _gripLossMs) d]
               ..sort((a, b) => b.timeTrendMsPerLap!.compareTo(a.timeTrendMsPerLap!)));
-      final where = lost.take(_gripLossCorners).map((d) => '${labels[d.index]}(+${_sec(d.timeTrendMsPerLap!)}/랩)').join('·');
-      lines.add('$label: AI보다 랩당 ${_sec(extra)}씩 더 떨어졌어${where.isEmpty ? '' : ' — 시간이 늘어난 곳은 $where'}');
+      final where = lost.take(_gripLossCorners).map((d) => '${labels[d.index]}에서 랩마다 ${_sec(d.timeTrendMsPerLap!)}씩').join(', ');
+      lines.add('$label: 랩이 지날수록 AI보다 랩당 ${_sec(extra)}씩 더 느려졌어${where.isEmpty ? '' : '. 특히 $where 늘었어'}');
     } else if (extra != null && extra <= -kTrendMarginMs) {
-      lines.add('$label: AI보다 랩당 ${_sec(extra)}씩 덜 떨어졌어 — 타이어 관리 좋았어');
+      lines.add('$label: 랩이 지날수록 느려지는 정도가 AI보다 랩당 ${_sec(extra)} 작았어. 타이어 관리를 잘했어');
     }
     if (tyreLifeLine(stint, last: k == reviewStints.length - 1) case final life?) {
       lines.add(life);
@@ -814,18 +826,19 @@ List<String> _sameCompoundLines(RaceAnalysis analysis, List<String> labels, int 
       final reasons = [
         for (final c in corners.take(_gripLossCorners))
           if (c.delta > 0)
-            if (_difference(stint.segment(c.index), best.segment(c.index)) case final what?) '${labels[c.index]}($what)',
+            if (_difference(stint.segment(c.index), best.segment(c.index)) case final what?) '${labels[c.index]}에서는 $what',
       ];
-      final wearText = perMj == null ? '' : '(마모 ≈+${_f1(diff / _kjPerMj * perMj)}%p)';
-      final bestRange = '${best.startLap}–${best.endLap}랩';
-      lines.add('${stint.label}은 $bestRange보다 $name 일이 랩당 ${_kj(diff)} 많았어$wearText'
-          '${reasons.isEmpty ? '' : ' — 차이는 ${reasons.join('·')}'} → $bestRange처럼 타면 돼');
+      final more = perMj == null
+          ? '${_tyre(name)}가 받는 부담이 랩마다 ${_pct(diff / best.wheelWorkKj![limiter])} 더 컸어'
+          : '${_tyre(name)}가 랩마다 ${_f1(diff / _kjPerMj * perMj)}% 더 닳았어';
+      lines.add('${stint.label}에는 ${best.label}보다 $more'
+          '${reasons.isEmpty ? '' : '. ${reasons.join('. ')}'} → ${best.label} 때처럼 타면 돼');
     }
   }
   return lines;
 }
 
-/// 두 스틴트의 같은 구간에서 [worse]가 가장 크게 다른 입력(`언더스티어 2.9° vs 2.4°`). 말할 만한 차이가 없으면 null.
+/// 두 스틴트의 같은 구간에서 [worse]가 가장 크게 다른 입력(`앞바퀴가 더 미끄러졌어(2.9도, 그때는 2.4도)`). 말할 만한 차이가 없으면 null.
 String? _difference(RaceSegmentDriving? worse, RaceSegmentDriving? better) {
   if (worse == null || better == null) {
     return null;
@@ -837,13 +850,15 @@ String? _difference(RaceSegmentDriving? worse, RaceSegmentDriving? better) {
     }
   }
 
-  add(worse.understeerDeg, better.understeerDeg, _understeerDiffDeg, (a, b) => '언더스티어 ${_f1(a)}° vs ${_f1(b)}°');
-  add(worse.steerPct, better.steerPct, _steerDiffPct, (a, b) => '조향 ${a.round()}% vs ${b.round()}%');
-  add(worse.throttleSteerM, better.throttleSteerM, _distanceDiffM, (a, b) => '풀 스로틀 조향 ${a.round()}m vs ${b.round()}m');
-  add(worse.trailBrakeM, better.trailBrakeM, _distanceDiffM, (a, b) => '브레이크 밟은 채 조향 ${a.round()}m vs ${b.round()}m');
-  add(worse.kerbM, better.kerbM, _kerbDiffM, (a, b) => '연석 ${a.round()}m vs ${b.round()}m');
-  add(worse.lockupM, better.lockupM, _slipDiffM, (a, b) => '락업 ${a.round()}m vs ${b.round()}m');
-  add(worse.wheelspinM, better.wheelspinM, _slipDiffM, (a, b) => '휠스핀 ${a.round()}m vs ${b.round()}m');
+  add(worse.understeerDeg, better.understeerDeg, _understeerDiffDeg, (a, b) => '앞바퀴가 더 미끄러졌어(${_f1(a)}도, 그때는 ${_f1(b)}도)');
+  add(worse.steerPct, better.steerPct, _steerDiffPct, (a, b) => '핸들을 더 많이 꺾었어(${a.round()}%, 그때는 ${b.round()}%)');
+  add(worse.throttleSteerM, better.throttleSteerM, _distanceDiffM,
+      (a, b) => '스로틀을 끝까지 밟은 채로 핸들을 꺾은 거리가 길었어(${a.round()}m, 그때는 ${b.round()}m)');
+  add(worse.trailBrakeM, better.trailBrakeM, _distanceDiffM,
+      (a, b) => '브레이크를 밟은 채로 핸들을 꺾은 거리가 길었어(${a.round()}m, 그때는 ${b.round()}m)');
+  add(worse.kerbM, better.kerbM, _kerbDiffM, (a, b) => '연석을 더 많이 밟았어(${a.round()}m, 그때는 ${b.round()}m)');
+  add(worse.lockupM, better.lockupM, _slipDiffM, (a, b) => '앞바퀴가 더 많이 잠겼어(${a.round()}m, 그때는 ${b.round()}m)');
+  add(worse.wheelspinM, better.wheelspinM, _slipDiffM, (a, b) => '뒷바퀴가 더 많이 헛돌았어(${a.round()}m, 그때는 ${b.round()}m)');
   if (candidates.isEmpty) {
     return null;
   }
@@ -866,7 +881,8 @@ List<String> _setupLines(Map<String, Object?>? setup, RaceAnalysis analysis, Lis
   if (front && understeer.isNotEmpty && frontWing != null) {
     final mean = understeer.reduce((a, b) => a + b) / understeer.length;
     if (mean >= _setupUndersteerDeg) {
-      lines.add('세팅: 부담이 큰 코너에서 앞이 평균 ${_f1(mean)}° 더 미끄러져 → 앞 날개 +1~2 또는 앞 안티롤바를 낮춰 앞 그립을 올려 봐'
+      lines.add('세팅: 부담이 큰 코너들에서 앞바퀴가 뒷바퀴보다 평균 ${_f1(mean)}도 더 미끄러져 '
+          '→ 앞 날개를 1~2 올리거나 앞 안티롤바를 낮춰서 앞쪽 그립을 높여 봐'
           '(지금 앞 날개 ${frontWing.round()}${frontBar == null ? '' : ', 앞 안티롤바 ${frontBar.round()}'})');
     }
   }
@@ -879,13 +895,15 @@ List<String> _setupLines(Map<String, Object?>? setup, RaceAnalysis analysis, Lis
   final lockupTotal = lockups.fold(0.0, (sum, l) => sum + l.m);
   final bias = jsonDouble(setup['brakeBias']);
   if (lockupTotal >= _setupLockupM && bias != null) {
-    final where = lockups.take(_gripLossCorners).map((l) => labels[l.index]).join('·');
-    lines.add('세팅: 앞 락업이 랩당 ${lockupTotal.round()}m($where) → 브레이크 바이어스를 1~2% 뒤로(지금 ${bias.round()}%)');
+    final where = lockups.take(_gripLossCorners).map((l) => labels[l.index]).join(', ');
+    lines.add('세팅: 앞바퀴가 잠긴 채로 미끄러진 거리가 랩마다 ${lockupTotal.round()}m야. 주로 $where에서 잠겨 '
+        '→ 브레이크 바이어스를 1~2% 뒤로 옮겨 봐(지금 ${bias.round()}%)');
   }
 
   final camber = jsonDouble(setup['frontCamber']);
   if (front && camber != null && camber <= _hotCamberDeg) {
-    lines.add('세팅: 앞 캠버 ${camber.toStringAsFixed(2)}°는 코너 그립엔 좋지만 앞 타이어를 더 달궈 → 레이스에선 0.1~0.2° 세워 봐');
+    lines.add('세팅: 앞 캠버가 ${camber.toStringAsFixed(2)}도면 코너 그립에는 좋지만 앞 타이어가 더 뜨거워져 '
+        '→ 레이스에서는 캠버를 0.1~0.2도 세워 봐(마이너스 값을 줄이는 쪽)');
   }
   return lines;
 }
@@ -910,7 +928,15 @@ List<String> deepBatteryLines(RaceBatteryReview? battery, RaceAnalysis analysis,
   if (hasField) {
     final aiDeploy = analysis.fieldErs.fold(0.0, (sum, f) => sum + f.deployKj);
     final aiHarvest = analysis.fieldErs.fold(0.0, (sum, f) => sum + f.harvestKj);
-    lines.add('랩당 배터리 사용 ${_kj(total((d) => d.deployKj))} · 채움 ${_kj(total((d) => d.harvestKj))} — AI는 사용 ${_kj(aiDeploy)} · 채움 ${_kj(aiHarvest)}');
+    final myDeploy = total((d) => d.deployKj);
+    final myHarvest = total((d) => d.harvestKj);
+    // 한 통(100%)을 넘으면 `한 통의 1.6배`로 말한다.
+    final inFulls = [myDeploy, myHarvest, aiDeploy, aiHarvest].any((kj) => kj * _jPerKj >= kErsCapacityJ);
+    String amount(double kj) => '${(kj * _jPerKj / kErsCapacityJ).toStringAsFixed(1)}배';
+    lines.add(inFulls
+        ? '한 랩에 배터리 한 통의 ${amount(myDeploy)}를 쓰고 ${amount(myHarvest)}를 채웠어. '
+            'AI는 ${amount(aiDeploy)}를 쓰고 ${amount(aiHarvest)}를 채웠어'
+        : '한 랩에 배터리를 ${_bat(myDeploy)} 쓰고 ${_bat(myHarvest)} 채웠어. AI는 ${_bat(aiDeploy)} 쓰고 ${_bat(aiHarvest)} 채웠어');
   }
 
   for (final stint in driven) {
@@ -931,11 +957,11 @@ List<String> deepBatteryLines(RaceBatteryReview? battery, RaceAnalysis analysis,
       ];
       final emptyLaps = empty.emptyLaps;
       final head = emptyLaps == null
-          ? '${stint.label}: $where에서 랩당 ${empty.emptyM!.round()}m는 배터리가 바닥이었어'
+          ? '${stint.label}: $where에서 랩마다 평균 ${empty.emptyM!.round()}m는 배터리가 바닥난 채로 달렸어'
           : '${stint.label}: ${stint.laps.length}랩 중 $emptyLaps랩은 $where에서 배터리가 바닥났어';
       final entryText = entry == null
           ? ''
-          : '(들어갈 때 잔량 ${_kj(entry)}${others.isEmpty ? '' : ', 바닥 안 난 스틴트 ${_kjRange(others)}'})';
+          : '. $where에 들어갈 때 배터리가 ${_bat(entry)}였어${others.isEmpty ? '' : '. 바닥나지 않은 스틴트에서는 ${_batRange(others)}였어'}';
       // 줄일 곳: 280km/h 넘는 Overtake(같은 배터리로 버는 시간이 가장 적다)를 짧은 직선부터. 코너 탈출 Overtake는 지킨다.
       final fast = [
         for (final d in stint.segments)
@@ -943,14 +969,17 @@ List<String> deepBatteryLines(RaceBatteryReview? battery, RaceAnalysis analysis,
             (d: d, length: _lengthOf(s, analysis.trackLengthM)),
       ]..sort((a, b) => a.length.compareTo(b.length));
       final advice = fast.isNotEmpty
-          ? '280km/h 넘는 Overtake부터 줄여 — ${fast.map((f) => '${labels[f.d.index]}(${f.d.fastOvertakeM!.round()}m)').join(' → ')} 순서로'
-              '(짧은 직선일수록 같은 배터리로 버는 시간이 적어), 코너 탈출 Overtake는 그대로 둬'
+          ? '280km/h가 넘을 때 켜는 Overtake부터 줄여. '
+              '${fast.map((f) => '${labels[f.d.index]}에서 ${f.d.fastOvertakeM!.round()}m').join(', ')} 순서로 줄이면 돼. '
+              '짧은 직선일수록 같은 배터리로 버는 시간이 적어. 코너를 빠져나갈 때 켜는 Overtake는 그대로 둬'
           : over == null
-              ? '앞 구간에서 Overtake를 줄여 잔량을 채운 채로 들어가'
-              : '${labels[over.d.index]}에선 Medium으로 두고 $where까지 남겨';
-      lines.add('$head$entryText'
-          '${over == null ? '' : ' — ${labels[over.d.index]}에서 AI보다 ${_kj(over.more)} 더 썼어${overtake > 0 ? '(Overtake ${overtake.round()}m)' : ''}'}'
-          ' → $advice');
+              ? '그 앞 구간에서 Overtake를 줄여서 배터리를 채운 채로 들어가'
+              : '${labels[over.d.index]}에서는 Overtake를 끄고 $where까지 배터리를 남겨';
+      final overText = over == null
+          ? ''
+          : '. ${labels[over.d.index]}에서 AI보다 배터리를 ${_bat(over.more)} 더 썼어'
+              '${overtake > 0 ? '. 거기서 Overtake를 켠 거리가 ${overtake.round()}m야' : ''}';
+      lines.add('$head$entryText$overText → $advice');
       continue;
     }
     // 바닥나지 않았으면: AI보다 덜 쓴 직선이 있을 때 그 직선에서 더 쓰라고 한다(배터리가 남으면 직선 끝까지 써도 된다).
@@ -958,7 +987,8 @@ List<String> deepBatteryLines(RaceBatteryReview? battery, RaceAnalysis analysis,
         .where((o) => _segmentOf(analysis, o.d.index)?.isCorner == false && -o.more >= _ersGapKj)
         .firstOrNull;
     if (under != null) {
-      lines.add('${stint.label}: ${labels[under.d.index]}에서 AI보다 랩당 ${_kj(-under.more)} 덜 썼어(바닥난 곳 없음) → 거기선 Overtake로 더 써');
+      lines.add('${stint.label}: 배터리가 바닥난 곳이 없는데 ${labels[under.d.index]}에서는 AI보다 배터리를 랩마다 ${_bat(-under.more)} 덜 썼어 '
+          '→ 거기서는 Overtake로 더 써');
     }
   }
 
@@ -986,13 +1016,15 @@ List<String> deepBatteryLines(RaceBatteryReview? battery, RaceAnalysis analysis,
       }
       final time = aiTime == null
           ? ''
-          : '(이 구간 AI ${_sec(aiTime)} · 너 ${_sec(mine.timeMs)}'
-              '${slower > 0 ? ' — ${_sec(slower)} 내주고 ${_kj(gap)} 더 채우는 셈' : ' — 시간도 안 잃어'})';
+          : slower > 0
+              ? '. 그 대신 이 구간을 ${_sec(slower)} 더 걸려 지나가. 시간을 조금 내주고 배터리를 ${_bat(gap)} 더 채우는 셈이야'
+              : '. 그러면서도 이 구간에서 시간을 잃지 않아';
       partial.add((
         index: s.index,
         gap: gap,
-        line: '${labels[s.index]}: 진입에서 완전히 뗀 거리가 ${mine.liftM.round()}m라 랩당 ${_kj(harvest)}만 채워'
-            ' — AI는 ${aiLift.round()}m 완전히 떼고 ${_kj(ai.harvestKj)} 채워$time → 반만 떼고 버티지 말고 완전히 떼고 브레이크를 짧게 찍어',
+        line: '${labels[s.index]}: 코너에 들어갈 때 스로틀을 완전히 뗀 거리가 ${mine.liftM.round()}m뿐이라 배터리를 랩마다 ${_bat(harvest)}밖에 못 채워. '
+            'AI는 ${aiLift.round()}m를 완전히 떼고 ${_bat(ai.harvestKj)}를 채워$time '
+            '→ 스로틀을 반만 떼고 버티지 말고, 완전히 뗀 다음 브레이크를 짧게 한 번 밟아',
       ));
     }
     partial.sort((a, b) => b.gap.compareTo(a.gap));
@@ -1023,11 +1055,12 @@ List<String> deepBatteryLines(RaceBatteryReview? battery, RaceAnalysis analysis,
     }
     if (worst != null) {
       final advice = worst.overtake > 0
-          ? 'Overtake(${worst.overtake.round()}m)를 끄고 Medium으로 지나가'
+          ? '. 여기서 Overtake를 켠 거리가 ${worst.overtake.round()}m야 → 여기서는 Overtake를 끄고 지나가'
           : worst.brake >= _emptyM
-              ? '브레이킹 구간을 길게 가져가서 더 채워'
-              : '이 코너는 Medium으로 두고 아껴';
-      lines.add('${labels[worst.index]}: 이 구간에서 배터리가 넌 랩당 ${_signedKj(worst.myNet)}, AI는 ${_signedKj(worst.aiNet)} → $advice');
+              ? ' → 브레이크 구간을 길게 가져가서 배터리를 더 채워'
+              : ' → 이 코너에서는 배터리를 쓰지 말고 아껴';
+      lines.add('${labels[worst.index]}: 이 구간을 지나면서 너는 배터리가 랩마다 ${_batChange(worst.myNet, last: false)}, '
+          'AI는 ${_batChange(worst.aiNet, last: true)}$advice');
     }
   }
 
@@ -1039,7 +1072,14 @@ List<String> deepBatteryLines(RaceBatteryReview? battery, RaceAnalysis analysis,
   return lines;
 }
 
-String _signedKj(double kj) => '${kj >= 0 ? '+' : '−'}${_kj(kj.abs())}';
+/// 배터리가 늘었는지 줄었는지(`5% 줄고`·`3% 늘어`, 1%도 안 되면 `거의 그대로야`). [last]면 문장 끝 어미.
+String _batChange(double kj, {required bool last}) {
+  final amount = _bat(kj.abs());
+  if (amount == '0%') {
+    return last ? '거의 그대로야' : '거의 그대로이고';
+  }
+  return '$amount ${kj >= 0 ? (last ? '늘어' : '늘고') : (last ? '줄어' : '줄고')}';
+}
 
 /// 구간 번호의 구간(없으면 null).
 RaceSegment? _segmentOf(RaceAnalysis analysis, int index) {
@@ -1055,10 +1095,11 @@ RaceSegment? _segmentOf(RaceAnalysis analysis, int index) {
 int _lengthOf(RaceSegment segment, int trackLengthM) =>
     segment.wraps ? trackLengthM - segment.startM + segment.endM : segment.endM - segment.startM;
 
-String _kjRange(List<double> values) {
-  final low = values.reduce(math.min).round();
-  final high = values.reduce(math.max).round();
-  return low == high ? '${low}kJ' : '$low~${high}kJ';
+/// 배터리 양 범위(`20~30%`, 같으면 하나).
+String _batRange(List<double> values) {
+  final low = _bat(values.reduce(math.min));
+  final high = _bat(values.reduce(math.max));
+  return low == high ? low : '${low.substring(0, low.length - 1)}~$high';
 }
 
 /// 스틴트에서 그 구간 배터리가 되풀이해 바닥났는지(랩 수를 모르면 평균 거리로만).
@@ -1081,8 +1122,9 @@ List<String> deepStrategyLines(RaceAnalysis analysis, List<RaceStintReview> revi
   final latest = strategy.latestLap;
   if (ideal != null && strategy.stops.isNotEmpty) {
     final onIdeal = strategy.stops.every((s) => s.idealLap == s.lap);
-    lines.add('출발 때 게임 피트 창은 $ideal${latest == null ? '' : '~$latest'}랩 — ${strategy.stops.length}스톱으로 '
-        '${strategy.stops.map((s) => s.lap).join('·')}랩에 들어왔어${onIdeal ? ', 모두 그때 창의 이상 랩이야' : ''}');
+    lines.add('출발할 때 게임이 알려 준 피트 시기는 $ideal${latest == null ? '' : '~$latest'}랩이었어. '
+        '피트에는 ${strategy.stops.map((s) => '${s.lap}랩').join(', ')}에 ${strategy.stops.length}번 들어갔어'
+        '${onIdeal ? '. 모두 그때 게임이 가장 좋다고 본 랩이야' : ''}');
   }
 
   for (final stop in strategy.stops) {
@@ -1091,19 +1133,26 @@ List<String> deepStrategyLines(RaceAnalysis analysis, List<RaceStintReview> revi
     final gain = stop.newSetGainMs;
     final payback = gain != null && gain > 0 && loss != null ? (loss / gain).ceil() : null;
     final remaining = strategy.totalLaps - stop.lap;
-    final paybackText = payback == null
-        ? ''
+    final to = compoundName(stop.toCompound);
+    final gainText = payback == null
+        ? '새 ${withParticle(to, '이', '가')} 랩당 ${_sec(gain ?? 0)} 빨라'
         : payback <= remaining
-            ? ' 스톱 손실 ${_sec1(loss!)}를 $payback랩이면 되찾아'
-            : ' 스톱 손실 ${_sec1(loss!)}를 되찾는 데 $payback랩인데 남은 건 $remaining랩이야';
+            ? '새 ${withParticle(to, '이', '가')} 랩당 ${_sec(gain!)} 빨라서, 피트 스톱 한 번에 잃는 ${_sec1(loss!)}를 $payback랩이면 되찾아'
+            : '새 ${withParticle(to, '이', '가')} 랩당 ${_sec(gain!)} 빨라도, 피트 스톱 한 번에 잃는 ${_sec1(loss!)}를 되찾으려면 '
+                '$payback랩이 필요한데 남은 랩은 $remaining랩뿐이야';
     final facts = [
-      if (wear != null) '마모 ${wear.round()}%',
-      if (life != null) '게임은 $life랩 더 간다고 봤어${stop.latestLap == null ? '' : '(창 끝 ${stop.latestLap}랩)'}',
-      if (gain != null && gain > 0) '새 ${stop.toCompound} 세트가 랩당 ${_sec(gain)} 빨라$paybackText',
+      if (wear != null) '그때 타이어는 ${wear.round()}% 닳아 있었어',
+      if (life != null)
+        '게임은 이 타이어로 $life랩 더 갈 수 있다고 봤어${stop.latestLap == null ? '' : '(피트 시기 마지막은 ${stop.latestLap}랩)'}',
+      if (gain != null && gain > 0) gainText,
     ];
     final forced = (life != null && life <= _forcedLifeLaps) || (wear != null && wear >= _forcedWearPct);
-    lines.add('${stop.lap}랩 ${stop.fromCompound}→${stop.toCompound}: ${facts.join('. ')}'
-        ' → ${forced ? '타이어가 한계라 들어올 수밖에 없었어' : '타이어 한계가 아니라 계획대로 들어온 거야'}');
+    final into = withParticle(to, '으로', '로', rieulAsVowel: true);
+    final head = stop.fromCompound == stop.toCompound
+        ? '${stop.lap}랩에 새 $into 바꿨어'
+        : '${stop.lap}랩에 ${compoundName(stop.fromCompound)}에서 $into 바꿨어';
+    lines.add('$head${facts.isEmpty ? '' : '. ${facts.join('. ')}'}'
+        ' → ${forced ? '타이어가 한계라서 들어올 수밖에 없었어' : '타이어가 한계라서가 아니라 계획대로 들어온 거야'}');
   }
 
   // 마지막 스틴트는 체커까지라 뺀다.
@@ -1112,10 +1161,11 @@ List<String> deepStrategyLines(RaceAnalysis analysis, List<RaceStintReview> revi
     for (final compound in strategy.compounds)
       if (compound.usableLaps case final usable?)
         if ([for (final s in early) if (s.compound == compound.compound) s.endLap - s.startLap + 1] case final used when used.isNotEmpty)
-          if (usable - used.reduce(math.max) >= _spareLaps) '${compound.compound} ${used.reduce(math.max)}/$usable랩',
+          if (usable - used.reduce(math.max) >= _spareLaps)
+            '${withParticle(compoundName(compound.compound), '은', '는')} $usable랩까지 탈 수 있는데 ${used.reduce(math.max)}랩만 탔어',
   ];
   if (spare.isNotEmpty) {
-    lines.add('게임 기준 쓸 수 있는 랩보다 짧게 탔어(탄 랩/쓸 수 있는 랩): ${spare.join(' · ')} — 스틴트를 늘리면 스톱을 줄일 수 있어');
+    lines.add('게임이 본 타이어 수명보다 일찍 바꾼 타이어가 있어. ${spare.join('. ')} → 스틴트를 더 길게 가져가면 피트 스톱을 줄일 수 있어');
   }
 
   RaceStrategyOption? actual;
@@ -1128,23 +1178,28 @@ List<String> deepStrategyLines(RaceAnalysis analysis, List<RaceStintReview> revi
   if (actual != null && alternatives.isNotEmpty) {
     final best = alternatives.first;
     if (best.deltaMs <= -kStrategyGainMs) {
-      var line = '추정(게임 타이어 델타·내 마모 기준): ${best.plan}(${best.stops}스톱)이면 ${_sec1(best.deltaMs)} 빨랐어';
+      var line = '계산해 보면(게임의 타이어 성능 정보와 내 타이어 마모로 추정) '
+          '${withParticle(best.plan, '으로', '로', rieulAsVowel: true)} 나눠서 ${_pitStops(best.stops)} ${_sec1(best.deltaMs)} 빨랐어';
       final fewer = actual.stops - best.stops;
       if (fewer > 0 && loss != null && loss * fewer + best.deltaMs > 0) {
-        line += ' — 스톱을 $fewer번 덜 해서 ${_sec1(loss * fewer)}를 아끼고, 새 타이어로 되찾던 건 ${_sec1(loss * fewer + best.deltaMs)}뿐이야';
+        line += '. 피트에 $fewer번 덜 들어가니 ${_sec1(loss * fewer)}를 아끼고, 새 타이어로 벌던 시간은 ${_sec1(loss * fewer + best.deltaMs)}만 줄어';
       }
       lines.add(line);
       for (final same in alternatives) {
         if (same.stops == actual.stops && !identical(same, best) && same.deltaMs <= -kStrategyGainMs) {
-          lines.add('${actual.stops}스톱으로 갈 거면 ${same.plan}로 나눠야 ${_sec1(same.deltaMs)} 빨랐어');
+          lines.add('피트에 ${actual.stops}번 들어갈 거라면 ${withParticle(same.plan, '으로', '로', rieulAsVowel: true)} 나눴어야 '
+              '${_sec1(same.deltaMs)} 빨랐어');
         }
       }
     } else {
-      lines.add('추정으로도 지금 전략이 가장 빨랐어 — 다른 스톱 수와 ${_sec1(kStrategyGainMs)} 안이야');
+      lines.add('계산해 봐도 지금 전략이 가장 빨랐어. 피트에 들어가는 횟수를 바꿔도 차이가 ${_sec1(kStrategyGainMs)}도 안 나');
     }
   }
   return lines;
 }
+
+/// `피트에 2번 들어갔으면`(0번이면 들어가지 않았으면).
+String _pitStops(int stops) => stops == 0 ? '피트에 들어가지 않았으면' : '피트에 $stops번 들어갔으면';
 
 /// 페이스 심층 줄: 기준 읽는 법, 스틴트마다 같은 타이어·같은 랩·스틴트 중앙값 기준 AI 대비(랩당), 같은 타이어로 가장 느렸던 스틴트.
 /// 기준 값이 하나도 없으면 빈 목록.
@@ -1158,16 +1213,20 @@ List<String> deepPaceLines(RaceAnalysis analysis, List<RaceStintReview> reviewSt
     final median = stint.medianMs;
     final fieldMedian = stint.fieldMedianMs;
     final stintGap = median != null && fieldMedian != null ? median - fieldMedian : null;
-    final parts = [
-      if (sameTyre != null) '같은 타이어 ${_signed(sameTyre)}',
-      if (sameLap != null) '같은 랩 ${_signed(sameLap)}',
-      if (stintGap != null) '스틴트 ${_signed(stintGap)}',
+    final gaps = [
+      if (sameTyre != null) (basis: '같은 타이어 기준으로', ms: sameTyre),
+      if (sameLap != null) (basis: '같은 랩 기준으로', ms: sameLap),
+      if (stintGap != null) (basis: '스틴트 전체로는', ms: stintGap),
     ];
-    if (parts.isEmpty) {
+    if (gaps.isEmpty) {
       continue;
     }
-    final label = '${stint.compound} ${stint.startLap}–${stint.endLap}랩';
-    lines.add('$label: ${parts.join(' · ')}');
+    final label = stintName(stint.compound, stint.startLap, stint.endLap);
+    final parts = [
+      for (final (i, g) in gaps.indexed)
+        '${g.basis} ${i == 0 ? '랩당 ' : ''}${_sec(g.ms)} ${g.ms >= 0 ? '느렸' : '빨랐'}${i == gaps.length - 1 ? '어' : '고'}',
+    ];
+    lines.add('$label: AI와 비교하면 ${parts.join(', ')}');
     if (sameTyre != null && (worst == null || sameTyre > worst.gap)) {
       worst = (label: label, gap: sameTyre);
     }
@@ -1176,7 +1235,8 @@ List<String> deepPaceLines(RaceAnalysis analysis, List<RaceStintReview> reviewSt
     return const [];
   }
   if (worst != null && worst.gap >= kPaceMarginMs) {
-    lines.add('같은 타이어로 보면 ${worst.label}이 가장 느렸어(랩당 ${_signed(worst.gap)}) → 이 스틴트의 코너별 타이어 부담부터 봐');
+    lines.add('같은 타이어로 비교하면 ${withParticle(worst.label, '이', '가')} 가장 느렸어(AI보다 랩당 ${_sec(worst.gap)}) '
+        '→ 이 스틴트에서 코너별 타이어 부담부터 봐');
   }
   return [kPaceBasisLine, ...lines];
 }

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../domain/race_analysis.dart';
+import '../domain/race_review.dart';
 import 'session_widgets.dart';
 import 'tyre_stints_view.dart';
 
@@ -35,6 +36,8 @@ const double _dimAlpha = 0.35;
 const int _frontWheels = 2;
 
 const double _msPerSecond = 1000;
+const double _kjPerMj = 1000;
+const double _percent = 100;
 
 /// 작은 회색 설명 글자.
 class _Caption extends StatelessWidget {
@@ -73,7 +76,7 @@ class _StintChip extends StatelessWidget {
           children: [
             TyreCompoundCircle(compound: stint.compound, tooltip: stint.compound, size: _chipCircle),
             const SizedBox(width: _gap / 2),
-            Text('L${stint.startLap}–${stint.endLap}', style: kTabularStyle.copyWith(fontWeight: selected ? FontWeight.w700 : null)),
+            Text('${stint.startLap}~${stint.endLap}랩', style: kTabularStyle.copyWith(fontWeight: selected ? FontWeight.w700 : null)),
           ],
         ),
       ),
@@ -129,7 +132,8 @@ class _Bar extends StatelessWidget {
   }
 }
 
-/// 타이어: 스틴트를 골라 리미터 바퀴의 코너별 마찰 일(kJ/랩)과 부담이 큰 코너의 입력 원인, 바퀴 네 개 랩당 일·마모.
+/// 타이어: 스틴트를 골라 가장 빨리 닳는 바퀴의 코너별 마모(마찰 일을 %로 환산, 모르면 랩 부담 중 비율)와 부담이 큰 코너의 입력 원인,
+/// 바퀴 네 개 랩당 마모(모르면 가장 큰 바퀴 대비 부담).
 class TyreLoadView extends StatefulWidget {
   const TyreLoadView({super.key, required this.analysis, required this.labels});
 
@@ -162,6 +166,15 @@ class _TyreLoadViewState extends State<TyreLoadView> {
     final work = stint.wheelWorkKj;
     final wear = stint.wheelWearPerLapPct;
     final front = limiter < _frontWheels;
+    final perMj = widget.analysis.wearPctPerMj;
+    final limiterWork = work?[limiter];
+    final maxWork = work?.reduce(math.max);
+    final tyre = '${kWheelNames[limiter]} 타이어';
+    String loadText(double load) => perMj != null
+        ? '${(load / _kjPerMj * perMj).toStringAsFixed(1)}%'
+        : limiterWork != null && limiterWork > 0
+            ? '${(load / limiterWork * _percent).round()}%'
+            : '';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -173,15 +186,19 @@ class _TyreLoadViewState extends State<TyreLoadView> {
               _StintChip(stint: s, selected: identical(s, stint), onTap: () => setState(() => _selected = i)),
           ],
         ),
-        if (work != null) ...[
+        if (work != null && maxWork != null && maxWork > 0) ...[
           const SizedBox(height: _gap),
+          _Caption(wear == null ? '바퀴마다 받는 부담(가장 큰 바퀴를 100%로)' : '바퀴마다 한 랩에 닳는 양'),
+          const SizedBox(height: _rowGap / 2),
           Wrap(
             spacing: _gap * 2,
             runSpacing: _gap / 2,
             children: [
               for (var w = 0; w < kWheelNames.length; w++)
                 Text(
-                  '${kWheelNames[w]} ${work[w].round()}kJ${wear == null ? '' : ' · ${wear[w].toStringAsFixed(1)}%p'}',
+                  wear == null
+                      ? '${kWheelNames[w]} ${(work[w] / maxWork * _percent).round()}%'
+                      : '${kWheelNames[w]} ${wear[w].toStringAsFixed(1)}%',
                   style: kTabularStyle.copyWith(
                     fontWeight: w == limiter ? FontWeight.w700 : null,
                     color: w == limiter ? palette.danger : palette.textMuted,
@@ -191,7 +208,9 @@ class _TyreLoadViewState extends State<TyreLoadView> {
           ),
         ],
         const SizedBox(height: _gap),
-        _Caption('코너별 ${kWheelNames[limiter]} 마찰 일(랩당) — 클수록 타이어를 더 갈아'),
+        _Caption(perMj != null
+            ? '코너마다 $tyre가 한 랩에 닳는 양(막대가 길수록 많이 닳아)'
+            : '코너마다 $tyre가 받는 부담이 한 랩 전체에서 차지하는 비율(막대가 길수록 커)'),
         const SizedBox(height: _rowGap),
         for (final c in corners) ...[
           Row(
@@ -208,7 +227,7 @@ class _TyreLoadViewState extends State<TyreLoadView> {
               ),
               SizedBox(
                 width: _valueWidth,
-                child: Text('${c.load.round()}kJ', textAlign: TextAlign.right, style: kTabularStyle),
+                child: Text(loadText(c.load), textAlign: TextAlign.right, style: kTabularStyle),
               ),
             ],
           ),
@@ -216,7 +235,7 @@ class _TyreLoadViewState extends State<TyreLoadView> {
             if (cornerCauses(c.driving, front: front) case final causes when causes.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(left: _labelWidth, bottom: _rowGap),
-                child: _Caption(causes.map((x) => x.fact).join(' · ')),
+                child: _Caption(causes.map((x) => x.fact).join('. ')),
               ),
         ],
       ],
@@ -224,7 +243,7 @@ class _TyreLoadViewState extends State<TyreLoadView> {
   }
 }
 
-/// 배터리: 구간마다 씀(왼쪽)·채움(오른쪽) 막대(레이스 평균), 세로선 = AI 중앙값, 오른쪽 숫자 = 순 변화(kJ).
+/// 배터리: 구간마다 씀(왼쪽)·채움(오른쪽) 막대(레이스 평균), 세로선 = AI 중앙값, 오른쪽 숫자 = 순 변화(배터리 게이지 %).
 class BatterySegmentsView extends StatelessWidget {
   const BatterySegmentsView({super.key, required this.analysis, required this.labels});
 
@@ -251,7 +270,8 @@ class BatterySegmentsView extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _Caption('구간별 배터리(랩당 kJ) — 왼쪽 씀 · 오른쪽 채움${analysis.fieldErs.isEmpty ? '' : ' · 세로선 AI'}'),
+        _Caption('구간마다 한 랩에 쓴 배터리(왼쪽 빨강)와 채운 배터리(오른쪽 초록)'
+            '${analysis.fieldErs.isEmpty ? '' : '. 세로선은 AI'}. 오른쪽 숫자는 그 구간을 지나며 늘거나 줄어든 배터리야'),
         const SizedBox(height: _rowGap),
         for (final r in rows)
           Padding(
@@ -278,7 +298,7 @@ class BatterySegmentsView extends StatelessWidget {
                 SizedBox(
                   width: _valueWidth,
                   child: Text(
-                    '${r.harvest - r.deploy >= 0 ? '+' : '−'}${(r.harvest - r.deploy).abs().round()}',
+                    '${r.harvest - r.deploy >= 0 ? '+' : '−'}${batteryShareOfKj((r.harvest - r.deploy).abs())}',
                     textAlign: TextAlign.right,
                     style: kTabularStyle,
                   ),
@@ -315,20 +335,24 @@ class StrategyAnalysisView extends StatelessWidget {
               spacing: _gap,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                Text('L${stop.lap}', style: kTabularStyle.copyWith(fontWeight: FontWeight.w700)),
+                Text('${stop.lap}랩', style: kTabularStyle.copyWith(fontWeight: FontWeight.w700)),
                 TyreCompoundCircle(compound: stop.fromCompound, tooltip: stop.fromCompound, size: _chipCircle),
                 Icon(Icons.arrow_right_alt, size: _chipCircle, color: palette.textMuted),
                 TyreCompoundCircle(compound: stop.toCompound, tooltip: stop.toCompound, size: _chipCircle),
-                if (stop.wearPct case final wear?) Text('마모 ${wear.round()}%', style: kTabularStyle),
-                if (stop.lifeLapsLeft case final life?) Text('남은 수명 $life랩', style: kTabularStyle.copyWith(color: palette.textMuted)),
+                if (stop.wearPct case final wear?) Text('${wear.round()}% 닳음', style: kTabularStyle),
+                if (stop.lifeLapsLeft case final life?)
+                  Text('게임이 본 남은 수명 $life랩', style: kTabularStyle.copyWith(color: palette.textMuted)),
                 if (stop.newSetGainMs case final gain? when gain > 0)
-                  Text('새 세트 −${(gain / _msPerSecond).toStringAsFixed(2)}초/랩', style: kTabularStyle.copyWith(color: palette.success)),
+                  Text(
+                    '새 타이어로 랩당 ${(gain / _msPerSecond).toStringAsFixed(2)}초 빨라짐',
+                    style: kTabularStyle.copyWith(color: palette.success),
+                  ),
               ],
             ),
           ),
         if (options.length > 1) ...[
           const SizedBox(height: _gap),
-          const _Caption('전략 비교(추정 — 게임 타이어 델타·내 마모·내 스톱 손실 기준)'),
+          const _Caption('전략 비교: 게임의 타이어 성능 정보, 내 타이어 마모, 내 피트 스톱 시간으로 계산한 추정이야'),
           const SizedBox(height: _rowGap),
           for (final option in options)
             Padding(
@@ -337,9 +361,11 @@ class StrategyAnalysisView extends StatelessWidget {
                 children: [
                   Expanded(child: _StintStrip(option: option)),
                   SizedBox(
-                    width: _valueWidth + _gap * 2,
+                    width: _valueWidth + _gap * 4,
                     child: Text(
-                      option.isActual ? '실제' : '${option.deltaMs < 0 ? '−' : '+'}${(option.deltaMs.abs() / _msPerSecond).toStringAsFixed(1)}초',
+                      option.isActual
+                          ? '실제 전략'
+                          : '${(option.deltaMs.abs() / _msPerSecond).toStringAsFixed(1)}초 ${option.deltaMs < 0 ? '빠름' : '느림'}',
                       textAlign: TextAlign.right,
                       style: kTabularStyle.copyWith(
                         fontWeight: FontWeight.w700,
@@ -382,7 +408,7 @@ class _StintStrip extends StatelessWidget {
                   color: tyreColorOf(s.compound),
                   alignment: Alignment.center,
                   child: Text(
-                    s.laps >= _stripLapsMin && s.compound.isNotEmpty ? '${s.compound[0]}${s.laps}' : '${s.laps}',
+                    s.laps >= _stripLapsMin ? '${s.laps}랩' : '${s.laps}',
                     maxLines: 1,
                     overflow: TextOverflow.clip,
                     style: const TextStyle(fontSize: _stripLabelSize, fontWeight: FontWeight.w700, color: AppColors.background),
@@ -435,7 +461,7 @@ class _LapPaceViewState extends State<LapPaceView> {
           alignment: WrapAlignment.spaceBetween,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            _Caption('랩별 AI 대비(±${(cap / _msPerSecond).toStringAsFixed(1)}초) — 위가 느림'),
+            _Caption('랩마다 AI보다 느리면 위로, 빠르면 아래로(가장 긴 막대가 ${(cap / _msPerSecond).toStringAsFixed(1)}초)'),
             SegmentedButton<PaceBasis>(
               key: const ValueKey('analysis-pace-basis'),
               showSelectedIcon: false,
@@ -468,7 +494,7 @@ class _LapPaceViewState extends State<LapPaceView> {
                         top: g >= 0 ? half - half * (g.clamp(0, cap) / cap) : half,
                         height: math.max(1, half * (g.abs().clamp(0, cap) / cap)),
                         child: Tooltip(
-                          message: 'L${p.lap} ${g >= 0 ? '+' : '−'}${(g.abs() / _msPerSecond).toStringAsFixed(3)}초',
+                          message: '${p.lap}랩: ${(g.abs() / _msPerSecond).toStringAsFixed(3)}초 ${g >= 0 ? '느림' : '빠름'}',
                           child: Container(
                             color: (g >= 0 ? palette.danger : palette.success).withValues(alpha: p.isClean ? 1 : _dimAlpha),
                           ),
@@ -482,8 +508,8 @@ class _LapPaceViewState extends State<LapPaceView> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('L${laps.first.lap}', style: kTabularStyle.copyWith(fontSize: _captionSize, color: palette.textMuted)),
-            Text('L${laps.last.lap}', style: kTabularStyle.copyWith(fontSize: _captionSize, color: palette.textMuted)),
+            Text('${laps.first.lap}랩', style: kTabularStyle.copyWith(fontSize: _captionSize, color: palette.textMuted)),
+            Text('${laps.last.lap}랩', style: kTabularStyle.copyWith(fontSize: _captionSize, color: palette.textMuted)),
           ],
         ),
       ],

@@ -16,31 +16,31 @@ import 'tyre_stints_view.dart';
 const String _title = 'Race Review';
 const String _collapseLabel = '레이스 리뷰 접기';
 const String _expandLabel = '레이스 리뷰 펼치기';
-const String _fieldMedianLabel = 'AI 중앙값';
+const String _fieldMedianLabel = 'AI 보통 랩타임';
 const String _paceRankLabel = '페이스 순위';
-const String _myMedianLabel = '내 중앙값';
-const String _toFieldLabel = 'AI 중앙값 대비';
+const String _myMedianLabel = '내 보통 랩타임';
+const String _toFieldLabel = 'AI 보통 랩타임과 차이';
 const String _gridLabel = '출발';
 const String _finishLabel = '완주';
 const String _winnerLabel = '우승 차';
-const String _trendLabel = '랩타임 추세';
-const String _wearLabel = '마모';
-const String _stintMedianLabel = '중앙값';
-const String _endLifeLabel = '끝 수명';
+const String _trendLabel = '랩마다 느려진 시간';
+const String _wearLabel = '랩마다 닳은 양';
+const String _stintMedianLabel = '보통 랩타임';
+const String _endLifeLabel = '남은 수명';
 const String _firstStoreLabel = '1랩 끝';
-const String _lastStoreLabel = '끝';
-const String _deployLabel = '배포';
-const String _harvestLabel = '회수';
-const String _lowLapsLabel = '바닥 랩';
-const String _fullLapsLabel = '가득 찬 랩';
-const String _perLapCaption = '랩당';
-const String _versusAiLabel = 'AI 대비';
-const String _positionChartCaption = '랩별 순위';
-const String _gridTooltip = '출발 그리드';
-const String _pitTooltip = '피트';
-const String _storeLabel = '잔량';
-const String _storeChartCaption = '랩 끝 잔량';
-const String _flowChartCaption = '랩별 배포 · 회수';
+const String _lastStoreLabel = '마지막 랩';
+const String _deployLabel = '쓴 양';
+const String _harvestLabel = '채운 양';
+const String _lowLapsLabel = '배터리가 바닥난 랩';
+const String _fullLapsLabel = '배터리가 꽉 찬 랩';
+const String _perLapCaption = '한 랩 평균';
+const String _versusAiLabel = 'AI와 차이';
+const String _positionChartCaption = '랩마다 순위';
+const String _gridTooltip = '출발';
+const String _pitTooltip = '피트 스톱';
+const String _storeLabel = '배터리';
+const String _storeChartCaption = '랩이 끝날 때 배터리';
+const String _flowChartCaption = '랩마다 쓴 양과 채운 양';
 
 const Map<ReviewGrade, String> _gradeText = {
   ReviewGrade.good: '좋음',
@@ -71,7 +71,7 @@ const double _captionSize = 11;
 const double _statGap = 20;
 
 /// 페이스 막대: 이름 칸·값 칸 폭, 막대 높이, 가장 빠른 차(길이 0)도 보이게 하는 최소 비율, 다른 차·AI 중앙값 막대 투명도.
-const double _ladderNameWidth = 92;
+const double _ladderNameWidth = 108;
 const double _ladderValueWidth = 84;
 const double _ladderBarHeight = 10;
 const double _ladderRowGap = 6;
@@ -104,7 +104,7 @@ const double _metricMinWidth = 96;
 
 /// 타이어 수명 막대.
 const double _lifeBarHeight = 8;
-const double _lifeLabelWidth = 52;
+const double _lifeLabelWidth = 60;
 const double _lifeValueWidth = 44;
 const double _stintCircleSize = 20;
 const double _stintGap = 14;
@@ -119,7 +119,7 @@ const double _batteryRadius = 5;
 const double _batteryInset = 3;
 const double _batteryGaugeWidth = 64;
 const double _batteryGaugeGap = 4;
-const double _flowLabelWidth = 36;
+const double _flowLabelWidth = 52;
 const double _flowValueWidth = 64;
 const double _flowBarHeight = 10;
 const double _batteryWideWidth = 380;
@@ -155,7 +155,6 @@ const double _half = 0.5;
 
 const double _msPerSecond = 1000;
 const double _percent = 100;
-const double _joulesPerKj = 1000;
 const int _chipSecondDigits = 1;
 const int _lapSecondDigits = 3;
 const int _wearDigits = 1;
@@ -163,7 +162,8 @@ const int _wearDigits = 1;
 String _signedSeconds(int ms, {int digits = _lapSecondDigits}) =>
     '${ms >= 0 ? '+' : '−'}${(ms.abs() / _msPerSecond).toStringAsFixed(digits)}초';
 
-String _kj(double joules) => '${(joules / _joulesPerKj).round()}kJ';
+/// 배터리 양(J)을 배터리 게이지 %로(한 통 = 100%).
+String _batteryPct(double joules) => '${(joules / kErsCapacityJ * _percent).round()}%';
 
 String _seconds(int ms, {int digits = _lapSecondDigits}) => '${(ms.abs() / _msPerSecond).toStringAsFixed(digits)}초';
 
@@ -577,7 +577,7 @@ class _PaceChart extends StatelessWidget {
           _MetricGroup([
             for (var i = 0; i < kSectorCount; i++)
               (
-                label: 'S${i + 1} · $_versusAiLabel',
+                label: '${i + 1}섹터 $_versusAiLabel',
                 value: _signedSeconds(sectors[i]),
                 sub: _seconds(mySectors[i]),
                 color: sectors[i] >= kSectorMarginMs
@@ -663,7 +663,7 @@ class _StrategyView extends StatelessWidget {
             children: [
               Text(_winnerLabel, style: TextStyle(color: palette.textMuted)),
               ..._compoundFlow(strategy.winnerCompounds, palette),
-              Text('$winnerStops스톱', style: TextStyle(color: palette.textMuted)),
+              Text('피트 $winnerStops번', style: TextStyle(color: palette.textMuted)),
             ],
           ),
         ],
@@ -804,13 +804,13 @@ class _PitChip extends StatelessWidget {
         runSpacing: _chipGap / 2,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          Text('L${stop.lap}', style: kTabularStyle.copyWith(fontWeight: FontWeight.w700)),
+          Text('${stop.lap}랩', style: kTabularStyle.copyWith(fontWeight: FontWeight.w700)),
           Row(mainAxisSize: MainAxisSize.min, children: _compoundFlow([stop.fromCompound, stop.toCompound], palette)),
-          if (before != null && after != null) Text('P$before→P$after', style: kTabularStyle),
+          if (before != null && after != null) Text('$before위→$after위', style: kTabularStyle),
           if (loss != null) Text(_seconds(loss, digits: _chipSecondDigits), style: kTabularStyle),
           if (loss != null && fieldLoss != null)
             Text(
-              'AI ${_seconds(fieldLoss, digits: _chipSecondDigits)}',
+              'AI는 ${_seconds(fieldLoss, digits: _chipSecondDigits)}',
               style: kTabularStyle.copyWith(color: palette.textMuted, fontSize: _captionSize),
             ),
         ],
@@ -869,7 +869,7 @@ class _StintList extends StatelessWidget {
             TyreCompoundCircle(compound: stint.compound, tooltip: stint.compound, size: _stintCircleSize),
             const SizedBox(width: _chipGap),
             Text(
-              '${stint.compound} · L${stint.startLap}–L${stint.endLap}',
+              stintName(stint.compound, stint.startLap, stint.endLap),
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
           ],
@@ -899,24 +899,24 @@ class _StintList extends StatelessWidget {
           if (trend != null)
             (
               label: _trendLabel,
-              value: '${_signedSeconds(trend)}/랩',
-              sub: fieldTrend == null ? null : 'AI ${_signedSeconds(fieldTrend)}',
+              value: _signedSeconds(trend),
+              sub: fieldTrend == null ? null : 'AI는 ${_signedSeconds(fieldTrend)}',
               color: extra == null || fieldTrend == null ? null : versusField(trend, fieldTrend, kTrendMarginMs),
             ),
           if (wear != null)
             (
               label: _wearLabel,
-              value: '${wear.toStringAsFixed(_wearDigits)}%/랩',
+              value: '${wear.toStringAsFixed(_wearDigits)}%',
               sub: axle == null
                   ? null
-                  : '앞 ${axle.front.toStringAsFixed(_wearDigits)} · 뒤 ${axle.rear.toStringAsFixed(_wearDigits)}',
+                  : '앞 ${axle.front.toStringAsFixed(_wearDigits)}%, 뒤 ${axle.rear.toStringAsFixed(_wearDigits)}%',
               color: stint.wearsFast ? palette.danger : null,
             ),
           if (median != null)
             (
               label: _stintMedianLabel,
               value: formatLapTime(median),
-              sub: fieldMedian == null ? null : 'AI ${formatLapTime(fieldMedian)}',
+              sub: fieldMedian == null ? null : 'AI는 ${formatLapTime(fieldMedian)}',
               color: fieldMedian == null ? null : versusField(median, fieldMedian, kPaceMarginMs),
             ),
         ]),
@@ -942,7 +942,7 @@ class _BatteryView extends StatelessWidget {
       children: [
         _BatteryGauge(label: _firstStoreLabel, fraction: battery.firstStoreJ / kErsCapacityJ),
         const SizedBox(width: _batteryGaugeGap),
-        _BatteryGauge(label: '최저 · L${battery.minStoreLap}', fraction: battery.minStoreJ / kErsCapacityJ),
+        _BatteryGauge(label: '최저 ${battery.minStoreLap}랩', fraction: battery.minStoreJ / kErsCapacityJ),
         const SizedBox(width: _batteryGaugeGap),
         _BatteryGauge(label: _lastStoreLabel, fraction: battery.lastStoreJ / kErsCapacityJ),
       ],
@@ -960,13 +960,13 @@ class _BatteryView extends StatelessWidget {
         _MetricGroup([
           (
             label: _lowLapsLabel,
-            value: '${battery.lowLaps}',
+            value: '${battery.lowLaps}랩',
             sub: null,
             color: battery.lowLaps >= kErsFlagLaps ? palette.danger : null,
           ),
           (
             label: _fullLapsLabel,
-            value: '${battery.fullLaps}',
+            value: '${battery.fullLaps}랩',
             sub: null,
             color: battery.fullLaps >= kErsFlagLaps ? palette.danger : null,
           ),
@@ -986,16 +986,16 @@ class _BatteryView extends StatelessWidget {
               children: [Align(alignment: Alignment.centerLeft, child: gauges), const SizedBox(height: _innerGap), flows],
             ),
     );
-    // 두 그래프 모두 같은 랩 설명: 끝 잔량(%·kJ), 배포·회수(kJ).
+    // 두 그래프 모두 같은 랩 설명: 랩 끝 배터리, 쓴 양·채운 양(모두 배터리 게이지 %).
     String lapTooltip(RaceBatteryLap l) {
       final deployed = l.deployedJ;
       final harvested = l.harvestedJ;
       final flow = [
-        if (deployed != null) '$_deployLabel ${_kj(deployed)}',
-        if (harvested != null) '$_harvestLabel ${_kj(harvested)}',
+        if (deployed != null) '$_deployLabel ${_batteryPct(deployed)}',
+        if (harvested != null) '$_harvestLabel ${_batteryPct(harvested)}',
       ];
-      return 'L${l.lap} · $_storeLabel ${(l.storeJ / kErsCapacityJ * _percent).round()}% (${_kj(l.storeJ)})'
-          '${flow.isEmpty ? '' : '\n${flow.join(' · ')}'}';
+      return '${l.lap}랩 끝 $_storeLabel ${_batteryPct(l.storeJ)}'
+          '${flow.isEmpty ? '' : '\n${flow.join(', ')}'}';
     }
 
     return Column(
@@ -1042,7 +1042,7 @@ class _BatteryView extends StatelessWidget {
             Expanded(child: _Bar(factor: joules / max, color: color, height: _flowBarHeight)),
             SizedBox(
               width: _flowValueWidth,
-              child: Text(_kj(joules), textAlign: TextAlign.right, style: kTabularStyle),
+              child: Text(_batteryPct(joules), textAlign: TextAlign.right, style: kTabularStyle),
             ),
           ],
         ),
@@ -1193,16 +1193,16 @@ class _PositionChart extends StatelessWidget {
   String _positionTooltip(List<RaceLapPosition> points, int i) {
     final point = points[i];
     if (point.lap == 0) {
-      return '$_gridTooltip · P${point.position}';
+      return '$_gridTooltip ${point.position}위';
     }
     final change = i == 0 ? 0 : points[i - 1].position - point.position;
     final parts = [
-      'L${point.lap} · P${point.position}',
-      if (change > 0) '$change계단 ↑',
-      if (change < 0) '${-change}계단 ↓',
+      '${point.lap}랩 ${point.position}위',
+      if (change > 0) '$change계단 올라감',
+      if (change < 0) '${-change}계단 내려감',
       if (pitLaps.contains(point.lap)) _pitTooltip,
     ];
-    return parts.join(' · ');
+    return parts.join(', ');
   }
 }
 
@@ -1437,11 +1437,11 @@ class _LapChart extends StatelessWidget {
         const SizedBox(height: _lapChartTickGap),
         Row(
           children: [
-            Text('L${laps.first}', style: tickStyle),
+            Text('${laps.first}랩', style: tickStyle),
             const Spacer(),
-            Text('L${laps[laps.length ~/ 2]}', style: tickStyle),
+            Text('${laps[laps.length ~/ 2]}랩', style: tickStyle),
             const Spacer(),
-            Text('L${laps.last}', style: tickStyle),
+            Text('${laps.last}랩', style: tickStyle),
           ],
         ),
       ],
