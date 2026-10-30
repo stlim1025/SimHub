@@ -72,6 +72,7 @@ public sealed class TrackGeometryBuilderTests
         var geometry = TrackGeometryBuilder.Build([TrackSampleDecoder.Decode(Encode(frames), format: 5)])!;
 
         Assert.InRange(geometry.BandRightM[2], 0, 2);           // 10m: 피트 레인 차가 도로 띠를 넓히지 않는다
+        Assert.InRange(geometry.ReachRightM[2], 0, 3);          // 방호벽 자리(차가 닿은 끝)도 넓히지 않는다
         Assert.NotNull(geometry.PitX);
         // 입구(590m)부터 출구(40m)까지(칸 반올림만큼 어긋날 수 있다).
         double DistanceToPitLaneAt(int index, double lapDistance)
@@ -148,6 +149,42 @@ public sealed class TrackGeometryBuilderTests
 
         Assert.All(geometry.BandRightM, w => Assert.True(w < 1));
         Assert.All(geometry.BandLeftM, w => Assert.True(w < 1));
+    }
+
+    [Fact]
+    public void Build_EdgesFromWheelsOnTarmac_KerbOuterEnd_AndReachOfEveryBody()
+    {
+        // 차 4대가 2m(100ms)마다 표본이라 진행 방향을 잴 수 있다: 0번은 레이싱 라인, 1번은 안쪽(왼쪽) 4m 아스팔트,
+        // 2번은 바깥(오른쪽) 3m 연석, 3번은 바깥 10m 잔디. 4번은 150m 지점 안쪽 20m에 멈춰 있다(속도 0, 방향 모름).
+        var stopAngle = 150 / Radius;
+        var frames = new List<Sample[]>();
+        for (var d = 0.0; d < LapLength; d += 2)
+        {
+            var angle = d / Radius;
+            Sample At(byte car, double radius, ushort surface = 0) => new(car, d, radius * Math.Cos(angle), radius * Math.Sin(angle), surface);
+            frames.Add([
+                At(0, Radius),
+                At(1, Radius - 4),
+                At(2, Radius + 3, Rumble),
+                At(3, Radius + 10, Grass),
+                new Sample(4, 150, (Radius - 20) * Math.Cos(stopAngle), (Radius - 20) * Math.Sin(stopAngle), SpeedKph: 0),
+            ]);
+        }
+
+        var geometry = TrackGeometryBuilder.Build([TrackSampleDecoder.Decode(Encode(frames), format: 5)])!;
+
+        // 기대값은 레이싱 라인(세 차의 중앙값을 평균한 선)에서 잰다: 왼쪽(안쪽) + = 선 반지름 − 차 반지름.
+        double OffsetAt(int bin, double radius) => Math.Sqrt(geometry.X[bin] * geometry.X[bin] + geometry.Z[bin] * geometry.Z[bin]) - radius;
+        void Near(double expected, double actual) => Assert.InRange(actual, expected - 0.2, expected + 0.2);
+        const int bin = 50; // 250m
+        Near(OffsetAt(bin, Radius - 4) + 1, geometry.EdgeLeftM[bin]);      // 1번 바깥 바퀴
+        Near(-OffsetAt(bin, Radius) + 1, geometry.EdgeRightM[bin]);        // 연석·잔디 위 차는 아스팔트 가장자리를 넓히지 않는다
+        Near(-OffsetAt(bin, Radius + 3) + 1, geometry.KerbOuterRightM[bin]); // 2번 바깥 바퀴 = 연석 바깥 끝
+        Assert.Equal(0, geometry.KerbOuterLeftM[bin]);
+        Near(-OffsetAt(bin, Radius + 10) + 1, geometry.ReachRightM[bin]);  // 3번 몸체(잔디 위)까지
+        Near(OffsetAt(bin, Radius - 4) + 1, geometry.ReachLeftM[bin]);
+        // 150m: 멈춘 4번은 방향을 몰라 어느 쪽으로든 대각선 반길이(√(1² + 2.8²) ≈ 2.97m)만큼 닿는다고 본다.
+        Near(OffsetAt(30, Radius - 20) + Math.Sqrt(1 + 2.8 * 2.8), geometry.ReachLeftM[30]);
     }
 
     [Fact]

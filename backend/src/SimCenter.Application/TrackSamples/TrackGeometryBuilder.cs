@@ -4,10 +4,14 @@ namespace SimCenter.Application.TrackSamples;
 /// 표본으로 만든 트랙 형상(랩 거리 <see cref="ResolutionM"/>마다 한 칸, 칸 i = 랩 거리 i × 간격 둘레 ±간격/2).
 /// 선(X·Z)은 차들이 달린 위치의 중앙값 = 레이싱 라인이고 도로 한가운데가 아니다. 띠는 그 선에서 왼쪽·오른쪽으로 차들이 달린 끝,
 /// 연석은 그 쪽 바퀴가 연석을 밟은 적이 있는지(도로 가장자리 단서).
+/// 가장자리·연석 바깥·도달 폭도 레이싱 라인에서 그 쪽으로 잰 거리(m)이고, 그런 표본이 없는 칸은 0이다.
 /// </summary>
 /// <param name="Y">높이(m). 높이 열이 있는 표본이 없으면 null.</param>
 /// <param name="BandLeftM">레이싱 라인에서 왼쪽(진행 방향 기준 법선 (−sin, cos))으로 차들이 달린 끝(m, 0 이상).</param>
 /// <param name="BandRightM">오른쪽 끝(m, 0 이상).</param>
+/// <param name="EdgeLeftM">네 바퀴가 모두 아스팔트(연석이 아닌 포장 노면)에 있던 차의 바깥 바퀴가 닿은 가장 먼 자리 = 아스팔트 왼쪽 가장자리.</param>
+/// <param name="KerbOuterLeftM">연석을 밟은 차(네 바퀴 모두 포장 노면)의 바깥 바퀴가 닿은 가장 먼 자리 = 왼쪽 연석 바깥 끝.</param>
+/// <param name="ReachLeftM">차 몸체가 닿은 가장 먼 자리: 잔디·그래블로 나간 차, 느리거나 멈춘 차까지 모두. 방호벽은 이보다 바깥에 있다.</param>
 /// <param name="PitX">피트 레인 선(피트 입구 → 출구 순, 피트 레인 표본의 칸별 중앙값). 피트 레인 표본이 모자라면 null.</param>
 public sealed record TrackGeometry(
     double ResolutionM,
@@ -19,6 +23,12 @@ public sealed record TrackGeometry(
     double[] BandRightM,
     bool[] KerbLeft,
     bool[] KerbRight,
+    double[] EdgeLeftM,
+    double[] EdgeRightM,
+    double[] KerbOuterLeftM,
+    double[] KerbOuterRightM,
+    double[] ReachLeftM,
+    double[] ReachRightM,
     double[]? PitX = null,
     double[]? PitZ = null,
     double[]? PitY = null);
@@ -31,7 +41,7 @@ public static class TrackGeometryBuilder
 {
     public const double ResolutionM = 5;
 
-    /// <summary>이보다 느린 표본(피트 출구·멈춤)은 뺀다(속도 열이 없으면 모두 쓴다).</summary>
+    /// <summary>이보다 느린 표본(피트 출구·멈춤)은 선·띠·가장자리에서 뺀다(속도 열이 없으면 모두 쓴다). 도달 폭에는 넣는다 — 멈춘 차도 방호벽 안에 있어야 한다.</summary>
     private const int MinSpeedKph = 30;
 
     /// <summary>띠 끝: 왼쪽은 오프셋 상위 2%, 오른쪽은 하위 2%(튀는 표본 무시).</summary>
@@ -63,7 +73,30 @@ public static class TrackGeometryBuilder
     private const int MinPitBinSamples = 3;
     private const int MinPitBins = 10;
 
-    private readonly record struct Point(double X, double Z, double? Y, bool Paved, bool Rumble);
+    /// <summary>바퀴: 차 가운데에서 바깥 바퀴 바깥 면까지 옆 거리(m)·앞뒤 바퀴 축까지 거리(m).</summary>
+    private const double WheelOuterHalfWidthM = 1.0;
+    private const double WheelHalfBaseM = 1.8;
+
+    /// <summary>차 몸체 반폭·반길이(m, 앱 리플레이가 그리는 차와 같다). 방향을 모르는 표본(멈춘 차)은 어느 쪽으로든 대각선 반길이만큼 닿는다고 본다.</summary>
+    private const double BodyHalfWidthM = 1.0;
+    private const double BodyHalfLengthM = 2.8;
+    private static readonly double BodyHalfDiagonalM = Math.Sqrt(BodyHalfWidthM * BodyHalfWidthM + BodyHalfLengthM * BodyHalfLengthM);
+
+    /// <summary>
+    /// 진행 방향은 같은 차의 바로 앞·뒤 표본(이 시간 ms 안)으로 잰다. 이보다 덜 움직였으면(m) 멈춘 차로,
+    /// 이보다 빠르면(m/s) 끊긴 표본(플래시백·되돌리기)으로 보고 방향을 모른다고 둔다.
+    /// </summary>
+    private const int MaxHeadingGapMs = 600;
+    private const double MinHeadingStepM = 0.3;
+    private const double MaxSpeedMps = 120;
+    private const double MsPerSecond = 1000;
+
+    /// <summary>레이싱 라인에서 이보다 먼(m) 표본은 그 칸 자리가 아니라고 보고(랩 거리와 위치가 어긋난 표본) 가장자리·도달 폭에서 뺀다.</summary>
+    private const double MaxLateralM = 100;
+
+    /// <param name="Fast">[MinSpeedKph] 이상(선·띠·가장자리에 쓴다).</param>
+    /// <param name="Heading">진행 방향(단위 벡터, X·Z). 모르면 null.</param>
+    private readonly record struct Point(double X, double Z, double? Y, bool Paved, bool Rumble, bool Fast, (double X, double Z)? Heading);
 
     /// <summary>표본이 모자라면(칸의 절반 미만) null.</summary>
     public static TrackGeometry? Build(IReadOnlyList<DecodedTrackSamples> chunks)
@@ -80,32 +113,31 @@ public static class TrackGeometryBuilder
         var sampleCount = 0;
         foreach (var chunk in chunks)
         {
+            var headings = Headings(chunk);
             for (var i = 0; i < chunk.Count; i++)
             {
+                var bin = (int)Math.Round(chunk.LapDistanceM[i] / ResolutionM) % n;
                 if (((chunk.Status[i] >> PitStatusShift) & PitStatusMask) != 0)
                 {
                     if (chunk.SpeedKph is not { } pitSpeed || pitSpeed[i] >= MinPitSpeedKph)
                     {
-                        pitBins[(int)Math.Round(chunk.LapDistanceM[i] / ResolutionM) % n]
-                            .Add(new Point(chunk.X[i], chunk.Z[i], chunk.Y?[i], true, false));
+                        pitBins[bin].Add(new Point(chunk.X[i], chunk.Z[i], chunk.Y?[i], true, false, true, null));
                     }
 
                     continue;
                 }
 
-                if (chunk.SpeedKph is { } speed && speed[i] < MinSpeedKph)
-                {
-                    continue;
-                }
-
+                var fast = chunk.SpeedKph is not { } speed || speed[i] >= MinSpeedKph;
                 var (paved, rumble) = Wheels(chunk.Surface[i]);
-                bins[(int)Math.Round(chunk.LapDistanceM[i] / ResolutionM) % n]
-                    .Add(new Point(chunk.X[i], chunk.Z[i], chunk.Y?[i], paved, rumble));
-                sampleCount++;
+                bins[bin].Add(new Point(chunk.X[i], chunk.Z[i], chunk.Y?[i], paved, rumble, fast, headings[i]));
+                if (fast)
+                {
+                    sampleCount++;
+                }
             }
         }
 
-        if (bins.Count(b => b.Count > 0) < n * MinCoverage)
+        if (bins.Count(b => b.Any(p => p.Fast)) < n * MinCoverage)
         {
             return null;
         }
@@ -115,17 +147,18 @@ public static class TrackGeometryBuilder
         var y = new double?[n];
         for (var k = 0; k < n; k++)
         {
-            if (bins[k].Count == 0)
+            var moving = bins[k].Where(p => p.Fast).ToList();
+            if (moving.Count == 0)
             {
                 continue;
             }
 
             // 선은 도로 위 표본으로 잡는다(잔디·그래블로 나간 차가 선을 끌지 않게). 도로 위 표본이 없는 칸만 모두 쓴다.
-            var onRoad = bins[k].Where(p => p.Paved).ToList();
-            var points = onRoad.Count > 0 ? onRoad : bins[k];
+            var onRoad = moving.Where(p => p.Paved).ToList();
+            var points = onRoad.Count > 0 ? onRoad : moving;
             x[k] = Median(points.Select(p => p.X));
             z[k] = Median(points.Select(p => p.Z));
-            var heights = bins[k].Where(p => p.Y.HasValue).Select(p => p.Y!.Value).ToList();
+            var heights = moving.Where(p => p.Y.HasValue).Select(p => p.Y!.Value).ToList();
             y[k] = heights.Count == 0 ? null : Median(heights);
         }
 
@@ -138,6 +171,12 @@ public static class TrackGeometryBuilder
         var bandRight = new double[n];
         var kerbLeft = new bool[n];
         var kerbRight = new bool[n];
+        var edgeLeft = new double[n];
+        var edgeRight = new double[n];
+        var kerbOuterLeft = new double[n];
+        var kerbOuterRight = new double[n];
+        var reachLeft = new double[n];
+        var reachRight = new double[n];
         for (var k = 0; k < n; k++)
         {
             var tx = lineX[(k + 1) % n] - lineX[(k - 1 + n) % n];
@@ -148,13 +187,29 @@ public static class TrackGeometryBuilder
                 continue;
             }
 
+            var ux = tx / length;
+            var uz = tz / length;
+
             // 왼쪽 법선(앱의 서킷 그림과 같은 규칙).
-            var nx = -tz / length;
-            var nz = tx / length;
+            var nx = -uz;
+            var nz = ux;
             var offsets = new List<double>();
             foreach (var p in bins[k])
             {
                 var offset = (p.X - lineX[k]) * nx + (p.Z - lineZ[k]) * nz;
+                var inStretch = Math.Abs(offset) <= MaxLateralM;
+                if (inStretch)
+                {
+                    var body = Extent(p.Heading, ux, uz, BodyHalfWidthM, BodyHalfLengthM) ?? BodyHalfDiagonalM;
+                    reachLeft[k] = Math.Max(reachLeft[k], offset + body);
+                    reachRight[k] = Math.Max(reachRight[k], -offset + body);
+                }
+
+                if (!p.Fast)
+                {
+                    continue;
+                }
+
                 if (p.Paved)
                 {
                     offsets.Add(offset);
@@ -167,6 +222,15 @@ public static class TrackGeometryBuilder
                 else if (p.Rumble && offset < -KerbSideMinOffsetM)
                 {
                     kerbRight[k] = true;
+                }
+
+                // 네 바퀴가 모두 포장 노면이면 바깥 바퀴가 닿은 자리까지가 도로다. 연석을 밟은 표본은 연석 바깥 끝으로 따로 모은다.
+                if (p.Paved && inStretch)
+                {
+                    var wheel = Extent(p.Heading, ux, uz, WheelOuterHalfWidthM, WheelHalfBaseM) ?? WheelOuterHalfWidthM;
+                    var (left, right) = p.Rumble ? (kerbOuterLeft, kerbOuterRight) : (edgeLeft, edgeRight);
+                    left[k] = Math.Max(left[k], offset + wheel);
+                    right[k] = Math.Max(right[k], -offset + wheel);
                 }
             }
 
@@ -182,7 +246,65 @@ public static class TrackGeometryBuilder
 
         var pit = PitLane(pitBins);
         return new TrackGeometry(
-            ResolutionM, sampleCount, lineX, lineZ, heightsOut, bandLeft, bandRight, kerbLeft, kerbRight, pit?.X, pit?.Z, pit?.Y);
+            ResolutionM, sampleCount, lineX, lineZ, heightsOut, bandLeft, bandRight, kerbLeft, kerbRight,
+            edgeLeft, edgeRight, kerbOuterLeft, kerbOuterRight, reachLeft, reachRight, pit?.X, pit?.Z, pit?.Y);
+    }
+
+    /// <summary>
+    /// 차 가운데에서 트랙 옆 방향(왼쪽·오른쪽 같다)으로 닿는 거리: 반폭 × |cos θ| + 반길이 × |sin θ|
+    /// (θ = 진행 방향과 트랙 방향 (<paramref name="ux"/>, <paramref name="uz"/>) 사이 각). 방향을 모르면 null.
+    /// </summary>
+    private static double? Extent((double X, double Z)? heading, double ux, double uz, double halfWidth, double halfLength)
+        => heading is { } h
+            ? halfWidth * Math.Abs(h.X * ux + h.Z * uz) + halfLength * Math.Abs(h.Z * ux - h.X * uz)
+            : null;
+
+    /// <summary>표본마다 진행 방향(단위 벡터, X·Z): 같은 조각 안 같은 차의 바로 앞·뒤 표본을 잇는다. 잴 수 없으면 null.</summary>
+    private static (double X, double Z)?[] Headings(DecodedTrackSamples chunk)
+    {
+        var headings = new (double X, double Z)?[chunk.Count];
+        var byCar = new Dictionary<byte, List<int>>();
+        for (var i = 0; i < chunk.Count; i++)
+        {
+            if (!byCar.TryGetValue(chunk.CarIndex[i], out var samples))
+            {
+                samples = [];
+                byCar[chunk.CarIndex[i]] = samples;
+            }
+
+            samples.Add(i);
+        }
+
+        foreach (var samples in byCar.Values)
+        {
+            for (var j = 0; j < samples.Count; j++)
+            {
+                var from = j > 0 && Follows(chunk, samples[j - 1], samples[j]) ? samples[j - 1] : samples[j];
+                var to = j + 1 < samples.Count && Follows(chunk, samples[j], samples[j + 1]) ? samples[j + 1] : samples[j];
+                if (from == to)
+                {
+                    continue;
+                }
+
+                var dx = (double)chunk.X[to] - chunk.X[from];
+                var dz = (double)chunk.Z[to] - chunk.Z[from];
+                var step = Math.Sqrt(dx * dx + dz * dz);
+                var seconds = (chunk.TimeMs[to] - chunk.TimeMs[from]) / MsPerSecond;
+                if (step >= MinHeadingStepM && step <= MaxSpeedMps * seconds)
+                {
+                    headings[samples[j]] = (dx / step, dz / step);
+                }
+            }
+        }
+
+        return headings;
+    }
+
+    /// <summary><paramref name="next"/>가 같은 차 <paramref name="previous"/> 바로 뒤에 이어진 표본인지(시간이 앞으로 가고 <see cref="MaxHeadingGapMs"/> 안).</summary>
+    private static bool Follows(DecodedTrackSamples chunk, int previous, int next)
+    {
+        var gap = chunk.TimeMs[next] - chunk.TimeMs[previous];
+        return gap > 0 && gap <= MaxHeadingGapMs;
     }
 
     /// <summary>

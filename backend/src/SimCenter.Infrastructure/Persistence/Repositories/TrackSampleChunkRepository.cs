@@ -30,6 +30,16 @@ public sealed class TrackSampleChunkRepository : ITrackSampleChunkRepository
             .Select(x => new StoredTrackSampleChunk(x.SessionRef, x.ChunkIndex, x.Format, x.Payload, x.TrackLengthM))
             .ToListAsync(cancellationToken);
 
+    public async Task<TrackSampleVersion?> GetTrackVersionAsync(Guid trackId, string gameCode, CancellationToken cancellationToken = default)
+    {
+        var chunks = _context.TrackSampleChunks
+            .AsNoTracking()
+            .Where(x => x.TrackId == trackId && x.GameCode == gameCode && !x.IsDeleted);
+        var count = await chunks.CountAsync(cancellationToken);
+        var latest = await chunks.MaxAsync(x => (DateTime?)x.CreatedAt, cancellationToken);
+        return new TrackSampleVersion(count, latest);
+    }
+
     public async Task<IReadOnlyList<StoredTrackSampleChunk>> ListForSessionAsync(
         Guid userId, string sessionRef, CancellationToken cancellationToken = default)
         => await _context.TrackSampleChunks

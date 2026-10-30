@@ -31,6 +31,9 @@ const double _streetWallHeightM = 1.6;
 /// 방호벽 위치(가장자리에서 m)를 고르는 범위(점 수): 앞뒤 가장 먼 값으로 넓힌 뒤 평균해 그래블 끝에서 들쭉날쭉하지 않게.
 const int _wallSmoothSamples = 4;
 
+/// 방호벽은 차 몸체가 닿은 가장 먼 자리([ReplayCircuit.reachLeftM])보다 이만큼(m) 더 바깥에 세운다.
+const double _wallCarClearanceM = 0.3;
+
 /// 방호벽이 다른 구간 도로(가장자리 + 이 여유 m) 안에 들어가면 가장자리 쪽으로 당긴다(모나코처럼 길이 붙은 곳).
 /// 이 길이(m) 안의 앞뒤 점은 같은 구간으로 보고 견주지 않는다.
 const double _wallClearanceM = 1.5;
@@ -406,13 +409,8 @@ class ReplayTrack3d {
       for (var i = 0; i < n; i++)
         if (!circuit.gravelAt[i]) 0 else if (circuit.curvatures[i] > 0) -1 else 1,
     ];
-    List<double> smoothWall(List<bool> kerbs, int side) {
-      final raw = [
-        for (var i = 0; i < n; i++)
-          (kerbs[i] ? kCircuitKerbWidthM : 0) +
-          (gravelSide[i] == side ? kCircuitGravelWidthM : 0) +
-          (circuit.street ? _streetRunoffM : _runoffM),
-      ];
+    // 앞뒤 가장 먼 값으로 넓힌 뒤 같은 범위로 평균한다 — 넓힌 범위 안에서 평균하므로 점마다 원래 값 이상이다.
+    List<double> widenThenAverage(List<double> raw) {
       final widened = [
         for (var i = 0; i < n; i++)
           [for (var k = i - _wallSmoothSamples; k <= i + _wallSmoothSamples; k++) raw[at(k)]].reduce(math.max),
@@ -423,6 +421,13 @@ class ReplayTrack3d {
               (_wallSmoothSamples * 2 + 1),
       ];
     }
+
+    List<double> smoothWall(List<bool> kerbs, int side) => widenThenAverage([
+          for (var i = 0; i < n; i++)
+            (kerbs[i] ? kCircuitKerbWidthM : 0) +
+                (gravelSide[i] == side ? kCircuitGravelWidthM : 0) +
+                (circuit.street ? _streetRunoffM : _runoffM),
+        ]);
 
     // 다른 구간 도로와 겹치지 않는 거리로 줄인다(격자로 가까운 중심선 점만 본다).
     final grid = <(int, int), List<int>>{};
@@ -456,18 +461,31 @@ class ReplayTrack3d {
       return false;
     }
 
-    ({List<double> offsets, List<bool> standing}) wall(List<Offset> edges, List<Offset> outward, List<bool> kerbs, int side) {
+    // 차 몸체가 닿은 자리([reach], 중심선에서 m)보다 안쪽에는 벽을 세우지 않는다. 그 자리가 다른 구간 도로에 걸리면 벽을 빼고,
+    // 그 밖에는 런오프 끝까지 두되 다른 구간 도로와 겹치면 차가 닿은 자리까지만 줄인다.
+    ({List<double> offsets, List<bool> standing}) wall(
+      List<Offset> edges,
+      List<Offset> outward,
+      List<bool> kerbs,
+      int side,
+      List<double> widths,
+      List<double> reach,
+    ) {
       final smooth = smoothWall(kerbs, side);
+      final need = widenThenAverage([
+        for (var i = 0; i < n; i++) math.max(0.0, reach[i] - widths[i] + _wallCarClearanceM),
+      ]);
       final offsets = <double>[];
       final standing = <bool>[];
       for (var i = 0; i < n; i++) {
-        var offset = smooth[i];
+        var offset = math.max(smooth[i], need[i]);
         var clear = !onOtherRoad(edges[i] + outward[i] * offset, i);
         for (final f in _wallShrinkSteps) {
-          if (clear) {
+          final shrunk = math.max(smooth[i] * f, need[i]);
+          if (clear || shrunk >= offset) {
             break;
           }
-          offset = smooth[i] * f;
+          offset = shrunk;
           clear = !onOtherRoad(edges[i] + outward[i] * offset, i);
         }
         offsets.add(offset);
@@ -478,8 +496,8 @@ class ReplayTrack3d {
 
     final outwardLeft = [for (var i = 0; i < n; i++) outward(circuit.leftPoints[i], i)];
     final outwardRight = [for (var i = 0; i < n; i++) outward(circuit.rightPoints[i], i)];
-    final left = wall(circuit.leftPoints, outwardLeft, circuit.kerbLeft, 1);
-    final right = wall(circuit.rightPoints, outwardRight, circuit.kerbRight, -1);
+    final left = wall(circuit.leftPoints, outwardLeft, circuit.kerbLeft, 1, circuit.leftWidths, circuit.reachLeftM);
+    final right = wall(circuit.rightPoints, outwardRight, circuit.kerbRight, -1, circuit.rightWidths, circuit.reachRightM);
 
     // 중계 카메라 자리: 간격마다 그 둘레(앞뒤 1/3)에서 곡률이 가장 큰 점의 코너 바깥, 방호벽 밖 높은 곳.
     final step = math.max(1, (_stationSpacingM / spacing).round());

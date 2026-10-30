@@ -43,6 +43,9 @@ const double _innerRadiusFraction = 0.8;
 /// 차 폭의 절반(m): 연석을 밟지 않은 표본은 차 가운데가 가장자리에서 이만큼 안쪽에 있어야 한다.
 const double _carHalfWidthM = 1;
 
+/// 차 길이의 절반(m, 그림의 차와 같다): 비스듬히 선 차는 옆으로 반폭~반길이만큼 닿는다.
+const double _carHalfLengthM = 2.8;
+
 /// 연석을 밟은 표본은 차 가운데가 가장자리 밖으로 이만큼(m)까지 나가도 된다(바깥 바퀴가 연석 위).
 const double _kerbCarAllowanceM = 0.5;
 
@@ -108,6 +111,8 @@ class ReplayCircuit {
     required this.startHeading,
     required this.startLeftM,
     required this.startRightM,
+    required this.reachLeftM,
+    required this.reachRightM,
     this.pitLane = const [],
     this.pitElevations = const [],
     this.pitNormals = const [],
@@ -156,6 +161,11 @@ class ReplayCircuit {
   final double startLeftM;
   final double startRightM;
 
+  /// 점마다 중심선에서 차 몸체가 닿은 가장 먼 자리(m, 왼쪽·오른쪽): 표본 형상의 모든 차와 내 랩·비교 랩 차.
+  /// 방호벽은 이보다 바깥에 세운다(차가 벽을 뚫고 지나가 보이지 않게). 아무 차도 닿지 않은 쪽은 0.
+  final List<double> reachLeftM;
+  final List<double> reachRightM;
+
   /// 피트 레인 선(입구 → 출구, 월드 X·Z)·점마다 노면 높이·왼쪽 법선, 그리고 2D로 칠할 피트 레인 면. 표본 형상에 피트 레인이 없으면 비어 있다.
   final List<Offset> pitLane;
   final List<double> pitElevations;
@@ -163,7 +173,8 @@ class ReplayCircuit {
   final Path pitAsphalt;
 
   /// [player](와 [ghost]) 주행 기록으로 서킷 모양을 만든다. [samples](모든 차 표본으로 만든 트랙 형상)가 있으면
-  /// 그것으로 만든 도로를 실측처럼 쓴다 — 게임 레이아웃 그대로라 [real](지도 실측)보다 맞다(카탈루냐는 지도가 옛 레이아웃).
+  /// 그것으로 만든 도로를 그 칸 그대로 쓴다 — 게임 좌표·레이아웃 그대로라 [real](지도 실측)보다 맞고(카탈루냐는 지도가 옛 레이아웃),
+  /// 주행선에 다시 맞추거나 주행선 점으로 옮겨 담지 않아 어긋나거나 뭉개지지 않는다. 주행선은 폭만 넓혀 도로 안에 담는다.
   /// 표본 형상이 없고 [real]이 있고 주행선에 맞으면 실측 중심선·폭을 쓴다.
   /// 높이·연석은 [samples]가 있으면 그것을 먼저 쓴다(내 랩 하나보다 여러 차·여러 랩이 고르다).
   /// [baseWidthM]은 실측이 없는 구간의 직선 도로 폭(트랙마다 다를 수 있다, 기본 [kCircuitBaseWidthM]).
@@ -180,11 +191,17 @@ class ReplayCircuit {
   }) {
     final lines = [player.trace, if (ghost != null) ghost.trace];
     final playerLine = _positions(player.trace);
-    final profile = samples == null ? real : trackProfileFromSamples(samples, widthM: baseWidthM);
-    final aligned = profile == null ? null : alignTrackProfile(profile, playerLine);
-    final estimated = _estimated(player, ghost, baseWidthM);
+    final sampled =
+        samples == null ? null : trackProfileFromSamples(samples, widthM: baseWidthM, kerbWidthM: kCircuitKerbWidthM);
+    // 지도 실측만 좌표계가 달라 주행선에 맞춘다.
+    final aligned = sampled != null || real == null ? null : alignTrackProfile(real, playerLine);
     final geometry = _covering(
-      aligned == null ? estimated : _keepLinesInside(_withMeasured(estimated, aligned), lines),
+      sampled != null
+          ? _coveringLines((center: sampled.center, left: sampled.leftM, right: sampled.rightM, closed: true), lines)
+          : () {
+              final estimated = _estimated(player, ghost, baseWidthM);
+              return aligned == null ? estimated : _keepLinesInside(_withMeasured(estimated, aligned), lines);
+            }(),
       cover,
     );
     final center = geometry.center;
@@ -226,6 +243,7 @@ class ReplayCircuit {
     final left = [for (var i = 0; i < n; i++) center[i] + normals[i] * leftWidths[i]];
     final right = [for (var i = 0; i < n; i++) center[i] - normals[i] * rightWidths[i]];
 
+    final reach = _reach(sampled, lines, center, normals, closed: closed);
     final traceKerbs = _kerbSides(lines, center, normals, curvatures, spacing: spacing, closed: closed);
     final sampleKerbs = samples == null ? null : _sampleKerbs(samples, center);
     final kerbs = sampleKerbs == null
@@ -306,7 +324,7 @@ class ReplayCircuit {
       leftWidths: leftWidths,
       rightWidths: rightWidths,
       curvatures: curvatures,
-      isMeasured: aligned != null,
+      isMeasured: sampled != null || aligned != null,
       street: street,
       closed: closed,
       leftPoints: left,
@@ -325,6 +343,8 @@ class ReplayCircuit {
       startHeading: headings[start],
       startLeftM: leftWidths[start],
       startRightM: rightWidths[start],
+      reachLeftM: reach.left,
+      reachRightM: reach.right,
     );
   }
 
@@ -514,6 +534,43 @@ class ReplayCircuit {
         needRight[j] = math.max(needRight[j], need);
       }
     }
+    return _widened(geometry, needLeft, needRight);
+  }
+
+  /// 주행선(내 랩·비교 랩)이 도로 안에 들도록 그 쪽 폭만 넓힌다(가운데는 그대로 — 표본 형상의 다른 차들이 제자리에 남게).
+  /// 연석을 밟은 표본은 차 가운데가 가장자리 밖 [_kerbCarAllowanceM]까지 나가도 되고, 아니면 차 반폭만큼 안쪽에 들어야 한다.
+  static _Geometry _coveringLines(_Geometry geometry, List<LapTrace> lines) {
+    final center = geometry.center;
+    final n = center.length;
+    final closed = geometry.closed;
+    final normals = _normals(center, closed: closed);
+    final needLeft = List<double>.filled(n, 0);
+    final needRight = List<double>.filled(n, 0);
+    for (final line in lines.where((l) => l.hasPositions)) {
+      final matcher = _SequentialMatcher(center, closed: closed);
+      for (var i = 0; i < line.length; i++) {
+        final p = Offset(line.worldPosX[i], line.worldPosZ[i]);
+        final j = matcher.match(p);
+        final lateral = (p.dx - center[j].dx) * normals[j].dx + (p.dy - center[j].dy) * normals[j].dy;
+        final onKerb = line.hasKerbContact && line.kerbContact[i];
+        final need = lateral.abs() + (onKerb ? -_kerbCarAllowanceM : _carHalfWidthM);
+        if (lateral >= 0) {
+          needLeft[j] = math.max(needLeft[j], need);
+        } else {
+          needRight[j] = math.max(needRight[j], need);
+        }
+      }
+    }
+    return _widened(geometry, needLeft, needRight);
+  }
+
+  /// 점마다 그 쪽에 있어야 할 폭([needLeft]·[needRight], m)만큼 폭을 넓힌다. 앞뒤로 퍼뜨린 뒤 평균해 폭이 부드럽게 늘고 준다
+  /// (퍼뜨린 범위 안에서 평균하므로 넓힌 폭은 점마다 필요한 폭 이상이다).
+  static _Geometry _widened(_Geometry geometry, List<double> needLeft, List<double> needRight) {
+    final center = geometry.center;
+    final n = center.length;
+    final closed = geometry.closed;
+    int at(int i) => closed ? (i % n + n) % n : i.clamp(0, n - 1);
     final spread = math.max(1, (_shiftSpreadM / _spacing(center, closed: closed)).round());
     List<double> widen(List<double> base, List<double> need) {
       final dilated = [
@@ -536,6 +593,57 @@ class ReplayCircuit {
       right: widen(geometry.right, needRight),
       closed: closed,
     );
+  }
+
+  /// 점마다 중심선에서 차 몸체가 닿은 가장 먼 자리(m, 왼쪽·오른쪽): 표본 형상의 모든 차([sampled]의 도달 폭 — 그때 중심선은
+  /// 표본 칸 그대로다)와 주행선(내 랩·비교 랩) 차 몸체(진행 방향에 따라 옆으로 반폭~반길이).
+  static ({List<double> left, List<double> right}) _reach(
+    TrackWidthProfile? sampled,
+    List<LapTrace> lines,
+    List<Offset> center,
+    List<Offset> normals, {
+    required bool closed,
+  }) {
+    final n = center.length;
+    final sampledLeft = sampled?.reachLeftM;
+    final sampledRight = sampled?.reachRightM;
+    final left = [for (var i = 0; i < n; i++) sampledLeft == null ? 0.0 : sampledLeft[i]];
+    final right = [for (var i = 0; i < n; i++) sampledRight == null ? 0.0 : sampledRight[i]];
+    final halfDiagonal = math.sqrt(_carHalfWidthM * _carHalfWidthM + _carHalfLengthM * _carHalfLengthM);
+    for (final line in lines.where((l) => l.hasPositions)) {
+      final matcher = _SequentialMatcher(center, closed: closed);
+      final m = line.length;
+      Offset position(int i) => Offset(line.worldPosX[i.clamp(0, m - 1)], line.worldPosZ[i.clamp(0, m - 1)]);
+      for (var i = 0; i < m; i++) {
+        final p = position(i);
+        final j = matcher.match(p);
+        final normal = normals[j];
+        final lateral = (p.dx - center[j].dx) * normal.dx + (p.dy - center[j].dy) * normal.dy;
+        // 진행 방향이 트랙과 이루는 각만큼 옆으로 더 닿는다(움직이지 않았으면 어느 쪽이든 대각선 반길이).
+        final heading = position(i + 1) - position(i - 1);
+        final along = (heading.dx * normal.dy - heading.dy * normal.dx).abs();
+        final across = (heading.dx * normal.dx + heading.dy * normal.dy).abs();
+        final body = heading.distance == 0
+            ? halfDiagonal
+            : (_carHalfWidthM * along + _carHalfLengthM * across) / heading.distance;
+        left[j] = math.max(left[j], lateral + body);
+        right[j] = math.max(right[j], -lateral + body);
+      }
+    }
+    return (left: left, right: right);
+  }
+
+  /// 점마다 왼쪽 단위 법선(진행 방향에서 +90°). 앞뒤 점이 겹치면 0.
+  static List<Offset> _normals(List<Offset> center, {required bool closed}) {
+    final n = center.length;
+    int at(int i) => closed ? (i % n + n) % n : i.clamp(0, n - 1);
+    return [
+      for (var i = 0; i < n; i++)
+        () {
+          final d = center[at(i + 1)] - center[at(i - 1)];
+          return d.distance == 0 ? Offset.zero : Offset(-d.dy, d.dx) / d.distance;
+        }(),
+    ];
   }
 
   /// 실측 서킷이 없을 때: 주행선(과 비교 랩 주행선의 평균)을 평활해 중심선을 만들고 곡률로 폭을 정한다.

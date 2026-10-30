@@ -28,6 +28,7 @@ public static class DependencyInjection
         services.AddScoped<LapDetailExtractor>();
         services.AddScoped<ISessionClassificationIngestor, SessionClassificationIngestor>();
         services.AddScoped<ITrackSamplesIngestor, TrackSamplesIngestor>();
+        services.AddSingleton<TrackGeometryCache>();
         services.AddScoped<ITrackGeometryService, TrackGeometryService>();
         services.AddScoped<IFieldLapService, FieldLapService>();
         services.AddScoped<IHighlightsService, HighlightsService>();
