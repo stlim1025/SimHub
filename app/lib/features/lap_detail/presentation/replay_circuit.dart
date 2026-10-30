@@ -65,6 +65,10 @@ const double _measuredBlendM = 30;
 const double _kerbSpreadM = 6;
 const double _kerbGapFillM = 12;
 
+/// 급한 코너의 안쪽 연석 기록이 코너 길이의 이 비율보다 적으면 곡률로 코너 내내 안쪽 연석을 그린다
+/// (게임이 연석을 연석 노면으로 알려 주지 않아 한두 칸만 잡힌 곳 — 모나코 라스카스 등).
+const double _insideKerbMinCoverage = 0.25;
+
 /// 중심선을 다듬는 이동 평균 반폭(표본 수)·곡률을 고르는 이동 평균 반폭(표본 수).
 const int _centerTidySamples = 2;
 const int _curvatureSmoothSamples = 3;
@@ -245,13 +249,18 @@ class ReplayCircuit {
 
     final reach = _reach(sampled, lines, center, normals, closed: closed);
     final traceKerbs = _kerbSides(lines, center, normals, curvatures, spacing: spacing, closed: closed);
-    final sampleKerbs = samples == null ? null : _sampleKerbs(samples, center);
-    final kerbs = sampleKerbs == null
-        ? traceKerbs
-        : (
-            left: [for (var i = 0; i < n; i++) traceKerbs.left[i] || sampleKerbs.left[i]],
-            right: [for (var i = 0; i < n; i++) traceKerbs.right[i] || sampleKerbs.right[i]],
-          );
+    final sampleKerbs = samples == null ? null : _sampleKerbs(samples, center, spacing: spacing, closed: closed);
+    // 안쪽 연석 기록이 하나도 없는 급한 코너는 곡률로 안쪽 연석을 그린다 — 게임이 연석을 연석 노면으로 알려 주지 않는 곳(모나코 라스카스 등).
+    final kerbs = _withInsideKerbs(
+      sampleKerbs == null
+          ? traceKerbs
+          : (
+              left: [for (var i = 0; i < n; i++) traceKerbs.left[i] || sampleKerbs.left[i]],
+              right: [for (var i = 0; i < n; i++) traceKerbs.right[i] || sampleKerbs.right[i]],
+            ),
+      curvatures,
+      closed: closed,
+    );
     final gravelAt = street
         ? List.filled(n, false)
         : _dropShortRuns([for (final k in curvatures) k.abs() >= kCircuitGravelCurvature], closed: closed);
@@ -417,13 +426,71 @@ class ReplayCircuit {
   static double _lerp(double a, double b, double t) => a + (b - a) * t;
 
   /// 중심선 점마다 가장 가까운 표본 형상 칸의 연석(그 칸에서 차들이 그 쪽 연석을 밟은 적이 있으면).
-  static ({List<bool> left, List<bool> right}) _sampleKerbs(TrackSampleGeometry samples, List<Offset> center) {
+  /// [_kerbGapFillM]보다 짧게 끊긴 틈은 이어 그린다(한 연석이 조각나 보이지 않게).
+  static ({List<bool> left, List<bool> right}) _sampleKerbs(
+    TrackSampleGeometry samples,
+    List<Offset> center, {
+    required double spacing,
+    required bool closed,
+  }) {
     final matcher = _SequentialMatcher(samples.line, closed: true);
     final nearest = [for (final p in center) matcher.match(p)];
+    final gap = math.max(1, (_kerbGapFillM / spacing).round());
     return (
-      left: [for (final j in nearest) samples.kerbLeft[j]],
-      right: [for (final j in nearest) samples.kerbRight[j]],
+      left: _fillShortGaps([for (final j in nearest) samples.kerbLeft[j]], gap, closed: closed),
+      right: _fillShortGaps([for (final j in nearest) samples.kerbRight[j]], gap, closed: closed),
     );
+  }
+
+  /// 한쪽으로 [kCircuitKerbCurvature]보다 급하게 굽는 코너([_minFeatureRunSamples]칸 이상)에 안쪽 연석 기록이
+  /// 코너 길이의 [_insideKerbMinCoverage]에 못 미치면 코너 내내 안쪽(굽는 쪽) 연석을 그린다. 기록이 충분한 코너는 그대로 둔다.
+  static ({List<bool> left, List<bool> right}) _withInsideKerbs(
+    ({List<bool> left, List<bool> right}) kerbs,
+    List<double> curvatures, {
+    required bool closed,
+  }) {
+    final left = List<bool>.of(kerbs.left);
+    final right = List<bool>.of(kerbs.right);
+    for (final (bends, recorded, result) in [
+      (_dropShortRuns([for (final k in curvatures) k >= kCircuitKerbCurvature], closed: closed), kerbs.left, left),
+      (_dropShortRuns([for (final k in curvatures) k <= -kCircuitKerbCurvature], closed: closed), kerbs.right, right),
+    ]) {
+      for (final run in _runs(bends, closed: closed)) {
+        if (run.where((i) => recorded[i]).length < run.length * _insideKerbMinCoverage) {
+          for (final i in run) {
+            result[i] = true;
+          }
+        }
+      }
+    }
+    return (left: left, right: right);
+  }
+
+  /// true가 이어진 구간들(점 번호 순). 닫힌 서킷이면 끝과 처음에 걸친 구간을 한 구간으로 본다.
+  static List<List<int>> _runs(List<bool> flags, {required bool closed}) {
+    final n = flags.length;
+    if (!flags.contains(true)) {
+      return const [];
+    }
+    if (!flags.contains(false)) {
+      return [List<int>.generate(n, (i) => i)];
+    }
+    final start = closed ? flags.indexOf(false) : 0;
+    final runs = <List<int>>[];
+    var current = <int>[];
+    for (var j = 0; j < n; j++) {
+      final i = (start + j) % n;
+      if (flags[i]) {
+        current.add(i);
+      } else if (current.isNotEmpty) {
+        runs.add(current);
+        current = <int>[];
+      }
+    }
+    if (current.isNotEmpty) {
+      runs.add(current);
+    }
+    return runs;
   }
 
   /// 중심선 점마다 노면 높이를 앞뒤 몇 칸 평균한 값: 표본 형상에 높이가 있으면 가장 가까운 형상 칸, 없으면 가장 가까운 내 랩 표본.

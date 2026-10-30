@@ -50,8 +50,21 @@ public static class TrackGeometryBuilder
     /// <summary>띠 끝: 왼쪽은 오프셋 상위 2%, 오른쪽은 하위 2%(튀는 표본 무시).</summary>
     private const double BandPercentile = 0.98;
 
-    /// <summary>연석 쪽을 정할 때 이보다 레이싱 라인에 가까운 표본은 어느 쪽인지 모호해 뺀다(m).</summary>
+    /// <summary>
+    /// 연석 쪽을 정할 때 이보다 레이싱 라인에 가까운 표본은 어느 쪽인지 모호하다(m). 그 칸이 이보다 급하게(1/m) 굽으면
+    /// 굽은 안쪽 연석(에이펙스 — 레이싱 라인이 연석을 밟고 지난다)으로 보고, 아니면 뺀다.
+    /// </summary>
     private const double KerbSideMinOffsetM = 0.5;
+    private const double ApexKerbMinCurvature = 0.008;
+
+    /// <summary>곡률을 재는 앞뒤 칸 수(진행 방향 차이 / 거리).</summary>
+    private const int CurvatureBins = 2;
+
+    /// <summary>
+    /// 피트 레인에 있던 순간에서 이 시간(ms) 안의 같은 차 표본은 피트 입구·출구 길(도로 옆에 붙어 있다 — 모나코 1번 코너 안쪽 피트 출구)로
+    /// 보고 선·띠·가장자리·연석에서 뺀다. 방호벽 자리(도달 폭)에는 넣는다.
+    /// </summary>
+    private const int PitMarginMs = 8_000;
 
     /// <summary>레이싱 라인을 고르는 이동 평균 반폭(칸).</summary>
     private const int LineSmoothBins = 2;
@@ -104,8 +117,14 @@ public static class TrackGeometryBuilder
     private const double MaxLateralM = 100;
 
     /// <param name="Fast">[MinSpeedKph] 이상(선·띠·가장자리에 쓴다).</param>
+    /// <param name="NearPit">피트 레인을 드나드는 길 위([PitMarginMs] 안) — 도로 모양에는 쓰지 않는다.</param>
     /// <param name="Heading">진행 방향(단위 벡터, X·Z). 모르면 null.</param>
-    private readonly record struct Point(double X, double Z, double? Y, bool Paved, bool Rumble, bool Fast, (double X, double Z)? Heading);
+    private readonly record struct Point(
+        double X, double Z, double? Y, bool Paved, bool Rumble, bool Fast, bool NearPit, (double X, double Z)? Heading)
+    {
+        /// <summary>도로 모양(선·띠·가장자리·연석)에 쓰는 표본.</summary>
+        public bool Shapes => Fast && !NearPit;
+    }
 
     /// <summary>표본이 모자라면(칸의 절반 미만) null.</summary>
     public static TrackGeometry? Build(IReadOnlyList<DecodedTrackSamples> chunks)
@@ -120,17 +139,20 @@ public static class TrackGeometryBuilder
         var bins = Enumerable.Range(0, n).Select(_ => new List<Point>()).ToArray();
         var pitBins = Enumerable.Range(0, n).Select(_ => new List<Point>()).ToArray();
         var sampleCount = 0;
-        foreach (var chunk in chunks)
+        var timelines = Timelines(chunks);
+        var pitTimes = PitTimes(chunks, timelines);
+        for (var c = 0; c < chunks.Count; c++)
         {
+            var chunk = chunks[c];
             var headings = Headings(chunk);
             for (var i = 0; i < chunk.Count; i++)
             {
                 var bin = (int)Math.Round(chunk.LapDistanceM[i] / ResolutionM) % n;
-                if (((chunk.Status[i] >> PitStatusShift) & PitStatusMask) != 0)
+                if (InPit(chunk, i))
                 {
                     if (chunk.SpeedKph is not { } pitSpeed || pitSpeed[i] >= MinPitSpeedKph)
                     {
-                        pitBins[bin].Add(new Point(chunk.X[i], chunk.Z[i], chunk.Y?[i], true, false, true, null));
+                        pitBins[bin].Add(new Point(chunk.X[i], chunk.Z[i], chunk.Y?[i], true, false, true, false, null));
                     }
 
                     continue;
@@ -138,7 +160,8 @@ public static class TrackGeometryBuilder
 
                 var fast = chunk.SpeedKph is not { } speed || speed[i] >= MinSpeedKph;
                 var (paved, rumble) = Wheels(chunk.Surface[i]);
-                bins[bin].Add(new Point(chunk.X[i], chunk.Z[i], chunk.Y?[i], paved, rumble, fast, headings[i]));
+                var nearPit = pitTimes.TryGetValue((timelines[c], chunk.CarIndex[i]), out var times) && Near(times, chunk.TimeMs[i]);
+                bins[bin].Add(new Point(chunk.X[i], chunk.Z[i], chunk.Y?[i], paved, rumble, fast, nearPit, headings[i]));
                 if (fast)
                 {
                     sampleCount++;
@@ -156,7 +179,13 @@ public static class TrackGeometryBuilder
         var y = new double?[n];
         for (var k = 0; k < n; k++)
         {
-            var moving = bins[k].Where(p => p.Fast).ToList();
+            // 피트를 드나드는 차만 지난 칸이면 그 차들로라도 선을 잡는다.
+            var moving = bins[k].Where(p => p.Shapes).ToList();
+            if (moving.Count == 0)
+            {
+                moving = bins[k].Where(p => p.Fast).ToList();
+            }
+
             if (moving.Count == 0)
             {
                 continue;
@@ -188,6 +217,7 @@ public static class TrackGeometryBuilder
         var kerbWheels = (Left: new List<double>(), Right: new List<double>());
         var reachLeft = new double[n];
         var reachRight = new double[n];
+        var curvatures = Curvatures(lineX, lineZ);
         for (var k = 0; k < n; k++)
         {
             var tx = lineX[(k + 1) % n] - lineX[(k - 1 + n) % n];
@@ -220,7 +250,7 @@ public static class TrackGeometryBuilder
                     reachRight[k] = Math.Max(reachRight[k], -offset + body);
                 }
 
-                if (!p.Fast)
+                if (!p.Shapes)
                 {
                     continue;
                 }
@@ -230,11 +260,16 @@ public static class TrackGeometryBuilder
                     offsets.Add(offset);
                 }
 
-                if (p.Rumble && offset > KerbSideMinOffsetM)
+                var kerbSide = !p.Rumble ? 0
+                    : offset > KerbSideMinOffsetM ? 1
+                    : offset < -KerbSideMinOffsetM ? -1
+                    : Math.Abs(curvatures[k]) >= ApexKerbMinCurvature ? Math.Sign(curvatures[k])
+                    : 0;
+                if (kerbSide > 0)
                 {
                     kerbLeft[k] = true;
                 }
-                else if (p.Rumble && offset < -KerbSideMinOffsetM)
+                else if (kerbSide < 0)
                 {
                     kerbRight[k] = true;
                 }
@@ -268,6 +303,94 @@ public static class TrackGeometryBuilder
         return new TrackGeometry(
             ResolutionM, sampleCount, lineX, lineZ, heightsOut, bandLeft, bandRight, kerbLeft, kerbRight,
             edgeLeft, edgeRight, kerbOuterLeft, kerbOuterRight, reachLeft, reachRight, pit?.X, pit?.Z, pit?.Y);
+    }
+
+    /// <summary>칸마다 선의 곡률(1/m, + = 왼쪽으로 굽는다): 앞뒤 [CurvatureBins]칸 진행 방향 차이 / 거리.</summary>
+    private static double[] Curvatures(double[] lineX, double[] lineZ)
+    {
+        var n = lineX.Length;
+        double Heading(int k) => Math.Atan2(lineZ[(k + 1) % n] - lineZ[(k - 1 + n) % n], lineX[(k + 1) % n] - lineX[(k - 1 + n) % n]);
+        var curvatures = new double[n];
+        for (var k = 0; k < n; k++)
+        {
+            var turn = Heading((k + CurvatureBins) % n) - Heading((k - CurvatureBins + n) % n);
+            turn = Math.IEEERemainder(turn, 2 * Math.PI);
+            curvatures[k] = turn / (2 * CurvatureBins * ResolutionM);
+        }
+
+        return curvatures;
+    }
+
+    private static bool InPit(DecodedTrackSamples chunk, int i) => ((chunk.Status[i] >> PitStatusShift) & PitStatusMask) != 0;
+
+    /// <summary>조각마다 세션 시간 줄기 번호: 앞 조각보다 시간이 뒤로 가면(다른 세션·되돌리기) 새 줄기로 본다.</summary>
+    private static int[] Timelines(IReadOnlyList<DecodedTrackSamples> chunks)
+    {
+        var timelines = new int[chunks.Count];
+        var timeline = 0;
+        int? last = null;
+        for (var c = 0; c < chunks.Count; c++)
+        {
+            var times = chunks[c].TimeMs;
+            if (times.Length > 0)
+            {
+                if (last is { } previous && times[0] < previous)
+                {
+                    timeline++;
+                }
+
+                last = times[^1];
+            }
+
+            timelines[c] = timeline;
+        }
+
+        return timelines;
+    }
+
+    /// <summary>줄기·차마다 피트 레인에 있던 시각(정렬). 조각 경계를 넘어 드나든 차도 같은 줄기면 이어서 본다.</summary>
+    private static Dictionary<(int Timeline, byte Car), List<int>> PitTimes(IReadOnlyList<DecodedTrackSamples> chunks, int[] timelines)
+    {
+        var pitTimes = new Dictionary<(int Timeline, byte Car), List<int>>();
+        for (var c = 0; c < chunks.Count; c++)
+        {
+            var chunk = chunks[c];
+            for (var i = 0; i < chunk.Count; i++)
+            {
+                if (!InPit(chunk, i))
+                {
+                    continue;
+                }
+
+                var key = (timelines[c], chunk.CarIndex[i]);
+                if (!pitTimes.TryGetValue(key, out var times))
+                {
+                    times = [];
+                    pitTimes[key] = times;
+                }
+
+                times.Add(chunk.TimeMs[i]);
+            }
+        }
+
+        foreach (var times in pitTimes.Values)
+        {
+            times.Sort();
+        }
+
+        return pitTimes;
+    }
+
+    /// <summary>정렬된 피트 레인 시각 가운데 <paramref name="time"/> ± <see cref="PitMarginMs"/> 안에 있는 것이 있는지.</summary>
+    private static bool Near(List<int> pitTimes, int time)
+    {
+        var i = pitTimes.BinarySearch(time - PitMarginMs);
+        if (i < 0)
+        {
+            i = ~i;
+        }
+
+        return i < pitTimes.Count && pitTimes[i] <= time + PitMarginMs;
     }
 
     /// <summary>바퀴 자리 가운데 <see cref="EdgePercentile"/> 위치(0 이상). 없으면 0.</summary>

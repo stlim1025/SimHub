@@ -220,6 +220,54 @@ public sealed class TrackGeometryBuilderTests
     }
 
     [Fact]
+    public void Build_CarsOnThePitEntryOrExitRoad_DoNotWidenTheRoad_ButTheWallReachesThem()
+    {
+        // 0번은 레이싱 라인. 1번은 300~340m에서 피트 레인(pitStatus)이고, 그 앞뒤(250~400m, 피트 레인에서 8초 안)는
+        // 안쪽 12m 피트 입구·출구 길을 달린다(모나코 1번 코너 안쪽 피트 출구처럼 도로 옆에 붙은 길).
+        const byte pitting = 1 << 3;
+        var frames = new List<Sample[]>();
+        for (var d = 0.0; d < LapLength; d += 2)
+        {
+            var angle = d / Radius;
+            Sample At(byte car, double radius, byte status = 0) => new(car, d, radius * Math.Cos(angle), radius * Math.Sin(angle), Status: status);
+            frames.Add([
+                At(0, Radius),
+                d is >= 300 and <= 340 ? At(1, Radius + 15, pitting)
+                : d is >= 250 and < 400 ? At(1, Radius - 12)
+                : At(1, Radius),
+            ]);
+        }
+
+        var geometry = TrackGeometryBuilder.Build([TrackSampleDecoder.Decode(Encode(frames), format: 5)])!;
+
+        double OffsetAt(int bin, double radius) => Math.Sqrt(geometry.X[bin] * geometry.X[bin] + geometry.Z[bin] * geometry.Z[bin]) - radius;
+        void Near(double expected, double actual) => Assert.InRange(actual, expected - 0.2, expected + 0.2);
+        foreach (var bin in new[] { 55, 75 }) // 275m(피트 입구 길)·375m(피트 출구 길)
+        {
+            Near(OffsetAt(bin, Radius) + 1, geometry.EdgeLeftM[bin]);       // 도로 가장자리는 0번 차까지만
+            Near(OffsetAt(bin, Radius - 12) + 1, geometry.ReachLeftM[bin]); // 방호벽 자리는 1번 차까지
+        }
+    }
+
+    [Fact]
+    public void Build_RumbleOnTheRacingLineInABend_IsTheInsideKerb()
+    {
+        // 레이싱 라인 차가 100~120m에서 연석을 밟고 지난다(라인에서 0.5m 안이라 좌우로는 모호하다). 원을 반시계로 도니 안쪽 = 왼쪽.
+        var frames = new List<Sample[]>();
+        for (var d = 0.0; d < LapLength; d += 2)
+        {
+            var angle = d / Radius;
+            frames.Add([new Sample(0, d, Radius * Math.Cos(angle), Radius * Math.Sin(angle), d is >= 100 and < 120 ? Rumble : (ushort)0)]);
+        }
+
+        var geometry = TrackGeometryBuilder.Build([TrackSampleDecoder.Decode(Encode(frames), format: 5)])!;
+
+        Assert.True(geometry.KerbLeft[22]);   // 110m
+        Assert.False(geometry.KerbRight[22]);
+        Assert.False(geometry.KerbLeft[60]);  // 밟지 않은 곳
+    }
+
+    [Fact]
     public void Build_TooFewSamples_ReturnsNull()
         => Assert.Null(TrackGeometryBuilder.Build([TrackSampleDecoder.Decode(Encode([[new Sample(0, 500, 1, 1)]]), format: 5)]));
 }

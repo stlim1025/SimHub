@@ -102,7 +102,7 @@ void main() {
     expect(circuit.asphalt.contains(at(107.5)), isFalse);
   });
 
-  test('연석이 있는 칸은 아스팔트가 연석 바깥 끝을 넘지 않는다(그 너머 포장 런오프는 도로가 아니다)', () {
+  test('연석이 있는 칸은 아스팔트가 연석 안쪽 끝까지, 연석은 그 바깥에 그린다(그 너머 포장 런오프는 도로가 아니다)', () {
     final json = _geometryJson(
       pit: false,
       columns: {'edgeLeftM': 2, 'edgeRightM': 20, 'kerbOuterLeftM': 0, 'kerbOuterRightM': 8},
@@ -115,9 +115,28 @@ void main() {
     );
     Offset at(double radius) => Offset(radius * math.cos(1.0), radius * math.sin(1.0));
 
-    // 오른쪽(바깥): 포장 런오프로 20m까지 나간 차가 있어도 아스팔트는 연석 바깥 끝 8m까지.
-    expect(circuit.asphalt.contains(at(107.5)), isTrue);
+    // 오른쪽(바깥): 포장 런오프로 20m까지 나간 차가 있어도 아스팔트는 연석 안쪽 끝(8m − 1.5m)까지, 연석은 그 바깥 1.5m.
+    expect(circuit.asphalt.contains(at(106)), isTrue);
+    expect(circuit.asphalt.contains(at(107)), isFalse);
+    expect(circuit.kerbRed.contains(at(107.2)) || circuit.kerbWhite.contains(at(107.2)), isTrue);
     expect(circuit.asphalt.contains(at(115)), isFalse);
+  });
+
+  test('한두 칸만 튄 가장자리(피트 입구로 갈라지는 차 등)는 앞뒤 가운데값으로 눌러 도로가 부풀지 않는다', () {
+    final json = _geometryJson(
+      pit: false,
+      columns: {'edgeLeftM': 3, 'edgeRightM': 3, 'kerbOuterLeftM': 0, 'kerbOuterRightM': 0},
+    );
+    (json['edgeLeftM'] as List)[60] = 20.0;
+    final circuit = ReplayCircuit.build(
+      LapReplay(_circleLap()),
+      samples: TrackSampleGeometry.fromJsonOrNull(json)!,
+      baseWidthM: 10,
+    );
+    Offset polar(double radius, double angle) => Offset(radius * math.cos(angle), radius * math.sin(angle));
+
+    expect(circuit.asphalt.contains(polar(96, 3.0)), isTrue); // 기본 반폭 5m 안
+    expect(circuit.asphalt.contains(polar(88, 3.0)), isFalse); // 칸 60(300m)에서 20m로 튄 값은 누른다
   });
 
   test('표본 형상은 주행선에 다시 맞추지 않고 그 칸 그대로 쓰고, 주행선은 폭을 넓혀 담는다', () {
@@ -132,6 +151,35 @@ void main() {
       expect(p.distance, closeTo(100, 0.01));
     }
     expect(circuit.asphalt.contains(at(106.8)), isTrue); // 내 랩 차(가운데 106m + 반폭 1m)도 아스팔트 위
+  });
+
+  test('표본 연석은 짧은 틈을 이어 그리고, 안쪽 연석 기록이 없는 급한 코너는 곡률로 안쪽 연석을 그린다', () {
+    final json = _geometryJson(pit: false);
+    final n = (json['x'] as List).length;
+    // 오른쪽(바깥) 연석: 20~29칸과 31~40칸(가운데 한 칸만 비었다). 안쪽(왼쪽) 기록은 없다.
+    json['kerbRight'] = [for (var i = 0; i < n; i++) (i >= 20 && i <= 29) || (i >= 31 && i <= 40)];
+    // 내 랩: 연석 접촉 기록은 있지만 밟은 곳이 없다(기록이 아예 없어 곡률로 양쪽에 그리는 경우와 다르다).
+    final lap = _circleLap();
+    final trace = LapTrace(
+      lapId: lap.lapId,
+      resolutionM: lap.resolutionM,
+      timeMs: lap.timeMs,
+      speedKph: lap.speedKph,
+      throttle: lap.throttle,
+      brake: lap.brake,
+      steer: lap.steer,
+      gear: lap.gear,
+      rpm: lap.rpm,
+      worldPosX: lap.worldPosX,
+      worldPosZ: lap.worldPosZ,
+      kerbContact: [for (var i = 0; i < lap.length; i++) false],
+    );
+    final circuit = ReplayCircuit.build(LapReplay(trace), samples: TrackSampleGeometry.fromJsonOrNull(json)!, baseWidthM: 10);
+
+    expect(circuit.kerbRight[30], isTrue); // 한 칸 틈은 잇는다
+    expect(circuit.kerbRight[80], isFalse);
+    // 원(반지름 100m, 왼쪽으로 굽는다)은 안쪽 연석 기록이 없어 곡률로 안쪽(왼쪽)에 그린다.
+    expect(circuit.kerbLeft.every((kerb) => kerb), isTrue);
   });
 
   test('방호벽은 차 몸체가 닿은 가장 먼 자리보다 바깥에 선다', () {
