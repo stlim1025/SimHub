@@ -107,11 +107,13 @@ final routerProvider = Provider<GoRouter>((ref) {
           // 세션 목록의 필터는 `?type=`(모르는 값은 all, docs/12 §8.1).
           _screen('/sessions', (state) => SessionsPage(filter: state.uri.queryParameters['type'])),
           // 세션 상세의 `?from=season`은 시즌 칩에서 열었다는 표시다(뒤로 가기가 그 시즌으로, docs/12 §8.1).
+          // `?tab=`은 레이스 리뷰가 있는 레이스의 탭(Results · Race Review).
           _screen(
             '/sessions/:sessionId',
             (state) => SessionDetailPage(
               sessionId: state.pathParameters['sessionId']!,
               from: state.uri.queryParameters['from'],
+              tab: state.uri.queryParameters['tab'],
             ),
           ),
           // 세션 셋업(세션 상세 Details 카드의 View Setup, F1Laps 셋업 페이지 모양). 뒤로 가기는 그 세션 상세로.

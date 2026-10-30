@@ -9,6 +9,7 @@ import 'package:simcenter_app/core/theme/app_colors.dart';
 import 'package:simcenter_app/core/theme/app_theme.dart';
 import 'package:simcenter_app/features/laps/domain/lap_models.dart';
 import 'package:simcenter_app/features/sessions/data/sessions_repository.dart';
+import 'package:simcenter_app/features/sessions/domain/race_review.dart';
 import 'package:simcenter_app/features/sessions/domain/session_models.dart';
 import 'package:simcenter_app/features/sessions/presentation/engine_painter.dart';
 import 'package:simcenter_app/features/sessions/presentation/session_detail_page.dart';
@@ -59,8 +60,9 @@ List<SessionResult> _raceResults() => [
     ];
 
 /// 계약(docs/15 §11.4)의 모든 카드 데이터가 있는 레이스.
-SessionDetail _fullDetail({String sessionType = 'Race', String sessionKind = 'Race'}) => detailOf(
+SessionDetail _fullDetail({String sessionType = 'Race', String sessionKind = 'Race', RaceReview? raceReview}) => detailOf(
       'd1',
+      raceReview: raceReview,
       results: _raceResults(),
       trackName: 'Jeddah',
       sessionType: sessionType,
@@ -168,6 +170,7 @@ Future<GoRouter> _pumpPage(
         body: SessionDetailPage(
           sessionId: state.pathParameters['sessionId']!,
           from: state.uri.queryParameters['from'],
+          tab: state.uri.queryParameters['tab'],
         ),
       ),
     ),
@@ -191,7 +194,71 @@ Color? _textColor(WidgetTester t, String text) => t.widget<Text>(find.text(text)
 
 Finder _rowOf(String key) => find.byKey(ValueKey(key));
 
+/// 페이스·전략·타이어 항목이 있는 레이스 리뷰.
+final RaceReview _review = RaceReview.fromJsonOrNull({
+  'pace': {'myMedianMs': 89750, 'rank': 2, 'rankedCars': 3, 'fieldMedianMs': 90000},
+  'strategy': {
+    'gridPosition': 3,
+    'finishPosition': 2,
+    'stops': 1,
+    'pitStops': [
+      {'lap': 5, 'positionBefore': 2, 'positionAfter': 4, 'lossMs': 45000, 'fromCompound': 'Medium', 'toCompound': 'Hard'},
+    ],
+  },
+  'stints': [
+    {'compound': 'Hard', 'startLap': 6, 'endLap': 10, 'medianMs': 89650, 'fieldMedianMs': 91000},
+  ],
+})!;
+
+Finder _tab(String label) => find.widgetWithText(Tab, label);
+
 void main() {
+  group('SessionDetailPage 레이스 리뷰 탭', () {
+    testWidgets('레이스 리뷰가 있으면 Results · Race Review 탭, 처음엔 결과 카드만', (t) async {
+      await _pumpPage(t, _repo(_fullDetail(raceReview: _review)));
+
+      expect(_tab('Results'), findsOneWidget);
+      expect(_tab('Race Review'), findsOneWidget);
+      expect(find.text('Final Classification'), findsOneWidget);
+      expect(find.byKey(const ValueKey('race-review')), findsNothing);
+    });
+
+    testWidgets('Race Review 탭을 누르면 주소에 tab=review가 붙고(from은 그대로) 리뷰만 보인다', (t) async {
+      final router = await _pumpPage(
+        t,
+        _repo(_fullDetail(raceReview: _review)),
+        initialLocation: '/sessions/d1?from=season',
+      );
+
+      await t.tap(_tab('Race Review'));
+      await t.pumpAndSettle();
+
+      expect(_location(router), '/sessions/d1?from=season&tab=review');
+      expect(find.byKey(const ValueKey('race-review')), findsOneWidget);
+      expect(find.text('Final Classification'), findsNothing);
+
+      await t.tap(_tab('Results'));
+      await t.pumpAndSettle();
+
+      expect(_location(router), '/sessions/d1?from=season');
+      expect(find.text('Final Classification'), findsOneWidget);
+    });
+
+    testWidgets('주소가 tab=review면 Race Review 탭으로 연다', (t) async {
+      await _pumpPage(t, _repo(_fullDetail(raceReview: _review)), initialLocation: '/sessions/d1?tab=review');
+
+      expect(find.byKey(const ValueKey('race-review')), findsOneWidget);
+      expect(find.text('Final Classification'), findsNothing);
+    });
+
+    testWidgets('레이스 리뷰가 없으면 탭 없이 결과 카드만(주소에 tab=review가 있어도)', (t) async {
+      await _pumpPage(t, _repo(_fullDetail()), initialLocation: '/sessions/d1?tab=review');
+
+      expect(find.byType(TabBar), findsNothing);
+      expect(find.text('Final Classification'), findsOneWidget);
+    });
+  });
+
   group('SessionDetailPage 헤더·레이아웃', () {
     testWidgets('헤더: 국기 + 트랙 + 세션 종류 이름', (t) async {
       await _pumpPage(t, _repo(_fullDetail(sessionType: 'Qualifying', sessionKind: 'Qualifying3')));

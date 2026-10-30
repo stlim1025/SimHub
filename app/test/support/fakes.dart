@@ -27,6 +27,7 @@ import 'package:simcenter_app/features/seasons/domain/season_import_models.dart'
 import 'package:simcenter_app/features/seasons/domain/season_models.dart';
 import 'package:simcenter_app/features/sessions/data/sessions_repository.dart';
 import 'package:simcenter_app/features/sessions/domain/race_highlights.dart';
+import 'package:simcenter_app/features/sessions/domain/race_review.dart';
 import 'package:simcenter_app/features/sessions/domain/session_display.dart';
 import 'package:simcenter_app/features/sessions/domain/session_models.dart';
 
@@ -654,8 +655,10 @@ SessionDetail detailOf(
   List<SessionTyreStint> tyreStints = const [],
   List<SessionPenalty> penalties = const [],
   bool hasFieldSamples = false,
+  RaceReview? raceReview,
 }) =>
     SessionDetail(
+      raceReview: raceReview,
       qualifyingPositions: qualifyingPositions,
       myBestLap: myBestLap,
       setup: setup,

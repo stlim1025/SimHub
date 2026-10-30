@@ -42,24 +42,77 @@ const double _headerFlagSize = 24;
 const double _headerGap = 8;
 const double _headerFontSize = 22;
 const double _cardGap = 20;
+const double _sectionGap = 16;
+
+/// 탭 값 → 탭 글자(`kSessionTabs`와 같은 순서로 그린다).
+const Map<String, String> _tabLabels = {
+  kSessionTabResults: 'Results',
+  kSessionTabReview: 'Race Review',
+};
 
 /// 세션 상세(docs/15 §11.3, D-53): 헤더(국기 + 트랙 + 세션 종류) + 카드 7장 — Details · Final Classification · Laps ·
 /// Engine Wear · Tyre Stints 2종 · Penalties. 콘텐츠 폭 900px 이상이면 2열(Laps는 열이 많아 한 줄 전체), 미만이면 1열.
+/// 레이스 리뷰가 있는 레이스는 탭 두 개(Results = 카드 7장 · Race Review)로 나누고, 탭은 주소의 `?tab=`과 동기화된다.
 /// 남의 것이거나 없는 세션이면 404 상태를 보여 준다.
 ///
 /// [from]은 주소의 `?from=` 값이다. `season`(시즌 화면의 세션 칩)이고 불러온 세션이 시즌에 속하면
 /// 뒤로 가기가 그 시즌으로 돌아가고, 그 밖(없음·모르는 값·시즌 없는 세션·아직 로딩)은 세션 목록으로 간다.
-class SessionDetailPage extends ConsumerWidget {
-  const SessionDetailPage({super.key, required this.sessionId, this.from});
+class SessionDetailPage extends ConsumerStatefulWidget {
+  const SessionDetailPage({super.key, required this.sessionId, this.from, this.tab});
 
   final String sessionId;
   final String? from;
 
+  /// 주소의 `tab` 쿼리. null이거나 모르는 값이면 결과 탭(레이스 리뷰가 없는 세션은 탭 없이 결과만).
+  final String? tab;
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SessionDetailPage> createState() => _SessionDetailPageState();
+}
+
+class _SessionDetailPageState extends ConsumerState<SessionDetailPage> with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
+
+  String get _tab => normalizeSessionTab(widget.tab);
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: kSessionTabs.length, vsync: this, initialIndex: kSessionTabs.indexOf(_tab));
+  }
+
+  @override
+  void didUpdateWidget(SessionDetailPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 주소가 바뀌면(뒤로 가기·다른 화면에서의 이동 포함) 탭 막대의 선택도 따라간다.
+    final index = kSessionTabs.indexOf(_tab);
+    if (_tabController.index != index) {
+      _tabController.index = index;
+    }
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  /// 탭을 누를 때마다 브라우저 기록에 항목이 쌓이지 않도록 neglect로 감싸 쿼리만 바꾼다(`from`은 그대로 둔다).
+  void _selectTab(int index) {
+    final tab = kSessionTabs[index];
+    if (tab == _tab) {
+      return;
+    }
+    final location = sessionLocation(widget.sessionId, fromSeason: widget.from == kSessionFromSeason, tab: tab);
+    Router.neglect(context, () => context.go(location));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sessionId = widget.sessionId;
     final detail = ref.watch(sessionDetailProvider(sessionId));
     final header = detail.valueOrNull?.header;
-    final backSeasonId = from == kSessionFromSeason ? header?.seasonId : null;
+    final backSeasonId = widget.from == kSessionFromSeason ? header?.seasonId : null;
 
     return ListView(
       padding: pagePadding(context),
@@ -72,7 +125,7 @@ class SessionDetailPage extends ConsumerWidget {
               ? () => context.go(sessionHighlightsLocation(sessionId))
               : null,
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: _sectionGap),
         detail.when(
           loading: () => const PageLoadingBar(),
           error: (e, _) => _isNotFound(e)
@@ -86,7 +139,7 @@ class SessionDetailPage extends ConsumerWidget {
                   fallbackMessage: '세션 결과를 불러오지 못했어요.',
                   onRetry: () => ref.invalidate(sessionDetailProvider(sessionId)),
                 ),
-          data: (data) => _SessionCards(detail: data),
+          data: (data) => _SessionCards(detail: data, tab: _tab, tabController: _tabController, onTab: _selectTab),
         ),
       ],
     );
@@ -145,9 +198,40 @@ class _Header extends StatelessWidget {
   }
 }
 
-/// 카드 7장(레이스 총평이 있으면 맨 위에 하나 더). 2열이면 [Details | Final Classification] · [Laps] · [Engine Wear | Tyre Life] · [Lap Times | Penalties].
+/// 카드 7장. 2열이면 [Details | Final Classification] · [Laps] · [Engine Wear | Tyre Life] · [Lap Times | Penalties].
+/// 레이스 리뷰가 있으면 위에 탭 막대(Results · Race Review)를 두고 [tab]에 고른 쪽만 그린다.
 class _SessionCards extends StatelessWidget {
-  const _SessionCards({required this.detail});
+  const _SessionCards({required this.detail, required this.tab, required this.tabController, required this.onTab});
+
+  final SessionDetail detail;
+  final String tab;
+  final TabController tabController;
+  final ValueChanged<int> onTab;
+
+  @override
+  Widget build(BuildContext context) {
+    final review = detail.raceReview;
+    if (review == null || raceReviewSections(review).isEmpty) {
+      return _ResultCards(detail: detail);
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TabBar(
+          controller: tabController,
+          onTap: onTab,
+          tabs: [for (final tab in kSessionTabs) Tab(text: _tabLabels[tab])],
+        ),
+        const SizedBox(height: _sectionGap),
+        if (tab == kSessionTabReview) RaceReviewCard(review: review) else _ResultCards(detail: detail),
+      ],
+    );
+  }
+}
+
+/// 결과 카드 7장(Results 탭, 레이스 리뷰가 없으면 화면 전체).
+class _ResultCards extends StatelessWidget {
+  const _ResultCards({required this.detail});
 
   final SessionDetail detail;
 
@@ -179,20 +263,17 @@ class _SessionCards extends StatelessWidget {
     final tyreLife = TyreLifeCard(stints: detail.tyreStints);
     final lapTimes = StintLapTimesCard(stints: detail.tyreStints);
     final penalties = PenaltiesCard(penalties: detail.penalties);
-    final review = detail.raceReview;
-    final reviewCard = review == null || raceReviewSections(review).isEmpty ? null : RaceReviewCard(review: review);
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final rows = constraints.maxWidth >= kSessionDetailTwoColumnWidth
             ? <Widget>[
-                ?reviewCard,
                 _Pair(details, classification),
                 laps,
                 _Pair(engine, tyreLife),
                 _Pair(lapTimes, penalties),
               ]
-            : <Widget>[?reviewCard, details, classification, laps, engine, tyreLife, lapTimes, penalties];
+            : <Widget>[details, classification, laps, engine, tyreLife, lapTimes, penalties];
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
