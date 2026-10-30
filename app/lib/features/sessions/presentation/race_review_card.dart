@@ -879,7 +879,7 @@ class _StintList extends StatelessWidget {
               sub: axle == null
                   ? null
                   : '앞 ${axle.front.toStringAsFixed(_wearDigits)} · 뒤 ${axle.rear.toStringAsFixed(_wearDigits)}',
-              color: wear >= kFastWearPct ? palette.danger : null,
+              color: stint.wearsFast ? palette.danger : null,
             ),
           if (median != null)
             (

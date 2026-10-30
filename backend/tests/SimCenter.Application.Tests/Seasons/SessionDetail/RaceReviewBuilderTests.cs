@@ -16,11 +16,27 @@ public class RaceReviewBuilderTests
     private static readonly int[] ThirdLaps = [101_000, 91_000, 91_000, 91_000, 112_000, 113_000, 91_000, 91_000, 91_000, 91_000];
 
     private static readonly SessionResult Me =
-        Result(0, position: 2, grid: 3, isPlayer: true, name: "Player", teamId: 221, (5, TyreCompound.Medium), (0, TyreCompound.Hard));
+        Result(0, position: 2, grid: 3, isPlayer: true, name: "Player", teamId: 221, (4, TyreCompound.Medium), (0, TyreCompound.Hard));
     private static readonly SessionResult Winner =
-        Result(1, position: 1, grid: 1, false, "NORRIS", 228, (6, TyreCompound.Soft), (0, TyreCompound.Medium));
+        Result(1, position: 1, grid: 1, false, "NORRIS", 228, (5, TyreCompound.Soft), (0, TyreCompound.Medium));
     private static readonly SessionResult Third =
-        Result(2, position: 3, grid: 2, false, "LECLERC", 222, (5, TyreCompound.Medium), (0, TyreCompound.Hard));
+        Result(2, position: 3, grid: 2, false, "LECLERC", 222, (4, TyreCompound.Medium), (0, TyreCompound.Hard));
+
+    [Fact]
+    public void Build_StintWear_UsesOneTyreSet_WhenTheInLapAlreadyShowsNewTyres()
+    {
+        // 피트 박스가 기록선 앞인 트랙: 5랩(인 랩) 안에서 타이어를 바꿔 5랩 끝 기록은 이미 새 Hard(마모 0)다.
+        // 바퀴 마모 앞 w·뒤 w+2 → 남은 수명 = 99 − w.
+        var rows = new[] { LapRow(2, 90_000, wear: 2), LapRow(3, 90_000, wear: 4), LapRow(4, 90_200, wear: 6), LapRow(5, 110_000, wear: 0) };
+
+        var review = RaceReviewBuilder.Build(
+            Session(SessionType.Race), [Winner, Me, Third], SessionHistory.Parse(History()), 0, rows.Select(MySessionLap.From).ToList())!;
+
+        var medium = review.Stints[0];
+        Assert.Equal(2.0, medium.WearPerLapPct);   // 수명 97 → 93%(2랩). 5랩의 새 타이어(99%)는 다음 세트라 뺀다.
+        Assert.Equal(93.0, medium.EndLifePct);
+        Assert.Equal([2.0, 2.0, 2.0, 2.0], medium.WheelWearPerLapPct);
+    }
 
     [Fact]
     public void Build_RaceReview_PaceStrategyStintsBattery()
@@ -61,7 +77,8 @@ public class RaceReviewBuilderTests
             strategy.LapPositions);
 
         Assert.Equal(2, review.Stints.Count);
-        Assert.Equal(new RaceStintReviewDto("Medium", 1, 5, null, 90_000, null, null, null, null), review.Stints[0]);
+        // 같은 Medium의 차 2는 1~5랩(피트 전 5랩)을 탔다.
+        Assert.Equal(new RaceStintReviewDto("Medium", 1, 5, null, 90_000, null, null, null, null, FieldStintLaps: 5), review.Stints[0]);
         // Hard: 7~10랩 89.5→89.8초(+100ms/랩), 같은 Hard의 차 2는 91.0초 일정. 마모 97% → 91%(3랩).
         var hard = review.Stints[1];
         Assert.Equal(new RaceStintReviewDto("Hard", 6, 10, 89_650, 91_000, 100, 0, 2.0, 91.0), hard with { WheelWearPerLapPct = null, EndLapsSlowerMs = null });

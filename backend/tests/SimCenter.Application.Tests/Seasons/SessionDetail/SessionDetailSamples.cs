@@ -75,6 +75,7 @@ internal static class SessionDetailSamples
         int lapNumber, int lapTimeMs, bool isValid = true, string? details = null, double? wear = null, int? gearbox = null, int? engine = null)
         => MySessionLap.From(LapRow(lapNumber, lapTimeMs, isValid, details, wear, gearbox: gearbox, engine: engine));
 
+    /// <summary>순위표 한 줄. [stints]의 끝 랩은 게임이 보내는 값(0부터 센 값 — 그 타이어로 달린 마지막 랩 = 끝 랩 + 1)이다.</summary>
     public static SessionResult Result(
         int carIndex, int position, int grid, bool isPlayer = false, string? name = null, int? teamId = 221, params (int EndLap, TyreCompound Compound)[] stints)
         => new()

@@ -3,7 +3,9 @@ using SimCenter.Domain.Entities;
 namespace SimCenter.Application.Seasons.Queries.Detail;
 
 /// <summary>
-/// 내 스틴트 1개의 랩 범위(docs/15 §11.3). 첫 스틴트는 1랩부터, 다음 스틴트는 이전 <c>EndLap + 1</c>부터 자기 <c>EndLap</c>까지.
+/// 스틴트 1개의 랩 범위(docs/15 §11.3, 랩 번호는 1부터). 게임이 보내는 끝 랩은 0부터 센 값이라 그 타이어로 달린 마지막 랩
+/// (= 피트로 들어간 인 랩)은 <c>끝 랩 + 1</c>이다 — 실제 레이스에서 모든 차의 정지가 <c>끝 랩 + 1</c>(피트 박스가 기록선 앞) 또는
+/// <c>끝 랩 + 2</c>(기록선 뒤)에 들어 있었다. 그래서 첫 스틴트는 1랩부터, 다음 스틴트는 이전 <c>끝 랩 + 2</c>부터 자기 <c>끝 랩 + 1</c>까지.
 /// </summary>
 public sealed record StintSpan(int StintNumber, int StartLap, int EndLap, string VisualCompound, bool IsLast)
 {
@@ -15,6 +17,9 @@ public sealed record StintSpan(int StintNumber, int StartLap, int EndLap, string
 
     /// <summary>열린 끝 스틴트의 끝 랩(기록이 있는 마지막 랩까지 이어진다).</summary>
     public const int OpenEnd = int.MaxValue;
+
+    /// <summary>게임 끝 랩(0부터) → 1부터 센 랩 번호.</summary>
+    private const int GameLapOffset = 1;
 
     public bool Contains(int lapNumber) => lapNumber >= StartLap && lapNumber <= EndLap;
 
@@ -34,7 +39,7 @@ public sealed record StintSpan(int StintNumber, int StartLap, int EndLap, string
             var stint = stints[i];
             // 게임은 진행 중(마지막) 스틴트 끝 랩을 0이나 255로 보낼 때가 있다 → 열린 끝으로 본다(docs/15 §11.3).
             var isLastStint = i == stints.Count - 1;
-            var endLap = isLastStint && (stint.EndLap == UnsetEndLap || stint.EndLap >= OpenEndLapMarker) ? OpenEnd : stint.EndLap;
+            var endLap = isLastStint && (stint.EndLap == UnsetEndLap || stint.EndLap >= OpenEndLapMarker) ? OpenEnd : stint.EndLap + GameLapOffset;
             if (endLap <= previousEnd)
             {
                 continue;
@@ -63,7 +68,7 @@ public sealed record StintSpan(int StintNumber, int StartLap, int EndLap, string
         return (spans.FirstOrDefault(s => s.Contains(lapNumber)) ?? spans[^1]).VisualCompound;
     }
 
-    /// <summary>스틴트가 바뀐 랩(마지막이 아닌 스틴트의 끝 랩 = 피트에 들어간 랩)인지.</summary>
+    /// <summary>스틴트가 바뀐 랩(마지막이 아닌 스틴트의 끝 랩 = 피트로 들어간 인 랩)인지.</summary>
     public static bool IsPitLap(IReadOnlyList<StintSpan> spans, int lapNumber)
         => spans.Any(s => !s.IsLast && s.EndLap == lapNumber);
 }

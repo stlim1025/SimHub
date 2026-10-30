@@ -123,7 +123,8 @@ public sealed record RacePitStopReviewDto(
 
 /// <summary>
 /// 내 스틴트 하나: 컴파운드·랩 범위, 깨끗한 랩 중앙값(ms)과 같은 컴파운드 다른 차들 값, 랩타임 추세(ms/랩, +면 느려짐)와 다른 차들 값,
-/// 랩당 타이어 마모(%p)·끝 잔여 수명(%), 바퀴별 랩당 마모(%p, 앞왼·앞오·뒤왼·뒤오), 마지막 깨끗한 랩들이 스틴트 중앙값보다 느린 정도(ms).
+/// 랩당 타이어 마모(%p)·끝 잔여 수명(%), 바퀴별 랩당 마모(%p, 앞왼·앞오·뒤왼·뒤오), 마지막 깨끗한 랩들이 스틴트 중앙값보다 느린 정도(ms),
+/// 같은 컴파운드로 다른 차들이 피트에 들어가기 전까지 탄 랩 수의 중앙값(마지막 스틴트 제외, 마모가 빠른지 견주는 기준).
 /// </summary>
 public sealed record RaceStintReviewDto(
     string Compound,
@@ -136,7 +137,8 @@ public sealed record RaceStintReviewDto(
     double? WearPerLapPct,
     double? EndLifePct,
     IReadOnlyList<double>? WheelWearPerLapPct = null,
-    int? EndLapsSlowerMs = null);
+    int? EndLapsSlowerMs = null,
+    int? FieldStintLaps = null);
 
 /// <summary>배터리: 기록된 랩 수, 랩당 평균 배포·회수(J), 랩 끝 잔량 처음·끝·최저(J)와 그 랩, 거의 바닥·가득 찬 랩 수, 랩별 잔량·배포·회수.</summary>
 public sealed record RaceBatteryReviewDto(

@@ -31,6 +31,9 @@ public static class RaceReviewBuilder
     private const double FullStoreFraction = 0.95;
     private const int WearDecimals = 2;
 
+    /// <summary>랩 사이 남은 수명이 이보다 크게(%p) 올라가면 새 타이어로 본다.</summary>
+    private const double NewSetLifeJumpPct = 2;
+
     /// <summary>섹터 수, 바퀴 수, 스틴트 끝 페이스를 볼 마지막 깨끗한 랩 수.</summary>
     private const int SectorCount = 3;
     private const int WheelCount = 4;
@@ -196,12 +199,18 @@ public static class RaceReviewBuilder
                 .ToList();
             var fieldMedians = fieldStints.Where(l => l.Count >= MinPaceLaps).Select(l => Median(l.Select(x => (double)x.LapTimeMs))).ToList();
             var fieldTrends = fieldStints.Select(Trend).OfType<double>().ToList();
-            var lives = Enumerable.Range(span.StartLap, end - span.StartLap + 1)
+            // 같은 컴파운드로 다른 차들이 피트에 들어가기 전까지 탄 랩 수(마지막 스틴트는 체커까지라 뺀다) — 마모가 빠른지 견주는 기준.
+            var fieldLengths = others
+                .SelectMany(c => c.Spans.Where(s => !s.IsLast && s.VisualCompound == span.VisualCompound))
+                .Select(s => (double)(s.EndLap - s.StartLap + 1))
+                .ToList();
+            var lives = OneSet(Enumerable.Range(span.StartLap, end - span.StartLap + 1)
                 .Select(n => (Lap: n, Life: stored.TryGetValue(n, out var lap) ? lap.TyreLifeRemaining : null))
                 .Where(x => x.Life.HasValue)
-                .ToList();
+                .Select(x => (x.Lap, Life: x.Life!.Value))
+                .ToList());
             double? wearPerLap = lives.Count >= 2
-                ? Math.Round((lives[0].Life!.Value - lives[^1].Life!.Value) / (lives[^1].Lap - lives[0].Lap), WearDecimals)
+                ? Math.Round((lives[0].Life - lives[^1].Life) / (lives[^1].Lap - lives[0].Lap), WearDecimals)
                 : null;
             var cleanTimes = clean.Select(l => (double)l.LapTimeMs).ToList();
             int? endSlower = cleanTimes.Count >= MinTrendLaps
@@ -218,11 +227,38 @@ public static class RaceReviewBuilder
                 fieldTrends.Count == 0 ? null : Round(Median(fieldTrends)),
                 wearPerLap,
                 lives.Count == 0 ? null : lives[^1].Life,
-                WheelWearPerLap(stored, span.StartLap, end),
-                endSlower));
+                lives.Count >= 2 ? WheelWearPerLap(stored, lives[0].Lap, lives[^1].Lap) : null,
+                endSlower,
+                fieldLengths.Count == 0 ? null : Round(Median(fieldLengths))));
         }
 
         return stints;
+    }
+
+    /// <summary>
+    /// 랩별 남은 수명을 한 타이어 세트 것만 남긴다: 수명이 <see cref="NewSetLifeJumpPct"/>보다 크게 올라가면(새 타이어) 거기서 나누고
+    /// 가장 긴 구간(같으면 앞)을 쓴다 — 스틴트 범위 끝에 피트 랩(새 타이어)이 걸려도 마모가 거꾸로 나오지 않게.
+    /// </summary>
+    private static List<(int Lap, double Life)> OneSet(List<(int Lap, double Life)> lives)
+    {
+        var best = new List<(int Lap, double Life)>();
+        var current = new List<(int Lap, double Life)>();
+        foreach (var life in lives)
+        {
+            if (current.Count > 0 && life.Life > current[^1].Life + NewSetLifeJumpPct)
+            {
+                if (current.Count > best.Count)
+                {
+                    best = current;
+                }
+
+                current = [];
+            }
+
+            current.Add(life);
+        }
+
+        return current.Count > best.Count ? current : best;
     }
 
     /// <summary>스틴트 [start]~[end]랩의 바퀴별 랩당 마모(%p, 앞왼·앞오·뒤왼·뒤오) — 네 바퀴 마모가 모두 있는 처음·마지막 랩으로. 두 랩이 안 되면 null.</summary>

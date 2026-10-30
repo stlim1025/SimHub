@@ -31,7 +31,7 @@ void main() {
       'fieldPitLossMs': 42500,
     },
     'stints': [
-      {'compound': 'Hard', 'startLap': 6, 'endLap': 10, 'medianMs': 89650, 'fieldMedianMs': 91000, 'trendMsPerLap': 100, 'fieldTrendMsPerLap': 0, 'wearPerLapPct': 2.0, 'endLifePct': 91.0},
+      {'compound': 'Hard', 'startLap': 6, 'endLap': 10, 'medianMs': 89650, 'fieldMedianMs': 91000, 'trendMsPerLap': 100, 'fieldTrendMsPerLap': 0, 'wearPerLapPct': 2.0, 'endLifePct': 91.0, 'fieldStintLaps': 5},
     ],
     'battery': {
       'laps': 10, 'averageDeployJ': 1100000, 'averageHarvestJ': 700000, 'firstStoreJ': 3900000, 'lastStoreJ': 2400000,
@@ -48,6 +48,7 @@ void main() {
     expect(review.pace!.rank, 2);
     expect(review.strategy.pitStops.single.placesGained, -2);
     expect(review.stints.single.extraTrendMs, 100);
+    expect(review.stints.single.fieldStintLaps, 5);
     expect(review.battery!.lowLaps, 4);
     expect(review.battery!.perLap.map((l) => (l.lap, l.storeJ, l.deployedJ)), [(1, 3900000.0, 900000.0), (8, 200000.0, 1500000.0), (10, 2400000.0, null)]);
     expect(RaceReview.fromJsonOrNull(null), isNull);
@@ -123,6 +124,16 @@ void main() {
     final tyreLines = tyreReview(const [rearWorn, RaceStintReview(compound: 'Hard', startLap: 10, endLap: 30)]).lines;
     expect(tyreLines[0], contains('뒤 타이어(랩당 4.7%)가 앞(3.3%)보다 빨리 닳았어 → 탈출에서 스로틀 천천히 열어서 휠스핀 줄이자'));
     expect(tyreLines[1], contains('수명 22%까지 탔고 마지막 랩들이 스틴트 중앙값보다 0.600초 느렸어'));
+
+    // 마모: 고정 %가 아니라 새 타이어가 수명 30%까지 가는 랩 수를 AI가 같은 컴파운드로 탄 랩 수와 견준다.
+    const quickWear = RaceStintReview(compound: 'Medium', startLap: 1, endLap: 8, wearPerLapPct: 7.0, fieldStintLaps: 11);
+    expect(quickWear.lapsToLowLife, 10);
+    expect(tyreReview(const [quickWear]).lines.single,
+        'Medium 1–8랩: 마모 랩당 7.0%면 새 타이어도 10랩이면 수명 30%인데 AI는 이 타이어로 보통 11랩 탔어');
+    const enoughWear = RaceStintReview(compound: 'Medium', startLap: 1, endLap: 12, wearPerLapPct: 5.2, fieldStintLaps: 11);
+    expect(enoughWear.wearsFast, isFalse); // 13랩 ≥ 11랩 — 짧은 레이스에서 랩당 5%대는 보통이다
+    expect(tyreReview(const [enoughWear]).lines, isEmpty);
+    expect(const RaceStintReview(compound: 'Soft', startLap: 1, endLap: 5, wearPerLapPct: 6.0).wearsFast, isFalse); // AI 랩 수를 모르면 짚지 않는다
 
     // 배터리: 가득 찬 랩을 랩 번호로, 그 랩 배포가 평균보다 적었는지로(회수 기록이 없어도).
     const full = RaceBatteryReview(

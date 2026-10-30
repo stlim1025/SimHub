@@ -13,7 +13,7 @@ public class SessionDetailBuildersTests
     private const string GameCode = "F1_25";
 
     private static readonly SessionResult Me =
-        Result(0, position: 4, grid: 6, isPlayer: true, name: "Player", teamId: 221, (2, TyreCompound.Medium), (4, TyreCompound.Hard));
+        Result(0, position: 4, grid: 6, isPlayer: true, name: "Player", teamId: 221, (1, TyreCompound.Medium), (3, TyreCompound.Hard));
 
     // ---- Laps ----
 
@@ -99,7 +99,7 @@ public class SessionDetailBuildersTests
     [Fact]
     public void StintSpan_SkipsBrokenAndDeletedStints()
     {
-        var result = Result(0, 1, 1, true, null, 1, (5, TyreCompound.Soft), (3, TyreCompound.Medium), (9, TyreCompound.Hard));
+        var result = Result(0, 1, 1, true, null, 1, (4, TyreCompound.Soft), (2, TyreCompound.Medium), (8, TyreCompound.Hard));
         result.TyreStints.Add(new SessionResultTyreStint { StintNumber = 4, EndLap = 12, VisualCompound = TyreCompound.Wet, IsDeleted = true });
 
         var spans = StintSpan.From(result);
@@ -116,7 +116,7 @@ public class SessionDetailBuildersTests
     [InlineData(255)]
     public void StintSpan_LastStintUnsetEnd_IsOpenEnded(int lastEndLap)
     {
-        var result = Result(0, 1, 1, true, null, 1, (2, TyreCompound.Medium), (lastEndLap, TyreCompound.Hard));
+        var result = Result(0, 1, 1, true, null, 1, (1, TyreCompound.Medium), (lastEndLap, TyreCompound.Hard));
 
         var spans = StintSpan.From(result);
 

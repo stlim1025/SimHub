@@ -18,8 +18,7 @@ const int _placesLost = 2;
 /// 스틴트 랩타임 추세가 같은 컴파운드 다른 차들보다 이만큼(ms/랩) 크거나 작으면 타이어를 빨리 잃었다·잘 지켰다.
 const int kTrendMarginMs = 50;
 
-/// 랩당 마모(%p)가 이 이상이면 빠르다, 스틴트 끝 잔여 수명(%)이 이 아래면 너무 오래 탔다, 이 이상이면(마지막 스틴트 제외) 일찍 들어왔다.
-const double _fastWearPct = 3;
+/// 스틴트 끝 잔여 수명(%)이 이 아래면 너무 오래 탔다(마모가 빠른지도 새 타이어가 여기까지 가는 랩 수로 본다), 이 이상이면(마지막 스틴트 제외) 일찍 들어왔다.
 const double _lowLifePct = 30;
 const double _earlyStopLifePct = 60;
 
@@ -232,7 +231,8 @@ class RaceStrategyReview {
   }
 }
 
-/// 내 스틴트 하나: 컴파운드·랩 범위, 깨끗한 랩 중앙값과 랩타임 추세(+면 느려짐)를 같은 컴파운드 다른 차들과, 랩당 마모·끝 잔여 수명.
+/// 내 스틴트 하나: 컴파운드·랩 범위, 깨끗한 랩 중앙값과 랩타임 추세(+면 느려짐)를 같은 컴파운드 다른 차들과, 랩당 마모·끝 잔여 수명,
+/// 같은 컴파운드로 AI가 피트 전까지 탄 랩 수(중앙값).
 class RaceStintReview {
   const RaceStintReview({
     required this.compound,
@@ -246,6 +246,7 @@ class RaceStintReview {
     this.endLifePct,
     this.wheelWearPerLapPct,
     this.endLapsSlowerMs,
+    this.fieldStintLaps,
   });
 
   final String compound;
@@ -262,9 +263,26 @@ class RaceStintReview {
   final List<double>? wheelWearPerLapPct;
   final int? endLapsSlowerMs;
 
+  /// 같은 컴파운드로 AI가 피트 전까지 탄 랩 수(중앙값, 마지막 스틴트 제외). 모르면 null.
+  final int? fieldStintLaps;
+
   /// 내 추세 − 다른 차들 추세(ms/랩, +면 타이어를 더 빨리 잃었다). 모르면 null.
   int? get extraTrendMs =>
       trendMsPerLap == null || fieldTrendMsPerLap == null ? null : trendMsPerLap! - fieldTrendMsPerLap!;
+
+  /// 이 마모라면 새 타이어가 수명 30%까지 가는 랩 수(내림). 마모를 모르거나 0 이하면 null.
+  int? get lapsToLowLife {
+    final wear = wearPerLapPct;
+    return wear == null || wear <= 0 ? null : ((_percent - _lowLifePct) / wear).floor();
+  }
+
+  /// 마모가 빠른지: 새 타이어가 수명 30%까지 가는 랩 수가 AI가 같은 컴파운드로 탄 랩 수보다 짧다.
+  /// 고정 기준(랩당 몇 %)은 레이스 길이마다 맞지 않아 AI 스틴트 길이와 견준다. 둘 중 하나라도 모르면 false.
+  bool get wearsFast {
+    final laps = lapsToLowLife;
+    final field = fieldStintLaps;
+    return laps != null && field != null && laps < field;
+  }
 
   static RaceStintReview? fromJsonOrNull(Map<String, dynamic> json) {
     final start = jsonInt(json['startLap']);
@@ -285,6 +303,7 @@ class RaceStintReview {
       endLifePct: jsonDouble(json['endLifePct']),
       wheelWearPerLapPct: _wheels(json['wheelWearPerLapPct']),
       endLapsSlowerMs: jsonInt(json['endLapsSlowerMs']),
+      fieldStintLaps: jsonInt(json['fieldStintLaps']),
     );
   }
 }
@@ -642,13 +661,14 @@ ReviewSection tyreReview(List<RaceStintReview> stints) {
     final wear = stint.wearPerLapPct;
     final life = stint.endLifePct;
     final extra = stint.extraTrendMs;
-    final fastWear = wear != null && wear >= _fastWearPct;
+    final fastWear = stint.wearsFast;
     final lostGrip = extra != null && extra >= kTrendMarginMs;
     if (lostGrip || fastWear) {
       worse++;
       final facts = [
         if (lostGrip) 'AI보다 랩당 ${_seconds(extra)}씩 더 빨리 떨어졌어',
-        if (fastWear) '마모 랩당 ${wear.toStringAsFixed(1)}%야',
+        if (fastWear && wear != null)
+          '마모 랩당 ${wear.toStringAsFixed(1)}%면 새 타이어도 ${stint.lapsToLowLife}랩이면 수명 30%인데 AI는 이 타이어로 보통 ${stint.fieldStintLaps}랩 탔어',
       ];
       final advice = _axleAdvice(stint);
       lines.add('$label: ${facts.join(', ')}${advice == null ? '' : '. $advice'}');
@@ -746,9 +766,6 @@ const int kErsFlagLaps = _ersFlagLaps;
 /// 스틴트 끝 수명(%): 이 아래는 위험, 이 이상은 넉넉함(그림 색).
 const double kLowTyreLifePct = _lowLifePct;
 const double kHealthyTyreLifePct = _earlyStopLifePct;
-
-/// 랩당 마모(%p)가 이 이상이면 빠르다(그림 색).
-const double kFastWearPct = _fastWearPct;
 
 /// 항목 이름.
 const String kPaceSectionTitle = '페이스';
