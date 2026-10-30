@@ -59,6 +59,29 @@ public sealed class LapDetailApiE2ETests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Trace_IsCompressedAndPrivatelyCached_OnlyWhenFound()
+    {
+        var (client, _) = await SeedThreeLapsAsync();
+        var trackId = await JeddahTrackIdAsync(client);
+        var items = Items(await client.GetFromJsonAsync<JsonElement>($"/api/v1/me/laps?trackId={trackId}"));
+
+        // 트레이스가 있는 랩: 브라우저처럼 압축을 받겠다고 하면 brotli로 오고, 그 브라우저에만 캐시된다(사용자마다 따로).
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"/api/v1/me/laps/{items[0].GetProperty("lapId").GetGuid()}/trace");
+        request.Headers.AcceptEncoding.ParseAdd("br, gzip");
+        using var found = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, found.StatusCode);
+        Assert.Equal(["br"], found.Content.Headers.ContentEncoding);
+        Assert.True(found.Headers.CacheControl!.Private);
+        Assert.Equal(TimeSpan.FromHours(1), found.Headers.CacheControl.MaxAge);
+        Assert.Contains("Authorization", found.Headers.Vary);
+
+        // 트레이스가 없는 랩(404)은 캐시하지 않는다 — 나중에 올라오면 바로 보여야 한다.
+        using var missing = await client.GetAsync($"/api/v1/me/laps/{items[1].GetProperty("lapId").GetGuid()}/trace");
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+        Assert.Null(missing.Headers.CacheControl);
+    }
+
+    [Fact]
     public async Task OtherUsersLap_DetailAndTrace_AreNotFound()
     {
         var (owner, _) = await SeedThreeLapsAsync();

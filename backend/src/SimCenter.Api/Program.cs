@@ -46,6 +46,9 @@ builder.Services.AddSimCenterRateLimiting();
 // ── 프록시 헤더(16 §4.3): 같은 PC의 Tailscale Funnel(루프백)이 보낸 X-Forwarded-For·Proto만 믿는다. ──
 builder.Services.AddSimCenterForwardedHeaders();
 
+// ── 응답 압축: /api GET 응답만 brotli·gzip(Funnel 중계로 나가는 랩 트레이스 등 큰 응답, 비밀이 든 POST 응답은 빼고). ──
+builder.Services.AddSimCenterResponseCompression();
+
 // ── SignalR(실시간 인입, 05-signalr-design). JSON은 camelCase + enum 문자열로 계약 고정. ──
 builder.Services.AddSignalR()
     .AddJsonProtocol(options =>
@@ -104,6 +107,9 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseHttpsRedirection();
 }
+
+// 압축은 응답을 쓰는 미들웨어(팀 로고·내려받기·컨트롤러)보다 앞에.
+app.UseSimCenterResponseCompression();
 
 app.UseCors();
 

@@ -64,6 +64,7 @@ public sealed class MySessionsController(
     /// 폴 포지션 랩과 내 랩 비교에 쓴다. 남의 세션·표본 없음·복원할 랩 없음은 404.
     /// </summary>
     [HttpGet("{sessionId:guid}/cars/{carIndex:int}/best-lap-trace")]
+    [PrivateCache(PrivateCacheAttribute.LapTraceSeconds)]
     [ProducesResponseType(typeof(LapTraceResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<LapTraceResponse>> GetCarBestLapTrace(Guid sessionId, int carIndex, CancellationToken cancellationToken)

@@ -16,6 +16,7 @@ public sealed class LapsController(ILapQueryService lapQueryService) : Controlle
 {
     /// <summary>비교 랩 트레이스(D-45 모양 그대로). 트레이스가 없거나 비교할 수 없는 랩이면 404.</summary>
     [HttpGet("{lapId:guid}/trace")]
+    [PrivateCache(PrivateCacheAttribute.LapTraceSeconds)]
     [ProducesResponseType(typeof(LapTraceResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<LapTraceResponse>> GetComparableLapTrace(Guid lapId, CancellationToken cancellationToken)

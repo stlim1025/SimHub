@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SimCenter.Api.Common;
 using SimCenter.Application.Laps;
 
 namespace SimCenter.Api.Controllers;
@@ -27,6 +28,7 @@ public sealed class PublicLapsController(ILapQueryService lapQueryService) : Con
 
     /// <summary>공유 랩 텔레메트리 트레이스(D-45 모양 그대로). 트레이스가 없거나 없는 랩이면 404.</summary>
     [HttpGet("{lapId:guid}/trace")]
+    [PrivateCache(PrivateCacheAttribute.LapTraceSeconds)]
     [ProducesResponseType(typeof(LapTraceResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<LapTraceResponse>> GetPublicLapTrace(Guid lapId, CancellationToken cancellationToken)

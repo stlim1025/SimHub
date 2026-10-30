@@ -61,6 +61,7 @@ public sealed class MeController(IRankingService rankingService, ILapQueryServic
 
     /// <summary>내 랩 텔레메트리 트레이스(D-45). 트레이스가 없거나 남의 랩이면 404.</summary>
     [HttpGet("laps/{lapId:guid}/trace")]
+    [PrivateCache(PrivateCacheAttribute.LapTraceSeconds)]
     [ProducesResponseType(typeof(LapTraceResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<LapTraceResponse>> GetMyLapTrace(Guid lapId, CancellationToken cancellationToken)
