@@ -65,13 +65,21 @@ public class RaceReviewBuilderTests
         var strategy = review.Strategy;
         Assert.Equal((3, 2, 1), (strategy.GridPosition, strategy.FinishPosition, strategy.Stops));
         var stop = Assert.Single(strategy.PitStops);
-        Assert.Equal(new RacePitStopReviewDto(5, 2, 3, 42_500, "Medium", "Hard"), stop with { InLapLossMs = null, OutLapLossMs = null });
+        Assert.Equal(
+            new RacePitStopReviewDto(5, 2, 3, 42_500, "Medium", "Hard"),
+            stop with { InLapLossMs = null, OutLapLossMs = null, PeerLossMs = null, PeerCount = 0, PeerInLapLossMs = null, PeerOutLapLossMs = null });
+        // 비슷한 때(5랩 ± 3랩) 같은 원스톱으로 들어간 차: 우승(6랩, 42.0초)·3위(5랩, 43.0초).
+        Assert.Equal((42_500, 2), (stop.PeerLossMs, stop.PeerCount));
         Assert.Equal(stop.LossMs, stop.InLapLossMs + stop.OutLapLossMs);   // 인 랩 + 아웃 랩 = 스톱 손실
         Assert.NotNull(strategy.FieldInLapLossMs);
         Assert.NotNull(strategy.FieldOutLapLossMs);
         Assert.Equal((1, 3, 1), (strategy.CommonStops, strategy.CommonStopsCars, strategy.WinnerStops));
         Assert.Equal(new[] { "Soft", "Medium" }, strategy.WinnerCompounds);
         Assert.Equal(42_500, strategy.FieldPitLossMs);  // 42.0초·43.0초
+        var group = Assert.Single(strategy.StopGroups!);
+        Assert.Equal(1, group.Stops);
+        Assert.Equal([1, 2, 3], group.Finishes);
+        Assert.Empty(strategy.Rivals!);   // 모두 원스톱이라 전략이 다른 상대가 없다
         Assert.Equal(
             Enumerable.Range(1, 10).Select(lap => new RaceLapPositionDto(lap, lap is >= 5 and <= 7 ? 3 : 2)),
             strategy.LapPositions);
@@ -90,6 +98,24 @@ public class RaceReviewBuilderTests
         Assert.Equal(
             [new RaceBatteryLapDto(7, 3_900_000, 1_000_000, 800_000), new RaceBatteryLapDto(10, 300_000, 1_200_000, 600_000)],
             battery.PerLap);
+    }
+
+    [Fact]
+    public void Build_Strategy_StopGroupsRivalsAndPeers_ByStopCount()
+    {
+        // 3위 LECLERC는 피트 없이 끝까지(2위 출발 → 3위): 나(3위 출발 → 2위, 원스톱)와 출발·결과 순서가 뒤바뀐 다른 전략 상대다.
+        var noStop = Result(2, position: 3, grid: 2, false, "LECLERC", 222, (0, TyreCompound.Hard));
+
+        var strategy = RaceReviewBuilder.Build(
+            Session(SessionType.Race), [Winner, Me, noStop], SessionHistory.Parse(History()), 0, [])!.Strategy;
+
+        Assert.Equal(
+            [(0, new[] { 3 }), (1, new[] { 1, 2 })],
+            strategy.StopGroups!.Select(g => (g.Stops, g.Finishes.ToArray())));
+        Assert.Equal([new RaceStrategyRivalDto("LECLERC", 0, 2, 3)], strategy.Rivals);
+        // 비슷한 때 같은 원스톱으로 들어간 차는 우승 차(6랩)뿐 — 피트 없는 LECLERC는 견줄 스톱이 없다.
+        var stop = Assert.Single(strategy.PitStops);
+        Assert.Equal((42_000, 1), (stop.PeerLossMs, stop.PeerCount));
     }
 
     [Fact]

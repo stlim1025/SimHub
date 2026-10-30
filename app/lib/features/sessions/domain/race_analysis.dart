@@ -1111,7 +1111,8 @@ double? _entryStore(RaceStintDriving stint, int index, int segmentCount) =>
 
 /// 전략 심층 줄: 출발 때 게임 피트 창과 실제 스톱, 스톱마다 타이어 사정(마모·남은 수명·새 세트 이득·되찾는 랩)과 타이어 때문인지,
 /// 게임 기준 쓸 수 있는 랩보다 짧게 탄 컴파운드, 추정 대안 전략. 분석이 없으면 빈 목록.
-List<String> deepStrategyLines(RaceAnalysis analysis, List<RaceStintReview> reviewStints) {
+/// [review]가 내 스톱 수가 실제로 가장 잘 통했다고 하면, 스톱 수가 다른 추정 대안에 실제 결과를 믿으라는 말을 붙인다.
+List<String> deepStrategyLines(RaceAnalysis analysis, List<RaceStintReview> reviewStints, {RaceStrategyReview? review}) {
   final strategy = analysis.strategy;
   if (strategy == null) {
     return const [];
@@ -1184,6 +1185,9 @@ List<String> deepStrategyLines(RaceAnalysis analysis, List<RaceStintReview> revi
       if (fewer > 0 && loss != null && loss * fewer + best.deltaMs > 0) {
         line += '. 피트에 $fewer번 덜 들어가니 ${_sec1(loss * fewer)}를 아끼고, 새 타이어로 벌던 시간은 ${_sec1(loss * fewer + best.deltaMs)}만 줄어';
       }
+      if (review != null && best.stops != actual.stops && stopChoiceWorkedBest(review)) {
+        line += '. 다만 실제 레이스에서는 피트에 ${actual.stops}번 들어간 차들이 가장 높은 순위였으니, 이번엔 추정보다 실제 결과를 믿어';
+      }
       lines.add(line);
       for (final same in alternatives) {
         if (same.stops == actual.stops && !identical(same, best) && same.deltaMs <= -kStrategyGainMs) {
@@ -1241,7 +1245,8 @@ List<String> deepPaceLines(RaceAnalysis analysis, List<RaceStintReview> reviewSt
   return [kPaceBasisLine, ...lines];
 }
 
-/// 총평 항목에 심층 분석을 얹는다(평가는 그대로): 페이스·전략은 심층 줄을 앞에 더하고, 타이어·배터리는 심층 줄로 바꾼다(심층 줄이 없으면 그대로).
+/// 총평 항목에 심층 분석을 얹는다: 페이스는 심층 줄을 앞에, 전략은 뒤에 더하고(전략 평가에는 가장 빠른 추정 대안을 쓴다),
+/// 타이어·배터리는 심층 줄로 바꾼다(심층 줄이 없으면 그대로).
 List<({String title, ReviewSection section})> raceReviewSectionsWithAnalysis(
   RaceReview review,
   RaceAnalysis analysis,
@@ -1252,7 +1257,7 @@ List<({String title, ReviewSection section})> raceReviewSectionsWithAnalysis(
   List<String> deeper(String title, List<String> lines) {
     final deep = switch (title) {
       kPaceSectionTitle => deepPaceLines(analysis, review.stints),
-      kStrategySectionTitle => deepStrategyLines(analysis, review.stints),
+      kStrategySectionTitle => deepStrategyLines(analysis, review.stints, review: review.strategy),
       kTyreSectionTitle => deepTyreLines(review.stints, analysis, labels, setup),
       kBatterySectionTitle => deepBatteryLines(review.battery, analysis, labels),
       _ => const <String>[],
@@ -1260,10 +1265,24 @@ List<({String title, ReviewSection section})> raceReviewSectionsWithAnalysis(
     if (deep.isEmpty) {
       return lines;
     }
-    return title == kPaceSectionTitle || title == kStrategySectionTitle ? [...deep, ...lines] : deep;
+    // 전략은 실제 결과(스톱 수별 순위·뒤바뀐 상대)를 먼저, 페이스는 기준 설명을 먼저.
+    return switch (title) {
+      kPaceSectionTitle => [...deep, ...lines],
+      kStrategySectionTitle => [...lines, ...deep],
+      _ => deep,
+    };
   }
 
+  // 전략 평가에는 가장 빠른 추정 대안(실제보다 빠른 시간·스톱 수)을 넘긴다.
+  final alternatives = [for (final o in analysis.strategy?.options ?? const <RaceStrategyOption>[]) if (!o.isActual) o]
+    ..sort((a, b) => a.deltaMs.compareTo(b.deltaMs));
+  final best = alternatives.firstOrNull;
   return [
-    for (final s in raceReviewSections(review)) (title: s.title, section: (grade: s.section.grade, lines: deeper(s.title, s.section.lines))),
+    for (final s in raceReviewSections(
+      review,
+      alternativeGainMs: best == null ? null : -best.deltaMs,
+      alternativeStops: best?.stops,
+    ))
+      (title: s.title, section: (grade: s.section.grade, lines: deeper(s.title, s.section.lines))),
   ];
 }

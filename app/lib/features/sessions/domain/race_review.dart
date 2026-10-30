@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'session_detail_models.dart';
 
 // 레이스 총평(`raceReview`): 서버가 낸 수치(깨끗한 랩 중앙값·피트 스톱·스틴트 추세·배터리)를 평가 글로 바꾼다. 모두 순수 함수.
@@ -8,6 +10,13 @@ const int kPaceMarginMs = 300;
 
 /// 피트 스톱 손실이 다른 차들보다 이만큼(ms) 크면 짚는다.
 const int kPitLossMarginMs = 1500;
+
+/// 전략 평가: 추정 대안 전략이 이만큼(ms) 빠르면 아쉬움(단 실제 레이스에서 내 스톱 수가 가장 잘 통했으면 실제 결과를 믿는다),
+/// 나와 스톱 수가 달라 뒤에서 출발해 앞에 들어온 차가 이 수 이상이면 아쉬움. 줄에 늘어놓을 완주 순위·상대 수.
+const int kStrategyPoorMs = 5000;
+const int _rivalsAheadPoor = 2;
+const int _listedFinishes = 5;
+const int _listedRivals = 3;
 
 /// 피트 구간: 인 랩부터 이만큼 뒤 랩까지(서버가 피트 뒤 순위를 보는 랩과 같다).
 const int kPitSettleLaps = 2;
@@ -121,7 +130,8 @@ List<int>? _sectors(Object? json) {
   return values.length == kSectorCount ? values : null;
 }
 
-/// 피트 스톱 하나: 인 랩, 앞 랩 순위 → 아웃 랩 다음 랩 순위, 손실(ms), 바꾸기 전·후 컴파운드, 인 랩·아웃 랩 손실(ms).
+/// 피트 스톱 하나: 인 랩, 앞 랩 순위 → 아웃 랩 다음 랩 순위, 손실(ms), 바꾸기 전·후 컴파운드, 인 랩·아웃 랩 손실(ms),
+/// 비슷한 때 같은 스톱 수로 들어간 다른 차들(없으면 비슷한 때 들어간 차들)의 손실·인 랩·아웃 랩 손실 중앙값과 그 스톱 수.
 class RacePitStopReview {
   const RacePitStopReview({
     required this.lap,
@@ -132,6 +142,10 @@ class RacePitStopReview {
     required this.toCompound,
     this.inLapLossMs,
     this.outLapLossMs,
+    this.peerLossMs,
+    this.peerCount = 0,
+    this.peerInLapLossMs,
+    this.peerOutLapLossMs,
   });
 
   final int lap;
@@ -142,6 +156,10 @@ class RacePitStopReview {
   final String toCompound;
   final int? inLapLossMs;
   final int? outLapLossMs;
+  final int? peerLossMs;
+  final int peerCount;
+  final int? peerInLapLossMs;
+  final int? peerOutLapLossMs;
 
   /// 피트 전후로 얻은 순위(+ = 올라감). 모르면 null.
   int? get placesGained =>
@@ -161,12 +179,22 @@ class RacePitStopReview {
       toCompound: jsonString(json['toCompound']) ?? '',
       inLapLossMs: jsonInt(json['inLapLossMs']),
       outLapLossMs: jsonInt(json['outLapLossMs']),
+      peerLossMs: jsonInt(json['peerLossMs']),
+      peerCount: jsonInt(json['peerCount']) ?? 0,
+      peerInLapLossMs: jsonInt(json['peerInLapLossMs']),
+      peerOutLapLossMs: jsonInt(json['peerOutLapLossMs']),
     );
   }
 }
 
 /// 내 랩 끝 순위 하나.
 typedef RaceLapPosition = ({int lap, int position});
+
+/// 스톱 수 하나로 완주한 차들의 결과 순위(오름차순, 나 포함).
+typedef RaceStopGroup = ({int stops, List<int> finishes});
+
+/// 나와 스톱 수가 다르면서 출발·결과 순서가 나와 뒤바뀐 차.
+typedef RaceStrategyRival = ({String name, int stops, int grid, int finish});
 
 /// 전략: 그리드·결과, 스톱, 완주 차들이 가장 많이 한 스톱 수, 우승 차 전략, 다른 차들 스톱 손실 중앙값.
 class RaceStrategyReview {
@@ -183,6 +211,8 @@ class RaceStrategyReview {
     this.lapPositions = const [],
     this.fieldInLapLossMs,
     this.fieldOutLapLossMs,
+    this.stopGroups = const [],
+    this.rivals = const [],
   });
 
   final int? gridPosition;
@@ -201,6 +231,12 @@ class RaceStrategyReview {
   /// 다른 차들 인 랩·아웃 랩 손실 중앙값(ms).
   final int? fieldInLapLossMs;
   final int? fieldOutLapLossMs;
+
+  /// 스톱 수별 완주 순위(스톱 수 순서).
+  final List<RaceStopGroup> stopGroups;
+
+  /// 나와 스톱 수가 달라 출발·결과 순서가 뒤바뀐 차(결과 순서).
+  final List<RaceStrategyRival> rivals;
 
   static RaceStrategyReview fromJson(Object? json) {
     if (json is! Map<String, dynamic>) {
@@ -227,6 +263,20 @@ class RaceStrategyReview {
       }),
       fieldInLapLossMs: jsonInt(json['fieldInLapLossMs']),
       fieldOutLapLossMs: jsonInt(json['fieldOutLapLossMs']),
+      stopGroups: jsonObjects(json['stopGroups'], (j) {
+        final stops = jsonInt(j['stops']);
+        final finishes = j['finishes'];
+        return stops == null || finishes is! List ? null : (stops: stops, finishes: [for (final f in finishes) ?jsonInt(f)]);
+      }),
+      rivals: jsonObjects(json['rivals'], (j) {
+        final name = jsonString(j['name']);
+        final stops = jsonInt(j['stops']);
+        final grid = jsonInt(j['gridPosition']);
+        final finish = jsonInt(j['finishPosition']);
+        return name == null || stops == null || grid == null || finish == null
+            ? null
+            : (name: name, stops: stops, grid: grid, finish: finish);
+      }),
     );
   }
 }
@@ -595,72 +645,135 @@ String _lostPlacesLine(int paceRank, int finish, ({int start, int pits, int trac
     line += '. 달리면서 ${changes.track}계단 되찾았지만 다 메우지는 못했어';
   }
   final common = strategy.commonStops;
-  if (changes.pits < 0 && common != null && strategy.stops > common) {
+  if (changes.pits < 0 && common != null && strategy.stops > common && !stopChoiceWorkedBest(strategy)) {
     line += ' → 다른 차들은 대부분 피트에 $common번 들어갔는데 우리는 ${strategy.stops}번 들어갔어. 피트에 덜 들어가면 그만큼 덜 잃어';
   }
   return line;
 }
 
-/// 피트 스톱 하나의 평가: 다른 차들보다 피트에서 시간을 많이 잃으면 아쉬움, 피트 뒤 순위를 얻으면 좋음.
+/// 피트 스톱 하나의 평가: 비슷한 때 들어간 차들(없으면 다른 차들 전체)보다 피트에서 시간을 많이 잃으면 아쉬움, 피트 뒤 순위를 얻으면 좋음.
 /// 피트 직후 순위가 떨어지는 것은 피트 손실만큼 당연하므로 평가하지 않는다.
 ReviewGrade pitStopGrade(RacePitStopReview stop, int? fieldLossMs) {
   final loss = stop.lossMs;
+  final reference = stop.peerLossMs ?? fieldLossMs;
   final places = stop.placesGained;
-  if (loss != null && fieldLossMs != null && loss - fieldLossMs >= kPitLossMarginMs) {
+  if (loss != null && reference != null && loss - reference >= kPitLossMarginMs) {
     return ReviewGrade.poor;
   }
   return places != null && places > 0 ? ReviewGrade.good : ReviewGrade.fair;
 }
 
-/// 시간을 더 잃은 스톱: 인 랩·아웃 랩을 AI와 나눠 비교해, 더 잃은 쪽을 짚는다.
+/// 시간을 더 잃은 스톱: 비슷한 때 들어간 차들(없으면 AI들 전체)과 견주고, 인 랩·아웃 랩을 나눠 더 잃은 쪽을 짚는다.
 String _slowStopLine(RacePitStopReview stop, RaceStrategyReview strategy) {
-  final extra = stop.lossMs! - strategy.fieldPitLossMs!;
-  final head = '${stop.lap}랩 피트 스톱에서 AI들보다 ${_seconds(extra)} 더 잃었어';
+  final peer = stop.peerLossMs != null;
+  final extra = stop.lossMs! - (stop.peerLossMs ?? strategy.fieldPitLossMs!);
+  final who = peer ? '비슷한 때 피트에 들어간 차들' : 'AI들';
+  final head = '${stop.lap}랩 피트 스톱에서 $who보다 ${_seconds(extra)} 더 잃었어';
   final inLoss = stop.inLapLossMs;
   final outLoss = stop.outLapLossMs;
-  final fieldIn = strategy.fieldInLapLossMs;
-  final fieldOut = strategy.fieldOutLapLossMs;
+  final fieldIn = peer ? stop.peerInLapLossMs : strategy.fieldInLapLossMs;
+  final fieldOut = peer ? stop.peerOutLapLossMs : strategy.fieldOutLapLossMs;
   if (inLoss == null || outLoss == null || fieldIn == null || fieldOut == null) {
     return head;
   }
   final extraIn = inLoss - fieldIn;
   final extraOut = outLoss - fieldOut;
-  String versusAi(int ms) => '${_seconds(ms)} ${ms >= 0 ? '더' : '덜'} 걸렸';
-  final split = 'AI들과 비교하면 피트로 들어가는 랩에서 ${versusAi(extraIn)}고, 피트에서 나오는 랩에서 ${versusAi(extraOut)}어';
+  String versus(int ms) => '${_seconds(ms)} ${ms >= 0 ? '더' : '덜'} 걸렸';
+  final split = '그 차들과 비교하면 피트로 들어가는 랩에서 ${versus(extraIn)}고, 피트에서 나오는 랩에서 ${versus(extraOut)}어';
   return extraIn >= extraOut
       ? '$head. $split → 들어가는 랩에서 더 잃었어. 피트 입구 직전에 속도를 줄이는 곳과 피트 레인에 들어가는 부분을 다시 봐'
       : '$head. $split → 나오는 랩에서 더 잃었어. 피트에서 나와 차가운 새 타이어로 도는 첫 랩을 다시 봐';
 }
 
-/// 전략 평가: 그리드 → 결과·스톱 흐름·우승 차 전략은 그림이 보여 주고, 줄은 시간을 더 잃은 스톱(인·아웃 랩 비교)·순위를 얻은 스톱·스톱 수 비교.
-ReviewSection strategyReview(RaceStrategyReview strategy) {
+/// 내 스톱 수로 완주한 차들이 다른 스톱 수보다 높은 순위를 냈는지(견줄 다른 스톱 수가 없으면 false).
+bool stopChoiceWorkedBest(RaceStrategyReview strategy) {
+  final mine = strategy.stopGroups.where((g) => g.stops == strategy.stops && g.finishes.isNotEmpty).firstOrNull;
+  final others = [for (final g in strategy.stopGroups) if (g.stops != strategy.stops && g.finishes.isNotEmpty) g.finishes.first];
+  return mine != null && others.isNotEmpty && mine.finishes.first < others.reduce(math.min);
+}
+
+/// `피트에 2번 들어간`(0번이면 `피트에 들어가지 않은`).
+String _stoppedText(int stops) => stops == 0 ? '피트에 들어가지 않은' : '피트에 $stops번 들어간';
+
+/// `피트 2번`(0번이면 `피트에 안 들어가는 전략`).
+String _stopsPlan(int stops) => stops == 0 ? '피트에 안 들어가는 전략' : '피트 $stops번';
+
+/// 완주 순위 목록 `1, 3, 5위`(많으면 앞 몇 개와 `등`).
+String _finishList(List<int> finishes) {
+  final shown = finishes.take(_listedFinishes).join(', ');
+  return finishes.length > _listedFinishes ? '$shown위 등' : '$shown위';
+}
+
+/// 상대 목록 `NORRIS(1위 출발 → 2위, 피트 2번)`(많으면 앞 몇 대와 `등 n대`).
+String _rivalList(List<RaceStrategyRival> rivals) {
+  final shown = rivals
+      .take(_listedRivals)
+      .map((r) => '${r.name}(${r.grid}위 출발 → ${r.finish}위, ${_stopsPlan(r.stops)})')
+      .join(', ');
+  return rivals.length > _listedRivals ? '$shown 등 ${rivals.length}대' : shown;
+}
+
+/// 전략 평가: 결과와 전략 선택으로 매긴다 — 피트 스톱 하나의 실행은 짚을 것으로만 남기고 평가를 혼자 정하지 않는다.
+/// - 아쉬움: 나와 스톱 수가 다른 차가 뒤에서 출발해 앞에 [_rivalsAheadPoor]대 이상 들어왔거나(순위를 잃었으면 1대라도),
+///   다른 스톱 수가 더 높은 순위를 내고 나는 순위를 잃었거나, 추정 대안이 [kStrategyPoorMs] 이상 빠르고 실제로도 내 스톱 수가 가장 잘 통하지 않았을 때.
+/// - 좋음: 그 밖에 순위를 얻었거나 우승했거나, 내 스톱 수가 가장 높은 순위를 냈거나, 다른 전략으로 앞에서 출발한 차를 앞질렀을 때.
+///
+/// 줄: 스톱 수별 완주 순위와 어느 쪽이 통했는지, 순서가 뒤바뀐 상대, 비슷한 때 들어간 차들보다 시간을 더 잃은 스톱, 순위를 얻은 스톱.
+/// [alternativeGainMs]·[alternativeStops]는 심층 분석의 가장 빠른 대안 전략(실제보다 빠른 시간, 스톱 수).
+ReviewSection strategyReview(RaceStrategyReview strategy, {int? alternativeGainMs, int? alternativeStops}) {
   final lines = <String>[];
   final grid = strategy.gridPosition;
   final finish = strategy.finishPosition;
-  final gainedOverall = grid != null && finish != null ? grid - finish : 0;
-  var poor = 0;
-  var good = 0;
+  final gained = grid != null && finish != null ? grid - finish : 0;
+
+  final mine = strategy.stopGroups.where((g) => g.stops == strategy.stops && g.finishes.isNotEmpty).firstOrNull;
+  final others = [for (final g in strategy.stopGroups) if (g.stops != strategy.stops && g.finishes.isNotEmpty) g];
+  final bestOther = others.isEmpty ? null : others.reduce((a, b) => a.finishes.first <= b.finishes.first ? a : b);
+  final choiceBest = stopChoiceWorkedBest(strategy);
+  final choiceWorse = mine != null && bestOther != null && bestOther.finishes.first < mine.finishes.first;
+  if (mine != null && bestOther != null) {
+    final rest = others
+        .map((g) => '${_stoppedText(g.stops)} ${g.finishes.length}대 중 가장 높은 순위는 ${g.finishes.first}위')
+        .join(', ');
+    final head = mine.finishes.length == 1
+        ? '${_stoppedText(mine.stops)} 건 우리뿐이었고(${mine.finishes.single}위), $rest였어'
+        : '${_stoppedText(mine.stops)} ${mine.finishes.length}대(우리 포함)는 ${_finishList(mine.finishes)}였고, $rest였어';
+    lines.add(choiceBest
+        ? '$head. 이번 레이스는 ${_stopsPlan(mine.stops)}이 가장 잘 통했고, 우리도 그렇게 갔어'
+        : choiceWorse
+            ? '$head → 이번 레이스는 ${_stopsPlan(bestOther.stops)}이 더 잘 통했어. 비슷한 레이스면 ${_stopsPlan(bestOther.stops)}도 생각해 봐'
+            : head);
+  }
+
+  final ahead = [for (final r in strategy.rivals) if (finish != null && r.finish < finish) r];
+  final behind = [for (final r in strategy.rivals) if (finish != null && r.finish > finish) r];
+  if (ahead.isNotEmpty) {
+    lines.add('다른 전략으로 너보다 뒤에서 출발해 앞에 들어온 차: ${_rivalList(ahead)} '
+        '→ 그 차들이 언제 어떤 타이어로 바꿨는지 보고 다음 전략에 참고해');
+  }
+  if (behind.isNotEmpty) {
+    lines.add('다른 전략으로 너보다 앞에서 출발했는데 뒤로 들어온 차: ${_rivalList(behind)}');
+  }
+
   for (final stop in strategy.pitStops) {
     switch (pitStopGrade(stop, strategy.fieldPitLossMs)) {
       case ReviewGrade.poor:
-        poor++;
         lines.add(_slowStopLine(stop, strategy));
       case ReviewGrade.good:
-        good++;
         lines.add('${stop.lap}랩 피트 스톱으로 순위가 ${stop.placesGained}계단 올라갔어');
       case ReviewGrade.fair:
         break;
     }
   }
-  final common = strategy.commonStops;
-  if (common != null && strategy.commonStopsCars > 0) {
-    lines.add(common == strategy.stops
-        ? '완주한 차 대부분(${strategy.commonStopsCars}대)이 피트에 $common번 들어갔고, 우리도 $common번 들어갔어'
-        : '완주한 차 대부분(${strategy.commonStopsCars}대)이 피트에 $common번 들어갔고, 우리는 ${strategy.stops}번 들어갔어');
-  }
-  final grade = poor > 0
+
+  final alternativeBetter = alternativeGainMs != null &&
+      alternativeGainMs >= kStrategyPoorMs &&
+      !choiceBest &&
+      alternativeStops != strategy.stops;
+  final poor = ahead.length >= _rivalsAheadPoor || (ahead.isNotEmpty && gained < 0) || (choiceWorse && gained < 0) || alternativeBetter;
+  final grade = poor
       ? ReviewGrade.poor
-      : good > 0 || gainedOverall > 0
+      : gained > 0 || finish == 1 || choiceBest || behind.isNotEmpty
           ? ReviewGrade.good
           : ReviewGrade.fair;
   return (grade: grade, lines: lines);
@@ -827,14 +940,18 @@ const String kTyreSectionTitle = '타이어 관리';
 const String kBatterySectionTitle = '배터리 관리';
 
 /// 총평의 항목들(데이터가 있는 것만, 페이스 → 전략 → 타이어 → 배터리).
-List<({String title, ReviewSection section})> raceReviewSections(RaceReview review) {
+/// [alternativeGainMs]·[alternativeStops]는 심층 분석의 가장 빠른 대안 전략(전략 평가에 쓴다, [strategyReview]).
+List<({String title, ReviewSection section})> raceReviewSections(RaceReview review, {int? alternativeGainMs, int? alternativeStops}) {
   final pace = review.pace;
   final battery = review.battery;
   final strategy = review.strategy;
   return [
     if (pace != null) (title: kPaceSectionTitle, section: paceReview(pace, strategy)),
     if (strategy.gridPosition != null || strategy.pitStops.isNotEmpty)
-      (title: kStrategySectionTitle, section: strategyReview(strategy)),
+      (
+        title: kStrategySectionTitle,
+        section: strategyReview(strategy, alternativeGainMs: alternativeGainMs, alternativeStops: alternativeStops),
+      ),
     if (review.stints.isNotEmpty) (title: kTyreSectionTitle, section: tyreReview(review.stints)),
     if (battery != null) (title: kBatterySectionTitle, section: batteryReview(battery)),
   ];

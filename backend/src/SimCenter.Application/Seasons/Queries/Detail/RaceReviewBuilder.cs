@@ -7,7 +7,7 @@ namespace SimCenter.Application.Seasons.Queries.Detail;
 /// 레이스 총평 재료(순수 계산). 세션 기록(<c>lapHistory</c>·<c>lapPositions</c>)·순위표·내 랩 스냅샷만으로 만든다.
 /// <list type="bullet">
 /// <item>페이스: 차마다 깨끗한 랩 중앙값 — 내 순위, 다른 차들 중앙값, 가장 빠른 차, 결과 바로 앞·뒤 차.</item>
-/// <item>전략: 내 피트 스톱마다 앞 랩 순위 → 아웃 랩 다음 랩 순위, 스톱 손실(인·아웃 랩 − 깨끗한 랩 중앙값 2배), 완주 차들이 가장 많이 한 스톱 수, 우승 차 전략.</item>
+/// <item>전략: 내 피트 스톱마다 앞 랩 순위 → 아웃 랩 다음 랩 순위, 스톱 손실(인·아웃 랩 − 깨끗한 랩 중앙값 2배)과 비슷한 때 들어간 차들 손실, 완주 차들이 가장 많이 한 스톱 수, 우승 차 전략, 스톱 수별 완주 순위, 나와 스톱 수가 달라 출발·결과 순서가 뒤바뀐 차.</item>
 /// <item>스틴트: 깨끗한 랩 중앙값·랩타임 추세(ms/랩, 최소제곱 기울기)를 같은 컴파운드로 달린 다른 차들과, 랩당 타이어 마모·끝 잔여 수명.</item>
 /// <item>배터리: 랩 끝 잔량(처음·끝·최저)·랩당 배포·회수, 거의 바닥·가득 찬 랩 수.</item>
 /// </list>
@@ -24,6 +24,12 @@ public static class RaceReviewBuilder
 
     /// <summary>피트 뒤 순위를 볼 랩: 인 랩 + 이 값(아웃 랩 다음 랩 끝 — 다른 차들의 피트가 대개 정리된다).</summary>
     private const int SettleLaps = 2;
+
+    /// <summary>
+    /// 피트 손실을 견줄 다른 차 스톱: 내 인 랩 앞뒤 이 랩 수 안(타이어가 닳은 정도·연료가 비슷하다). 스톱 수가 같은 차를 먼저 본다 —
+    /// 원스톱의 늦은 인 랩과 투스톱의 이른 인 랩은 타이어 상태가 달라 바로 견줄 수 없다.
+    /// </summary>
+    private const int PeerLapWindow = 3;
 
     /// <summary>F1 게임 ERS 배터리 용량(J)과 거의 바닥·가득으로 볼 비율.</summary>
     private const double ErsCapacityJ = 4_000_000;
@@ -127,11 +133,23 @@ public static class RaceReviewBuilder
     private static RaceStrategyReviewDto Strategy(CarRace mine, IReadOnlyList<CarRace> cars, SessionHistory history)
     {
         var me = mine.Result;
+        var myStops = Math.Max(mine.Spans.Count - 1, 0);
+        var fieldStops = cars
+            .Where(c => !ReferenceEquals(c, mine))
+            .SelectMany(c => c.Spans.Take(c.Spans.Count - 1).Select(s => (Car: c, InLap: s.EndLap)))
+            .ToList();
         var stops = new List<RacePitStopReviewDto>();
         for (var i = 0; i < mine.Spans.Count - 1; i++)
         {
             var inLap = mine.Spans[i].EndLap;
             var before = inLap - 1;
+            var near = fieldStops.Where(s => Math.Abs(s.InLap - inLap) <= PeerLapWindow).ToList();
+            var sameCount = near.Where(s => s.Car.Spans.Count - 1 == myStops).ToList();
+            var peers = sameCount.Count > 0 ? sameCount : near;
+            int? PeerMedian(Func<CarRace, int, int?> loss)
+                => peers.Select(s => loss(s.Car, s.InLap)).OfType<int>().Select(ms => (double)ms).ToList() is { Count: > 0 } values
+                    ? Round(Median(values))
+                    : null;
             stops.Add(new RacePitStopReviewDto(
                 inLap,
                 before < 1 ? NullIfZero(me.GridPosition) : history.PositionOf(me.CarIndex, before),
@@ -140,7 +158,11 @@ public static class RaceReviewBuilder
                 mine.Spans[i].VisualCompound,
                 mine.Spans[i + 1].VisualCompound,
                 mine.LapLossMs(inLap),
-                mine.LapLossMs(inLap + 1)));
+                mine.LapLossMs(inLap + 1),
+                PeerMedian((c, lap) => c.PitLossMs(lap)),
+                peers.Count(s => s.Car.PitLossMs(s.InLap) is not null),
+                PeerMedian((c, lap) => c.LapLossMs(lap)),
+                PeerMedian((c, lap) => c.LapLossMs(lap + 1))));
         }
 
         // 완주 차들이 가장 많이 한 스톱 수(같으면 적은 쪽).
@@ -151,10 +173,25 @@ public static class RaceReviewBuilder
             .ThenBy(g => g.Key)
             .FirstOrDefault();
         var winner = cars.FirstOrDefault(c => c.Result.Position == 1);
-        var fieldStops = cars
-            .Where(c => !ReferenceEquals(c, mine))
-            .SelectMany(c => c.Spans.Take(c.Spans.Count - 1).Select(s => (Car: c, InLap: s.EndLap)))
+
+        // 스톱 수마다 완주 순위, 그리고 나와 스톱 수가 다르면서 출발·결과 순서가 나와 뒤바뀐 차(전략이 순위를 바꾼 상대).
+        var finishers = cars
+            .Where(c => c.Result.ResultStatus == ResultStatus.Finished && c.Spans.Count > 0 && c.Result.Position > 0)
             .ToList();
+        var stopGroups = finishers
+            .GroupBy(c => c.Spans.Count - 1)
+            .OrderBy(g => g.Key)
+            .Select(g => new RaceStopGroupDto(g.Key, g.Select(c => c.Result.Position).Order().ToList()))
+            .ToList();
+        var rivals = me.GridPosition > 0 && me.Position > 0
+            ? finishers
+                .Where(c => !ReferenceEquals(c, mine) && c.Spans.Count - 1 != myStops && c.Result.GridPosition > 0)
+                .Where(c => (c.Result.GridPosition > me.GridPosition && c.Result.Position < me.Position)
+                    || (c.Result.GridPosition < me.GridPosition && c.Result.Position > me.Position))
+                .OrderBy(c => c.Result.Position)
+                .Select(c => new RaceStrategyRivalDto(c.Name, c.Spans.Count - 1, c.Result.GridPosition, c.Result.Position))
+                .ToList()
+            : [];
         List<double> FieldLosses(Func<CarRace, int, int?> loss)
             => fieldStops.Select(s => loss(s.Car, s.InLap)).OfType<int>().Select(ms => (double)ms).ToList();
         var fieldLosses = FieldLosses((c, lap) => c.PitLossMs(lap));
@@ -164,7 +201,7 @@ public static class RaceReviewBuilder
         return new RaceStrategyReviewDto(
             NullIfZero(me.GridPosition),
             NullIfZero(me.Position),
-            Math.Max(mine.Spans.Count - 1, 0),
+            myStops,
             stops,
             common?.Key,
             common?.Count() ?? 0,
@@ -176,7 +213,9 @@ public static class RaceReviewBuilder
                 .OfType<RaceLapPositionDto>()
                 .ToList(),
             fieldInLosses.Count == 0 ? null : Round(Median(fieldInLosses)),
-            fieldOutLosses.Count == 0 ? null : Round(Median(fieldOutLosses)));
+            fieldOutLosses.Count == 0 ? null : Round(Median(fieldOutLosses)),
+            stopGroups,
+            rivals);
     }
 
     private static List<RaceStintReviewDto> Stints(CarRace mine, IReadOnlyList<CarRace> cars, IReadOnlyList<MySessionLap> myLaps)

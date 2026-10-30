@@ -69,16 +69,15 @@ void main() {
     expect(pace.lines, ['바로 앞 차(NORRIS)는 랩당 0.750초 빨랐어']); // 섹터 값이 없으면 근거 없는 조언을 붙이지 않는다
 
     final strategy = sections[1].section;
-    expect(strategy.grade, ReviewGrade.poor); // 피트에서 2.5초 더 잃음
+    // 피트에서 2.5초 더 잃었어도 전략 평가는 결과로 매긴다 — 3위 출발 → 2위.
+    expect(strategy.grade, ReviewGrade.good);
     expect(pitStopGrade(review.strategy.pitStops.single, review.strategy.fieldPitLossMs), ReviewGrade.poor);
     // 피트 직후 순위가 떨어진 것만으로는 아쉬움이 아니다 — 손실이 AI와 비슷하면 보통.
     const normalStop = RacePitStopReview(lap: 5, positionBefore: 2, positionAfter: 6, lossMs: 43000, fromCompound: 'Medium', toCompound: 'Hard');
     expect(pitStopGrade(normalStop, 42500), ReviewGrade.fair);
     expect(strategyReview(RaceStrategyReview(gridPosition: 3, finishPosition: 3, stops: 1, pitStops: const [normalStop], fieldPitLossMs: 42500)).lines, isEmpty);
-    expect(strategy.lines, [
-      '5랩 피트 스톱에서 AI들보다 2.500초 더 잃었어', // 인·아웃 랩 값이 없으면 어디서 잃었는지 말하지 않는다
-      '완주한 차 대부분(3대)이 피트에 1번 들어갔고, 우리도 1번 들어갔어',
-    ]);
+    // 인·아웃 랩 값이 없으면 어디서 잃었는지 말하지 않는다. 스톱 수별 결과가 없으면 스톱 수 줄도 없다.
+    expect(strategy.lines, ['5랩 피트 스톱에서 AI들보다 2.500초 더 잃었어']);
 
     final tyres = sections[2].section;
     expect(tyres.grade, ReviewGrade.poor);
@@ -90,7 +89,7 @@ void main() {
     expect(battery.lines.first, startsWith('8랩에서 배터리가 10% 아래까지 떨어졌어. 그 랩들은 평균보다 배터리를 8% 더 썼어 →'));
     expect(battery.lines.last, startsWith('체커기를 받을 때 배터리가 60% 남아 있었어'));
 
-    expect(raceReviewSummary(sections), '전략, 타이어 관리, 배터리 관리에서 시간을 잃었어. 하나씩 같이 보자.');
+    expect(raceReviewSummary(sections), '전략이 좋았고, 타이어 관리, 배터리 관리가 아쉬웠어. 하나씩 같이 보자.');
   });
 
   test('내 데이터가 있으면 근거를 들어 짚는다: 섹터·인아웃 랩·앞뒤 마모·마지막 랩·실제 순위 변화', () {
@@ -120,7 +119,7 @@ void main() {
 
     // 전략: 아웃 랩에서 AI보다 2.5초, 인 랩 0.5초 더 — 아웃 랩을 짚는다.
     expect(strategyReview(strategy).lines.first,
-        contains('AI들과 비교하면 피트로 들어가는 랩에서 0.500초 더 걸렸고, 피트에서 나오는 랩에서 2.500초 더 걸렸어 → 나오는 랩에서 더 잃었어'));
+        contains('그 차들과 비교하면 피트로 들어가는 랩에서 0.500초 더 걸렸고, 피트에서 나오는 랩에서 2.500초 더 걸렸어 → 나오는 랩에서 더 잃었어'));
 
     // 타이어: 뒤가 앞보다 빨리 닳으면 탈출 스로틀, 끝 수명이 낮고 마지막 랩들이 느려졌으면 그 차이로.
     const rearWorn = RaceStintReview(
@@ -155,6 +154,61 @@ void main() {
     expect(batteryReview(full).lines.first, startsWith('1랩, 2랩, 3랩에서 배터리가 꽉 찼어. 그 랩들은 평균보다 배터리를 25% 덜 썼어'));
     expect(raceReviewSummary([(title: '페이스', section: (grade: ReviewGrade.good, lines: const <String>[]))]),
         '페이스가 좋았어. 잘 달렸어.');
+  });
+
+  test('전략 평가는 결과와 전략 선택으로: 피트 스톱 하나가 느려도 내 스톱 수가 가장 잘 통했으면 좋음', () {
+    // 오스트리아: 2위 출발 원스톱으로 우승, 투스톱 중 가장 높은 건 2위(1위 출발 NORRIS). 20랩 스톱은 AI 전체보다 2.1초 느리지만
+    // 비슷한 때 같은 원스톱으로 들어간 차보다는 0.7초 덜 잃었다.
+    const austria = RaceStrategyReview(
+      gridPosition: 2, finishPosition: 1, stops: 1, fieldPitLossMs: 17300,
+      pitStops: [
+        RacePitStopReview(lap: 20, positionBefore: 1, positionAfter: 2, lossMs: 19400, fromCompound: 'Hard', toCompound: 'Medium', peerLossMs: 20100, peerCount: 1),
+      ],
+      stopGroups: [(stops: 1, finishes: [1, 3, 5, 6]), (stops: 2, finishes: [2, 4, 7, 8, 9, 10, 11])],
+      rivals: [(name: 'NORRIS', stops: 2, grid: 1, finish: 2)],
+    );
+    final section = strategyReview(austria, alternativeGainMs: 6000, alternativeStops: 2);
+    expect(section.grade, ReviewGrade.good); // 추정 대안이 빨라도 실제로 원스톱이 가장 잘 통했다
+    expect(section.lines, [
+      '피트에 1번 들어간 4대(우리 포함)는 1, 3, 5, 6위였고, 피트에 2번 들어간 7대 중 가장 높은 순위는 2위였어. '
+          '이번 레이스는 피트 1번이 가장 잘 통했고, 우리도 그렇게 갔어',
+      '다른 전략으로 너보다 앞에서 출발했는데 뒤로 들어온 차: NORRIS(1위 출발 → 2위, 피트 2번)',
+    ]);
+
+    // 다른 스톱 수가 더 잘 통하고, 그 전략으로 뒤에서 출발한 차 둘이 앞에 들어왔으면 아쉬움.
+    const beaten = RaceStrategyReview(
+      gridPosition: 3, finishPosition: 5, stops: 2,
+      stopGroups: [(stops: 1, finishes: [1, 2, 4]), (stops: 2, finishes: [3, 5])],
+      rivals: [(name: 'PIASTRI', stops: 1, grid: 6, finish: 2), (name: 'HADJAR', stops: 1, grid: 8, finish: 4)],
+    );
+    final poor = strategyReview(beaten);
+    expect(poor.grade, ReviewGrade.poor);
+    expect(
+      poor.lines.first,
+      '피트에 2번 들어간 2대(우리 포함)는 3, 5위였고, 피트에 1번 들어간 3대 중 가장 높은 순위는 1위였어 '
+      '→ 이번 레이스는 피트 1번이 더 잘 통했어. 비슷한 레이스면 피트 1번도 생각해 봐',
+    );
+    // 혼자 다른 스톱 수면 '우리뿐', 상대가 많으면 앞 몇 대와 전체 수.
+    const lonely = RaceStrategyReview(
+      gridPosition: 7, finishPosition: 15, stops: 3,
+      stopGroups: [(stops: 2, finishes: [1, 3]), (stops: 3, finishes: [15])],
+      rivals: [
+        (name: 'A', stops: 2, grid: 8, finish: 9), (name: 'B', stops: 2, grid: 9, finish: 10),
+        (name: 'C', stops: 2, grid: 10, finish: 11), (name: 'D', stops: 2, grid: 11, finish: 12),
+      ],
+    );
+    final lonelyLines = strategyReview(lonely).lines;
+    expect(lonelyLines.first, startsWith('피트에 3번 들어간 건 우리뿐이었고(15위), 피트에 2번 들어간 2대 중 가장 높은 순위는 1위였어'));
+    expect(lonelyLines[1], contains('C(10위 출발 → 11위, 피트 2번) 등 4대'));
+    expect(poor.lines[1], startsWith('다른 전략으로 너보다 뒤에서 출발해 앞에 들어온 차: PIASTRI(6위 출발 → 2위, 피트 1번), HADJAR(8위 출발 → 4위, 피트 1번)'));
+
+    // 실제 결과로 가릴 수 없고(다른 스톱 수 없음) 추정 대안이 5초 이상 빠르면 아쉬움, 같은 스톱 수 대안이면 평가에 쓰지 않는다.
+    const alone = RaceStrategyReview(gridPosition: 4, finishPosition: 4, stops: 3);
+    expect(strategyReview(alone, alternativeGainMs: 12600, alternativeStops: 2).grade, ReviewGrade.poor);
+    expect(strategyReview(alone, alternativeGainMs: 12600, alternativeStops: 3).grade, ReviewGrade.fair);
+
+    // 비슷한 때 들어간 차들보다 느린 스톱만 짚는다(AI 전체보다 느려도 그 차들보다 빠르면 말하지 않는다).
+    expect(pitStopGrade(austria.pitStops.single, austria.fieldPitLossMs), ReviewGrade.fair);
   });
 
   test('순위 그래프 축 눈금: 범위에 맞는 간격, 양 끝은 늘 넣고 끝에 붙은 눈금은 뺀다', () {

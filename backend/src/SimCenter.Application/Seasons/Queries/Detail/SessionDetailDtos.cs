@@ -91,7 +91,7 @@ public sealed record RacePaceReviewDto(
 /// <summary>
 /// 전략: 그리드·결과 순위, 내 스톱 수와 스톱마다의 결과, 완주 차들이 가장 많이 한 스톱 수와 그 차 수,
 /// 우승 차 스톱 수·컴파운드 순서, 다른 차들 스톱 손실 중앙값(ms), 내 랩 끝 순위(랩별, 기록된 랩만),
-/// 다른 차들 인 랩·아웃 랩 손실 중앙값(ms).
+/// 다른 차들 인 랩·아웃 랩 손실 중앙값(ms), 스톱 수별 완주 순위, 나와 스톱 수가 다르면서 출발·결과 순서가 뒤바뀐 차들.
 /// </summary>
 public sealed record RaceStrategyReviewDto(
     int? GridPosition,
@@ -105,12 +105,23 @@ public sealed record RaceStrategyReviewDto(
     int? FieldPitLossMs,
     IReadOnlyList<RaceLapPositionDto> LapPositions,
     int? FieldInLapLossMs = null,
-    int? FieldOutLapLossMs = null);
+    int? FieldOutLapLossMs = null,
+    IReadOnlyList<RaceStopGroupDto>? StopGroups = null,
+    IReadOnlyList<RaceStrategyRivalDto>? Rivals = null);
+
+/// <summary>스톱 수 하나로 완주한 차들의 결과 순위(오름차순, 나 포함).</summary>
+public sealed record RaceStopGroupDto(int Stops, IReadOnlyList<int> Finishes);
+
+/// <summary>나와 스톱 수가 다른 차 중 출발·결과 순서가 나와 뒤바뀐 차: 이름, 스톱 수, 출발·결과 순위.</summary>
+public sealed record RaceStrategyRivalDto(string Name, int Stops, int GridPosition, int FinishPosition);
 
 /// <summary>내 랩 끝 순위 하나.</summary>
 public sealed record RaceLapPositionDto(int Lap, int Position);
 
-/// <summary>피트 스톱 하나: 인 랩, 앞 랩 순위 → 아웃 랩 다음 랩 순위, 손실(ms), 바꾸기 전·후 컴파운드, 인 랩·아웃 랩 손실(각 랩 − 깨끗한 랩 중앙값, ms).</summary>
+/// <summary>
+/// 피트 스톱 하나: 인 랩, 앞 랩 순위 → 아웃 랩 다음 랩 순위, 손실(ms), 바꾸기 전·후 컴파운드, 인 랩·아웃 랩 손실(각 랩 − 깨끗한 랩 중앙값, ms),
+/// 비슷한 때(인 랩 앞뒤 몇 랩) 같은 스톱 수로 들어간 다른 차들(없으면 스톱 수와 상관없이 비슷한 때 들어간 차들)의 손실·인 랩·아웃 랩 손실 중앙값과 그 스톱 수.
+/// </summary>
 public sealed record RacePitStopReviewDto(
     int Lap,
     int? PositionBefore,
@@ -119,7 +130,11 @@ public sealed record RacePitStopReviewDto(
     string FromCompound,
     string ToCompound,
     int? InLapLossMs = null,
-    int? OutLapLossMs = null);
+    int? OutLapLossMs = null,
+    int? PeerLossMs = null,
+    int PeerCount = 0,
+    int? PeerInLapLossMs = null,
+    int? PeerOutLapLossMs = null);
 
 /// <summary>
 /// 내 스틴트 하나: 컴파운드·랩 범위, 깨끗한 랩 중앙값(ms)과 같은 컴파운드 다른 차들 값, 랩타임 추세(ms/랩, +면 느려짐)와 다른 차들 값,
