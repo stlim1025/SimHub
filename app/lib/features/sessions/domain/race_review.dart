@@ -1,6 +1,7 @@
 import 'session_detail_models.dart';
 
 // 레이스 총평(`raceReview`): 서버가 낸 수치(깨끗한 랩 중앙값·피트 스톱·스틴트 추세·배터리)를 평가 글로 바꾼다. 모두 순수 함수.
+// 말투는 레이스 엔지니어가 무전으로 드라이버에게 말하듯 — 짧은 반말, 수치 먼저, 할 것은 지시로(` → ` 뒤).
 
 /// 페이스가 다른 차들 중앙값보다 이만큼(ms) 빠르거나 느리면 좋음·아쉬움.
 const int kPaceMarginMs = 300;
@@ -454,11 +455,11 @@ ReviewSection paceReview(RacePaceReview pace, RaceStrategyReview strategy) {
     final slow = _slowestSector(toField);
     final fast = _fastestSector(toField);
     if (slow.gap >= kSectorMarginMs) {
-      lines.add('${_sectorName(slow.sector)}에서 AI 중앙값보다 랩당 ${_seconds(slow.gap)} 느려요'
-          '${fast.gap <= -kSectorMarginMs ? '(${_sectorName(fast.sector)}에서는 ${_seconds(fast.gap)} 빨라요)' : ''}'
-          ' → 랩 분석에서 ${_sectorName(slow.sector)} 코너를 기준 랩과 비교해 보세요');
+      lines.add('${_sectorName(slow.sector)}에서 AI 중앙값보다 랩당 ${_seconds(slow.gap)} 느려'
+          '${fast.gap <= -kSectorMarginMs ? '(${_sectorName(fast.sector)}은 ${_seconds(fast.gap)} 빨라)' : ''}'
+          ' → 랩 분석 열어서 ${_sectorName(slow.sector)} 코너를 기준 랩이랑 맞춰 봐');
     } else if (fast.gap <= -kSectorMarginMs) {
-      lines.add('${_sectorName(fast.sector)}에서 AI 중앙값보다 랩당 ${_seconds(fast.gap)} 빨라요 — 가장 강한 섹터예요');
+      lines.add('${_sectorName(fast.sector)}에서 AI 중앙값보다 랩당 ${_seconds(fast.gap)} 빨라 — 거기가 우리 제일 강한 섹터야');
     }
   }
   final ahead = pace.aheadMedianMs;
@@ -469,21 +470,21 @@ ReviewSection paceReview(RacePaceReview pace, RaceStrategyReview strategy) {
     if (diff > 0) {
       final slow = toAhead == null ? null : _slowestSector(toAhead);
       lines.add(slow != null && slow.gap >= kSectorMarginMs
-          ? '바로 앞 $aheadName은 랩당 ${_seconds(diff)} 빨랐고, 그중 ${_sectorName(slow.sector)}에서 ${_seconds(slow.gap)} 차이 났어요 '
-              '→ ${_sectorName(slow.sector)}를 줄이면 따라잡을 수 있어요'
-          : '바로 앞 $aheadName은 랩당 ${_seconds(diff)} 빨랐어요');
+          ? '앞차 $aheadName, 랩당 ${_seconds(diff)} 빨랐어. 그중 ${_sectorName(slow.sector)}에서 ${_seconds(slow.gap)} '
+              '→ ${_sectorName(slow.sector)}만 줄이면 잡을 수 있어'
+          : '앞차 $aheadName, 랩당 ${_seconds(diff)} 빨랐어');
     } else {
       final fast = toAhead == null ? null : _fastestSector(toAhead);
       lines.add(fast != null && fast.gap <= -kSectorMarginMs
-          ? '바로 앞 $aheadName보다 랩당 ${_seconds(diff)} 빨랐는데 넘지 못했어요. ${_sectorName(fast.sector)}에서 ${_seconds(fast.gap)}로 가장 빨랐어요 '
-              '→ ${_sectorName(fast.sector)}에서 붙은 뒤 이어지는 직선에서 배터리를 몰아 쓰세요'
-          : '바로 앞 $aheadName보다 랩당 ${_seconds(diff)} 빨랐는데 넘지 못했어요');
+          ? '앞차 $aheadName보다 랩당 ${_seconds(diff)} 빨랐는데 못 넘었어. ${_sectorName(fast.sector)}에서 ${_seconds(fast.gap)}로 제일 빨랐고 '
+              '→ ${_sectorName(fast.sector)}에서 붙고, 이어지는 직선에서 배터리 몰아 써'
+          : '앞차 $aheadName보다 랩당 ${_seconds(diff)} 빨랐는데 못 넘었어');
     }
   }
   final behind = pace.behindMedianMs;
   final behindName = pace.behindName;
   if (behind != null && behindName != null && behind < pace.myMedianMs) {
-    lines.add('뒤의 $behindName이 랩당 ${_seconds(pace.myMedianMs - behind)} 빨랐지만 순위를 지켜냈어요');
+    lines.add('뒤차 $behindName, 랩당 ${_seconds(pace.myMedianMs - behind)} 빨랐는데 잘 막아냈어');
   }
   final finish = strategy.finishPosition;
   if (finish != null) {
@@ -493,8 +494,8 @@ ReviewSection paceReview(RacePaceReview pace, RaceStrategyReview strategy) {
         if (changes != null && changes.start > 0) '출발에서 ${changes.start}계단',
         if (changes != null && changes.track > 0) '주행 중 ${changes.track}계단',
       ];
-      lines.add('페이스 순위(${pace.rank}위)보다 높은 $finish위로 끝냈어요'
-          '${gained.isEmpty ? '' : ' — ${gained.join(', ')} 얻었어요'}');
+      lines.add('페이스는 ${pace.rank}위였는데 $finish위로 들어왔어'
+          '${gained.isEmpty ? '' : ' — ${gained.join(', ')} 올라섰어'}');
     } else if (finish - pace.rank >= _placesLost) {
       lines.add(_lostPlacesLine(pace.rank, finish, changes, strategy));
     }
@@ -527,7 +528,7 @@ ReviewSection paceReview(RacePaceReview pace, RaceStrategyReview strategy) {
 
 /// 결과가 페이스 순위보다 낮을 때: 실제로 순위를 잃은 구간만 짚고, 다른 차들보다 스톱이 많으면 줄이라고 한다.
 String _lostPlacesLine(int paceRank, int finish, ({int start, int pits, int track})? changes, RaceStrategyReview strategy) {
-  final head = '페이스는 $paceRank위인데 결과는 $finish위예요';
+  final head = '페이스는 $paceRank위인데 결과는 $finish위야';
   if (changes == null) {
     return head;
   }
@@ -536,13 +537,13 @@ String _lostPlacesLine(int paceRank, int finish, ({int start, int pits, int trac
     if (changes.pits < 0) '피트 구간에서 ${-changes.pits}계단',
     if (changes.track < 0) '주행 중 ${-changes.track}계단',
   ];
-  var line = lost.isEmpty ? head : '$head — ${lost.join(', ')} 잃었어요';
+  var line = lost.isEmpty ? head : '$head — ${lost.join(', ')} 잃었어';
   if (changes.pits < 0 && changes.track > 0) {
-    line += '. 주행 중 ${changes.track}계단을 되찾았지만 다 메우지 못했어요';
+    line += '. 주행 중 ${changes.track}계단 되찾았는데 다 못 메웠어';
   }
   final common = strategy.commonStops;
   if (changes.pits < 0 && common != null && strategy.stops > common) {
-    line += ' → 대부분은 $common스톱이었는데 ${strategy.stops}스톱을 했어요. 스톱을 줄이면 피트에서 잃는 순위를 줄일 수 있어요';
+    line += ' → 다들 $common스톱이었는데 우린 ${strategy.stops}스톱이야. 스톱 줄이면 피트에서 덜 잃어';
   }
   return line;
 }
@@ -561,7 +562,7 @@ ReviewGrade pitStopGrade(RacePitStopReview stop, int? fieldLossMs) {
 /// 시간을 더 잃은 스톱: 인 랩·아웃 랩을 AI와 나눠 비교해, 더 잃은 쪽을 짚는다.
 String _slowStopLine(RacePitStopReview stop, RaceStrategyReview strategy) {
   final extra = stop.lossMs! - strategy.fieldPitLossMs!;
-  final head = '${stop.lap}랩 피트에서 AI보다 ${_seconds(extra)} 더 잃었어요';
+  final head = '${stop.lap}랩 피트, AI보다 ${_seconds(extra)} 더 잃었어';
   final inLoss = stop.inLapLossMs;
   final outLoss = stop.outLapLossMs;
   final fieldIn = strategy.fieldInLapLossMs;
@@ -573,8 +574,8 @@ String _slowStopLine(RacePitStopReview stop, RaceStrategyReview strategy) {
   final extraOut = outLoss - fieldOut;
   final split = '인 랩 ${_signedSeconds(extraIn)}, 아웃 랩 ${_signedSeconds(extraOut)}(AI 대비)';
   return extraIn >= extraOut
-      ? '$head — $split → 인 랩에서 더 잃었어요. 피트 진입 직전 감속과 피트 레인 진입을 점검하세요'
-      : '$head — $split → 아웃 랩에서 더 잃었어요. 피트를 나온 뒤 차가운 타이어로 달리는 첫 랩을 점검하세요';
+      ? '$head — $split → 인 랩에서 더 잃었어. 피트 진입 직전 감속이랑 피트 레인 진입 다시 보자'
+      : '$head — $split → 아웃 랩에서 더 잃었어. 피트 나와서 찬 타이어로 도는 첫 랩 다시 보자';
 }
 
 /// 전략 평가: 그리드 → 결과·스톱 흐름·우승 차 전략은 그림이 보여 주고, 줄은 시간을 더 잃은 스톱(인·아웃 랩 비교)·순위를 얻은 스톱·스톱 수 비교.
@@ -592,7 +593,7 @@ ReviewSection strategyReview(RaceStrategyReview strategy) {
         lines.add(_slowStopLine(stop, strategy));
       case ReviewGrade.good:
         good++;
-        lines.add('${stop.lap}랩 피트로 ${stop.placesGained}계단 올라섰어요');
+        lines.add('${stop.lap}랩 피트로 ${stop.placesGained}계단 올라섰어');
       case ReviewGrade.fair:
         break;
     }
@@ -600,8 +601,8 @@ ReviewSection strategyReview(RaceStrategyReview strategy) {
   final common = strategy.commonStops;
   if (common != null && strategy.commonStopsCars > 0) {
     lines.add(common == strategy.stops
-        ? '완주한 차 대부분(${strategy.commonStopsCars}대)과 같은 $common스톱이었어요'
-        : '완주한 차 대부분(${strategy.commonStopsCars}대)은 $common스톱, 나는 ${strategy.stops}스톱이었어요');
+        ? '완주 차 대부분(${strategy.commonStopsCars}대)이 $common스톱, 우리도 $common스톱이었어'
+        : '완주 차 대부분(${strategy.commonStopsCars}대)이 $common스톱, 우린 ${strategy.stops}스톱이었어');
   }
   final grade = poor > 0
       ? ReviewGrade.poor
@@ -626,8 +627,8 @@ String? _axleAdvice(RaceStintReview stint) {
   final front = axle.front.toStringAsFixed(1);
   final rear = axle.rear.toStringAsFixed(1);
   return axle.front > axle.rear
-      ? '앞 타이어(랩당 $front%)가 뒤($rear%)보다 빨리 닳았어요 → 코너 진입에서 브레이크를 일찍 풀고 핸들을 덜 꺾으세요'
-      : '뒤 타이어(랩당 $rear%)가 앞($front%)보다 빨리 닳았어요 → 코너 탈출에서 스로틀을 천천히 밟아 휠스핀을 줄이세요';
+      ? '앞 타이어(랩당 $front%)가 뒤($rear%)보다 빨리 닳았어 → 진입에서 브레이크 일찍 풀고 스티어링 덜 써'
+      : '뒤 타이어(랩당 $rear%)가 앞($front%)보다 빨리 닳았어 → 탈출에서 스로틀 천천히 열어서 휠스핀 줄이자';
 }
 
 /// 타이어 평가: 스틴트 수치는 그림이 보여 주고, 줄은 스틴트마다 랩타임 추세(AI 대비)·앞뒤 마모로 본 원인·끝 수명과 마지막 랩 페이스.
@@ -646,22 +647,22 @@ ReviewSection tyreReview(List<RaceStintReview> stints) {
     if (lostGrip || fastWear) {
       worse++;
       final facts = [
-        if (lostGrip) 'AI보다 랩당 ${_seconds(extra)}씩 더 빨리 느려졌어요',
-        if (fastWear) '마모가 랩당 ${wear.toStringAsFixed(1)}%예요',
+        if (lostGrip) 'AI보다 랩당 ${_seconds(extra)}씩 더 빨리 떨어졌어',
+        if (fastWear) '마모 랩당 ${wear.toStringAsFixed(1)}%야',
       ];
       final advice = _axleAdvice(stint);
       lines.add('$label: ${facts.join(', ')}${advice == null ? '' : '. $advice'}');
     } else if (extra != null && extra <= -kTrendMarginMs) {
       better++;
-      lines.add('$label: AI보다 랩당 ${_seconds(extra)}씩 덜 느려졌어요 — 타이어를 잘 지켰어요');
+      lines.add('$label: AI보다 랩당 ${_seconds(extra)}씩 덜 떨어졌어 — 타이어 관리 좋았어');
     }
     final slower = stint.endLapsSlowerMs;
     if (life != null && life < _lowLifePct) {
       lines.add(slower != null && slower > 0
-          ? '$label: 수명 ${life.round()}%까지 탔고 마지막 랩들이 스틴트 중앙값보다 ${_seconds(slower)} 느렸어요 → 한두 랩 일찍 들어가면 그만큼 아낄 수 있어요'
-          : '$label: 수명 ${life.round()}%까지 탔지만 마지막 랩 페이스는 지켰어요');
+          ? '$label: 수명 ${life.round()}%까지 탔고 마지막 랩들이 스틴트 중앙값보다 ${_seconds(slower)} 느렸어 → 한두 랩 일찍 박스하면 그만큼 아낄 수 있어'
+          : '$label: 수명 ${life.round()}%까지 탔는데 마지막 랩 페이스는 지켰어');
     } else if (life != null && !last && life >= _earlyStopLifePct) {
-      lines.add('$label: 수명이 ${life.round()}% 남았는데 들어왔어요 → 스틴트를 늘리면 스톱을 줄일 수 있어요');
+      lines.add('$label: 수명 ${life.round()}% 남기고 들어왔어 → 스틴트 더 끌면 스톱 하나 줄일 수 있어');
     }
   }
   final grade = worse > 0
@@ -708,11 +709,11 @@ ReviewSection batteryReview(RaceBatteryReview battery) {
     final where = lowLaps.isEmpty ? '${battery.lowLaps}랩' : _lapList([for (final l in lowLaps) l.lap]);
     final deploy = flow.deploy;
     final harvest = flow.harvest;
-    final head = '$where에서 배터리가 $lowPct 아래였어요';
+    final head = '$where에서 배터리가 $lowPct 아래까지 떨어졌어';
     lines.add(deploy != null && deploy > 0
-        ? '$head. 그 랩들 배포가 평균보다 ${deploy}kJ 많았어요 → 그 랩들에서 효과가 작은 짧은 직선은 Normal로 두고 긴 직선에만 쓰세요'
+        ? '$head. 그 랩들 배포가 평균보다 ${deploy}kJ 많았어 → 그 랩들은 효과 작은 짧은 직선은 Normal로 두고 긴 직선에서만 써'
         : harvest != null && harvest < 0
-            ? '$head. 그 랩들 회수가 평균보다 ${-harvest}kJ 적었어요 → 브레이킹 구간을 길게 가져가 회수를 늘리세요'
+            ? '$head. 그 랩들 회수가 평균보다 ${-harvest}kJ 적었어 → 브레이킹 구간 길게 가져가서 회수 늘리자'
             : head);
   }
   if (battery.fullLaps >= _ersFlagLaps) {
@@ -721,15 +722,15 @@ ReviewSection batteryReview(RaceBatteryReview battery) {
     final where = fullLaps.isEmpty ? '${battery.fullLaps}랩' : _lapList([for (final l in fullLaps) l.lap]);
     final deploy = flow.deploy;
     lines.add(deploy != null && deploy < 0
-        ? '$where에서 배터리가 가득 찼어요. 그 랩들 배포가 평균보다 ${-deploy}kJ 적었어요 → 가득 차면 더 회수하지 못하니 그 랩들에서 Overtake 모드로 더 쓰세요'
-        : '$where에서 배터리가 가득 찼어요');
+        ? '$where에서 배터리가 꽉 찼어. 그 랩들 배포가 평균보다 ${-deploy}kJ 적었어 → 꽉 차면 더 못 모아. 그 랩들은 Overtake 모드로 더 써'
+        : '$where에서 배터리가 꽉 찼어');
   }
   if (battery.lastStoreJ >= kErsCapacityJ * _ersLeftoverFraction) {
     issues++;
-    lines.add('레이스가 끝날 때 ${_pct(battery.lastStoreJ / kErsCapacityJ)}를 남겼어요 → 마지막 두세 랩은 다 써도 돼요');
+    lines.add('체커 받을 때 ${_pct(battery.lastStoreJ / kErsCapacityJ)} 남겼어 → 마지막 두세 랩은 다 털어 써도 돼');
   }
   if (issues == 0) {
-    lines.add('바닥나거나 가득 차 버린 랩 없이 썼고, 끝 잔량은 ${_pct(battery.lastStoreJ / kErsCapacityJ)}예요');
+    lines.add('바닥나거나 꽉 찬 랩 없이 잘 썼어. 끝 잔량 ${_pct(battery.lastStoreJ / kErsCapacityJ)}');
   }
   final grade = issues == 0
       ? ReviewGrade.good
@@ -777,15 +778,15 @@ String? raceReviewSummary(List<({String title, ReviewSection section})> sections
   final good = [for (final s in sections) if (s.section.grade == ReviewGrade.good) s.title];
   final poor = [for (final s in sections) if (s.section.grade == ReviewGrade.poor) s.title];
   if (poor.isEmpty && good.isEmpty) {
-    return '전체적으로 무난한 레이스였어요.';
+    return '전체적으로 무난한 레이스였어. 수고했어.';
   }
   if (poor.isEmpty) {
-    return '${good.join('·')}${_subjectParticle(good.last)} 좋았던 레이스예요.';
+    return '${good.join('·')}${_subjectParticle(good.last)} 좋았어. 잘 달렸어.';
   }
   if (good.isEmpty) {
-    return '${poor.join('·')}에서 시간을 잃은 레이스예요.';
+    return '${poor.join('·')}에서 시간을 잃었어. 하나씩 짚어 보자.';
   }
-  return '${good.join('·')}${_subjectParticle(good.last)} 좋았고, ${poor.join('·')}${_subjectParticle(poor.last)} 아쉬웠어요.';
+  return '${good.join('·')}${_subjectParticle(good.last)} 좋았고, ${poor.join('·')}${_subjectParticle(poor.last)} 아쉬웠어. 하나씩 짚어 보자.';
 }
 
 /// 받침이 있으면 `이`, 없으면 `가`(한글 끝 글자 기준, 순수 함수).

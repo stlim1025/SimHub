@@ -61,7 +61,7 @@ void main() {
     final pace = sections[0].section;
     expect(pace.grade, ReviewGrade.fair); // 중앙값보다 0.25초 빠름 < 0.3초
     // 중앙값·순위·가장 빠른 차는 그래프가 보여 주고, 줄은 짚을 것만.
-    expect(pace.lines, ['바로 앞 NORRIS은 랩당 0.750초 빨랐어요']); // 섹터 값이 없으면 근거 없는 조언을 붙이지 않는다
+    expect(pace.lines, ['앞차 NORRIS, 랩당 0.750초 빨랐어']); // 섹터 값이 없으면 근거 없는 조언을 붙이지 않는다
 
     final strategy = sections[1].section;
     expect(strategy.grade, ReviewGrade.poor); // 피트에서 2.5초 더 잃음
@@ -71,21 +71,21 @@ void main() {
     expect(pitStopGrade(normalStop, 42500), ReviewGrade.fair);
     expect(strategyReview(RaceStrategyReview(gridPosition: 3, finishPosition: 3, stops: 1, pitStops: const [normalStop], fieldPitLossMs: 42500)).lines, isEmpty);
     expect(strategy.lines, [
-      '5랩 피트에서 AI보다 2.500초 더 잃었어요', // 인·아웃 랩 값이 없으면 어디서 잃었는지 말하지 않는다
-      '완주한 차 대부분(3대)과 같은 1스톱이었어요',
+      '5랩 피트, AI보다 2.500초 더 잃었어', // 인·아웃 랩 값이 없으면 어디서 잃었는지 말하지 않는다
+      '완주 차 대부분(3대)이 1스톱, 우리도 1스톱이었어',
     ]);
 
     final tyres = sections[2].section;
     expect(tyres.grade, ReviewGrade.poor);
-    expect(tyres.lines, ['Hard 6–10랩: AI보다 랩당 0.100초씩 더 빨리 느려졌어요']); // 바퀴 값이 없으면 원인을 짐작하지 않는다
+    expect(tyres.lines, ['Hard 6–10랩: AI보다 랩당 0.100초씩 더 빨리 떨어졌어']); // 바퀴 값이 없으면 원인을 짐작하지 않는다
 
     final battery = sections[3].section;
     expect(battery.grade, ReviewGrade.poor); // 바닥 4랩 + 끝 60% 남김
     // 바닥 랩은 L8(5%), 그 랩 배포 1500kJ — 배포가 있는 두 랩 평균 1200kJ보다 300kJ 많다.
-    expect(battery.lines.first, startsWith('L8에서 배터리가 10% 아래였어요. 그 랩들 배포가 평균보다 300kJ 많았어요 →'));
-    expect(battery.lines.last, startsWith('레이스가 끝날 때 60%를 남겼어요'));
+    expect(battery.lines.first, startsWith('L8에서 배터리가 10% 아래까지 떨어졌어. 그 랩들 배포가 평균보다 300kJ 많았어 →'));
+    expect(battery.lines.last, startsWith('체커 받을 때 60% 남겼어'));
 
-    expect(raceReviewSummary(sections), '전략·타이어 관리·배터리 관리에서 시간을 잃은 레이스예요.');
+    expect(raceReviewSummary(sections), '전략·타이어 관리·배터리 관리에서 시간을 잃었어. 하나씩 짚어 보자.');
   });
 
   test('내 데이터가 있으면 근거를 들어 짚는다: 섹터·인아웃 랩·앞뒤 마모·마지막 랩·실제 순위 변화', () {
@@ -105,15 +105,15 @@ void main() {
       lapPositions: [(lap: 1, position: 7), (lap: 7, position: 4), (lap: 10, position: 21), (lap: 12, position: 6), (lap: 20, position: 15)],
     );
     final paceLines = paceReview(pace, strategy).lines;
-    expect(paceLines[0], 'S2에서 AI 중앙값보다 랩당 0.400초 느려요(S3에서는 0.200초 빨라요) → 랩 분석에서 S2 코너를 기준 랩과 비교해 보세요');
-    expect(paceLines[1], startsWith('바로 앞 NOR은 랩당 0.300초 빨랐고, 그중 S2에서 0.300초 차이 났어요'));
+    expect(paceLines[0], 'S2에서 AI 중앙값보다 랩당 0.400초 느려(S3은 0.200초 빨라) → 랩 분석 열어서 S2 코너를 기준 랩이랑 맞춰 봐');
+    expect(paceLines[1], startsWith('앞차 NOR, 랩당 0.300초 빨랐어. 그중 S2에서 0.300초'));
     // 출발은 잃지 않았다(7 → 7) — 피트 구간(10~12랩: 4 → 6)과 주행 중(7 → 4 얻고 6 → 15 잃음)만.
-    expect(paceLines[2], startsWith('페이스는 4위인데 결과는 15위예요 — 피트 구간에서 2계단, 주행 중 6계단 잃었어요'));
+    expect(paceLines[2], startsWith('페이스는 4위인데 결과는 15위야 — 피트 구간에서 2계단, 주행 중 6계단 잃었어'));
     expect(paceLines[2], isNot(contains('출발')));
-    expect(paceLines[2], contains('대부분은 1스톱이었는데 3스톱을 했어요'));
+    expect(paceLines[2], contains('다들 1스톱이었는데 우린 3스톱이야'));
 
     // 전략: 아웃 랩에서 AI보다 2.5초, 인 랩 0.5초 더 — 아웃 랩을 짚는다.
-    expect(strategyReview(strategy).lines.first, contains('인 랩 +0.500초, 아웃 랩 +2.500초(AI 대비) → 아웃 랩에서 더 잃었어요'));
+    expect(strategyReview(strategy).lines.first, contains('인 랩 +0.500초, 아웃 랩 +2.500초(AI 대비) → 아웃 랩에서 더 잃었어'));
 
     // 타이어: 뒤가 앞보다 빨리 닳으면 탈출 스로틀, 끝 수명이 낮고 마지막 랩들이 느려졌으면 그 차이로.
     const rearWorn = RaceStintReview(
@@ -121,8 +121,8 @@ void main() {
       wheelWearPerLapPct: [3.2, 3.4, 4.6, 4.8], endLapsSlowerMs: 600,
     );
     final tyreLines = tyreReview(const [rearWorn, RaceStintReview(compound: 'Hard', startLap: 10, endLap: 30)]).lines;
-    expect(tyreLines[0], contains('뒤 타이어(랩당 4.7%)가 앞(3.3%)보다 빨리 닳았어요 → 코너 탈출에서 스로틀을 천천히 밟아 휠스핀을 줄이세요'));
-    expect(tyreLines[1], contains('수명 22%까지 탔고 마지막 랩들이 스틴트 중앙값보다 0.600초 느렸어요'));
+    expect(tyreLines[0], contains('뒤 타이어(랩당 4.7%)가 앞(3.3%)보다 빨리 닳았어 → 탈출에서 스로틀 천천히 열어서 휠스핀 줄이자'));
+    expect(tyreLines[1], contains('수명 22%까지 탔고 마지막 랩들이 스틴트 중앙값보다 0.600초 느렸어'));
 
     // 배터리: 가득 찬 랩을 랩 번호로, 그 랩 배포가 평균보다 적었는지로(회수 기록이 없어도).
     const full = RaceBatteryReview(
@@ -134,9 +134,9 @@ void main() {
         RaceBatteryLap(lap: 4, storeJ: 1000000, deployedJ: 7000000),
       ],
     );
-    expect(batteryReview(full).lines.first, startsWith('L1·L2·L3에서 배터리가 가득 찼어요. 그 랩들 배포가 평균보다 1000kJ 적었어요'));
+    expect(batteryReview(full).lines.first, startsWith('L1·L2·L3에서 배터리가 꽉 찼어. 그 랩들 배포가 평균보다 1000kJ 적었어'));
     expect(raceReviewSummary([(title: '페이스', section: (grade: ReviewGrade.good, lines: const <String>[]))]),
-        '페이스가 좋았던 레이스예요.');
+        '페이스가 좋았어. 잘 달렸어.');
   });
 
   test('순위 그래프 축 눈금: 범위에 맞는 간격, 양 끝은 늘 넣고 끝에 붙은 눈금은 뺀다', () {
