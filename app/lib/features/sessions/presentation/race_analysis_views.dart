@@ -311,7 +311,7 @@ class BatterySegmentsView extends StatelessWidget {
   }
 }
 
-/// 전략: 스톱마다 타이어 사정, 실제 전략과 추정 대안(스틴트 띠 + 실제 대비 시간).
+/// 전략: 실제 전략과 추정 대안(스틴트 띠 + 실제 대비 시간). 스톱마다 타이어 사정은 리뷰 카드의 피트 스톱 표에 있다.
 class StrategyAnalysisView extends StatelessWidget {
   const StrategyAnalysisView({super.key, required this.strategy});
 
@@ -328,30 +328,7 @@ class StrategyAnalysisView extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final stop in strategy.stops)
-          Padding(
-            padding: const EdgeInsets.only(bottom: _rowGap),
-            child: Wrap(
-              spacing: _gap,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Text('${stop.lap}랩', style: kTabularStyle.copyWith(fontWeight: FontWeight.w700)),
-                TyreCompoundCircle(compound: stop.fromCompound, tooltip: stop.fromCompound, size: _chipCircle),
-                Icon(Icons.arrow_right_alt, size: _chipCircle, color: palette.textMuted),
-                TyreCompoundCircle(compound: stop.toCompound, tooltip: stop.toCompound, size: _chipCircle),
-                if (stop.wearPct case final wear?) Text('${wear.round()}% 닳음', style: kTabularStyle),
-                if (stop.lifeLapsLeft case final life?)
-                  Text('게임이 본 남은 수명 $life랩', style: kTabularStyle.copyWith(color: palette.textMuted)),
-                if (stop.newSetGainMs case final gain? when gain > 0)
-                  Text(
-                    '새 타이어로 랩당 ${(gain / _msPerSecond).toStringAsFixed(2)}초 빨라짐',
-                    style: kTabularStyle.copyWith(color: palette.success),
-                  ),
-              ],
-            ),
-          ),
         if (options.length > 1) ...[
-          const SizedBox(height: _gap),
           const _Caption('전략 비교: 게임의 타이어 성능 정보, 내 타이어 마모, 내 피트 스톱 시간으로 계산한 추정이야'),
           const SizedBox(height: _rowGap),
           for (final option in options)

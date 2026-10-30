@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/util/lap_time.dart';
+import '../../../core/widgets/compact_table.dart';
 import '../../lap_detail/domain/lap_corners.dart' show OfficialCorner;
 import '../domain/race_analysis.dart';
 import '../domain/race_review.dart';
@@ -47,9 +48,11 @@ const Map<ReviewGrade, String> _gradeText = {
   ReviewGrade.poor: '아쉬움',
 };
 
-/// 넓으면 고른 항목의 그림과 짚을 것을 나란히.
+/// 넓으면 고른 항목의 그림과 짚을 것을 나란히(그림 쪽을 더 넓게 — 표·그래프 칸이 눌리지 않게).
 const double _twoColumnWidth = 760;
 const double _sideBySideGap = 24;
+const int _visualFlex = 3;
+const int _notesFlex = 2;
 const double _blockGap = 16;
 const double _blockRadius = 10;
 
@@ -94,12 +97,26 @@ const double _lapTickWidth = 28;
 const double _segmentLabelSize = 11;
 const int _segmentNameMinLaps = 6;
 
-/// 피트 칩.
+/// 컴파운드 원·화살표, 줄 안 간격.
 const double _chipCircleSize = 16;
 const double _chipGap = 6;
-const EdgeInsets _chipPadding = EdgeInsets.symmetric(horizontal: 10, vertical: 6);
-const double _chipRadius = 8;
 const double _arrowIconSize = 14;
+
+/// 피트 스톱 표: 머리글, 랩·타이어 칸 폭, 나머지 열 비율, 타이어 사정 열을 숨기는 표 폭, 초 자릿수.
+const String _pitLapHeader = '랩';
+const String _pitTyreHeader = '타이어';
+const String _pitPositionHeader = '순위';
+const String _pitLossHeader = '피트 손실';
+const String _pitWearHeader = '닳은 정도';
+const String _pitLifeHeader = '남은 수명';
+const String _pitGainHeader = '새 타이어 이득';
+const double _pitLapWidth = 40;
+const double _pitTyreWidth = 56;
+const int _pitWideFlex = 3;
+const int _pitNarrowFlex = 2;
+const double _pitTableCompactWidth = 480;
+const int _pitSecondDigits = 1;
+const int _pitGainDigits = 2;
 
 /// 수치 칸.
 const EdgeInsets _metricPadding = EdgeInsets.symmetric(horizontal: 10, vertical: 6);
@@ -160,7 +177,6 @@ const double _half = 0.5;
 
 const double _msPerSecond = 1000;
 const double _percent = 100;
-const int _chipSecondDigits = 1;
 const int _lapSecondDigits = 3;
 const int _wearDigits = 1;
 
@@ -256,7 +272,11 @@ class _RaceReviewCardState extends State<RaceReviewCard> {
     final battery = review.battery;
     final base = switch (title) {
       kPaceSectionTitle when pace != null => _PaceChart(pace: pace),
-      kStrategySectionTitle => _StrategyView(strategy: review.strategy, stints: review.stints),
+      kStrategySectionTitle => _StrategyView(
+          strategy: review.strategy,
+          stints: review.stints,
+          stopContexts: analysis?.strategy?.stops ?? const [],
+        ),
       kTyreSectionTitle => _StintList(stints: review.stints),
       kBatterySectionTitle when battery != null => _BatteryView(battery: battery),
       _ => null,
@@ -266,7 +286,7 @@ class _RaceReviewCardState extends State<RaceReviewCard> {
         ? null
         : switch (title) {
             kPaceSectionTitle when analysis.lapPace.isNotEmpty => LapPaceView(analysis: analysis),
-            kStrategySectionTitle when strategy != null => StrategyAnalysisView(strategy: strategy),
+            kStrategySectionTitle when strategy != null && strategy.options.length > 1 => StrategyAnalysisView(strategy: strategy),
             kTyreSectionTitle when analysis.drivenStints.isNotEmpty => TyreLoadView(analysis: analysis, labels: labels),
             kBatterySectionTitle when analysis.stints.any((s) => s.segments.any((d) => d.deployKj != null)) =>
               BatterySegmentsView(analysis: analysis, labels: labels),
@@ -416,9 +436,9 @@ class _SectionBody extends StatelessWidget {
           ? Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(child: visual),
+                Expanded(flex: _visualFlex, child: visual),
                 const SizedBox(width: _sideBySideGap),
-                Expanded(child: notes),
+                Expanded(flex: _notesFlex, child: notes),
               ],
             )
           : Column(
@@ -677,12 +697,15 @@ class _PaceChart extends StatelessWidget {
   }
 }
 
-/// 전략: 출발 → 완주, 스틴트 타임라인(컴파운드 색, 피트 랩 눈금), 피트 칩, 우승 차 전략.
+/// 전략: 출발 → 완주, 스틴트 타임라인(컴파운드 색, 피트 랩 눈금), 피트 스톱 표, 우승 차 전략.
 class _StrategyView extends StatelessWidget {
-  const _StrategyView({required this.strategy, required this.stints});
+  const _StrategyView({required this.strategy, required this.stints, this.stopContexts = const []});
 
   final RaceStrategyReview strategy;
   final List<RaceStintReview> stints;
+
+  /// 심층 분석의 스톱마다 타이어 사정(닳은 정도·남은 수명·새 타이어 이득) — 피트 스톱 표에 같은 랩끼리 붙인다.
+  final List<RaceStopContext> stopContexts;
 
   @override
   Widget build(BuildContext context) {
@@ -731,13 +754,7 @@ class _StrategyView extends StatelessWidget {
         ],
         if (strategy.pitStops.isNotEmpty) ...[
           const SizedBox(height: _innerGap),
-          Wrap(
-            spacing: _chipGap,
-            runSpacing: _chipGap,
-            children: [
-              for (final stop in strategy.pitStops) _PitChip(stop: stop, fieldLossMs: strategy.fieldPitLossMs),
-            ],
-          ),
+          _PitStopTable(stops: strategy.pitStops, fieldLossMs: strategy.fieldPitLossMs, contexts: stopContexts),
         ],
         if (winnerStops != null && strategy.winnerCompounds.isNotEmpty) ...[
           const SizedBox(height: _innerGap),
@@ -864,42 +881,127 @@ class _StintTimeline extends StatelessWidget {
   }
 }
 
-/// 피트 칩: 랩, 바꾼 컴파운드, 순위 변화, 손실(AI 손실) — 평가 색 테두리.
-class _PitChip extends StatelessWidget {
-  const _PitChip({required this.stop, required this.fieldLossMs});
+/// 피트 스톱 표 한 줄: 결과 쪽 스톱과 (있으면) 같은 랩의 심층 분석 타이어 사정.
+typedef _PitStopRow = ({RacePitStopReview stop, RaceStopContext? context});
 
-  final RacePitStopReview stop;
+/// 피트 스톱 표: 스톱마다 한 줄, 열마다 같은 자리(랩·타이어·순위·피트 손실과 AI·닳은 정도·남은 수명·새 타이어 이득).
+/// 피트 손실은 평가 색, 새 타이어 이득은 초록. 좁으면 타이어 사정 세 열은 숨긴다(짚을 것 문장에 같은 값이 있다).
+class _PitStopTable extends StatelessWidget {
+  const _PitStopTable({required this.stops, required this.fieldLossMs, required this.contexts});
+
+  final List<RacePitStopReview> stops;
   final int? fieldLossMs;
+  final List<RaceStopContext> contexts;
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final grade = pitStopGrade(stop, fieldLossMs);
-    final before = stop.positionBefore;
-    final after = stop.positionAfter;
-    final loss = stop.lossMs;
-    final fieldLoss = fieldLossMs;
+    final muted = kTabularStyle.copyWith(color: palette.textMuted, fontSize: _captionSize);
+    final hasContext = contexts.isNotEmpty;
+    final rows = <_PitStopRow>[
+      for (final stop in stops) (stop: stop, context: contexts.where((c) => c.lap == stop.lap).firstOrNull),
+    ];
+    Widget value(String? text, {Color? color, FontWeight? weight}) => Text(
+          text ?? '–',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: kTabularStyle.copyWith(color: text == null ? palette.textMuted : color, fontWeight: weight),
+        );
     return Container(
-      padding: _chipPadding,
       decoration: BoxDecoration(
-        border: Border.all(color: grade == ReviewGrade.fair ? palette.border : _gradeColor(grade, palette)),
-        borderRadius: BorderRadius.circular(_chipRadius),
+        border: Border.all(color: palette.border),
+        borderRadius: BorderRadius.circular(_blockRadius),
       ),
-      child: Wrap(
-        spacing: _chipGap,
-        runSpacing: _chipGap / 2,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          Text('${stop.lap}랩', style: kTabularStyle.copyWith(fontWeight: FontWeight.w700)),
-          Row(mainAxisSize: MainAxisSize.min, children: _compoundFlow([stop.fromCompound, stop.toCompound], palette)),
-          if (before != null && after != null) Text('$before위→$after위', style: kTabularStyle),
-          if (loss != null) Text(_seconds(loss, digits: _chipSecondDigits), style: kTabularStyle),
-          if (loss != null && fieldLoss != null)
-            Text(
-              'AI는 ${_seconds(fieldLoss, digits: _chipSecondDigits)}',
-              style: kTabularStyle.copyWith(color: palette.textMuted, fontSize: _captionSize),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(_blockRadius),
+        child: CompactTable<_PitStopRow>(
+          framed: false,
+          compactWidth: _pitTableCompactWidth,
+          rowKey: (r) => ValueKey('race-review-pit-${r.stop.lap}'),
+          rows: rows,
+          columns: [
+            CompactColumn(
+              label: _pitLapHeader,
+              width: _pitLapWidth,
+              cell: (r) => value('${r.stop.lap}랩', weight: FontWeight.w700),
             ),
-        ],
+            CompactColumn(
+              label: _pitTyreHeader,
+              width: _pitTyreWidth,
+              cell: (r) => Row(
+                mainAxisSize: MainAxisSize.min,
+                children: _compoundFlow([r.stop.fromCompound, r.stop.toCompound], palette),
+              ),
+            ),
+            CompactColumn(
+              label: _pitPositionHeader,
+              flex: _pitWideFlex,
+              // 좁은 칸에서도 말줄임 없이 한 줄에 다 보이게 필요하면 글자를 줄인다.
+              cell: (r) => FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: value(
+                  r.stop.positionBefore == null || r.stop.positionAfter == null
+                      ? null
+                      : '${r.stop.positionBefore}위→${r.stop.positionAfter}위',
+                ),
+              ),
+            ),
+            CompactColumn(
+              label: _pitLossHeader,
+              flex: _pitWideFlex,
+              cell: (r) {
+                final loss = r.stop.lossMs;
+                final field = fieldLossMs;
+                final grade = pitStopGrade(r.stop, field);
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    value(
+                      loss == null ? null : _seconds(loss, digits: _pitSecondDigits),
+                      color: grade == ReviewGrade.fair ? null : _gradeColor(grade, palette),
+                      weight: FontWeight.w700,
+                    ),
+                    if (loss != null && field != null)
+                      Text(
+                        'AI는 ${_seconds(field, digits: _pitSecondDigits)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: muted,
+                      ),
+                  ],
+                );
+              },
+            ),
+            if (hasContext) ...[
+              CompactColumn(
+                label: _pitWearHeader,
+                flex: _pitNarrowFlex,
+                compactHidden: true,
+                cell: (r) => value(r.context?.wearPct == null ? null : '${r.context!.wearPct!.round()}%'),
+              ),
+              CompactColumn(
+                label: _pitLifeHeader,
+                flex: _pitNarrowFlex,
+                compactHidden: true,
+                cell: (r) => value(r.context?.lifeLapsLeft == null ? null : '${r.context!.lifeLapsLeft}랩'),
+              ),
+              CompactColumn(
+                label: _pitGainHeader,
+                flex: _pitWideFlex,
+                compactHidden: true,
+                cell: (r) {
+                  final gain = r.context?.newSetGainMs;
+                  return value(
+                    gain == null || gain <= 0 ? null : '랩당 ${_seconds(gain, digits: _pitGainDigits)}',
+                    color: palette.success,
+                  );
+                },
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
