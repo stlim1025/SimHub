@@ -22,12 +22,28 @@ const double _mapPadding = 24;
 const double _outlineWidth = 8;
 const double _sectorWidth = 4;
 
-/// 코너 번호 자리: 바깥쪽 방향을 잴 앞뒤 거리(m), 트랙에서 띄우는 거리 후보(px, 겹치면 더 멀리), 겹침 판정 여유(px),
-/// 코너가 거의 곧을 때(바깥쪽을 못 잴 때) 기준(px).
+/// 코너 번호 자리: 바깥쪽 방향을 잴 앞뒤 거리(m), 코너가 거의 곧을 때(바깥쪽을 못 잴 때) 기준(px).
 const double _outwardSpanM = 30;
-const List<double> _labelOffsets = [14, 24, 34];
-const double _labelClearance = 1;
 const double _minOutward = 0.5;
+
+/// 배지 후보: 코너 둘레 방향 수, 배지 가장자리와 코너 지점 사이 거리 후보(px, 가까운 것부터).
+const int _labelDirections = 16;
+const List<double> _labelGaps = [5, 10, 16, 24, 34, 46, 60];
+
+/// 후보 고르기: 바깥쪽에서 벗어난 각도(라디안)당 비용을 거리(px)로 친 값.
+const double _anglePenaltyPx = 8;
+
+/// 배지끼리·배지와 트랙 선 사이 여유(px), 트랙 선 검사에 쓸 점 간격(px).
+const double _labelClearance = 2;
+const double _trackClearance = 1;
+const double _trackSampleStepPx = 2;
+
+/// 배지가 이보다 멀리(px, 배지 가장자리 기준) 놓이면 코너까지 선과 점을 긋는다.
+const double _leaderMinGap = 7;
+const double _anchorDotRadius = 2;
+
+/// 이웃 코너를 셀 반경(px): 코너가 몰린 곳부터 자리를 잡는다.
+const double _crowdRadiusPx = 40;
 
 /// 코너 번호 글자·배지.
 const double _labelFontSize = 10;
@@ -60,8 +76,11 @@ double raceTrackMapHeight(LapTrace trace, double width) {
 /// 코너 번호 하나: 글자, 트랙 위 지점, 배지 가운데.
 typedef CornerLabelPlacement = ({String text, Offset anchor, Offset center});
 
-/// 코너 번호 배지 자리(순수 계산). 코너 가운데 지점에서 코너 바깥쪽(앞뒤 [_outwardSpanM] 점을 이은 선에서 멀어지는 쪽)으로
-/// [_labelOffsets]만큼 띄우고, 먼저 놓인 배지와 겹치면 더 멀리 놓는다. 배지는 상자 [size] 안으로 밀어 넣는다.
+/// 코너 번호 배지 자리(순수 계산). 배지끼리 겹치지 않고 트랙 선([trackHalfWidth] 두께의 반)도 덮지 않게 놓는다.
+/// 후보는 코너 가운데 지점 둘레 [_labelDirections]방향 × [_labelGaps] 거리이고, 코너 바깥쪽(앞뒤 [_outwardSpanM] 점을 이은 선에서
+/// 멀어지는 쪽)에 가깝고 코너에 가까운 자리부터 고른다. 상자 [size] 밖으로 나가는 후보는 쓰지 않는다.
+/// 코너가 몰린 곳([_crowdRadiusPx] 안 이웃이 많은 코너)부터 자리를 잡는다. 겹치지 않는 자리가 없으면 트랙을 덜 덮는 자리,
+/// 그래도 없으면 바깥쪽 가장 가까운 자리. 결과는 [corners] 순서다.
 /// [points]는 표본마다 화면 점(칸 i = 랩 거리 i × [resolutionM]), [sizeOf]는 글자마다 배지 크기.
 List<CornerLabelPlacement> placeCornerLabels({
   required List<Offset> points,
@@ -69,13 +88,19 @@ List<CornerLabelPlacement> placeCornerLabels({
   required List<LapCorner> corners,
   required Size size,
   required Size Function(String text) sizeOf,
+  double trackHalfWidth = 0,
 }) {
   if (points.length < 3 || corners.isEmpty || resolutionM <= 0) {
     return const [];
   }
   final n = points.length;
   final span = math.max(1, (_outwardSpanM / resolutionM).round());
-  final placed = <({Rect rect, CornerLabelPlacement label})>[];
+  final trackPoints = _thinned(points);
+  final trackReach = trackHalfWidth + _trackClearance;
+  final bounds = Offset.zero & size;
+
+  final anchors = <Offset>[];
+  final outwards = <Offset>[];
   for (final corner in corners) {
     final i = ((corner.startM + corner.endM) / 2 / resolutionM).round().clamp(0, n - 1);
     final anchor = points[i];
@@ -86,28 +111,109 @@ List<CornerLabelPlacement> placeCornerLabels({
       final along = after - before;
       outward = Offset(-along.dy, along.dx);
     }
-    final unit = outward.distance == 0 ? const Offset(0, -1) : outward / outward.distance;
-    final labelSize = sizeOf(corner.label);
-    var rect = Rect.zero;
-    for (final offset in _labelOffsets) {
-      rect = _clampInto(
-        Rect.fromCenter(center: anchor + unit * offset, width: labelSize.width, height: labelSize.height),
-        size,
-      );
-      if (!placed.any((p) => p.rect.inflate(_labelClearance).overlaps(rect))) {
-        break;
+    anchors.add(anchor);
+    outwards.add(outward.distance == 0 ? const Offset(0, -1) : outward / outward.distance);
+  }
+  int crowd(int k) => [for (final a in anchors) if ((a - anchors[k]).distance <= _crowdRadiusPx) a].length;
+  final order = [for (var k = 0; k < corners.length; k++) k]..sort((a, b) {
+      final byCrowd = crowd(b).compareTo(crowd(a));
+      return byCrowd != 0 ? byCrowd : a.compareTo(b);
+    });
+
+  int trackHits(Rect rect) {
+    var hits = 0;
+    for (final p in trackPoints) {
+      final dx = math.max(math.max(rect.left - p.dx, 0.0), p.dx - rect.right);
+      final dy = math.max(math.max(rect.top - p.dy, 0.0), p.dy - rect.bottom);
+      if (dx * dx + dy * dy < trackReach * trackReach) {
+        hits++;
       }
     }
-    placed.add((rect: rect, label: (text: corner.label, anchor: anchor, center: rect.center)));
+    return hits;
   }
-  return [for (final p in placed) p.label];
+
+  // 코너 지점에서 배지까지 선에 닿는 트랙 점 수(코너 지점 둘레의 제 트랙은 뺀다).
+  int leaderCrossings(Offset anchor, Rect rect) {
+    final end = _nearestOnRect(rect, anchor);
+    final along = end - anchor;
+    final length = along.distance;
+    final ownReach = trackReach + _leaderMinGap;
+    if (length <= ownReach) {
+      return 0;
+    }
+    var crossings = 0;
+    for (final p in trackPoints) {
+      if ((p - anchor).distance <= ownReach) {
+        continue;
+      }
+      final t = (((p - anchor).dx * along.dx + (p - anchor).dy * along.dy) / (length * length)).clamp(0.0, 1.0);
+      if ((anchor + along * t - p).distance < trackReach) {
+        crossings++;
+      }
+    }
+    return crossings;
+  }
+
+  final rects = List<Rect?>.filled(corners.length, null);
+  for (final k in order) {
+    final labelSize = sizeOf(corners[k].label);
+    final anchor = anchors[k];
+    final base = math.atan2(outwards[k].dy, outwards[k].dx);
+    final candidates = <({Rect rect, double cost})>[];
+    for (var d = 0; d < _labelDirections; d++) {
+      // 0, +1, −1, +2, −2 … 칸: 바깥쪽에서 가까운 방향부터.
+      final step = (d + 1) ~/ 2 * (d.isOdd ? 1 : -1);
+      final angle = base + step * 2 * math.pi / _labelDirections;
+      final unit = Offset(math.cos(angle), math.sin(angle));
+      // 배지 가운데에서 그 방향 가장자리까지 거리.
+      final extent = labelSize.width / 2 * unit.dx.abs() + labelSize.height / 2 * unit.dy.abs();
+      for (final gap in _labelGaps) {
+        final rect = Rect.fromCenter(center: anchor + unit * (extent + gap), width: labelSize.width, height: labelSize.height);
+        if (bounds.contains(rect.topLeft) && bounds.contains(rect.bottomRight)) {
+          candidates.add((rect: rect, cost: gap + step.abs() * 2 * math.pi / _labelDirections * _anglePenaltyPx));
+        }
+      }
+    }
+    candidates.sort((a, b) => a.cost.compareTo(b.cost));
+    final free = candidates.where((c) => !rects.any((r) => r != null && r.inflate(_labelClearance).overlaps(c.rect)));
+    // 트랙을 덮지 않는 자리 → 그중 지시선이 다른 트랙 줄을 가로지르지 않는 자리 → 가까운 자리 순.
+    Rect? chosen;
+    var best = (hits: 0, crossings: 0);
+    for (final c in free) {
+      final score = (hits: trackHits(c.rect), crossings: leaderCrossings(anchor, c.rect));
+      if (chosen == null ||
+          score.hits < best.hits ||
+          (score.hits == best.hits && score.crossings < best.crossings)) {
+        chosen = c.rect;
+        best = score;
+        if (score.hits == 0 && score.crossings == 0) {
+          break;
+        }
+      }
+    }
+    rects[k] = chosen ??
+        candidates.firstOrNull?.rect ??
+        Rect.fromCenter(center: anchor, width: labelSize.width, height: labelSize.height);
+  }
+  return [
+    for (var k = 0; k < corners.length; k++) (text: corners[k].label, anchor: anchors[k], center: rects[k]!.center),
+  ];
 }
 
-Rect _clampInto(Rect rect, Size size) {
-  final dx = rect.left < 0 ? -rect.left : (rect.right > size.width ? size.width - rect.right : 0.0);
-  final dy = rect.top < 0 ? -rect.top : (rect.bottom > size.height ? size.height - rect.bottom : 0.0);
-  return rect.shift(Offset(dx, dy));
+/// 트랙 선 검사용으로 [_trackSampleStepPx]보다 촘촘한 점을 덜어 낸다(모양은 그대로).
+List<Offset> _thinned(List<Offset> points) {
+  final result = <Offset>[points.first];
+  for (final p in points.skip(1)) {
+    if ((p - result.last).distance >= _trackSampleStepPx) {
+      result.add(p);
+    }
+  }
+  return result;
 }
+
+/// [rect]에서 [p]에 가장 가까운 점(지시선 끝).
+Offset _nearestOnRect(Rect rect, Offset p) =>
+    Offset(p.dx.clamp(rect.left, rect.right), p.dy.clamp(rect.top, rect.bottom));
 
 /// 레이스 리뷰 옆 트랙 지도 그림: 어두운 테두리 + 섹터 색 선, 코너마다 번호 배지(트랙 바깥쪽, 멀리 놓이면 트랙까지 가는 선).
 class RaceTrackMapPainter extends CustomPainter {
@@ -115,7 +221,7 @@ class RaceTrackMapPainter extends CustomPainter {
     required this.trace,
     required this.sectorIndexes,
     required this.corners,
-    required this.labelColor,
+    required this.labelStyle,
     required this.labelBackground,
     required this.labelBorder,
   });
@@ -125,17 +231,14 @@ class RaceTrackMapPainter extends CustomPainter {
   /// 표본마다 섹터 번호. null이면 한 색.
   final List<int>? sectorIndexes;
   final List<LapCorner> corners;
-  final Color labelColor;
+
+  /// 코너 번호 글자(앱 글꼴·글자색).
+  final TextStyle labelStyle;
   final Color labelBackground;
   final Color labelBorder;
 
-  TextPainter _text(String text) => TextPainter(
-    text: TextSpan(
-      text: text,
-      style: TextStyle(color: labelColor, fontSize: _labelFontSize, fontWeight: FontWeight.w700, height: 1),
-    ),
-    textDirection: TextDirection.ltr,
-  )..layout();
+  TextPainter _text(String text) =>
+      TextPainter(text: TextSpan(text: text, style: labelStyle), textDirection: TextDirection.ltr)..layout();
 
   /// [size] 상자에서 코너 번호 배지 자리(테스트에서도 쓴다).
   List<CornerLabelPlacement> labelsFor(Size size) {
@@ -149,6 +252,7 @@ class RaceTrackMapPainter extends CustomPainter {
       corners: corners,
       size: size,
       sizeOf: (label) => _badgeSize(texts.putIfAbsent(label, () => _text(label))),
+      trackHalfWidth: _outlineWidth / 2,
     );
   }
 
@@ -187,17 +291,29 @@ class RaceTrackMapPainter extends CustomPainter {
       corners: corners,
       size: size,
       sizeOf: (label) => _badgeSize(textOf(label)),
+      trackHalfWidth: _outlineWidth / 2,
     );
+    Rect rectOf(CornerLabelPlacement label) {
+      final badgeSize = _badgeSize(textOf(label.text));
+      return Rect.fromCenter(center: label.center, width: badgeSize.width, height: badgeSize.height);
+    }
+
+    // 지시선을 먼저 모두 긋고 배지를 위에 그린다(선이 다른 배지를 가로지르지 않게).
     final leader = _stroke(labelBorder, _leaderWidth);
+    final dot = Paint()..color = labelBorder;
+    for (final label in labels) {
+      final end = _nearestOnRect(rectOf(label), label.anchor);
+      if ((end - label.anchor).distance > _leaderMinGap) {
+        canvas
+          ..drawLine(label.anchor, end, leader)
+          ..drawCircle(label.anchor, _anchorDotRadius, dot);
+      }
+    }
     final fill = Paint()..color = labelBackground;
     final border = _stroke(labelBorder, _labelBorder);
     for (final label in labels) {
       final text = textOf(label.text);
-      final badgeSize = _badgeSize(text);
-      final rect = Rect.fromCenter(center: label.center, width: badgeSize.width, height: badgeSize.height);
-      if ((label.center - label.anchor).distance > _labelOffsets.first + _labelClearance) {
-        canvas.drawLine(label.anchor, label.center, leader);
-      }
+      final rect = rectOf(label);
       final badge = RRect.fromRectAndRadius(rect, const Radius.circular(_labelRadius));
       canvas
         ..drawRRect(badge, fill)
@@ -218,7 +334,7 @@ class RaceTrackMapPainter extends CustomPainter {
       !identical(oldDelegate.trace, trace) ||
       !listEquals(oldDelegate.sectorIndexes, sectorIndexes) ||
       !identical(oldDelegate.corners, corners) ||
-      oldDelegate.labelColor != labelColor ||
+      oldDelegate.labelStyle != labelStyle ||
       oldDelegate.labelBackground != labelBackground ||
       oldDelegate.labelBorder != labelBorder;
 }
@@ -254,7 +370,12 @@ class RaceReviewTrackMap extends StatelessWidget {
                       trace: trace,
                       sectorIndexes: sectorIndexes,
                       corners: resolveLapCorners(trace, officialCorners),
-                      labelColor: palette.textPrimary,
+                      labelStyle: (Theme.of(context).textTheme.labelSmall ?? const TextStyle()).copyWith(
+                        color: palette.textPrimary,
+                        fontSize: _labelFontSize,
+                        fontWeight: FontWeight.w700,
+                        height: 1,
+                      ),
                       labelBackground: palette.surface,
                       labelBorder: palette.textMuted,
                     ),

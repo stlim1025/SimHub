@@ -9,6 +9,7 @@ const double _radius = 100;
 const Offset _center = Offset(150, 150);
 const Size _box = Size(300, 300);
 const Size _badge = Size(20, 12);
+const double _trackHalfWidth = 4;
 
 /// 원 한 바퀴(반지름 [_radius]px, 1m = 1px, 1m 간격) 화면 점.
 List<Offset> _circle() {
@@ -39,19 +40,49 @@ void main() {
       }
     });
 
-    test('붙어 있는 코너는 배지가 겹치지 않게 더 멀리 놓는다', () {
+    test('코너가 몰려 있어도(실버스톤 베케츠처럼) 배지끼리 겹치지 않고 트랙 선도 덮지 않는다', () {
+      final circle = _circle();
       final labels = placeCornerLabels(
-        points: _circle(),
+        points: circle,
         resolutionM: 1,
-        corners: [_corner(1, 100), _corner(2, 104)],
+        corners: [for (var k = 0; k < 6; k++) _corner(k + 1, 100 + k * 8.0)],
         size: _box,
         sizeOf: (_) => _badge,
+        trackHalfWidth: _trackHalfWidth,
       );
 
-      final a = Rect.fromCenter(center: labels[0].center, width: _badge.width, height: _badge.height);
-      final b = Rect.fromCenter(center: labels[1].center, width: _badge.width, height: _badge.height);
-      expect(a.overlaps(b), isFalse);
-      expect((labels[1].center - _center).distance, greaterThan((labels[0].center - _center).distance));
+      final rects = [
+        for (final l in labels) Rect.fromCenter(center: l.center, width: _badge.width, height: _badge.height),
+      ];
+      for (var a = 0; a < rects.length; a++) {
+        for (var b = a + 1; b < rects.length; b++) {
+          expect(rects[a].overlaps(rects[b]), isFalse, reason: 'T${a + 1}·T${b + 1} 겹침');
+        }
+        for (final p in circle) {
+          final dx = math.max(math.max(rects[a].left - p.dx, 0.0), p.dx - rects[a].right);
+          final dy = math.max(math.max(rects[a].top - p.dy, 0.0), p.dy - rects[a].bottom);
+          expect(math.sqrt(dx * dx + dy * dy), greaterThanOrEqualTo(_trackHalfWidth), reason: 'T${a + 1}이 트랙을 덮음');
+        }
+      }
+    });
+
+    test('트랙 두 줄 사이에 낀 코너는 지시선이 다른 줄을 가로지르지 않는 쪽에 놓는다', () {
+      // 위아래로 20px 떨어진(배지가 사이에 못 들어가는) 두 직선을 잇는 헤어핀. 아래 줄은 오른쪽 → 왼쪽으로 달려
+      // 코너 지점(아래 줄 가운데)의 바깥쪽 = 위(다른 줄 쪽)다.
+      final points = [
+        for (var x = 280.0; x >= 20; x -= 1) Offset(x, 160),
+        for (var x = 20.0; x <= 280; x += 1) Offset(x, 140),
+      ];
+      final labels = placeCornerLabels(
+        points: points,
+        resolutionM: 1,
+        corners: [_corner(1, 130)],
+        size: _box,
+        sizeOf: (_) => _badge,
+        trackHalfWidth: _trackHalfWidth,
+      );
+
+      expect(labels.single.center.dy, greaterThan(160));
     });
 
     test('배지는 상자 밖으로 나가지 않는다', () {
