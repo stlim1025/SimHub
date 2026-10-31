@@ -151,17 +151,17 @@ void main() {
     expect(deepTyreLines(_stints, RaceAnalysis.fromJson(const {}), const [], _setup), isEmpty);
   });
 
-  test('배터리: 바닥난 스틴트는 고속 Overtake를 짧은 직선부터, 여유 있는 스틴트는 덜 쓴 직선을, 반만 떼는 코너는 완전히 떼라고', () {
+  test('배터리: 바닥난 스틴트는 긴 직선 밖 고속 Overtake를, 여유 있는 스틴트는 덜 쓴 직선을, 반만 떼는 코너는 완전히 떼라고', () {
     final lines = deepBatteryLines(null, _analysis, labels);
     // 배터리 양은 배터리 게이지 %(한 통 4MJ = 100%)로 말한다.
     expect(lines.first, '한 랩에 배터리를 64% 쓰고 48% 채웠어. AI는 73% 쓰고 73% 채웠어');
-    // 280km/h 넘는 Overtake: T2→T3 직선(190m) 60m, 메인 직선(200m) 150m → 짧은 직선부터.
+    // 풀 스로틀 구간: T3 탈출 → T4(완전히 떼지 않는다) → 메인 직선 380m가 가장 길다. 그래서 메인 직선의 280km/h 넘는 Overtake와
+    // T4에서 AI보다 많이 쓴 배터리는 줄이라고 하지 않고, T2→T3 직선(190m)의 고속 Overtake만 줄이라고 한다.
     expect(
       lines,
-      contains('소프트(1~5랩): 3랩 중 3랩은 메인 직선에서 배터리가 바닥났어. 메인 직선에 들어갈 때 배터리가 15%였어. 바닥나지 않은 스틴트에서는 35%였어. '
-          'T4에서 AI보다 배터리를 8% 더 썼어. 거기서 Overtake를 켠 거리가 60m야 '
-          '→ 280km/h가 넘을 때 켜는 Overtake부터 줄여. T2→T3 직선에서 60m, 메인 직선에서 150m 순서로 줄이면 돼. '
-          '짧은 직선일수록 같은 배터리로 버는 시간이 적어. 코너를 빠져나갈 때 켜는 Overtake는 그대로 둬'),
+      contains('소프트(1~5랩): 3랩 중 3랩은 메인 직선에서 배터리가 바닥났어. 메인 직선에 들어갈 때 배터리가 15%였어. 바닥나지 않은 스틴트에서는 35%였어 '
+          '→ 280km/h가 넘을 때 켜는 Overtake부터 줄여. T2→T3 직선에서 60m를 줄이면 돼. 짧은 직선일수록 같은 배터리로 버는 시간이 적어. '
+          'T4에서 켜는 Overtake는 그대로 둬. 긴 직선 앞 탈출이라 같은 배터리로 가장 많은 시간을 벌어'),
     );
     expect(lines, contains('소프트(6~10랩): 배터리가 바닥난 곳이 없는데 T2→T3 직선에서는 AI보다 배터리를 랩마다 13% 덜 썼어 → 거기서는 Overtake로 더 써'));
     // T4: 완전히 뗀 거리 0m로 50kJ — AI는 80m 완전히 떼고 300kJ(AI가 0.05초 빠르다).
@@ -179,7 +179,46 @@ void main() {
     );
     final costly = deepBatteryLines(null, _build(aiT4TimeMs: 3700), labels);
     expect(costly.where((l) => l.contains('완전히 뗀 거리')), isEmpty);
-    expect(costly, contains('T4: 이 구간을 지나면서 너는 배터리가 랩마다 9% 줄고, AI는 5% 늘어. 여기서 Overtake를 켠 거리가 50m야 → 여기서는 Overtake를 끄고 지나가'));
+    // T4는 가장 긴 직선 앞 탈출이라 AI보다 배터리를 더 잃어도 Overtake를 끄라고 하지 않는다.
+    expect(costly.where((l) => l.contains('Overtake를 끄고')), isEmpty);
+  });
+
+  test('긴 직선: 풀 스로틀로 지나가는 코너를 이어 가장 긴 구간의 60% 이상인 구간과 그 앞 탈출 코너를 지킨다', () {
+    final long = longRunSegments(_analysis, _analysis.drivenStints);
+    expect(long.launches, [3]);
+    expect(long.protected, {3, 4, 0});
+  });
+
+  test('배터리: 랩당 회수 한도까지 채웠으면 그 사실·덜 채운 랩을 말하고, 더 채우라고 하지 않는다', () {
+    final battery = RaceBatteryReview(
+      laps: 5,
+      firstStoreJ: 3000000,
+      lastStoreJ: 500000,
+      minStoreJ: 0,
+      minStoreLap: 3,
+      perLap: [
+        for (final (lap, harvest) in [(1, 7001000.0), (2, 7003000.0), (3, 6000000.0), (4, 7002000.0), (5, 7000500.0)])
+          RaceBatteryLap(lap: lap, storeJ: 500000, harvestedJ: harvest),
+      ],
+    );
+    expect(harvestCapJ(battery), 7003000);
+    final lines = deepBatteryLines(battery, _analysis, labels);
+    // 한도가 있으면 AI 채움 추정과 견주지 않는다.
+    expect(lines.first, '한 랩에 배터리를 64% 쓰고 48% 채웠어');
+    expect(
+      lines[1],
+      '배터리 채우기: 5랩 중 4랩이 한 랩에 7.0MJ(배터리 한 통의 1.8배)를 채운 뒤로 더 채워지지 않았어. 랩마다 채울 수 있는 한도까지 다 채운 거야. '
+      '3랩은 6.0MJ만 채웠어 → 브레이크를 더 길게 밟아도 더 채울 수 없어. 배터리로 시간을 더 벌려면 어디서 쓰는지를 골라야 해',
+    );
+    expect(lines.where((l) => l.contains('완전히 뗀 거리')), isEmpty);
+    // 랩마다 회수량이 다르면 한도로 보지 않는다.
+    expect(
+      harvestCapJ(RaceBatteryReview(
+        laps: 3, firstStoreJ: 0, lastStoreJ: 0, minStoreJ: 0, minStoreLap: 1,
+        perLap: [for (var lap = 1; lap <= 3; lap++) RaceBatteryLap(lap: lap, storeJ: 0, harvestedJ: 5000000.0 + lap * 400000)],
+      )),
+      isNull,
+    );
   });
 
   test('전략: 피트 창과 스톱, 남은 랩으로 못 되찾는 스톱, 짧게 탄 컴파운드, 추정 대안', () {
@@ -191,7 +230,17 @@ void main() {
       '새 소프트가 랩당 2.000초 빨라도, 피트 스톱 한 번에 잃는 20.0초를 되찾으려면 10랩이 필요한데 남은 랩은 5랩뿐이야 '
       '→ 타이어가 한계라서가 아니라 계획대로 들어온 거야',
     );
-    expect(lines[2], '게임이 본 타이어 수명보다 일찍 바꾼 타이어가 있어. 소프트는 9랩까지 탈 수 있는데 5랩만 탔어 → 스틴트를 더 길게 가져가면 피트 스톱을 줄일 수 있어');
+    // 피트 1번은 마른 노면의 최소라 일찍 바꿨어도 스톱을 줄이라고 하지 않는다.
+    expect(lines.where((l) => l.startsWith('게임이 본 타이어 수명보다')), isEmpty);
+    const threeStints = [
+      RaceStintReview(compound: 'Soft', startLap: 1, endLap: 5),
+      RaceStintReview(compound: 'Medium', startLap: 6, endLap: 8),
+      RaceStintReview(compound: 'Soft', startLap: 9, endLap: 10),
+    ];
+    expect(
+      deepStrategyLines(_analysis, threeStints),
+      contains('게임이 본 타이어 수명보다 일찍 바꾼 타이어가 있어. 소프트는 9랩까지 탈 수 있는데 5랩만 탔어 → 스틴트를 더 길게 가져가면 피트 스톱을 줄일 수 있어'),
+    );
     expect(lines.last, '계산해 봐도 지금 전략이 가장 빨랐어. 피트에 들어가는 횟수를 바꿔도 차이가 1.0초도 안 나');
 
     // 대안이 빠르면: 스톱을 줄여 아낀 시간과 새 타이어로 되찾던 시간, 같은 스톱 수의 더 나은 배분.

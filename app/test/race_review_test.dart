@@ -156,6 +156,44 @@ void main() {
         '페이스가 좋았어. 잘 달렸어.');
   });
 
+  test('타이어 평가: AI보다 스틴트를 길게 타고 피트에 덜 들어갔으면 좋음, 원스톱이면 스톱을 줄이라고 하지 않는다', () {
+    // 실버스톤 26랩: 혼자 원스톱(미디엄 12랩 → 하드 14랩), AI는 대부분 투스톱(미디엄 9랩·하드 12랩).
+    const medium = RaceStintReview(
+      compound: 'Medium', startLap: 1, endLap: 12, trendMsPerLap: 127, fieldTrendMsPerLap: 103, wearPerLapPct: 2.27, endLifePct: 72.5,
+      fieldStintLaps: 9,
+    );
+    const hard = RaceStintReview(
+      compound: 'Hard', startLap: 13, endLap: 26, trendMsPerLap: -7, fieldTrendMsPerLap: -45, wearPerLapPct: 1.75, endLifePct: 76,
+      fieldStintLaps: 12,
+    );
+    const strategy = RaceStrategyReview(
+      gridPosition: 6, finishPosition: 1, stops: 1, commonStops: 2, commonStopsCars: 20,
+      stopGroups: [(stops: 1, finishes: [1]), (stops: 2, finishes: [2, 3, 4])],
+    );
+    expect(minimumStops(const [medium, hard]), 1);
+    expect(canDropStop(const [medium, hard]), isFalse);
+    final review = tyreReview(const [medium, hard], strategy: strategy);
+    expect(review.grade, ReviewGrade.good);
+    expect(review.lines, [
+      '다른 차들은 대부분 피트에 2번 들어갔는데 우리는 타이어를 버텨서 1번만 들어갔어. 이번 레이스에서 가장 잘 통한 전략이었어',
+      '미디엄(1~12랩): AI는 미디엄으로 보통 9랩을 타고 들어왔는데 너는 12랩을 탔어. 그러고도 타이어 수명이 73% 남았어 '
+          '→ 마른 노면에서는 타이어 두 종류를 써야 해서 피트 한 번은 줄일 수 없어. 남은 수명은 다음에 더 세게 밀어도 되는 여유야',
+      '하드(13~26랩): AI는 하드로 보통 12랩을 타고 들어왔는데 너는 체커기까지 14랩을 탔어. 그러고도 타이어 수명이 76% 남았어',
+    ]);
+
+    // 끝 수명 줄: 원스톱이면 스톱을 줄이라고 하지 않고, 투스톱이면 줄이라고 한다.
+    expect(tyreLifeLine(medium, last: false, canDropStop: false), isNot(contains('줄일 수 있어')));
+    expect(tyreLifeLine(medium, last: false), endsWith('→ 이 스틴트를 더 끌면 피트 스톱을 한 번 줄일 수 있어'));
+    expect(canDropStop(const [medium, hard, RaceStintReview(compound: 'Soft', startLap: 20, endLap: 26)]), isTrue);
+    // 인터·웻을 썼으면 피트 0번이 최소.
+    expect(minimumStops(const [RaceStintReview(compound: 'Intermediate', startLap: 1, endLap: 10)]), 0);
+
+    // 그립을 AI보다 크게 잃었으면 길게 탔어도 좋음으로 치지 않는다.
+    const lostGrip = RaceStintReview(compound: 'Medium', startLap: 1, endLap: 14, trendMsPerLap: 200, fieldTrendMsPerLap: 100, fieldStintLaps: 9);
+    expect(longStintLine(lostGrip, last: false, canDropStop: true), isNull);
+    expect(tyreReview(const [lostGrip]).grade, ReviewGrade.poor);
+  });
+
   test('전략 평가는 결과와 전략 선택으로: 피트 스톱 하나가 느려도 내 스톱 수가 가장 잘 통했으면 좋음', () {
     // 오스트리아: 2위 출발 원스톱으로 우승, 투스톱 중 가장 높은 건 2위(1위 출발 NORRIS). 20랩 스톱은 AI 전체보다 2.1초 느리지만
     // 비슷한 때 같은 원스톱으로 들어간 차보다는 0.7초 덜 잃었다.

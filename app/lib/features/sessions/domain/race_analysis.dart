@@ -55,6 +55,23 @@ const double _liftGapM = 20;
 const int _partialLiftCorners = 2;
 const double _maxLiftCostSPerMj = 0.6;
 
+/// 긴 직선: 브레이크·완전히 떼는 거리가 이 미만(m)인 코너는 스로틀을 끝까지 밟고 지나가는 코너로 보고 앞뒤 직선과 한 덩어리로 잇는다.
+/// 이렇게 이은 풀 스로틀 구간이 가장 긴 구간의 이 비율 이상이면 긴 직선 — 그 앞 탈출 코너와 그 직선에서 쓰는 배터리는 줄이라고 하지 않는다
+/// (느린 탈출에서 긴 직선으로 나갈 때 같은 배터리로 버는 시간이 가장 크다). Overtake를 이 거리(m) 이상 켠 탈출만 짚는다.
+const double _flatCornerM = 10;
+const double _longRunFraction = 0.6;
+const double _launchOvertakeM = 20;
+
+/// 직선 끝 속도가 이 이상(km/h)이면 바닥나도 잃는 시간이 작다고 말한다(속도가 높을수록 같은 배터리로 버는 속도가 작다).
+const int _highSpeedKph = 290;
+
+/// 회수 한도: 랩 회수량이 가장 많은 랩의 이 비율 안인 랩이 기록된 랩의 이 비율 이상이면 랩당 한도까지 채운 것으로 본다,
+/// 한도보다 이 비율 이상 덜 채운 랩을 짚는다.
+const double _harvestCapTolerance = 0.01;
+const double _harvestCapLapShare = 0.6;
+const double _harvestShortFraction = 0.05;
+const double _jPerMj = 1000000;
+
 /// 전략: 남은 수명이 이 랩 이하이거나 마모가 이 % 이상이면 타이어 때문에 들어온 것, 게임이 본 쓸 수 있는 랩보다 이만큼 덜 탔으면 짚는다,
 /// 대안이 이만큼(ms) 이상 빨라야 말한다.
 const int _forcedLifeLaps = 2;
@@ -725,14 +742,16 @@ List<RaceSegment> loadRankedCorners(RaceAnalysis analysis, int limiter) {
   return [for (final l in loads) l.segment];
 }
 
-/// 타이어 심층 줄: 리미터 바퀴, 그 바퀴에 부담이 큰 코너(마모 환산·입력 원인 → 할 것), 표면 온도, 스틴트마다 AI 대비 추세와 시간이 늘어난 코너·끝 수명,
-/// 같은 컴파운드 스틴트끼리 무엇이 달랐는지, 세팅 제안. 트레이스로 분석한 스틴트가 없으면 빈 목록.
+/// 타이어 심층 줄: 리미터 바퀴, 그 바퀴에 부담이 큰 코너(마모 환산·입력 원인 → 할 것), 표면 온도, 다른 차들보다 덜 들어간 피트([strategy]),
+/// 스틴트마다 AI 대비 추세와 시간이 늘어난 코너·AI보다 길게 탄 스틴트·끝 수명, 같은 컴파운드 스틴트끼리 무엇이 달랐는지, 세팅 제안.
+/// 트레이스로 분석한 스틴트가 없으면 빈 목록.
 List<String> deepTyreLines(
   List<RaceStintReview> reviewStints,
   RaceAnalysis analysis,
   List<String> labels,
-  Map<String, Object?>? setup,
-) {
+  Map<String, Object?>? setup, {
+  RaceStrategyReview? strategy,
+}) {
   final driven = analysis.drivenStints;
   final limiter = tyreLimiterWheel(analysis);
   if (driven.isEmpty || limiter == null || labels.length != analysis.segments.length) {
@@ -774,6 +793,12 @@ List<String> deepTyreLines(
     }
   }
 
+  if (strategy != null) {
+    if (fewerStopsLine(reviewStints, strategy) case final fewer?) {
+      lines.add(fewer);
+    }
+  }
+  final dropStop = canDropStop(reviewStints);
   for (final (k, stint) in reviewStints.indexed) {
     final label = stintName(stint.compound, stint.startLap, stint.endLap);
     final extra = stint.extraTrendMs;
@@ -793,7 +818,13 @@ List<String> deepTyreLines(
     } else if (extra != null && extra <= -kTrendMarginMs) {
       lines.add('$label: 랩이 지날수록 느려지는 정도가 AI보다 랩당 ${_sec(extra)} 작았어. 타이어 관리를 잘했어');
     }
-    if (tyreLifeLine(stint, last: k == reviewStints.length - 1) case final life?) {
+    final last = k == reviewStints.length - 1;
+    final long = longStintLine(stint, last: last, canDropStop: dropStop);
+    if (long != null) {
+      lines.add(long);
+    }
+    if (tyreLifeLine(stint, last: last, canDropStop: dropStop) case final life?
+        when long == null || (stint.endLifePct ?? 0) < kLowTyreLifePct) {
       lines.add(life);
     }
   }
@@ -911,9 +942,75 @@ List<String> _setupLines(Map<String, Object?>? setup, RaceAnalysis analysis, Lis
 /// 배터리가 순으로 남거나 줄어든 양(kJ, 채움 − 씀).
 double _net(double harvest, double deploy) => harvest - deploy;
 
-/// 배터리 심층 줄: 랩당 사용·채움을 AI와, 스틴트마다 바닥난 구간과 줄일 곳(280km/h 넘는 Overtake를 짧은 직선부터 — 코너 탈출은 지킨다)
-/// 또는 여유가 있는데 AI보다 덜 쓴 직선(→ 더 써), 완전히 떼는 거리가 짧아 AI보다 덜 채우는 코너(→ 완전히 떼고 브레이크를 짧게), AI보다 배터리를 가장 많이 잃고 나온
-/// 코너(Overtake·브레이킹 여부에 맞춘 할 것), 체커 때 남긴 양. 구간 배터리 값이 없으면 빈 목록.
+/// 긴 직선 앞 탈출 코너와 긴 직선(풀 스로틀로 지나가는 코너를 이은 덩어리) 구간 번호들 — 여기서 쓰는 배터리는 줄이라고 하지 않는다.
+/// 브레이크를 밟거나 스로틀을 완전히 떼는 코너에서 다음 그런 코너까지가 한 풀 스로틀 구간이고, 그 길이가 가장 긴 구간의 [_longRunFraction] 이상이면 긴 직선.
+/// 반환: 보호 구간 번호들과 긴 직선 앞 탈출 코너 번호들(랩 순서).
+({Set<int> protected, List<int> launches}) longRunSegments(RaceAnalysis analysis, List<RaceStintDriving> driven) {
+  final segments = analysis.segments;
+  if (segments.isEmpty) {
+    return (protected: const {}, launches: const []);
+  }
+  bool braking(RaceSegment s) {
+    if (!s.isCorner) {
+      return false;
+    }
+    final d = averagedSegment(driven, s.index);
+    return d == null || d.brakeM >= _flatCornerM || d.liftM >= _flatCornerM;
+  }
+
+  final starts = [for (var i = 0; i < segments.length; i++) if (braking(segments[i])) i];
+  if (starts.isEmpty) {
+    return (protected: const {}, launches: const []);
+  }
+  final runs = <({int launch, List<int> members, int length})>[];
+  for (final (k, start) in starts.indexed) {
+    final end = starts[(k + 1) % starts.length];
+    final members = <int>[];
+    var length = 0;
+    for (var i = (start + 1) % segments.length; i != end; i = (i + 1) % segments.length) {
+      members.add(segments[i].index);
+      length += _lengthOf(segments[i], analysis.trackLengthM);
+    }
+    runs.add((launch: segments[start].index, members: members, length: length));
+  }
+  final longest = runs.map((r) => r.length).reduce(math.max);
+  final long = [for (final r in runs) if (longest > 0 && r.length >= longest * _longRunFraction) r];
+  return (
+    protected: {for (final r in long) ...[r.launch, ...r.members]},
+    launches: [for (final r in long) r.launch],
+  );
+}
+
+/// 랩당 회수 한도(J): 기록된 랩 대부분이 같은 회수량에서 멈췄으면 그 값, 아니면 null.
+double? harvestCapJ(RaceBatteryReview? battery) {
+  final values = [for (final l in battery?.perLap ?? const <RaceBatteryLap>[]) ?l.harvestedJ];
+  if (values.length < kErsFlagLaps) {
+    return null;
+  }
+  final top = values.reduce(math.max);
+  final atCap = values.where((v) => v >= top * (1 - _harvestCapTolerance)).length;
+  return top > 0 && atCap >= values.length * _harvestCapLapShare ? top : null;
+}
+
+String _mj(double j) => '${(j / _jPerMj).toStringAsFixed(1)}MJ';
+
+/// 회수 한도 줄: 몇 랩이 한도에서 멈췄는지와 한도보다 덜 채운 랩.
+String _harvestCapLine(RaceBatteryReview battery, double cap) {
+  final laps = [for (final l in battery.perLap) if (l.harvestedJ != null) l];
+  final atCap = laps.where((l) => l.harvestedJ! >= cap * (1 - _harvestCapTolerance)).length;
+  final short = [for (final l in laps) if (l.harvestedJ! < cap * (1 - _harvestShortFraction)) l];
+  final shortText = short.isEmpty
+      ? ''
+      : '. ${short.map((l) => '${l.lap}랩은 ${_mj(l.harvestedJ!)}').join(', ')}만 채웠어';
+  return '배터리 채우기: ${laps.length}랩 중 $atCap랩이 한 랩에 ${_mj(cap)}(배터리 한 통의 '
+      '${(cap / kErsCapacityJ).toStringAsFixed(1)}배)를 채운 뒤로 더 채워지지 않았어. 랩마다 채울 수 있는 한도까지 다 채운 거야$shortText '
+      '→ 브레이크를 더 길게 밟아도 더 채울 수 없어. 배터리로 시간을 더 벌려면 어디서 쓰는지를 골라야 해';
+}
+
+/// 배터리 심층 줄: 랩당 사용·채움을 AI와(랩당 회수 한도까지 채웠으면 그 사실과 덜 채운 랩), 스틴트마다 바닥난 구간과 줄일 곳(280km/h 넘는 Overtake를
+/// 짧은 직선부터 — 긴 직선과 그 앞 탈출은 지킨다, 줄일 곳이 없으면 왜 없는지) 또는 여유가 있는데 AI보다 덜 쓴 직선(→ 더 써), 완전히 떼는 거리가 짧아
+/// AI보다 덜 채우는 코너(→ 완전히 떼고 브레이크를 짧게, 한도까지 채웠으면 빼고), AI보다 배터리를 가장 많이 잃고 나온 코너(긴 직선 앞 탈출은 빼고,
+/// Overtake·브레이킹 여부에 맞춘 할 것), 체커 때 남긴 양. 구간 배터리 값이 없으면 빈 목록.
 List<String> deepBatteryLines(RaceBatteryReview? battery, RaceAnalysis analysis, List<String> labels) {
   final driven = [for (final s in analysis.stints) if (s.segments.any((d) => d.deployKj != null)) s];
   if (driven.isEmpty || labels.length != analysis.segments.length) {
@@ -925,6 +1022,8 @@ List<String> deepBatteryLines(RaceBatteryReview? battery, RaceAnalysis analysis,
 
   final lines = <String>[];
   final hasField = analysis.fieldErs.isNotEmpty;
+  // 랩당 회수 한도까지 채웠으면 AI의 채움 추정(표본으로 잰 값)과 견주지 않고, 더 채우라는 말도 하지 않는다.
+  final cap = harvestCapJ(battery);
   if (hasField) {
     final aiDeploy = analysis.fieldErs.fold(0.0, (sum, f) => sum + f.deployKj);
     final aiHarvest = analysis.fieldErs.fold(0.0, (sum, f) => sum + f.harvestKj);
@@ -933,17 +1032,38 @@ List<String> deepBatteryLines(RaceBatteryReview? battery, RaceAnalysis analysis,
     // 한 통(100%)을 넘으면 `한 통의 1.6배`로 말한다.
     final inFulls = [myDeploy, myHarvest, aiDeploy, aiHarvest].any((kj) => kj * _jPerKj >= kErsCapacityJ);
     String amount(double kj) => '${(kj * _jPerKj / kErsCapacityJ).toStringAsFixed(1)}배';
-    lines.add(inFulls
-        ? '한 랩에 배터리 한 통의 ${amount(myDeploy)}를 쓰고 ${amount(myHarvest)}를 채웠어. '
-            'AI는 ${amount(aiDeploy)}를 쓰고 ${amount(aiHarvest)}를 채웠어'
-        : '한 랩에 배터리를 ${_bat(myDeploy)} 쓰고 ${_bat(myHarvest)} 채웠어. AI는 ${_bat(aiDeploy)} 쓰고 ${_bat(aiHarvest)} 채웠어');
+    final mine = inFulls
+        ? '한 랩에 배터리 한 통의 ${amount(myDeploy)}를 쓰고 ${amount(myHarvest)}를 채웠어'
+        : '한 랩에 배터리를 ${_bat(myDeploy)} 쓰고 ${_bat(myHarvest)} 채웠어';
+    lines.add(cap != null
+        ? mine
+        : inFulls
+            ? '$mine. AI는 ${amount(aiDeploy)}를 쓰고 ${amount(aiHarvest)}를 채웠어'
+            : '$mine. AI는 ${_bat(aiDeploy)} 쓰고 ${_bat(aiHarvest)} 채웠어');
+  }
+  if (battery != null && cap != null) {
+    lines.add(_harvestCapLine(battery, cap));
   }
 
+  // 긴 직선 앞 탈출 코너와 긴 직선에서 쓰는 배터리는 줄이라고 하지 않는다. Overtake를 켠 그런 코너는 맞게 쓴다고 말한다.
+  final long = longRunSegments(analysis, driven);
+  final launchOvertakes = [
+    for (final s in analysis.segments)
+      if (s.isCorner && long.protected.contains(s.index) && (avg(s.index, (d) => d.overtakeM) ?? 0) >= _launchOvertakeM) labels[s.index],
+  ];
+  final keepLaunches = launchOvertakes.isEmpty
+      ? '코너를 빠져나갈 때 켜는 Overtake는 그대로 둬'
+      : '${launchOvertakes.join('·')}에서 켜는 Overtake는 그대로 둬. 긴 직선 앞 탈출이라 같은 배터리로 가장 많은 시간을 벌어';
+
+  // 줄일 곳이 없는 스틴트가 있으면 그 이유(긴 직선 앞 탈출 Overtake는 맞다·한도까지 채우고도 모자라다)를 스틴트 줄 뒤에 한 번만 말한다.
+  var noCut = false;
   for (final stint in driven) {
-    final overs = <({RaceSegmentDriving d, double more})>[
+    final versusAi = <({RaceSegmentDriving d, double more})>[
       for (final d in stint.segments)
         if ((d.deployKj, analysis.fieldErsAt(d.index)) case (final mine?, final ai?)) (d: d, more: mine - ai.deployKj),
     ]..sort((a, b) => b.more.compareTo(a.more));
+    // 줄일 후보: 긴 직선 앞 탈출·긴 직선은 뺀다.
+    final overs = [for (final o in versusAi) if (!long.protected.contains(o.d.index)) o];
     final empties = [for (final d in stint.segments) if (_ranFlat(d)) d]..sort((a, b) => b.emptyM!.compareTo(a.emptyM!));
     if (empties.isNotEmpty) {
       final empty = empties.first;
@@ -962,28 +1082,37 @@ List<String> deepBatteryLines(RaceBatteryReview? battery, RaceAnalysis analysis,
       final entryText = entry == null
           ? ''
           : '. $where에 들어갈 때 배터리가 ${_bat(entry)}였어${others.isEmpty ? '' : '. 바닥나지 않은 스틴트에서는 ${_batRange(others)}였어'}';
-      // 줄일 곳: 280km/h 넘는 Overtake(같은 배터리로 버는 시간이 가장 적다)를 짧은 직선부터. 코너 탈출 Overtake는 지킨다.
+      // 줄일 곳: 280km/h 넘는 Overtake(같은 배터리로 버는 시간이 가장 적다)를 짧은 직선부터. 긴 직선과 그 앞 탈출 Overtake는 지킨다.
       final fast = [
         for (final d in stint.segments)
-          if (_segmentOf(analysis, d.index) case final s? when !s.isCorner && (d.fastOvertakeM ?? 0) >= _fastOvertakeM)
+          if (_segmentOf(analysis, d.index) case final s?
+              when !s.isCorner && !long.protected.contains(s.index) && (d.fastOvertakeM ?? 0) >= _fastOvertakeM)
             (d: d, length: _lengthOf(s, analysis.trackLengthM)),
       ]..sort((a, b) => a.length.compareTo(b.length));
-      final advice = fast.isNotEmpty
-          ? '280km/h가 넘을 때 켜는 Overtake부터 줄여. '
-              '${fast.map((f) => '${labels[f.d.index]}에서 ${f.d.fastOvertakeM!.round()}m').join(', ')} 순서로 줄이면 돼. '
-              '짧은 직선일수록 같은 배터리로 버는 시간이 적어. 코너를 빠져나갈 때 켜는 Overtake는 그대로 둬'
-          : over == null
-              ? '그 앞 구간에서 Overtake를 줄여서 배터리를 채운 채로 들어가'
-              : '${labels[over.d.index]}에서는 Overtake를 끄고 $where까지 배터리를 남겨';
+      final cuts = fast.map((f) => '${labels[f.d.index]}에서 ${f.d.fastOvertakeM!.round()}m').toList();
       final overText = over == null
           ? ''
           : '. ${labels[over.d.index]}에서 AI보다 배터리를 ${_bat(over.more)} 더 썼어'
               '${overtake > 0 ? '. 거기서 Overtake를 켠 거리가 ${overtake.round()}m야' : ''}';
+      if (fast.isEmpty && over == null) {
+        noCut = true;
+        final segment = _segmentOf(analysis, empty.index);
+        final fastEnd = segment != null && !segment.isCorner && empty.endSpeedKph >= _highSpeedKph
+            ? '. $where 끝은 ${empty.endSpeedKph}km/h까지 올라가는 곳이라, 배터리가 바닥나도 잃는 시간이 가장 작아'
+            : '';
+        lines.add('$head$entryText$fastEnd');
+        continue;
+      }
+      final advice = fast.isNotEmpty
+          ? '280km/h가 넘을 때 켜는 Overtake부터 줄여. '
+              '${cuts.length == 1 ? '${cuts.single}를 줄이면 돼' : '${cuts.join(', ')} 순서로 줄이면 돼'}. '
+              '짧은 직선일수록 같은 배터리로 버는 시간이 적어. $keepLaunches'
+          : '${labels[over!.d.index]}에서는 Overtake를 끄고 $where까지 배터리를 남겨';
       lines.add('$head$entryText$overText → $advice');
       continue;
     }
     // 바닥나지 않았으면: AI보다 덜 쓴 직선이 있을 때 그 직선에서 더 쓰라고 한다(배터리가 남으면 직선 끝까지 써도 된다).
-    final under = overs.reversed
+    final under = versusAi.reversed
         .where((o) => _segmentOf(analysis, o.d.index)?.isCorner == false && -o.more >= _ersGapKj)
         .firstOrNull;
     if (under != null) {
@@ -991,12 +1120,16 @@ List<String> deepBatteryLines(RaceBatteryReview? battery, RaceAnalysis analysis,
           '→ 거기서는 Overtake로 더 써');
     }
   }
+  if (noCut) {
+    lines.add(_noCutLine(launchOvertakes, capped: cap != null));
+  }
 
   final halfLifted = <int>{};
   if (hasField) {
     // 덜 떼는 코너: 진입에서 스로틀을 완전히 떼는 거리가 짧아 회수가 적은데, AI는 더 오래 완전히 떼고(브레이크를 짧게 찍고) 훨씬 많이 채운다.
+    // 랩당 회수 한도까지 이미 채웠으면 더 채울 수 없으니 짚지 않는다.
     final partial = <({int index, double gap, String line})>[];
-    for (final s in analysis.segments.where((s) => s.isCorner)) {
+    for (final s in analysis.segments.where((s) => s.isCorner && cap == null)) {
       final ai = analysis.fieldErsAt(s.index);
       final mine = averagedSegment(driven, s.index);
       final aiLift = ai?.liftM;
@@ -1034,7 +1167,8 @@ List<String> deepBatteryLines(RaceBatteryReview? battery, RaceAnalysis analysis,
     }
 
     ({int index, double myNet, double aiNet, double overtake, double brake})? worst;
-    for (final s in analysis.segments.where((s) => s.isCorner && !halfLifted.contains(s.index))) {
+    // 긴 직선 앞 탈출 코너는 배터리를 쓰는 게 맞는 곳이라 뺀다.
+    for (final s in analysis.segments.where((s) => s.isCorner && !halfLifted.contains(s.index) && !long.protected.contains(s.index))) {
       final harvest = avg(s.index, (d) => d.harvestKj);
       final deploy = avg(s.index, (d) => d.deployKj);
       final ai = analysis.fieldErsAt(s.index);
@@ -1056,7 +1190,7 @@ List<String> deepBatteryLines(RaceBatteryReview? battery, RaceAnalysis analysis,
     if (worst != null) {
       final advice = worst.overtake > 0
           ? '. 여기서 Overtake를 켠 거리가 ${worst.overtake.round()}m야 → 여기서는 Overtake를 끄고 지나가'
-          : worst.brake >= _emptyM
+          : worst.brake >= _emptyM && cap == null
               ? ' → 브레이크 구간을 길게 가져가서 배터리를 더 채워'
               : ' → 이 코너에서는 배터리를 쓰지 말고 아껴';
       lines.add('${labels[worst.index]}: 이 구간을 지나면서 너는 배터리가 랩마다 ${_batChange(worst.myNet, last: false)}, '
@@ -1070,6 +1204,18 @@ List<String> deepBatteryLines(RaceBatteryReview? battery, RaceAnalysis analysis,
     }
   }
   return lines;
+}
+
+/// 바닥나는데 줄일 곳(긴 직선 밖 고속 Overtake·AI보다 많이 쓴 곳)이 없을 때의 줄: 긴 직선 앞 탈출 Overtake는 맞다고 하고,
+/// 회수 한도까지 채웠으면 모자란 이유를 붙인다. 둘 다 아니면 짧은 직선에서 Overtake를 줄이라고 한다.
+String _noCutLine(List<String> launchOvertakes, {required bool capped}) {
+  final parts = [
+    if (launchOvertakes.isNotEmpty) '${launchOvertakes.join('·')}에서 Overtake를 켜는 건 맞아. 긴 직선 앞 탈출이라 같은 배터리로 가장 많은 시간을 벌어',
+    if (capped) '랩마다 채울 수 있는 만큼 다 채우고도 모자란 거라, 바닥나는 걸 막으려고 탈출에서 Overtake를 줄일 필요는 없어',
+  ];
+  return parts.isEmpty
+      ? '바닥나지 않게 하려면 긴 직선이 아닌 짧은 직선에서 Overtake를 줄여서 배터리를 채운 채로 들어가'
+      : 'Overtake: ${parts.join('. ')}';
 }
 
 /// 배터리가 늘었는지 줄었는지(`5% 줄고`·`3% 늘어`, 1%도 안 되면 `거의 그대로야`). [last]면 문장 끝 어미.
@@ -1165,7 +1311,8 @@ List<String> deepStrategyLines(RaceAnalysis analysis, List<RaceStintReview> revi
           if (usable - used.reduce(math.max) >= _spareLaps)
             '${withParticle(compoundName(compound.compound), '은', '는')} $usable랩까지 탈 수 있는데 ${used.reduce(math.max)}랩만 탔어',
   ];
-  if (spare.isNotEmpty) {
+  // 스톱이 이미 규정 최소(마른 노면 1번)면 줄이라고 하지 않는다.
+  if (spare.isNotEmpty && canDropStop(reviewStints)) {
     lines.add('게임이 본 타이어 수명보다 일찍 바꾼 타이어가 있어. ${spare.join('. ')} → 스틴트를 더 길게 가져가면 피트 스톱을 줄일 수 있어');
   }
 
@@ -1258,7 +1405,7 @@ List<({String title, ReviewSection section})> raceReviewSectionsWithAnalysis(
     final deep = switch (title) {
       kPaceSectionTitle => deepPaceLines(analysis, review.stints),
       kStrategySectionTitle => deepStrategyLines(analysis, review.stints, review: review.strategy),
-      kTyreSectionTitle => deepTyreLines(review.stints, analysis, labels, setup),
+      kTyreSectionTitle => deepTyreLines(review.stints, analysis, labels, setup, strategy: review.strategy),
       kBatterySectionTitle => deepBatteryLines(review.battery, analysis, labels),
       _ => const <String>[],
     };

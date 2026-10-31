@@ -46,6 +46,12 @@ const int kSectorMarginMs = 100;
 /// 앞·뒤 타이어 랩당 마모 차이가 이만큼(%p) 이상이면 어느 쪽이 먼저 닳는지 짚는다.
 const double _axleWearGapPct = 0.3;
 
+/// 스틴트를 AI가 같은 컴파운드로 탄 랩 수보다 이만큼(랩) 이상 길게 타면(마모가 빠르지 않고 그립도 지켰을 때) 타이어를 아껴 쓴 것으로 본다.
+const int _longerStintLaps = 2;
+
+/// 마른 노면 타이어 — 이것만 썼으면 두 종류를 써야 하는 규정 때문에 피트 1번이 최소다(인터·웻을 썼으면 0번).
+const Set<String> _dryCompounds = {'Soft', 'Medium', 'Hard'};
+
 /// 배터리 랩 끝 잔량이 용량의 이 비율 아래면 거의 바닥, 이 비율 이상이면 가득(서버와 같다).
 const double kErsLowFraction = 0.1;
 const double kErsFullFraction = 0.95;
@@ -798,11 +804,57 @@ String? _axleAdvice(RaceStintReview stint) {
       : '뒤 타이어가 랩마다 $rear%씩 닳아서 앞 타이어($front%)보다 빨리 닳았어 → 코너를 나갈 때 스로틀을 천천히 열어서 뒷바퀴가 헛돌지 않게 해';
 }
 
-/// 타이어 평가: 스틴트 수치는 그림이 보여 주고, 줄은 스틴트마다 랩타임 추세(AI 대비)·앞뒤 마모로 본 원인·끝 수명과 마지막 랩 페이스.
-ReviewSection tyreReview(List<RaceStintReview> stints) {
+/// 피트 스톱 최소 횟수: 마른 노면 타이어만 썼으면 1번(두 종류를 써야 한다), 인터·웻을 썼으면 0번.
+int minimumStops(List<RaceStintReview> stints) => stints.every((s) => _dryCompounds.contains(s.compound)) ? 1 : 0;
+
+/// 스톱을 더 줄일 수 있는지(지금 스톱 수가 규정 최소보다 많은지).
+bool canDropStop(List<RaceStintReview> stints) => stints.length - 1 > minimumStops(stints);
+
+/// 스틴트를 AI가 같은 컴파운드로 탄 랩 수보다 [_longerStintLaps]랩 이상 길게 탔고(마모가 빠르지 않고 AI보다 그립을 크게 잃지 않았을 때)
+/// 그 줄과 끝 수명. 스톱을 더 줄일 수 없는데 수명이 넉넉히 남은 채 들어왔으면 남은 수명을 페이스에 써도 된다고 붙인다. 아니면 null.
+String? longStintLine(RaceStintReview stint, {required bool last, required bool canDropStop}) {
+  final field = stint.fieldStintLaps;
+  final laps = stint.endLap - stint.startLap + 1;
+  final extra = stint.extraTrendMs;
+  if (field == null || laps - field < _longerStintLaps || stint.wearsFast || (extra != null && extra >= kTrendMarginMs)) {
+    return null;
+  }
+  final label = stintName(stint.compound, stint.startLap, stint.endLap);
+  final life = stint.endLifePct;
+  final ran = last ? '체커기까지 $laps랩을 탔어' : '$laps랩을 탔어';
+  final lifeText = life == null ? '' : '. 그러고도 타이어 수명이 ${life.round()}% 남았어';
+  final spare = !last && !canDropStop && life != null && life >= _earlyStopLifePct
+      ? ' → 마른 노면에서는 타이어 두 종류를 써야 해서 피트 한 번은 줄일 수 없어. 남은 수명은 다음에 더 세게 밀어도 되는 여유야'
+      : '';
+  return '$label: AI는 ${withParticle(compoundName(stint.compound), '으로', '로', rieulAsVowel: true)} 보통 $field랩을 타고 들어왔는데 '
+      '너는 $ran$lifeText$spare';
+}
+
+/// 다른 차들 대부분보다 피트에 덜 들어갔고 타이어가 빨리 닳은 스틴트가 없으면 그 줄(아니면 null).
+String? fewerStopsLine(List<RaceStintReview> stints, RaceStrategyReview strategy) {
+  final common = strategy.commonStops;
+  if (common == null || strategy.stops >= common || stints.isEmpty || stints.any((s) => s.wearsFast)) {
+    return null;
+  }
+  final mine = strategy.stops == 0 ? '한 번도 안 들어갔어' : '${strategy.stops}번만 들어갔어';
+  return '다른 차들은 대부분 피트에 $common번 들어갔는데 우리는 타이어를 버텨서 $mine'
+      '${stopChoiceWorkedBest(strategy) ? '. 이번 레이스에서 가장 잘 통한 전략이었어' : ''}';
+}
+
+/// 타이어 평가: 스틴트 수치는 그림이 보여 주고, 줄은 다른 차들보다 덜 들어간 피트, 스틴트마다 랩타임 추세(AI 대비)·앞뒤 마모로 본 원인·
+/// AI보다 길게 탄 스틴트·끝 수명과 마지막 랩 페이스.
+/// 아쉬움: 그립을 AI보다 빨리 잃었거나 마모가 빠른 스틴트가 있을 때. 좋음: 그 밖에 그립을 더 잘 지켰거나, AI보다 길게 탔거나, 피트에 덜 들어갔을 때.
+ReviewSection tyreReview(List<RaceStintReview> stints, {RaceStrategyReview? strategy}) {
   final lines = <String>[];
   var worse = 0;
   var better = 0;
+  final dropStop = canDropStop(stints);
+  if (strategy != null) {
+    if (fewerStopsLine(stints, strategy) case final fewer?) {
+      better++;
+      lines.add(fewer);
+    }
+  }
   for (final (i, stint) in stints.indexed) {
     final last = i == stints.length - 1;
     final label = stintName(stint.compound, stint.startLap, stint.endLap);
@@ -824,7 +876,13 @@ ReviewSection tyreReview(List<RaceStintReview> stints) {
       better++;
       lines.add('$label: 랩이 지날수록 느려지는 정도가 AI보다 랩당 ${_seconds(extra)} 작았어. 타이어 관리를 잘했어');
     }
-    if (tyreLifeLine(stint, last: last) case final lifeLine?) {
+    final long = longStintLine(stint, last: last, canDropStop: dropStop);
+    if (long != null) {
+      better++;
+      lines.add(long);
+    }
+    // 길게 탄 줄이 끝 수명을 이미 말했으면 넉넉히 남겼다는 줄은 붙이지 않는다.
+    if (tyreLifeLine(stint, last: last, canDropStop: dropStop) case final lifeLine? when long == null || (stint.endLifePct ?? 0) < _lowLifePct) {
       lines.add(lifeLine);
     }
   }
@@ -836,8 +894,9 @@ ReviewSection tyreReview(List<RaceStintReview> stints) {
   return (grade: grade, lines: lines);
 }
 
-/// 스틴트 끝 수명 줄: 수명을 너무 낮게까지 탔으면(마지막 랩 페이스와 함께) 또는 넉넉히 남기고 들어왔으면(마지막 스틴트 제외). 짚을 게 없으면 null.
-String? tyreLifeLine(RaceStintReview stint, {required bool last}) {
+/// 스틴트 끝 수명 줄: 수명을 너무 낮게까지 탔으면(마지막 랩 페이스와 함께) 또는 넉넉히 남기고 들어왔으면(마지막 스틴트 제외 —
+/// 스톱을 더 줄일 수 있으면 줄이라고, 규정 최소라 줄일 수 없으면 남은 수명을 페이스에 써도 된다고). 짚을 게 없으면 null.
+String? tyreLifeLine(RaceStintReview stint, {required bool last, bool canDropStop = true}) {
   final label = stintName(stint.compound, stint.startLap, stint.endLap);
   final life = stint.endLifePct;
   final slower = stint.endLapsSlowerMs;
@@ -848,7 +907,10 @@ String? tyreLifeLine(RaceStintReview stint, {required bool last}) {
         : '$label: 타이어 수명이 ${life.round()}% 남을 때까지 탔는데 마지막 랩 페이스는 지켰어';
   }
   if (life != null && !last && life >= _earlyStopLifePct) {
-    return '$label: 타이어 수명이 ${life.round()}% 남았을 때 들어왔어 → 이 스틴트를 더 끌면 피트 스톱을 한 번 줄일 수 있어';
+    return canDropStop
+        ? '$label: 타이어 수명이 ${life.round()}% 남았을 때 들어왔어 → 이 스틴트를 더 끌면 피트 스톱을 한 번 줄일 수 있어'
+        : '$label: 타이어 수명이 ${life.round()}% 남았을 때 들어왔어. 마른 노면에서는 타이어 두 종류를 써야 해서 피트 한 번은 줄일 수 없어 '
+            '→ 남은 수명은 다음에 더 세게 밀어도 되는 여유야';
   }
   return null;
 }
@@ -952,7 +1014,7 @@ List<({String title, ReviewSection section})> raceReviewSections(RaceReview revi
         title: kStrategySectionTitle,
         section: strategyReview(strategy, alternativeGainMs: alternativeGainMs, alternativeStops: alternativeStops),
       ),
-    if (review.stints.isNotEmpty) (title: kTyreSectionTitle, section: tyreReview(review.stints)),
+    if (review.stints.isNotEmpty) (title: kTyreSectionTitle, section: tyreReview(review.stints, strategy: strategy)),
     if (battery != null) (title: kBatterySectionTitle, section: batteryReview(battery)),
   ];
 }

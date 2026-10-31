@@ -249,7 +249,8 @@ class _Loaded extends ConsumerWidget {
     }
     final trace = ref.watch(lapTraceProvider(lapId));
     final geometry = ref.watch(trackGeometryProvider((trackId: highlights.trackId, gameCode: highlights.gameCode)));
-    if (trace.isLoading || geometry.isLoading) {
+    // 실측 트랙 폭·공식 코너까지 기다려 서킷을 한 번에 제대로 그린다.
+    if (trace.isLoading || watchReplayCircuitLoading(ref, trackId: highlights.trackId, gameCode: highlights.gameCode)) {
       return const PageLoadingBar();
     }
     final lap = trace.valueOrNull;
