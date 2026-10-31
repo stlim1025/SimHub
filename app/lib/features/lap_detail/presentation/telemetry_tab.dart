@@ -347,7 +347,13 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
             ],
           );
     // 트랙 지도(같은 십자선 거리에 점) + Lap Telemetry 통계.
-    final panel = LapTelemetryPanel(trace: trace, sectors: widget.sectors, cursor: _shown, units: widget.units);
+    final panel = LapTelemetryPanel(
+      trace: trace,
+      sectors: widget.sectors,
+      cursor: _shown,
+      units: widget.units,
+      corners: corners,
+    );
     return LapPanelLayout(panel: panel, main: mainColumn, trace: trace, sectors: widget.sectors, cursor: _shown);
   }
 

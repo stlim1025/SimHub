@@ -3,7 +3,7 @@ import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:simcenter_app/features/lap_detail/domain/lap_corners.dart';
-import 'package:simcenter_app/features/sessions/presentation/race_review_track_map.dart';
+import 'package:simcenter_app/features/lap_detail/presentation/corner_labels.dart';
 
 const double _radius = 100;
 const Offset _center = Offset(150, 150);

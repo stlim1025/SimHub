@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:simcenter_app/core/layout/viewport_pinned.dart';
 import 'package:simcenter_app/core/theme/app_theme.dart';
+import 'package:simcenter_app/features/lap_detail/domain/lap_corners.dart';
 import 'package:simcenter_app/features/lap_detail/domain/lap_detail_models.dart';
 import 'package:simcenter_app/features/lap_detail/domain/track_map.dart';
 import 'package:simcenter_app/features/lap_detail/presentation/telemetry_tab.dart';
@@ -148,6 +149,33 @@ void main() {
       expect(corner.dx, greaterThan(start.dx));
       expect(corner.dy, greaterThan(start.dy));
       expect(find.text('Sector 1'), findsOneWidget);
+      expect(_painter(t).labelStyle, isNull); // 코너를 안 주면(작은 지도) 번호 없음
+    });
+
+    testWidgets('코너를 주면 지도에 코너 번호를 그리고, 번호 자리만큼 여백을 더 둔다', (t) async {
+      final cursor = ValueNotifier<double?>(0);
+      addTearDown(cursor.dispose);
+      const corners = [LapCorner(number: 1, startM: 0, endM: 10, direction: CornerDirection.right)];
+      Future<Offset> dotWith(List<LapCorner> corners) async {
+        await t.pumpWidget(MaterialApp(
+          theme: AppTheme.dark,
+          home: Scaffold(
+            body: SizedBox(
+              width: 400,
+              child: TrackMap(trace: _positionedTrace('l1'), sectors: sampleLap().sectors, cursor: cursor, corners: corners),
+            ),
+          ),
+        ));
+        return _painter(t).dotOffset(t.getSize(_mapPaint))!;
+      }
+
+      final plain = await dotWith(const []);
+      final labelled = await dotWith(corners);
+
+      expect(_painter(t).corners, corners);
+      expect(_painter(t).labelStyle, isNotNull);
+      // 표본 0 = 왼쪽 위 모서리: 여백이 커져 안쪽으로 들어온다.
+      expect(labelled.dy, greaterThan(plain.dy));
     });
   });
 

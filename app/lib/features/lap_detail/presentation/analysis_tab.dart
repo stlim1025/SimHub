@@ -191,7 +191,13 @@ class _AnalysisTabState extends ConsumerState<AnalysisTab> {
           ],
         );
         return LapPanelLayout(
-          panel: LapTelemetryPanel(trace: data, sectors: lap.sectors, cursor: _replayCursor, units: units),
+          panel: LapTelemetryPanel(
+            trace: data,
+            sectors: lap.sectors,
+            cursor: _replayCursor,
+            units: units,
+            corners: corners,
+          ),
           main: main,
           trace: data,
           sectors: lap.sectors,
