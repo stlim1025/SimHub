@@ -13,7 +13,11 @@ import 'package:simcenter_app/features/laps/data/laps_repository.dart';
 import 'package:simcenter_app/features/laps/domain/lap_models.dart';
 import 'package:simcenter_app/features/ranking/data/ranking_repository.dart';
 
+import 'package:simcenter_app/features/tracks/application/track_corners_provider.dart';
+import 'package:simcenter_app/features/tracks/application/track_widths_provider.dart';
+import 'package:simcenter_app/features/tracks/data/tracks_repository.dart';
 import 'fakes.dart';
+import 'setups_fakes.dart';
 
 const ferrari = LapTeam(name: 'Ferrari', color: '#E8002D');
 
@@ -109,6 +113,14 @@ LapDetail sampleDetail({
 String locationOf(GoRouter router) => router.routeInformationProvider.value.uri.toString();
 
 /// 랩 상세 화면을 띄운다. 다른 화면 경로는 `track:…`·`session:…`·`laps` 글자로 확인한다.
+/// 다시보기 서킷 재료(트랙 표본 형상·실측 폭·공식 코너)를 바로 끝나는 빈 값으로 — 화면이 이 재료를 기다리므로
+/// 테스트에서 네트워크·asset 읽기에 걸려 로딩에 머물지 않게 한다.
+final List<Override> replayCircuitOverrides = [
+  tracksRepositoryProvider.overrideWithValue(FakeTracksRepository()),
+  trackWidthsProvider.overrideWith((ref) async => const {}),
+  trackCornersProvider.overrideWith((ref) async => const {}),
+];
+
 Future<GoRouter> pumpLapDetail(
   WidgetTester tester, {
   required LapDetailRepository detailRepo,
@@ -150,6 +162,7 @@ Future<GoRouter> pumpLapDetail(
       lapsRepositoryProvider.overrideWithValue(lapsRepo ?? FakeLapsRepository()),
       rankingRepositoryProvider.overrideWithValue(FakeRankingRepository()),
       shareBaseUriProvider.overrideWithValue(shareBase ?? Uri.parse('https://simcenter.test/')),
+      ...replayCircuitOverrides,
     ],
     child: MaterialApp.router(theme: theme, routerConfig: router),
   ));

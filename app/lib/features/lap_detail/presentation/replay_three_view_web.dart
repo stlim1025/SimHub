@@ -48,7 +48,7 @@ Future<_SceneModule> _loadModule() =>
     _module ??= importModule(_modulePath.toJS).toDart.then((module) => module as _SceneModule);
 
 /// three.js(WebGL) 다시보기: [track] 메시를 한 번 넘기고, [time]이 바뀔 때마다 [cars](첫 차를 [camera]로 따라간다)의
-/// 프레임 상태를 넘겨 그린다. 모듈을 불러오는 동안·WebGL을 못 쓰면 [fallback](캔버스 그림)을 그린다.
+/// 프레임 상태를 넘겨 그린다. 모듈을 불러오는 동안은 비워 두고(캔버스 그림이 먼저 떴다가 바뀌지 않게), WebGL을 못 쓰면 [fallback](캔버스 그림)을 그린다.
 class ReplayThreeView extends StatefulWidget {
   const ReplayThreeView({
     super.key,
@@ -164,7 +164,6 @@ class _ReplayThreeViewState extends State<ReplayThreeView> {
     return Stack(
       fit: StackFit.expand,
       children: [
-        if (_scene == null) widget.fallback,
         HtmlElementView.fromTagName(tagName: _containerTag, onElementCreated: _onElementCreated),
         if (_scene != null && widget.overlay != null) widget.overlay!,
       ],

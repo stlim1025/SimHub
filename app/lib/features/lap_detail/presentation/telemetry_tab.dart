@@ -84,8 +84,9 @@ class TelemetryTab extends ConsumerWidget {
     final otherCarColor = compare.compareTeamColor;
     final units = ref.watch(authControllerProvider).valueOrNull?.preferences.units ?? UnitSystem.metric;
 
-    // 비교 랩 트레이스가 아직 오는 중이면 기다린다. 실패하면 이 랩만 그린다.
-    if (trace.isLoading || (reference?.isLoading ?? false)) {
+    // 비교 랩 트레이스·서킷 재료가 아직 오는 중이면 기다린다(다시보기를 한 번에 제대로 그린다). 실패하면 이 랩만 그린다.
+    final circuitLoading = watchReplayCircuitLoading(ref, trackId: detail.trackId, gameCode: lap.gameCode);
+    if (trace.isLoading || (reference?.isLoading ?? false) || circuitLoading) {
       return const PageLoadingBar();
     }
     return trace.when(

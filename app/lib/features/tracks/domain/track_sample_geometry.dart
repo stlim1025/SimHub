@@ -27,6 +27,10 @@ const int _edgeMedianBins = 2;
 /// 연석 칸의 가장자리(연석 안쪽 끝)에서 멀어질수록 가장자리가 넓어질 수 있는 기울기(옆 m / 진행 m) — 연석 둘레가 깔때기처럼 풀린다.
 const double _kerbFunnelSlope = 0.2;
 
+/// 양쪽 연석이 다 밟힌 칸: 앞뒤 이 칸 수로 잰 굽는 정도(1/m)가 이 이상이면 안쪽 연석만 따른다(덜 굽으면 두 쪽을 평균한다).
+const int _apexCurvatureBins = 2;
+const double _apexSideCurvature = 0.002;
+
 /// 모든 차 표본으로 서버가 만든 트랙 형상(`GET /tracks/{trackId}/geometry`). 칸 i = 랩 거리 i × [resolutionM].
 /// 선([x]·[z])은 레이싱 라인(차들이 달린 위치의 중앙값)이고 도로 한가운데가 아니다. 띠는 그 선에서 차들이 달린 왼쪽·오른쪽 끝(m),
 /// 연석은 그 쪽을 밟은 적이 있는지. 왼쪽 = 진행 방향 법선 (−sin, cos) 쪽(앱 서킷 그림과 같은 규칙).
@@ -235,12 +239,29 @@ TrackWidthProfile trackProfileFromSamples(TrackSampleGeometry geometry, {require
   final leftEdge = edge(geometry.edgeLeftM, geometry.kerbOuterLeftM, geometry.kerbLeft, geometry.bandLeftM);
   final rightEdge = edge(geometry.edgeRightM, geometry.kerbOuterRightM, geometry.kerbRight, geometry.bandRightM);
 
-  // 연석 단서가 있는 칸의 도로 가운데 이동량(+ = 왼쪽).
+  // 칸마다 레이싱 라인이 굽는 정도(1/m, + = 왼쪽으로 굽는다 = 왼쪽이 코너 안쪽).
+  double headingAt(int k) {
+    final d = line[at(k + 1)] - line[at(k - 1)];
+    return math.atan2(d.dy, d.dx);
+  }
+
+  double curvatureAt(int k) {
+    final turn = headingAt(k + _apexCurvatureBins) - headingAt(k - _apexCurvatureBins);
+    final wrapped = (turn + math.pi) % (2 * math.pi) - math.pi;
+    return wrapped / (2 * _apexCurvatureBins * geometry.resolutionM);
+  }
+
+  // 연석 단서가 있는 칸의 도로 가운데 이동량(+ = 왼쪽). 양쪽 다 밟힌 칸(코너 꼭짓점 — S자에서 차마다 어느 쪽 연석을 밟느냐가 다르다)은
+  // 굽는 안쪽 연석을 따른다. 둘을 평균하면 가운데가 레이싱 라인으로 돌아와 꼭짓점에서 차가 연석이 아니라 도로 한가운데를 지나 보인다.
   final known = <int, double>{};
   for (var k = 0; k < n; k++) {
+    final both = geometry.kerbLeft[k] && geometry.kerbRight[k];
+    final curvature = both ? curvatureAt(k) : 0.0;
+    final insideLeft = both && curvature >= _apexSideCurvature;
+    final insideRight = both && curvature <= -_apexSideCurvature;
     final values = [
-      if (geometry.kerbLeft[k]) leftEdge[k] - half,
-      if (geometry.kerbRight[k]) half - rightEdge[k],
+      if (geometry.kerbLeft[k] && !insideRight) leftEdge[k] - half,
+      if (geometry.kerbRight[k] && !insideLeft) half - rightEdge[k],
     ];
     if (values.isNotEmpty) {
       known[k] = values.reduce((a, b) => a + b) / values.length;

@@ -40,6 +40,7 @@ Future<GoRouter> _pumpShared(
     overrides: [
       fakeAuth(user),
       publicLapRepositoryProvider.overrideWithValue(repo),
+      ...replayCircuitOverrides,
     ],
     child: MaterialApp.router(routerConfig: router),
   ));

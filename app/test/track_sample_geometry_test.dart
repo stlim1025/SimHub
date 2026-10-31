@@ -122,6 +122,24 @@ void main() {
     expect(circuit.asphalt.contains(at(115)), isFalse);
   });
 
+  test('양쪽 연석이 다 밟힌 코너는 안쪽 연석에 도로 가장자리를 맞춰, 레이싱 라인이 꼭짓점에서 연석을 타고 지난다', () {
+    // 원을 반시계로 돈다(왼쪽 = 안쪽). 모든 칸에서 양쪽 연석이 밟혔고, 연석 바깥 끝은 라인에서 2.5m(안쪽 끝 1m).
+    final json = _geometryJson(
+      pit: false,
+      columns: {'edgeLeftM': 1, 'edgeRightM': 1, 'kerbOuterLeftM': 2.5, 'kerbOuterRightM': 2.5},
+    );
+    final n = (json['x'] as List).length;
+    json['kerbLeft'] = [for (var i = 0; i < n; i++) true];
+    json['kerbRight'] = [for (var i = 0; i < n; i++) true];
+    final circuit = ReplayCircuit.build(LapReplay(_circleLap()), samples: TrackSampleGeometry.fromJsonOrNull(json)!);
+    Offset at(double radius) => Offset(radius * math.cos(1.0), radius * math.sin(1.0));
+
+    // 안쪽 가장자리 = 라인에서 1m(두 쪽을 평균하면 라인이 도로 가운데로 돌아와 안쪽 가장자리가 6.5m에 선다).
+    expect(circuit.asphalt.contains(at(99.5)), isTrue);
+    expect(circuit.asphalt.contains(at(98.5)), isFalse);
+    expect(circuit.kerbRed.contains(at(98.3)) || circuit.kerbWhite.contains(at(98.3)), isTrue);
+  });
+
   test('한두 칸만 튄 가장자리(피트 입구로 갈라지는 차 등)는 앞뒤 가운데값으로 눌러 도로가 부풀지 않는다', () {
     final json = _geometryJson(
       pit: false,

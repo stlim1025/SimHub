@@ -98,7 +98,9 @@ class _AnalysisTabState extends ConsumerState<AnalysisTab> {
     final traces = watchLapTraces(ref, detail, widget.compare);
     final trace = traces.trace;
     final reference = traces.reference;
-    if (trace.isLoading || (reference?.isLoading ?? false)) {
+    // 서킷 재료도 기다려 다시보기를 한 번에 제대로 그린다.
+    final circuitLoading = watchReplayCircuitLoading(ref, trackId: detail.trackId, gameCode: lap.gameCode);
+    if (trace.isLoading || (reference?.isLoading ?? false) || circuitLoading) {
       return const PageLoadingBar();
     }
     final units = ref.watch(authControllerProvider).valueOrNull?.preferences.units ?? UnitSystem.metric;

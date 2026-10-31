@@ -250,6 +250,41 @@ public sealed class TrackGeometryBuilderTests
     }
 
     [Fact]
+    public void Build_PitLane_ReachesBackAlongTheEntryRoadAndOnAlongTheExitRoad()
+    {
+        // 2~4번 차가 300~400m에서 피트 레인(바깥 12m, pitStatus)을 달리고, 그 앞 240~300m는 도로에서 바깥으로 갈라지는 입구 길,
+        // 뒤 400~460m는 도로로 돌아오는 출구 길이다(게임은 이 길을 피트 레인으로 알려 주지 않는다). 0·1번은 레이싱 라인.
+        const byte pitting = 1 << 3;
+        var frames = new List<Sample[]>();
+        for (var d = 0.0; d < LapLength; d += 2)
+        {
+            var angle = d / Radius;
+            Sample At(byte car, double radius, byte status = 0) => new(car, d, radius * Math.Cos(angle), radius * Math.Sin(angle), SpeedKph: 80, Status: status);
+            var cars = new List<Sample> { At(0, Radius), At(1, Radius + 1) };
+            for (byte car = 2; car <= 4; car++)
+            {
+                cars.Add(d switch
+                {
+                    >= 300 and < 400 => At(car, Radius + 12, pitting),
+                    >= 240 and < 300 => At(car, Radius + 12 * (d - 240) / 60),
+                    >= 400 and < 460 => At(car, Radius + 12 * (460 - d) / 60),
+                    _ => At(car, Radius),
+                });
+            }
+
+            frames.Add([.. cars]);
+        }
+
+        var geometry = TrackGeometryBuilder.Build([TrackSampleDecoder.Decode(Encode(frames), format: 5)])!;
+
+        Assert.NotNull(geometry.PitX);
+        double LapDistanceOf(int index) => (Math.Atan2(geometry.PitZ![index], geometry.PitX![index]) + 2 * Math.PI) % (2 * Math.PI) * Radius;
+        // 레이싱 라인에서 8m 넘게 벗어난 길(입구 280m~·출구 ~420m)까지 이어진다.
+        Assert.InRange(LapDistanceOf(0), 270, 292);
+        Assert.InRange(LapDistanceOf(geometry.PitX!.Length - 1), 408, 430);
+    }
+
+    [Fact]
     public void Build_RumbleOnTheRacingLineInABend_IsTheInsideKerb()
     {
         // 레이싱 라인 차가 100~120m에서 연석을 밟고 지난다(라인에서 0.5m 안이라 좌우로는 모호하다). 원을 반시계로 도니 안쪽 = 왼쪽.

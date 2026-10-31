@@ -90,6 +90,14 @@ public static class TrackGeometryBuilder
     private const int MinPitBins = 10;
 
     /// <summary>
+    /// 피트 입구·출구 길: 게임은 피트 입구선부터 출구선까지만 피트 레인(pitStatus)으로 알려 주므로, 그 앞뒤로 도로에서 갈라져 나가는 길은
+    /// 피트 레인을 드나드는 차([PitMarginMs] 안) 표본 가운데 레이싱 라인에서 그 쪽 가장자리·연석 바깥과 이 거리(m) 중 먼 쪽보다 더 떨어진 것으로 잡는다
+    /// (도로 위를 넓게 달린 차는 빼고, 도로에서 벗어난 길만). 피트 레인 칸 앞뒤로 이 칸 수 이하로 끊긴 칸까지 이어 붙인다.
+    /// </summary>
+    private const double PitRoadMinOffsetM = 8;
+    private const int MaxPitRoadGapBins = 4;
+
+    /// <summary>
     /// 가장자리·연석 바깥 끝: 칸 표본의 바퀴 자리 가운데 이 비율 위치(가장 먼 1%는 런오프·탈출로로 잠깐 나간 차로 보고 뺀다).
     /// 표본이 100개 이하인 칸은 가장 먼 자리 그대로다.
     /// </summary>
@@ -138,6 +146,7 @@ public static class TrackGeometryBuilder
         var n = (int)Math.Round(maxDistance / ResolutionM) + 1;
         var bins = Enumerable.Range(0, n).Select(_ => new List<Point>()).ToArray();
         var pitBins = Enumerable.Range(0, n).Select(_ => new List<Point>()).ToArray();
+        var pitRoadBins = Enumerable.Range(0, n).Select(_ => new List<Point>()).ToArray();
         var sampleCount = 0;
         var timelines = Timelines(chunks);
         var pitTimes = PitTimes(chunks, timelines);
@@ -239,9 +248,15 @@ public static class TrackGeometryBuilder
             tarmacWheels.Right.Clear();
             kerbWheels.Left.Clear();
             kerbWheels.Right.Clear();
+            var pitRoad = new List<(Point Point, double Offset)>();
             foreach (var p in bins[k])
             {
                 var offset = (p.X - lineX[k]) * nx + (p.Z - lineZ[k]) * nz;
+                if (p.NearPit && p.Fast)
+                {
+                    pitRoad.Add((p, offset));
+                }
+
                 var inStretch = Math.Abs(offset) <= MaxLateralM;
                 if (inStretch)
                 {
@@ -289,6 +304,17 @@ public static class TrackGeometryBuilder
             kerbOuterLeft[k] = FarEnd(kerbWheels.Left);
             kerbOuterRight[k] = FarEnd(kerbWheels.Right);
 
+            // 피트를 드나드는 차가 도로 밖으로 벗어난 자리 = 피트 입구·출구 길.
+            var leftLimit = Math.Max(PitRoadMinOffsetM, Math.Max(edgeLeft[k], kerbOuterLeft[k]));
+            var rightLimit = Math.Max(PitRoadMinOffsetM, Math.Max(edgeRight[k], kerbOuterRight[k]));
+            foreach (var (p, offset) in pitRoad)
+            {
+                if ((offset > leftLimit || -offset > rightLimit) && Math.Abs(offset) <= MaxLateralM)
+                {
+                    pitRoadBins[k].Add(p);
+                }
+            }
+
             if (offsets.Count == 0)
             {
                 continue;
@@ -299,7 +325,7 @@ public static class TrackGeometryBuilder
             bandRight[k] = Math.Max(0, -offsets[(int)(offsets.Count * (1 - BandPercentile))]);
         }
 
-        var pit = PitLane(pitBins);
+        var pit = PitLane(pitBins, pitRoadBins);
         return new TrackGeometry(
             ResolutionM, sampleCount, lineX, lineZ, heightsOut, bandLeft, bandRight, kerbLeft, kerbRight,
             edgeLeft, edgeRight, kerbOuterLeft, kerbOuterRight, reachLeft, reachRight, pit?.X, pit?.Z, pit?.Y);
@@ -464,9 +490,10 @@ public static class TrackGeometryBuilder
 
     /// <summary>
     /// 피트 레인 표본 칸 → 피트 입구에서 출구로 가는 선. 칸은 랩 거리 순이고 피트 레인이 출발선을 넘을 수 있어(모나코),
-    /// 표본 칸 사이 가장 긴 빈 구간 바로 뒤를 피트 입구로 본다.
+    /// 표본 칸 사이 가장 긴 빈 구간 바로 뒤를 피트 입구로 본다. 그 앞(입구 길)·뒤(출구 길)로 <paramref name="roadBins"/>(도로에서 갈라진 길 표본)가
+    /// 있는 칸을 [MaxPitRoadGapBins]칸 이하 틈까지 이어 붙인다.
     /// </summary>
-    private static (double[] X, double[] Z, double[]? Y)? PitLane(List<Point>[] bins)
+    private static (double[] X, double[] Z, double[]? Y)? PitLane(List<Point>[] bins, List<Point>[] roadBins)
     {
         var n = bins.Length;
         var used = Enumerable.Range(0, n).Where(k => bins[k].Count >= MinPitBinSamples).ToList();
@@ -488,7 +515,35 @@ public static class TrackGeometryBuilder
             }
         }
 
-        var ordered = Enumerable.Range(0, used.Count).Select(j => bins[used[(start + j) % used.Count]]).ToList();
+        var lane = Enumerable.Range(0, used.Count).Select(j => used[(start + j) % used.Count]).ToList();
+        var taken = new HashSet<int>(lane);
+
+        // 피트 레인 끝에서 한 방향(-1 = 입구 쪽, +1 = 출구 쪽)으로 길 칸을 모은다(틈이 길면 멈춘다).
+        List<int> Extend(int from, int step)
+        {
+            var found = new List<int>();
+            var gap = 0;
+            for (var k = (from + step + n) % n; gap <= MaxPitRoadGapBins && !taken.Contains(k); k = (k + step + n) % n)
+            {
+                if (roadBins[k].Count >= MinPitBinSamples)
+                {
+                    found.Add(k);
+                    taken.Add(k);
+                    gap = 0;
+                }
+                else
+                {
+                    gap++;
+                }
+            }
+
+            return found;
+        }
+
+        var entry = Extend(lane[0], -1);
+        entry.Reverse();
+        var exit = Extend(lane[^1], 1);
+        var ordered = entry.Select(k => roadBins[k]).Concat(lane.Select(k => bins[k])).Concat(exit.Select(k => roadBins[k])).ToList();
         var x = Smooth(ordered.Select(b => Median(b.Select(p => p.X))).ToArray(), closed: false);
         var z = Smooth(ordered.Select(b => Median(b.Select(p => p.Z))).ToArray(), closed: false);
         var hasHeights = ordered.All(b => b.Any(p => p.Y.HasValue));
