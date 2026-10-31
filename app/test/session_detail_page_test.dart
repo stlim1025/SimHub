@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +9,8 @@ import 'package:intl/intl.dart';
 import 'package:simcenter_app/core/network/api_exception.dart';
 import 'package:simcenter_app/core/theme/app_colors.dart';
 import 'package:simcenter_app/core/theme/app_theme.dart';
+import 'package:simcenter_app/features/lap_detail/data/lap_detail_repository.dart';
+import 'package:simcenter_app/features/lap_detail/domain/lap_detail_models.dart';
 import 'package:simcenter_app/features/laps/domain/lap_models.dart';
 import 'package:simcenter_app/features/sessions/data/sessions_repository.dart';
 import 'package:simcenter_app/features/sessions/domain/race_analysis.dart';
@@ -152,6 +156,7 @@ Future<GoRouter> _pumpPage(
   String? initialLocation,
   Size size = const Size(1200, 4000),
   ThemeData? theme,
+  Map<String, LapTrace> traces = const {},
 }) async {
   setViewSize(tester, size);
   final router = GoRouter(initialLocation: initialLocation ?? '/sessions/$sessionId', routes: [
@@ -183,6 +188,7 @@ Future<GoRouter> _pumpPage(
       sessionsRepositoryProvider.overrideWithValue(repo),
       // 공식 코너 에셋은 테스트에서 실제 파일 읽기라 끝나지 않으므로 빈 목록으로 둔다.
       trackCornersProvider.overrideWith((ref) async => const {}),
+      lapDetailRepositoryProvider.overrideWithValue(FakeLapDetailRepository(traces: traces)),
     ],
     child: MaterialApp.router(theme: theme, routerConfig: router),
   ));
@@ -219,6 +225,24 @@ final RaceReview _review = RaceReview.fromJsonOrNull({
 })!;
 
 Finder _tab(String label) => find.widgetWithText(Tab, label);
+
+/// 원 서킷 한 바퀴(반지름 100m, 5m 간격) 랩: 트랙 지도 모양을 잡는 데만 쓴다.
+LapTrace _circleLap(String lapId) {
+  const count = 126;
+  return LapTrace(
+    lapId: lapId,
+    resolutionM: 5,
+    timeMs: [for (var i = 0; i < count; i++) i * 720],
+    speedKph: [for (var i = 0; i < count; i++) 180],
+    throttle: [for (var i = 0; i < count; i++) 100],
+    brake: [for (var i = 0; i < count; i++) 0],
+    steer: [for (var i = 0; i < count; i++) 0],
+    gear: [for (var i = 0; i < count; i++) 6],
+    rpm: [for (var i = 0; i < count; i++) 11000],
+    worldPosX: [for (var i = 0; i < count; i++) 100 * math.cos(i * 5 / 100)],
+    worldPosZ: [for (var i = 0; i < count; i++) 100 * math.sin(i * 5 / 100)],
+  );
+}
 
 void main() {
   group('SessionDetailPage 레이스 리뷰 탭', () {
@@ -268,6 +292,51 @@ void main() {
 
       expect(find.byKey(const ValueKey('race-review')), findsNothing);
       expect(find.text('다시 시도'), findsOneWidget);
+    });
+
+    testWidgets('넓으면 레이스 리뷰 오른쪽에 내 최고 랩으로 그린 트랙 지도(섹터 범례 포함)', (t) async {
+      await _pumpPage(
+        t,
+        _repo(_fullDetail(raceReview: _review)),
+        initialLocation: '/sessions/d1?tab=review',
+        size: const Size(1500, 4000),
+        traces: {'lap-9': _circleLap('lap-9')},
+      );
+
+      final review = find.byKey(const ValueKey('race-review'));
+      final map = find.byKey(const ValueKey('race-review-track-map'));
+      expect(map, findsOneWidget);
+      expect(t.getTopLeft(map).dx, greaterThan(t.getTopRight(review).dx));
+      expect(t.getTopLeft(map).dy, t.getTopLeft(review).dy);
+      expect(find.text('섹터 1'), findsOneWidget);
+      expect(find.text('섹터 3'), findsOneWidget);
+    });
+
+    testWidgets('좁으면 트랙 지도를 레이스 리뷰 위에 둔다', (t) async {
+      await _pumpPage(
+        t,
+        _repo(_fullDetail(raceReview: _review)),
+        initialLocation: '/sessions/d1?tab=review',
+        size: const Size(800, 4000),
+        traces: {'lap-9': _circleLap('lap-9')},
+      );
+
+      final map = find.byKey(const ValueKey('race-review-track-map'));
+      expect(map, findsOneWidget);
+      expect(t.getBottomLeft(map).dy, lessThan(t.getTopLeft(find.byKey(const ValueKey('race-review'))).dy));
+    });
+
+    testWidgets('랩 트레이스에 위치가 없으면 지도 없이 리뷰만', (t) async {
+      await _pumpPage(
+        t,
+        _repo(_fullDetail(raceReview: _review)),
+        initialLocation: '/sessions/d1?tab=review',
+        size: const Size(1500, 4000),
+        traces: {'lap-9': traceOf('lap-9')},
+      );
+
+      expect(find.byKey(const ValueKey('race-review')), findsOneWidget);
+      expect(find.byKey(const ValueKey('race-review-track-map')), findsNothing);
     });
 
     testWidgets('레이스 리뷰가 없으면 탭 없이 결과 카드만(주소에 tab=review가 있어도)', (t) async {

@@ -3,15 +3,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/layout/equal_height.dart';
+import '../../../core/layout/layout_constants.dart';
 import '../../../core/layout/page_padding.dart';
+import '../../../core/layout/viewport_pinned.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/page_loading_bar.dart';
 import '../../../core/widgets/not_found_state.dart';
 import '../../../core/widgets/track_flag.dart';
+import '../../lap_detail/application/lap_detail_providers.dart';
 import '../../lap_detail/domain/lap_compare.dart';
 import '../../lap_detail/domain/lap_detail_display.dart';
+import '../../laps/domain/lap_models.dart' show LapSector;
 import '../../seasons/domain/season_display.dart';
 import '../../tracks/application/track_corners_provider.dart';
 import '../application/sessions_providers.dart';
@@ -23,6 +27,7 @@ import 'engine_wear_card.dart';
 import 'final_classification_card.dart';
 import 'penalties_card.dart';
 import 'race_review_card.dart';
+import 'race_review_track_map.dart';
 import 'session_details_card.dart';
 import 'session_highlights_page.dart';
 import 'session_laps_card.dart';
@@ -45,6 +50,10 @@ const double _headerGap = 8;
 const double _headerFontSize = 22;
 const double _cardGap = 20;
 const double _sectionGap = 16;
+
+/// 레이스 리뷰 옆 트랙 지도 칸 폭, 지도를 옆 칸에 둘 최소 콘텐츠 폭(리뷰의 그림·짚을 것 두 칸이 눌리지 않게).
+const double _reviewMapWidth = 300;
+const double _reviewMapSideWidth = 1080;
 
 /// 탭 값 → 탭 글자(`kSessionTabs`와 같은 순서로 그린다).
 const Map<String, String> _tabLabels = {
@@ -117,7 +126,11 @@ class _SessionDetailPageState extends ConsumerState<SessionDetailPage> with Sing
     final backSeasonId = widget.from == kSessionFromSeason ? header?.seasonId : null;
 
     return ListView(
-      padding: pagePadding(context),
+      // Race Review 탭은 오른쪽 트랙 지도 칸만큼 더 넓게 써서 리뷰 폭은 그대로 둔다.
+      padding: pagePadding(
+        context,
+        maxWidth: _tab == kSessionTabReview ? kContentMaxWidth + _reviewMapWidth + _sectionGap : kContentMaxWidth,
+      ),
       children: [
         _Header(
           header: header,
@@ -243,9 +256,13 @@ class _RaceReviewTab extends ConsumerWidget {
     final sessionId = detail.header.sessionId;
     final analysis = ref.watch(raceAnalysisProvider(sessionId));
     final corners = ref.watch(trackCornersProvider);
-    if (analysis.isLoading || corners.isLoading) {
+    final mapLap = _mapLap(detail);
+    final mapLapId = mapLap?.lapId;
+    final trace = mapLapId == null ? null : ref.watch(lapTraceProvider(mapLapId));
+    if (analysis.isLoading || corners.isLoading || (trace?.isLoading ?? false)) {
       return const PageLoadingBar();
     }
+    final official = corners.valueOrNull?[detail.header.trackName];
     return analysis.when(
       loading: () => const PageLoadingBar(),
       error: (e, _) => ErrorRetry(
@@ -253,13 +270,38 @@ class _RaceReviewTab extends ConsumerWidget {
         fallbackMessage: _analysisErrorMessage,
         onRetry: () => ref.invalidate(raceAnalysisProvider(sessionId)),
       ),
-      data: (data) => RaceReviewCard(
-        review: review,
-        analysis: data,
-        officialCorners: corners.valueOrNull?[detail.header.trackName],
-        setup: detail.setup,
-      ),
+      data: (data) {
+        final card = RaceReviewCard(review: review, analysis: data, officialCorners: official, setup: detail.setup);
+        final lapTrace = trace?.valueOrNull;
+        if (mapLap == null || lapTrace == null || !lapTrace.hasPositions) {
+          return card;
+        }
+        final map = RaceReviewTrackMap(
+          trace: lapTrace,
+          sectors: [
+            for (var i = 0; i < mapLap.sectorsMs.length; i++)
+              if (mapLap.sectorsMs[i] case final ms?) LapSector(sectorNumber: i + 1, sectorTimeMs: ms),
+          ],
+          officialCorners: official,
+        );
+        // 넓으면 오른쪽 칸에 지도를 두고 스크롤해도 화면 위에 붙어 따라오게, 좁으면 리뷰 위에 둔다.
+        return LayoutBuilder(
+          builder: (context, box) => box.maxWidth >= _reviewMapSideWidth
+              ? ViewportPinned(asideWidth: _reviewMapWidth, gap: _sectionGap, main: card, pinned: map)
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [map, const SizedBox(height: _sectionGap), card],
+                ),
+        );
+      },
     );
+  }
+
+  /// 지도를 그릴 내 랩: 세션 최고 랩(저장돼 있으면), 없으면 저장된 첫 랩. 섹터 시간도 그 랩 것을 쓴다.
+  static SessionLap? _mapLap(SessionDetail detail) {
+    final bestId = detail.myBestLap?.lapId;
+    final saved = detail.laps.where((l) => l.lapId != null);
+    return saved.where((l) => l.lapId == bestId).firstOrNull ?? saved.firstOrNull;
   }
 }
 
