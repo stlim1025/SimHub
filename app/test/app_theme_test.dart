@@ -10,7 +10,7 @@ import 'package:simcenter_app/core/theme/app_theme.dart';
 /// 밝은 표면 위 글자가 맞춰야 하는 대비(WCAG AA 본문).
 const double _minTextContrast = 4.5;
 
-/// AppTheme은 GoogleFonts(Inter)를 쓴다. 테스트에는 글꼴 파일·네트워크가 없으므로 내려받기를 끄고,
+/// AppTheme은 GoogleFonts(Barlow Condensed)를 쓴다. 테스트에는 글꼴 파일·네트워크가 없으므로 내려받기를 끄고,
 /// 그 때문에 비동기로 나는 글꼴 로딩 실패만 이 영역에서 삼킨다(이 테스트는 색·구성만 본다). 다른 오류는 그대로 실패시킨다.
 Future<ThemeData> _build(ThemeData Function() theme) {
   GoogleFonts.config.allowRuntimeFetching = false;
@@ -37,7 +37,7 @@ double _contrast(Color a, Color b) {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('어두운 테마는 기존 화면 그대로다(색 토큰·구성 고정)', () async {
+  test('어두운 테마는 Cockpit HUD 토큰을 싣는다(색 토큰·구성 고정)', () async {
     final theme = await _build(() => AppTheme.dark);
 
     expect(theme.brightness, Brightness.dark);
@@ -53,7 +53,8 @@ void main() {
     expect(theme.colorScheme.outline, AppColors.border);
     expect(theme.colorScheme.error, AppColors.danger);
     expect(theme.cardTheme.color, AppColors.surface);
-    expect((theme.cardTheme.shape! as RoundedRectangleBorder).side.color, AppColors.border);
+    // 어두운 카드는 테두리 없이 표면 색으로만 갈리고, 오른쪽 위 모서리를 깎는다.
+    expect((theme.cardTheme.shape! as BeveledRectangleBorder).side, BorderSide.none);
     expect(theme.appBarTheme.backgroundColor, AppColors.surface);
     expect(theme.inputDecorationTheme.fillColor, AppColors.surface);
     expect(theme.textTheme.bodyMedium?.color, AppColors.textPrimary);
@@ -77,6 +78,7 @@ void main() {
     expect(theme.colorScheme.surface, AppColors.lightSurface);
     expect(theme.colorScheme.error, AppColors.lightDanger);
     expect(theme.textTheme.bodyMedium?.color, AppColors.lightTextPrimary);
+    expect((theme.cardTheme.shape! as BeveledRectangleBorder).side.color, AppColors.lightBorder);
   });
 
   test('링크 글자(랩타임)는 두 테마의 표면·배경·표 머리줄 위에서 4.5:1 이상이다', () {
@@ -87,10 +89,10 @@ void main() {
     }
   });
 
-  test('그래프 선(이 랩 강조색·비교 랩 청록)은 두 테마의 표면 위에서 3:1 이상이다', () {
+  test('그래프 선(이 랩 링크색·비교 랩 시안)은 두 테마의 표면 위에서 3:1 이상이다', () {
     const minGraphicContrast = 3.0;
     for (final palette in [AppPalette.dark, AppPalette.light]) {
-      expect(_contrast(AppColors.accent, palette.surface), greaterThanOrEqualTo(minGraphicContrast));
+      expect(_contrast(palette.link, palette.surface), greaterThanOrEqualTo(minGraphicContrast));
       expect(_contrast(palette.comparison, palette.surface), greaterThanOrEqualTo(minGraphicContrast));
     }
   });

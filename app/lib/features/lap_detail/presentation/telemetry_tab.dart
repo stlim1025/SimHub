@@ -5,7 +5,6 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/layout/viewport_pinned.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/util/lap_time.dart';
 import '../../../core/widgets/error_retry.dart';
@@ -269,7 +268,7 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
     // 값이 없는 랩(ERS 채널이 없는 옛 기록 등)은 그 선을 빼고, 두 랩 모두 없으면 그래프를 그리지 않는다.
     Widget? channelChart(TelemetryChannel channel) {
       final series = [
-        ChartSeries(values: channel.valuesOf(trace, widget.units), resolutionM: trace.resolutionM, color: AppColors.accent),
+        ChartSeries(values: channel.valuesOf(trace, widget.units), resolutionM: trace.resolutionM, color: palette.link),
         if (reference != null)
           ChartSeries(
             values: channel.valuesOf(reference, widget.units),
@@ -364,7 +363,7 @@ class _TelemetryChartsState extends State<TelemetryCharts> {
     return TelemetryChart(
       key: const ValueKey('telemetry-chart-delta'),
       title: 'Delta',
-      series: [ChartSeries(values: values, resolutionM: trace.resolutionM, color: AppColors.accent)],
+      series: [ChartSeries(values: values, resolutionM: trace.resolutionM, color: context.palette.link)],
       range: valueRangeOf(values, symmetric: true),
       maxDistanceM: maxDistanceM,
       cursor: _cursor,
@@ -643,7 +642,7 @@ class _Legend extends StatelessWidget {
       runSpacing: _legendDotGap,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        item(AppColors.accent, thisLapText, const ValueKey('legend-this-lap')),
+        item(palette.link, thisLapText, const ValueKey('legend-this-lap')),
         if (reference != null) item(palette.comparison, reference, const ValueKey('legend-reference-lap')),
         ValueListenableBuilder<double?>(
           valueListenable: cursor,

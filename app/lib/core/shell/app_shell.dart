@@ -25,7 +25,7 @@ const double kSidebarWidth = 220;
 const String kSettingsPath = '/settings';
 
 const double _sidebarPadding = 12;
-const double _selectedTileAlpha = 0.14;
+const double _selectedTileAlpha = 0.12;
 
 // 좌측 메뉴 치수(웹 대시보드처럼 글자·아이콘을 키우고 줄 간격을 둔다, F1Laps 참고).
 const double _navItemHeight = 40;
@@ -33,9 +33,16 @@ const double _navItemGap = 2;
 const double _navItemPaddingX = 12;
 const double _navIconSize = 20;
 const double _navIconGap = 12;
-const double _navFontSize = 14;
-const double _navRadius = 6;
-const double _footerRadius = 8;
+const double _navFontSize = 16;
+/// 선택된 메뉴 줄의 오른쪽 아래를 깎는 크기·왼쪽 앰버 막대 굵기.
+const double _navChamfer = 12;
+const double _navBarWidth = 3;
+const double _navLetterSpacing = 0.8;
+const double _brandLetterSpacing = 1.2;
+const double _brandUnderlineWidth = 36;
+const double _brandUnderlineHeight = 3;
+const double _brandUnderlineGap = 6;
+const double _footerChamfer = 10;
 const double _footerAvatarSize = 32;
 const String _brandName = AppConfig.brandName;
 const String _accountSettingsLabel = '계정 설정';
@@ -195,11 +202,26 @@ class _Brand extends StatelessWidget {
           const BrandMark(),
           const SizedBox(width: 10),
           Flexible(
-            child: Text(
-              _brandName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _brandName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w800, letterSpacing: _brandLetterSpacing),
+                ),
+                const SizedBox(height: _brandUnderlineGap),
+                // 계기판 눈금처럼 비스듬한 앰버 밑줄.
+                Transform(
+                  transform: Matrix4.skewX(-0.35),
+                  child: Container(width: _brandUnderlineWidth, height: _brandUnderlineHeight, color: AppColors.accent),
+                ),
+              ],
             ),
           ),
         ],
@@ -220,26 +242,32 @@ class _NavTile extends StatelessWidget {
     final palette = context.palette;
     return Padding(
       padding: const EdgeInsets.only(bottom: _navItemGap),
-      child: ListTile(
+      // 선택 = 왼쪽 앰버 막대 + 옅은 앰버 줄(오른쪽 아래를 깎음) + 앰버 글자·아이콘.
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border(left: BorderSide(color: selected ? AppColors.accent : Colors.transparent, width: _navBarWidth)),
+        ),
+        child: ListTile(
         selected: selected,
         minTileHeight: _navItemHeight,
         contentPadding: const EdgeInsets.symmetric(horizontal: _navItemPaddingX),
         horizontalTitleGap: _navIconGap,
         minLeadingWidth: _navIconSize,
         visualDensity: VisualDensity.compact,
-        // 선택 = 인디고 글자·아이콘 + 옅은 인디고 줄(F1Laps), 나머지는 밝은 글자 + 흐린 아이콘.
         selectedColor: palette.link,
         selectedTileColor: AppColors.accent.withValues(alpha: _selectedTileAlpha),
         iconColor: palette.textMuted,
         textColor: palette.textPrimary,
         titleTextStyle: TextStyle(
           fontSize: _navFontSize,
-          fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+          fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+          letterSpacing: _navLetterSpacing,
         ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_navRadius)),
+        shape: const BeveledRectangleBorder(borderRadius: BorderRadius.only(bottomRight: Radius.circular(_navChamfer))),
         leading: Icon(item.icon, size: _navIconSize),
         title: Text(item.label),
         onTap: onTap,
+        ),
       ),
     );
   }
@@ -273,10 +301,10 @@ class _UserFooter extends StatelessWidget {
           Expanded(
             child: Material(
               color: selected ? AppColors.accent.withValues(alpha: _selectedTileAlpha) : Colors.transparent,
-              borderRadius: BorderRadius.circular(_footerRadius),
+              shape: const BeveledRectangleBorder(borderRadius: BorderRadius.only(topRight: Radius.circular(_footerChamfer))),
+              clipBehavior: Clip.antiAlias,
               child: InkWell(
                 key: const ValueKey('account-settings'),
-                borderRadius: BorderRadius.circular(_footerRadius),
                 onTap: onOpenSettings,
                 child: Padding(
                   padding: const EdgeInsets.all(8),

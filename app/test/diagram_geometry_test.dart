@@ -49,15 +49,23 @@ void main() {
       expect(engineColorFor(EnginePart.controlElectronics, wear, palette), palette.textMuted);
     });
 
-    test('모든 부품이 그림에 있고 단위 좌표 안, 터보·MGU-H 몸통은 좌우 대칭', () {
+    test('모든 부품이 그림에 있고 단위 좌표 안, ICE 블록은 좌우 대칭', () {
       final shapes = engineShapes();
       expect(shapes.map((s) => s.part).toSet(), EnginePart.values.toSet());
       _expectInsideUnit(shapes);
-      // MGU-H 첫 부품은 배기관, 둘째가 오른쪽 몸통.
-      final mguHPod = shapes.where((s) => s.part == EnginePart.mguH).elementAt(1).path;
-      _expectMirrored(_pathOf(shapes, EnginePart.turboCharger), mguHPod);
       final block = engineBlockPath().getBounds();
       expect(block.left, closeTo(1 - block.right, _epsilon));
+    });
+
+    test('터보는 왼쪽, MGU-H는 오른쪽, Energy Store는 V 골 가운데, 기어박스는 맨 아래', () {
+      final turbo = engineTurboPath().getBounds();
+      final mguH = engineMguHPath().getBounds();
+      final es = engineEnergyStorePath().getBounds();
+      final gearbox = engineGearboxPath().getBounds();
+      expect(turbo.center.dx, lessThan(0.5));
+      expect(mguH.center.dx, greaterThan(0.5));
+      expect(es.center.dx, closeTo(0.5, _epsilon));
+      expect(gearbox.bottom, greaterThan(engineMguKPath().getBounds().bottom));
     });
   });
 

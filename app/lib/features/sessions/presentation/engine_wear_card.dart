@@ -57,6 +57,7 @@ class EngineWearCard extends StatelessWidget {
         painter: EnginePainter(
           partColors: [for (final part in EnginePart.values) engineColorFor(part, value, palette)],
           baseColor: palette.surface,
+          frameColor: palette.border,
         ),
       ),
     );

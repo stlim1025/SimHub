@@ -14,7 +14,10 @@ const double kCompactHeaderHeight = 36;
 const double kCompactTableDefaultWidth = 600;
 
 const double _cellGap = 12;
-const double _headerLetterSpacing = 0.6;
+const double _headerLetterSpacing = 1.1;
+
+/// 강조 행(내 행) 왼쪽의 앰버 막대 굵기.
+const double _highlightBarWidth = 3;
 const EdgeInsets _rowPadding = EdgeInsets.symmetric(horizontal: 16);
 const EdgeInsets _footerPadding = EdgeInsets.symmetric(horizontal: 16, vertical: 12);
 
@@ -198,7 +201,11 @@ class _BodyRow<T> extends StatelessWidget {
         hoverColor: AppColors.rowHover,
         child: Container(
           height: kCompactRowHeight,
-          padding: _rowPadding,
+          // 강조 행은 왼쪽에 앰버 막대를 두고, 칸 위치가 머리줄과 어긋나지 않게 그만큼 안쪽 여백을 줄인다.
+          decoration: highlighted
+              ? const BoxDecoration(border: Border(left: BorderSide(color: AppColors.accent, width: _highlightBarWidth)))
+              : null,
+          padding: highlighted ? _rowPadding.copyWith(left: _rowPadding.left - _highlightBarWidth) : _rowPadding,
           child: Row(
             children: _withGaps([for (final column in columns) _cellBox(column, column.cell(row))]),
           ),

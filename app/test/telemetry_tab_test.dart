@@ -187,7 +187,7 @@ void main() {
       expect(find.text('이 랩 1:38.448'), findsOneWidget);
       expect(find.text('내 최고 랩 1:38.000'), findsOneWidget);
       final painter = _painterOf(t, 'speed');
-      expect(painter.series.map((s) => s.color), [AppColors.accent, t.element(_chart('speed')).palette.comparison]);
+      expect(painter.series.map((s) => s.color), [t.element(_chart('speed')).palette.link, t.element(_chart('speed')).palette.comparison]);
     });
 
     testWidgets('비교 랩에 트레이스가 없거나 비교 대상이 이 랩이면 Delta·비교 선이 없다', (t) async {

@@ -12,7 +12,8 @@ const double _cardTitleGap = 16;
 const double _teamDotSize = 8;
 const double _teamDotGap = 8;
 const double _arrowSize = 14;
-const double _badgeRadius = 999;
+/// 배지 양끝을 비스듬히 깎는 크기(버튼·탭과 같은 모양).
+const double _badgeChamfer = 5;
 const EdgeInsets _badgePadding = EdgeInsets.symmetric(horizontal: 8, vertical: 2);
 const double _badgeFontSize = 12;
 
@@ -50,7 +51,7 @@ class SessionCard extends StatelessWidget {
           _cardTitlePadding, _cardTitlePadding, _cardTitlePadding, collapsed ? _cardTitlePadding : _cardTitleGap),
       child: Row(
         children: [
-          Expanded(child: Text(title, style: cardTitleStyle(context))),
+          Expanded(child: CardTitle(title)),
           ?trailing,
         ],
       ),
@@ -162,7 +163,7 @@ class PositionChangeText extends StatelessWidget {
   }
 }
 
-/// `P8` 알약 배지(RESULT·POSITION 칸). [emphasized]면 강조색 채움(레이스, D-54).
+/// `P8` 배지(RESULT·POSITION 칸, 양끝을 비스듬히 깎음). [emphasized]면 강조색 채움(레이스, D-54).
 class PositionBadge extends StatelessWidget {
   const PositionBadge({super.key, required this.text, this.emphasized = false});
 
@@ -174,10 +175,15 @@ class PositionBadge extends StatelessWidget {
     final palette = context.palette;
     return Container(
       padding: _badgePadding,
-      decoration: BoxDecoration(
+      decoration: ShapeDecoration(
         color: emphasized ? AppColors.accent : palette.tableHeader,
-        borderRadius: BorderRadius.circular(_badgeRadius),
-        border: Border.all(color: emphasized ? AppColors.accent : palette.border),
+        shape: BeveledRectangleBorder(
+          borderRadius: const BorderRadius.only(
+            topRight: Radius.circular(_badgeChamfer),
+            bottomLeft: Radius.circular(_badgeChamfer),
+          ),
+          side: BorderSide(color: emphasized ? AppColors.accent : palette.border),
+        ),
       ),
       child: Text(
         text,
