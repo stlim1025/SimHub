@@ -514,6 +514,26 @@ public sealed class HighlightsBuilderTests
     }
 
     [Fact]
+    public void Standings_SamplesStoppingJustBeforeTheLine_FinishAtTheExtrapolatedLastCrossing()
+    {
+        // 게임이 마지막 랩을 마치는 순간 세션을 끝내 표본이 58.7초에 멈춘다: 1번은 결승선 5m 앞(0.1초), 2번은 20m 뒤(0.4초).
+        var samples = Race(new Dictionary<byte, double> { [1] = 60, [2] = 40 }, toMs: 58_700);
+        var timeline = RaceTimeline.Build([samples]);
+        var crossings = timeline.Cars.Keys.ToDictionary(c => c, c => timeline.CrossingsOf(c, TrackLength));
+        var standings = new RaceStandings(timeline, TrackLength, 5, winner: 1, crossings, [], new Dictionary<int, int[]>());
+
+        Assert.Equal(5, crossings[1].Count);
+        Assert.InRange(crossings[1][^1], 58_790, 58_810);
+        Assert.InRange(crossings[2][^1], 59_190, 59_210);
+
+        // 4랩 끝(46.8초) 뒤는 아직 달리는 중 — 마지막 통과가 빠지면 여기서 피니시로 보였다.
+        Assert.All(standings.Frames(50_000, 50_000).Single().State, s => Assert.Equal((int)StandingState.Running, s));
+        var end = standings.Frames(59_500, 59_500).Single();
+        Assert.All(end.State, s => Assert.Equal((int)StandingState.Finished, s));
+        Assert.InRange(end.GapMs[1]!.Value, 390, 410);
+    }
+
+    [Fact]
     public void NoSamples_GivesEmptyReels()
     {
         var result = HighlightsBuilder.Build(Guid.Empty, Guid.Empty, "F1_25", 5, RaceTimeline.Build([]), TrackLength, Cars, [], []);

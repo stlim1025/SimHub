@@ -69,6 +69,13 @@ public sealed class RaceTimeline
     /// <summary>세션 시간이 이보다 크게 뒤로 가면 되감기로 본다(같은 프레임 안 반올림 흔들림은 무시).</summary>
     private const int RewindToleranceMs = 50;
 
+    /// <summary>마지막 표본이 타임라인 끝에서 이 안이고 결승선까지 이 시간 안에 닿으면 그 통과를 더한다(<see cref="CrossingsOf"/>).</summary>
+    private const int SessionEndToleranceMs = 200;
+    private const int MaxFinishExtrapolationMs = 1000;
+
+    private const double KphPerMetresPerSecond = 3.6;
+    private const double MillisecondsPerSecond = 1000;
+
     private RaceTimeline(IReadOnlyDictionary<int, IReadOnlyList<RaceSample>> cars, int startMs, int endMs)
     {
         Cars = cars;
@@ -129,6 +136,8 @@ public sealed class RaceTimeline
     /// <summary>
     /// 그 차가 결승선을 지난 시각들(랩 거리가 트랙 길이 절반 넘게 줄어든 곳의 뒤 표본). 앞서 랩 앞쪽 절반을 지난 적이 있어야 센다 —
     /// 그리드(출발선 뒤, 랩 끝 쪽 거리)에서 출발선을 처음 넘는 것은 랩을 끝낸 것이 아니다.
+    /// 게임은 마지막 랩을 마치는 순간 세션을 끝내 표본도 결승선 바로 앞에서 멈춘다 — 그 차의 마지막 표본이 타임라인 끝이고
+    /// 그 속도로 결승선까지 <see cref="MaxFinishExtrapolationMs"/> 안이면, 남은 거리를 달린 시각을 마지막 통과로 더한다.
     /// </summary>
     public IReadOnlyList<int> CrossingsOf(int car, double trackLengthM)
     {
@@ -154,6 +163,16 @@ public sealed class RaceTimeline
             else if (samples[k].LapDistanceM < half)
             {
                 lapStarted = true;
+            }
+        }
+
+        var last = samples[^1];
+        if (lapStarted && EndMs - last.TimeMs <= SessionEndToleranceMs && last.SpeedKph > 0)
+        {
+            var toLineMs = Math.Max(0, trackLengthM - last.LapDistanceM) / (last.SpeedKph / KphPerMetresPerSecond) * MillisecondsPerSecond;
+            if (toLineMs <= MaxFinishExtrapolationMs)
+            {
+                crossings.Add(last.TimeMs + (int)Math.Round(toLineMs));
             }
         }
 

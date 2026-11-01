@@ -120,8 +120,11 @@ public sealed class RaceStandings
                 continue;
             }
 
+            // 둘 다 피니시했으면 들어온 시각 차 — 마지막 통과가 표본 끝 너머(어림)면 진행으로는 잴 수 없다.
             var reference = row.State == StandingState.Finished ? row.FinishMs : timeMs;
-            gaps.Add(TimeAtProgress(leader.Car, row.Progress) is { } at ? Math.Max(0, reference - at) : null);
+            gaps.Add(row.State == StandingState.Finished && leader.State == StandingState.Finished
+                ? Math.Max(0, row.FinishMs - leader.FinishMs)
+                : TimeAtProgress(leader.Car, row.Progress) is { } at ? Math.Max(0, reference - at) : null);
             lapsDown.Add(row.State == StandingState.Finished
                 ? Math.Max(0, (int)Math.Round((leader.Progress - row.Progress) / _trackLengthM))
                 : Math.Max(0, (int)Math.Floor((leaderNow - row.Progress) / _trackLengthM)));
