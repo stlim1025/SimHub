@@ -843,7 +843,8 @@ String? fewerStopsLine(List<RaceStintReview> stints, RaceStrategyReview strategy
 
 /// 타이어 평가: 스틴트 수치는 그림이 보여 주고, 줄은 다른 차들보다 덜 들어간 피트, 스틴트마다 랩타임 추세(AI 대비)·앞뒤 마모로 본 원인·
 /// AI보다 길게 탄 스틴트·끝 수명과 마지막 랩 페이스.
-/// 아쉬움: 그립을 AI보다 빨리 잃었거나 마모가 빠른 스틴트가 있을 때. 좋음: 그 밖에 그립을 더 잘 지켰거나, AI보다 길게 탔거나, 피트에 덜 들어갔을 때.
+/// 아쉬움: 그립을 AI보다 빨리 잃었거나 마모가 빠른 스틴트가 있을 때 — 단 스틴트 페이스가 같은 때 같은 타이어를 탄 AI보다 [kPaceMarginMs] 이상
+/// 빨랐으면 더 빨리 느려진 것만으로는 아쉬움이 아니다(빠르게 출발한 만큼 잃을 것도 많다). 좋음: 그 밖에 그립을 더 잘 지켰거나, AI보다 길게 탔거나, 피트에 덜 들어갔을 때.
 ReviewSection tyreReview(List<RaceStintReview> stints, {RaceStrategyReview? strategy}) {
   final lines = <String>[];
   var worse = 0;
@@ -862,7 +863,14 @@ ReviewSection tyreReview(List<RaceStintReview> stints, {RaceStrategyReview? stra
     final extra = stint.extraTrendMs;
     final fastWear = stint.wearsFast;
     final lostGrip = extra != null && extra >= kTrendMarginMs;
-    if (lostGrip || fastWear) {
+    final paceAhead = switch ((stint.medianMs, stint.fieldMedianMs)) {
+      (final mine?, final field?) when field - mine >= kPaceMarginMs => field - mine,
+      _ => null,
+    };
+    if (lostGrip && !fastWear && paceAhead != null) {
+      lines.add('$label: 랩이 지날수록 AI보다 랩당 ${_seconds(extra)}씩 더 느려졌지만, 스틴트 페이스는 같은 때 '
+          '${withParticle(compoundName(stint.compound), '을', '를')} 탄 AI보다 랩당 ${_seconds(paceAhead)} 빨랐어');
+    } else if (lostGrip || fastWear) {
       worse++;
       final facts = [
         if (lostGrip) '랩이 지날수록 AI보다 랩당 ${_seconds(extra)}씩 더 느려졌어',

@@ -233,9 +233,15 @@ public static class RaceReviewBuilder
             }
 
             var clean = mine.CleanIn(span);
-            var fieldStints = others
-                .SelectMany(c => c.Spans.Where(s => s.VisualCompound == span.VisualCompound).Select(s => c.CleanIn(s)))
+            // 같은 때(내 스틴트 랩의 절반 이상 겹친다) 같은 컴파운드로 달린 스틴트와 견준다 — 레이스 초반(연료가 무겁다)과 막판 스틴트는
+            // 페이스도 랩타임 추세도 다르다. 그런 스틴트가 없으면 같은 컴파운드 전체와 견준다.
+            var sameCompound = others
+                .SelectMany(c => c.Spans.Where(s => s.VisualCompound == span.VisualCompound).Select(s => (Car: c, Span: s)))
                 .ToList();
+            var samePhase = sameCompound
+                .Where(x => Math.Min(x.Span.EndLap, end) - Math.Max(x.Span.StartLap, span.StartLap) + 1 >= (end - span.StartLap + 1) / 2.0)
+                .ToList();
+            var fieldStints = (samePhase.Count > 0 ? samePhase : sameCompound).Select(x => x.Car.CleanIn(x.Span)).ToList();
             var fieldMedians = fieldStints.Where(l => l.Count >= MinPaceLaps).Select(l => Median(l.Select(x => (double)x.LapTimeMs))).ToList();
             var fieldTrends = fieldStints.Select(Trend).OfType<double>().ToList();
             // 같은 컴파운드로 다른 차들이 피트에 들어가기 전까지 탄 랩 수(마지막 스틴트는 체커까지라 뺀다) — 마모가 빠른지 견주는 기준.

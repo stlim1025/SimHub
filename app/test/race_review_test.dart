@@ -35,7 +35,7 @@ void main() {
       'fieldPitLossMs': 42500,
     },
     'stints': [
-      {'compound': 'Hard', 'startLap': 6, 'endLap': 10, 'medianMs': 89650, 'fieldMedianMs': 91000, 'trendMsPerLap': 100, 'fieldTrendMsPerLap': 0, 'wearPerLapPct': 2.0, 'endLifePct': 91.0, 'fieldStintLaps': 5},
+      {'compound': 'Hard', 'startLap': 6, 'endLap': 10, 'medianMs': 89650, 'fieldMedianMs': 89800, 'trendMsPerLap': 100, 'fieldTrendMsPerLap': 0, 'wearPerLapPct': 2.0, 'endLifePct': 91.0, 'fieldStintLaps': 5},
     ],
     'battery': {
       'laps': 10, 'averageDeployJ': 1100000, 'averageHarvestJ': 700000, 'firstStoreJ': 3900000, 'lastStoreJ': 2400000,
@@ -192,6 +192,14 @@ void main() {
     const lostGrip = RaceStintReview(compound: 'Medium', startLap: 1, endLap: 14, trendMsPerLap: 200, fieldTrendMsPerLap: 100, fieldStintLaps: 9);
     expect(longStintLine(lostGrip, last: false, canDropStop: true), isNull);
     expect(tyreReview(const [lostGrip]).grade, ReviewGrade.poor);
+
+    // 스파: 1위 해밀턴과 붙어 달리며 더 빨리 느려졌지만(랩당 +0.059초), 같은 때 미디엄 AI보다 랩당 1.288초 빨랐다 → 아쉬움이 아니다.
+    const fastButDegrading = RaceStintReview(
+      compound: 'Medium', startLap: 1, endLap: 9, medianMs: 110423, fieldMedianMs: 111711, trendMsPerLap: 273, fieldTrendMsPerLap: 214,
+    );
+    final spa = tyreReview(const [fastButDegrading]);
+    expect(spa.grade, ReviewGrade.fair);
+    expect(spa.lines.single, '미디엄(1~9랩): 랩이 지날수록 AI보다 랩당 0.059초씩 더 느려졌지만, 스틴트 페이스는 같은 때 미디엄을 탄 AI보다 랩당 1.288초 빨랐어');
   });
 
   test('전략 평가는 결과와 전략 선택으로: 피트 스톱 하나가 느려도 내 스톱 수가 가장 잘 통했으면 좋음', () {

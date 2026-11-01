@@ -85,8 +85,9 @@ public class RaceReviewBuilderTests
             strategy.LapPositions);
 
         Assert.Equal(2, review.Stints.Count);
-        // 같은 Medium의 차 2는 1~5랩(피트 전 5랩)을 탔다.
-        Assert.Equal(new RaceStintReviewDto("Medium", 1, 5, null, 90_000, null, null, null, null, FieldStintLaps: 5), review.Stints[0]);
+        // 같은 Medium의 차 2는 1~5랩(피트 전 5랩)을 탔다. 페이스는 같은 때 Medium을 탄 차 2(91.0초)와만 견준다 —
+        // 7~10랩에 Medium을 탄 우승 차(89.0초)는 레이스 막판 스틴트라 빠진다.
+        Assert.Equal(new RaceStintReviewDto("Medium", 1, 5, null, 91_000, null, null, null, null, FieldStintLaps: 5), review.Stints[0]);
         // Hard: 7~10랩 89.5→89.8초(+100ms/랩), 같은 Hard의 차 2는 91.0초 일정. 마모 97% → 91%(3랩).
         var hard = review.Stints[1];
         Assert.Equal(new RaceStintReviewDto("Hard", 6, 10, 89_650, 91_000, 100, 0, 2.0, 91.0), hard with { WheelWearPerLapPct = null, EndLapsSlowerMs = null });
