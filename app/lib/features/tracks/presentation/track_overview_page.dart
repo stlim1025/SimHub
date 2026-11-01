@@ -439,17 +439,23 @@ class _TrackOverviewMapState extends ConsumerState<_TrackOverviewMap> {
   Widget build(BuildContext context) {
     final lapId = widget.lapId;
     final traceState = lapId == null ? null : ref.watch(comparisonTraceProvider(lapId));
+    // 지도 랩은 내 랩이라 랩 상세의 섹터 시간으로 랩 상세 지도처럼 섹터별 색을 칠한다(못 불러오면 한 색).
+    final detailState = lapId == null ? null : ref.watch(lapDetailProvider(LapDetailKey(lapId)));
+    final cornersState = ref.watch(trackCornersProvider);
+    // 기록 지도·섹터 시간·코너를 다 받을 때까지 지도 자리만 잡아 둔다 — 윤곽 → 한 색 → 섹터 색으로 바뀌어 보이지 않게
+    // 다 갖춘 지도를 한 번에 그린다.
+    if ((traceState?.isLoading ?? false) || (detailState?.isLoading ?? false) || cornersState.isLoading) {
+      return const Padding(padding: EdgeInsets.only(top: _blockGap), child: SizedBox(height: kTrackMapHeight));
+    }
     final trace = traceState?.valueOrNull;
     if (trace == null || !trace.hasPositions) {
-      // 기록 지도가 없거나, 아직 읽는 중이거나, 읽지 못했거나, 위치가 없으면 서킷 윤곽(bacinger/f1-circuits)을 보인다 —
-      // 트랙 상세에 그림이 비는 일이 없게 한다. 기록 지도를 다 읽으면 그쪽으로 바뀐다.
+      // 기록 지도가 없거나, 읽지 못했거나, 위치가 없으면 서킷 윤곽(bacinger/f1-circuits)을 보인다.
       final outline = ref.watch(trackOutlinesProvider).valueOrNull?[widget.trackName];
       return outline == null
           ? const SizedBox.shrink()
           : Padding(padding: const EdgeInsets.only(top: _blockGap), child: TrackOutlineView(outline: outline));
     }
-    // 지도 랩은 내 랩이라 랩 상세의 섹터 시간으로 랩 상세 지도처럼 섹터별 색을 칠한다(못 불러오면 한 색).
-    final sectors = ref.watch(lapDetailProvider(LapDetailKey(lapId!))).valueOrNull?.lap.sectors ?? const <LapSector>[];
+    final sectors = detailState?.valueOrNull?.lap.sectors ?? const <LapSector>[];
     return Padding(
       padding: const EdgeInsets.only(top: _blockGap),
       child: TrackMap(
@@ -459,7 +465,7 @@ class _TrackOverviewMapState extends ConsumerState<_TrackOverviewMap> {
         showLegend: sectors.isNotEmpty,
         paintKey: const ValueKey('track-overview-map'),
         // 공식 트랙 지도처럼 코너 번호를 붙인다(공식 코너 자료가 있는 트랙만).
-        corners: resolveLapCorners(trace, ref.watch(trackCornersProvider).valueOrNull?[widget.trackName]),
+        corners: resolveLapCorners(trace, cornersState.valueOrNull?[widget.trackName]),
       ),
     );
   }

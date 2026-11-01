@@ -7,6 +7,7 @@ import 'package:simcenter_app/features/lap_detail/data/lap_detail_repository.dar
 import 'package:simcenter_app/features/lap_detail/domain/lap_detail_models.dart';
 import 'package:simcenter_app/features/profile/application/selected_game_provider.dart';
 import 'package:simcenter_app/features/setups/data/setups_repository.dart';
+import 'package:simcenter_app/features/tracks/application/track_corners_provider.dart';
 import 'package:simcenter_app/features/tracks/application/track_outlines_provider.dart';
 import 'package:simcenter_app/features/tracks/data/tracks_repository.dart';
 import 'package:simcenter_app/features/tracks/domain/track_outline.dart';
@@ -45,6 +46,7 @@ Future<GoRouter> _pump(
       lapDetailRepositoryProvider.overrideWithValue(lapRepo ?? FakeLapDetailRepository()),
       selectedGameProvider.overrideWithValue('F1_26'),
       trackOutlinesProvider.overrideWith((ref) async => outlines),
+      trackCornersProvider.overrideWith((ref) async => const {}),
     ],
     child: MaterialApp.router(routerConfig: router),
   ));
