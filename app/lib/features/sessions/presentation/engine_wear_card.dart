@@ -12,11 +12,13 @@ const String _emptyText = '이 세션에는 엔진 마모 데이터가 없어요
 const String _diagramSemantics = '엔진 부품 마모 그림';
 
 /// 그림과 목록을 옆으로 놓는 카드 안 폭.
-const double _sideBySideWidth = 420;
+const double _sideBySideWidth = 480;
 const double _diagramGap = 20;
-const double _swatchSize = 12;
-const double _swatchGap = 8;
-const double _swatchRadius = 2;
+/// 범례 색 표시: 그림의 네온 선과 같은 짧은 선.
+const double _swatchWidth = 18;
+const double _swatchHeight = 3;
+const double _swatchGap = 10;
+const double _gridAlpha = 0.6;
 const double _legendRowPadding = 4;
 
 /// 그림 부품 → 마모 %(docs/15 §11.3).
@@ -34,7 +36,7 @@ double? engineWearOf(EnginePart part, EngineWear wear) => switch (part) {
 Color engineColorFor(EnginePart part, EngineWear wear, AppPalette palette) =>
     diagramColorFor(engineWearOf(part, wear), palette);
 
-/// Engine Wear 카드(docs/15 §11.3): 엔진 그림(부품별 마모 색) + ICE · Turbo Charger · MGU-H · MGU-K · Energy Store ·
+/// Engine Wear 카드(docs/15 §11.3): 3/4 시점 파워 유닛 네온 선화(부품별 마모 색) + ICE · Turbo Charger · MGU-H · MGU-K · Energy Store ·
 /// Control Electronics · Gearbox · Engine Damage 목록(색 네모 + %). 색 단계는 타이어 마모와 같은 25/50/75%.
 class EngineWearCard extends StatelessWidget {
   const EngineWearCard({super.key, required this.wear});
@@ -57,7 +59,7 @@ class EngineWearCard extends StatelessWidget {
         painter: EnginePainter(
           partColors: [for (final part in EnginePart.values) engineColorFor(part, value, palette)],
           baseColor: palette.surface,
-          frameColor: palette.border,
+          gridColor: palette.border.withValues(alpha: _gridAlpha),
         ),
       ),
     );
@@ -106,11 +108,7 @@ class _LegendRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: _legendRowPadding),
       child: Row(
         children: [
-          Container(
-            width: _swatchSize,
-            height: _swatchSize,
-            decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(_swatchRadius)),
-          ),
+          Container(width: _swatchWidth, height: _swatchHeight, color: color),
           const SizedBox(width: _swatchGap),
           Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis)),
           Text(formatPercent(value), style: kTabularStyle.copyWith(fontWeight: FontWeight.w600)),

@@ -49,23 +49,23 @@ void main() {
       expect(engineColorFor(EnginePart.controlElectronics, wear, palette), palette.textMuted);
     });
 
-    test('모든 부품이 그림에 있고 단위 좌표 안, ICE 블록은 좌우 대칭', () {
-      final shapes = engineShapes();
-      expect(shapes.map((s) => s.part).toSet(), EnginePart.values.toSet());
-      _expectInsideUnit(shapes);
-      final block = engineBlockPath().getBounds();
-      expect(block.left, closeTo(1 - block.right, _epsilon));
+    test('모든 부품이 투영된 그림에 보이고, 좌표는 모델을 감싸는 단위 상자 안', () {
+      final projection = projectEngine();
+      expect(projection.faces.map((f) => f.part).toSet(), EnginePart.values.toSet());
+      for (final face in projection.faces) {
+        for (final p in face.points) {
+          expect(p.dx >= -_epsilon && p.dx <= 1 + _epsilon && p.dy >= -_epsilon && p.dy <= 1 + _epsilon, isTrue);
+        }
+      }
+      expect(projection.aspect, inInclusiveRange(0.5, 2));
     });
 
-    test('터보는 왼쪽, MGU-H는 오른쪽, Energy Store는 V 골 가운데, 기어박스는 맨 아래', () {
-      final turbo = engineTurboPath().getBounds();
-      final mguH = engineMguHPath().getBounds();
-      final es = engineEnergyStorePath().getBounds();
-      final gearbox = engineGearboxPath().getBounds();
-      expect(turbo.center.dx, lessThan(0.5));
-      expect(mguH.center.dx, greaterThan(0.5));
-      expect(es.center.dx, closeTo(0.5, _epsilon));
-      expect(gearbox.bottom, greaterThan(engineMguKPath().getBounds().bottom));
+    test('면은 먼 것부터 그리고, 보는 쪽을 향한 면만 남긴다', () {
+      final faces = projectEngine().faces;
+      for (var i = 1; i < faces.length; i++) {
+        expect(faces[i].depth, greaterThanOrEqualTo(faces[i - 1].depth));
+      }
+      expect(faces.length, lessThan(engineFaces().length));
     });
   });
 
