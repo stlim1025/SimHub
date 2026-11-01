@@ -18,8 +18,9 @@ import '../../laps/domain/lap_display.dart';
 import '../../laps/domain/lap_models.dart';
 import '../../laps/presentation/lap_cells.dart';
 import '../application/dashboard_providers.dart';
+import 'dashboard_season_section.dart';
 
-/// 로그인 직후 홈. 환영 문구 + 내 최근 랩(docs/11 §7.3).
+/// 로그인 직후 홈. 환영 문구 + 연결 상태 + 진행 중인 시즌 요약 + 내 최근 랩(docs/11 §7.3).
 class DashboardPage extends ConsumerWidget {
   const DashboardPage({super.key});
 
@@ -38,6 +39,8 @@ class DashboardPage extends ConsumerWidget {
         ),
         const SizedBox(height: 24),
         const ConnectionStatusCard(),
+        const SizedBox(height: 24),
+        const DashboardSeasonSection(),
         const SizedBox(height: 24),
         Row(
           children: [

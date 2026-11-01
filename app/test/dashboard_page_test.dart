@@ -9,6 +9,7 @@ import 'package:simcenter_app/features/devices/data/devices_repository.dart';
 import 'package:simcenter_app/features/devices/domain/device_models.dart';
 import 'package:simcenter_app/features/laps/data/laps_repository.dart';
 import 'package:simcenter_app/features/laps/domain/lap_models.dart';
+import 'package:simcenter_app/features/seasons/data/seasons_repository.dart';
 
 import 'support/fakes.dart';
 
@@ -18,6 +19,7 @@ Future<FakeLapsRepository> _pumpDashboard(
   WidgetTester tester,
   List<Lap> laps, {
   List<AgentDevice> devices = const [],
+  FakeSeasonsRepository? seasons,
 }) async {
   setViewSize(tester, const Size(1000, 900));
   final repo = FakeLapsRepository(laps: laps);
@@ -26,6 +28,8 @@ Future<FakeLapsRepository> _pumpDashboard(
     GoRoute(path: '/laps', builder: (_, _) => const Text('body:laps')),
     GoRoute(path: '/laps/:lapId', builder: (_, state) => Text('body:lap:${state.pathParameters['lapId']}')),
     GoRoute(path: '/telemetry-app', builder: (_, _) => const Text('body:telemetry-app')),
+    GoRoute(path: '/seasons/:id', builder: (_, state) => Text('body:season:${state.pathParameters['id']}')),
+    GoRoute(path: '/sessions/:id', builder: (_, state) => Text('body:session:${state.pathParameters['id']}')),
   ]);
 
   await tester.pumpWidget(ProviderScope(
@@ -33,6 +37,7 @@ Future<FakeLapsRepository> _pumpDashboard(
       fakeAuth(),
       lapsRepositoryProvider.overrideWithValue(repo),
       devicesRepositoryProvider.overrideWithValue(FakeDevicesRepository(devices: devices)),
+      seasonsRepositoryProvider.overrideWithValue(seasons ?? FakeSeasonsRepository()),
       clockProvider.overrideWithValue(() => _now),
     ],
     child: MaterialApp.router(routerConfig: router),
@@ -126,6 +131,7 @@ void main() {
             FakeLapsRepository(laps: [lapOf('l1', 'Silverstone', 83452)]),
           ),
           agentDevicesProvider.overrideWith((ref) async => throw StateError('boom')),
+          seasonsRepositoryProvider.overrideWithValue(FakeSeasonsRepository()),
           clockProvider.overrideWithValue(() => _now),
         ],
         child: MaterialApp.router(
@@ -136,6 +142,96 @@ void main() {
 
       expect(find.text('Silverstone'), findsOneWidget);
       expect(find.text('연결 상태를 불러오지 못했어요.'), findsOneWidget);
+    });
+  });
+
+  group('시즌 영역', () {
+    FakeSeasonsRepository seasonRepo({DateTime? completedAt}) => FakeSeasonsRepository(
+          seasons: [seasonOf('s1', seasonNumber: 1, myPosition: 3, myPoints: 75, completedAt: completedAt)],
+          details: {
+            's1': seasonDetailOf(
+              's1',
+              season: seasonOf('s1', seasonNumber: 1, myPosition: 3, myPoints: 75, completedAt: completedAt),
+              drivers: [
+                driverStandingOf(1, name: 'NORRIS', points: 93),
+                driverStandingOf(2, name: 'PIASTRI', points: 79),
+                driverStandingOf(3, isPlayer: true, points: 75, wins: 1, podiums: 3),
+                driverStandingOf(4, name: 'RUSSELL', points: 64),
+                driverStandingOf(5, name: 'ANTONELLI', points: 63),
+              ],
+              calendar: [
+                seasonCalendarRoundOf(1,
+                    trackName: 'Melbourne', firstSessionId: 'p1', raceSessionId: 'race1', racePosition: 2, qualiPosition: 4, points: 18),
+                seasonCalendarRoundOf(2,
+                    trackName: 'Shanghai', firstSessionId: 'p2', raceSessionId: 'race2', racePosition: 1, qualiPosition: 1, points: 25),
+                seasonCalendarRoundOf(3, trackName: 'Suzuka'),
+              ],
+            ),
+          },
+        );
+
+    String statText(WidgetTester t, String key) => [
+          for (final w in t.widgetList<Text>(find.descendant(of: find.byKey(ValueKey(key)), matching: find.byType(Text))))
+            w.data ?? '',
+        ].join('|');
+
+    testWidgets('진행 중인 시즌의 순위·포인트·선두와 차이·우승·포디움·라운드와 다음 라운드를 보여준다', (t) async {
+      await _pumpDashboard(t, const [], seasons: seasonRepo());
+
+      expect(find.text('진행 중인 시즌'), findsOneWidget);
+      expect(find.text('Driver Career Season 1'), findsOneWidget);
+      expect(statText(t, 'dashboard-stat-position'), '순위|P3');
+      expect(statText(t, 'dashboard-stat-points'), '포인트|75');
+      expect(statText(t, 'dashboard-stat-gap'), '선두와 차이|-18|NORRIS');
+      expect(statText(t, 'dashboard-stat-wins'), '우승|1');
+      expect(statText(t, 'dashboard-stat-podiums'), '포디움|3');
+      expect(statText(t, 'dashboard-stat-rounds'), '라운드|2 / 3');
+      expect(statText(t, 'dashboard-next-round'), contains('Suzuka'));
+    });
+
+    testWidgets('최근 결과는 최근 라운드부터, 순위는 위쪽 3명과 내 앞뒤만 보여준다', (t) async {
+      await _pumpDashboard(t, const [], seasons: seasonRepo());
+
+      final r2 = t.getTopLeft(find.byKey(const ValueKey('dashboard-round-2')));
+      final r1 = t.getTopLeft(find.byKey(const ValueKey('dashboard-round-1')));
+      expect(r2.dy, lessThan(r1.dy));
+      expect(find.byKey(const ValueKey('dashboard-round-3')), findsNothing);
+
+      for (final position in [1, 2, 3, 4]) {
+        expect(find.byKey(ValueKey('dashboard-standing-$position')), findsOneWidget);
+      }
+      expect(find.byKey(const ValueKey('dashboard-standing-5')), findsNothing);
+      expect(find.text('You'), findsOneWidget);
+    });
+
+    testWidgets('최근 결과 줄을 누르면 그 주말 본 레이스로 간다', (t) async {
+      await _pumpDashboard(t, const [], seasons: seasonRepo());
+
+      await t.tap(find.text('Shanghai'));
+      await t.pumpAndSettle();
+      expect(find.text('body:session:race2'), findsOneWidget);
+    });
+
+    testWidgets('View season을 누르면 시즌 상세로 간다', (t) async {
+      await _pumpDashboard(t, const [], seasons: seasonRepo());
+
+      await t.tap(find.byKey(const ValueKey('dashboard-season-link')));
+      await t.pumpAndSettle();
+      expect(find.text('body:season:s1'), findsOneWidget);
+    });
+
+    testWidgets('완료된 시즌만 있으면 최근 시즌으로 보여준다', (t) async {
+      await _pumpDashboard(t, const [], seasons: seasonRepo(completedAt: DateTime(2026, 10, 25)));
+
+      expect(find.text('최근 시즌'), findsOneWidget);
+      expect(find.text('진행 중인 시즌'), findsNothing);
+    });
+
+    testWidgets('시즌이 없으면 시즌 영역을 그리지 않는다', (t) async {
+      await _pumpDashboard(t, const []);
+
+      expect(find.text('진행 중인 시즌'), findsNothing);
+      expect(find.text('최근 시즌'), findsNothing);
     });
   });
 }
