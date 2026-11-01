@@ -268,5 +268,49 @@ void main() {
 
       expect(t.resolutionM, 1);
     });
+
+    test('랩 시간이 0으로 떨어진 표본은 모든 채널을 앞뒤 표본으로 메운다(스파 섹터 3)', () {
+      final t = LapTrace.fromJson(traceJson({
+        'timeMs': [90581, 90703, 0, 90957],
+        'speedKph': [285, 284, 240, 283],
+        'throttle': [100, 100, 66, 100],
+        'brake': [0, 0, 0, 0],
+        'steer': [-7, -6, -9, -6],
+        'gear': [7, 7, 6, 7],
+        'rpm': [11611, 11569, 9778, 11516],
+        'extra': {
+          'worldPosX': [-68.5, -67.1, -66.3, -65.5],
+          'worldPosZ': [71.7, 62.1, 51.3, 42],
+          'ersStoreEnergy': [0, 0, 3588259, 0],
+        },
+      }));
+
+      expect(t.timeMs, [90581, 90703, 90830, 90957]);
+      expect(t.speedKph, [285, 284, 284, 283]);
+      expect(t.throttle, [100, 100, 100, 100]);
+      expect(t.gear, [7, 7, 7, 7]);
+      expect(t.rpm[2], 11543);
+      expect(t.worldPosX[2], closeTo(-66.3, 0.01));
+      expect(t.ersStoreJ, [0, 0, 0, 0]);
+    });
+  });
+
+  group('brokenSampleIndices', () {
+    test('정상 랩은 깨진 표본이 없다', () {
+      expect(brokenSampleIndices([0, 100, 200, 200, 300]), isEmpty);
+    });
+
+    test('0으로 떨어진 표본·연속으로 떨어진 표본을 찾는다', () {
+      expect(brokenSampleIndices([90000, 90100, 90200, 0, 90300]), [3]);
+      expect(brokenSampleIndices([90000, 90100, 0, 0, 90300]), [2, 3]);
+    });
+
+    test('혼자 튀어 오른 표본을 찾고 그 뒤 정상 표본은 남긴다', () {
+      expect(brokenSampleIndices([0, 100, 99999, 300, 400]), [2]);
+    });
+
+    test('마지막 표본이 떨어져도 찾는다', () {
+      expect(brokenSampleIndices([0, 100, 200, 5]), [3]);
+    });
   });
 }

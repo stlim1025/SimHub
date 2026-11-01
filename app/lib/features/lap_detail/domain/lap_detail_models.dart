@@ -366,9 +366,31 @@ const String kErsDeployModeChannel = 'ersDeployMode';
 const List<String> kSurfaceTypeChannels = ['surfaceTypeFL', 'surfaceTypeFR', 'surfaceTypeRL', 'surfaceTypeRR'];
 const int kSurfaceRumble = 1;
 
+/// 랩 시간 순서를 깨는 표본 번호(오름차순): 마지막 정상 표본보다 시간이 줄었거나(예: 0으로 떨어짐),
+/// 다음 표본보다 시간이 커서 혼자 튀어 오른 표본. 게임이 가끔 다른 순간의 값이 섞인 표본을 보내는데,
+/// 그대로 그리면 Delta·속도 그래프에 가짜 급락이 생긴다(순수 함수).
+List<int> brokenSampleIndices(List<int> timeMs) {
+  final broken = <int>[];
+  int? lastGood;
+  for (var i = 0; i < timeMs.length; i++) {
+    final time = timeMs[i];
+    final wentBackwards = lastGood != null && time < timeMs[lastGood];
+    final jumpedAhead = i + 1 < timeMs.length &&
+        time > timeMs[i + 1] &&
+        (lastGood == null || timeMs[lastGood] <= timeMs[i + 1]);
+    if (wentBackwards || jumpedAhead) {
+      broken.add(i);
+    } else {
+      lastGood = i;
+    }
+  }
+  return broken;
+}
+
 /// 1랩 텔레메트리 트레이스(docs/15 §3.3·§4.2, D-45). 표본 i의 랩 거리 = i × [resolutionM].
 /// 채널 길이가 다르면 가장 짧은 길이로 자르고, 빠진 채널이 있으면 빈 트레이스로 본다.
 /// 월드 위치([worldPosX]·[worldPosZ])는 extra 채널에서 읽고, 없거나 길이가 7채널과 다르면 둘 다 빈 목록이다(트랙 모양을 그리지 않는다).
+/// 랩 시간 순서를 깨는 표본([brokenSampleIndices])은 모든 채널을 앞뒤 정상 표본으로 메운다.
 class LapTrace {
   const LapTrace({
     required this.lapId,
@@ -461,10 +483,17 @@ class LapTrace {
         if (value is List && value.every((e) => e is num)) [for (final e in value) (e as num).toInt()] else <int>[],
     ];
     final length = lists.map((l) => l.length).reduce(math.min);
-    List<int> channel(int i) => List.unmodifiable(lists[i].take(length));
+    // 랩 시간 순서를 깨는 표본(다른 순간의 값이 섞여 들어온 표본)은 모든 채널을 앞뒤 정상 표본으로 메운다.
+    final broken = brokenSampleIndices(lists[0].take(length).toList()).toSet();
+    List<int> channel(int i, {bool discrete = false}) => List.unmodifiable(
+          _repairSamples([for (final v in lists[i].take(length)) v.toDouble()], broken, discrete: discrete)
+              .map((v) => v.round()),
+        );
     final extra = _mapOrNull(json['extra']);
-    final posX = _positionChannel(extra?[kWorldPosXChannel], length);
-    final posZ = _positionChannel(extra?[kWorldPosZChannel], length);
+    List<double> extraChannel(String name, {bool discrete = false}) =>
+        List.unmodifiable(_repairSamples(_positionChannel(extra?[name], length), broken, discrete: discrete));
+    final posX = extraChannel(kWorldPosXChannel);
+    final posZ = extraChannel(kWorldPosZChannel);
     final hasBoth = posX.isNotEmpty && posZ.isNotEmpty;
     return LapTrace(
       lapId: json['lapId'] as String,
@@ -474,21 +503,53 @@ class LapTrace {
       throttle: channel(2),
       brake: channel(3),
       steer: channel(4),
-      gear: channel(5),
+      gear: channel(5, discrete: true),
       rpm: channel(6),
       worldPosX: hasBoth ? posX : const [],
       worldPosZ: hasBoth ? posZ : const [],
-      worldPosY: hasBoth ? _positionChannel(extra?[kWorldPosYChannel], length) : const [],
-      ersStoreJ: _positionChannel(extra?[kErsStoreChannel], length),
-      ersDeployedJ: _positionChannel(extra?[kErsDeployedChannel], length),
-      ersDeployMode: List.unmodifiable(_positionChannel(extra?[kErsDeployModeChannel], length).map((v) => v.round())),
-      kerbContact: _kerbContact(extra, length),
+      worldPosY: hasBoth ? extraChannel(kWorldPosYChannel) : const [],
+      ersStoreJ: extraChannel(kErsStoreChannel),
+      ersDeployedJ: extraChannel(kErsDeployedChannel),
+      ersDeployMode: List.unmodifiable(extraChannel(kErsDeployModeChannel, discrete: true).map((v) => v.round())),
+      kerbContact: _kerbContact([
+        for (final name in kSurfaceTypeChannels) extraChannel(name, discrete: true),
+      ], length),
     );
   }
 
+  /// [broken] 표본을 앞뒤 정상 표본 사이의 거리 비율로 메운다. [discrete](기어·모드·노면)면 앞 정상 표본 값을 쓴다.
+  /// 한쪽에만 정상 표본이 있으면 그 값을, 빈 채널은 그대로 둔다(순수 함수).
+  static List<double> _repairSamples(List<double> values, Set<int> broken, {bool discrete = false}) {
+    if (broken.isEmpty || values.isEmpty) {
+      return values;
+    }
+    final repaired = [...values];
+    for (final i in broken) {
+      var before = i - 1;
+      while (before >= 0 && broken.contains(before)) {
+        before--;
+      }
+      var after = i + 1;
+      while (after < values.length && broken.contains(after)) {
+        after++;
+      }
+      final hasBefore = before >= 0;
+      final hasAfter = after < values.length;
+      if (!hasBefore && !hasAfter) {
+        continue;
+      }
+      if (discrete || !hasBefore || !hasAfter) {
+        repaired[i] = values[hasBefore ? before : after];
+        continue;
+      }
+      final fraction = (i - before) / (after - before);
+      repaired[i] = values[before] + (values[after] - values[before]) * fraction;
+    }
+    return repaired;
+  }
+
   /// 네 바퀴 노면 채널 → 표본마다 연석을 밟았는지. 채널 하나라도 없거나 길이가 다르면 빈 목록.
-  static List<bool> _kerbContact(Map<String, dynamic>? extra, int length) {
-    final wheels = [for (final name in kSurfaceTypeChannels) _positionChannel(extra?[name], length)];
+  static List<bool> _kerbContact(List<List<double>> wheels, int length) {
     if (length == 0 || wheels.any((w) => w.isEmpty)) {
       return const [];
     }
