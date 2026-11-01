@@ -204,6 +204,17 @@ void main() {
       expect(find.text('You'), findsOneWidget);
     });
 
+    testWidgets('나란히 놓인 최근 결과와 드라이버 순위 카드는 높이가 같다', (t) async {
+      await _pumpDashboard(t, const [], seasons: seasonRepo());
+
+      Size cardOf(String title) => t.getSize(find.ancestor(of: find.text(title), matching: find.byType(Card)).first);
+      expect(cardOf('최근 결과').height, cardOf('드라이버 순위').height);
+      expect(
+        t.getTopLeft(find.text('최근 결과')).dy,
+        t.getTopLeft(find.text('드라이버 순위')).dy,
+      );
+    });
+
     testWidgets('최근 결과 줄을 누르면 그 주말 본 레이스로 간다', (t) async {
       await _pumpDashboard(t, const [], seasons: seasonRepo());
 

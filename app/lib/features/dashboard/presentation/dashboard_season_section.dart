@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -49,6 +51,9 @@ const double _cardPadding = 24;
 /// 최근 결과·순위 카드를 나란히 놓는 최소 폭(이보다 좁으면 위아래로).
 const double _sideBySideMinWidth = 760;
 
+/// 표 한 줄이 차지하는 높이(줄 + 위 구분선). 나란히 놓은 두 카드의 높이를 맞출 때 짧은 쪽 아래에 이만큼씩 비운다.
+const double _tableRowExtent = kCompactRowHeight + 1;
+
 /// 최근 결과 카드가 순위 카드보다 넓게(비율).
 const int _resultsFlex = 3;
 const int _standingsFlex = 2;
@@ -91,8 +96,10 @@ class _SeasonOverview extends StatelessWidget {
   Widget build(BuildContext context) {
     final season = detail.season;
     final theme = Theme.of(context);
-    final results = _RecentResultsCard(rounds: recentCalendarRounds(detail.calendar));
-    final standings = _StandingsCard(drivers: standingsPreview(detail.standings.drivers));
+    final rounds = recentCalendarRounds(detail.calendar);
+    final drivers = standingsPreview(detail.standings.drivers);
+    // 나란히 놓을 때 두 표의 줄 수를 맞춰 카드 높이를 같게 한다(한쪽이 비어 있으면 그대로).
+    final rows = rounds.isEmpty || drivers.isEmpty ? null : math.max(rounds.length, drivers.length);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -116,20 +123,38 @@ class _SeasonOverview extends StatelessWidget {
               ? Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(flex: _resultsFlex, child: results),
+                    Expanded(
+                      flex: _resultsFlex,
+                      child: _RecentResultsCard(rounds: rounds, fillerRows: rows == null ? 0 : rows - rounds.length),
+                    ),
                     const SizedBox(width: _cardGap),
-                    Expanded(flex: _standingsFlex, child: standings),
+                    Expanded(
+                      flex: _standingsFlex,
+                      child: _StandingsCard(drivers: drivers, fillerRows: rows == null ? 0 : rows - drivers.length),
+                    ),
                   ],
                 )
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [results, const SizedBox(height: _cardGap), standings],
+                  children: [
+                    _RecentResultsCard(rounds: rounds),
+                    const SizedBox(height: _cardGap),
+                    _StandingsCard(drivers: drivers),
+                  ],
                 ),
         ),
       ],
     );
   }
 }
+
+/// [table] 아래에 [rows]줄만큼 빈 공간을 둔다.
+Widget _withFiller(int rows, Widget table) => rows <= 0
+    ? table
+    : Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [table, SizedBox(height: rows * _tableRowExtent)],
+      );
 
 // -- 요약 카드 ------------------------------------------------------------------
 
@@ -273,9 +298,12 @@ class _Stat extends StatelessWidget {
 
 /// 최근 달린 라운드: 라운드 · 그랑프리 · 예선 · 레이스 · 포인트(좁으면 라운드 열은 숨긴다). 줄을 누르면 그 주말 본 레이스(없으면 첫 세션).
 class _RecentResultsCard extends StatelessWidget {
-  const _RecentResultsCard({required this.rounds});
+  const _RecentResultsCard({required this.rounds, this.fillerRows = 0});
 
   final List<SeasonCalendarRound> rounds;
+
+  /// 표 아래에 비워 둘 줄 수(옆 카드와 높이 맞춤).
+  final int fillerRows;
 
   @override
   Widget build(BuildContext context) {
@@ -284,7 +312,7 @@ class _RecentResultsCard extends StatelessWidget {
       padded: rounds.isEmpty,
       child: rounds.isEmpty
           ? const SessionEmptyText(_noResultsText)
-          : CompactTable<SeasonCalendarRound>(
+          : _withFiller(fillerRows, CompactTable<SeasonCalendarRound>(
               framed: false,
               compactWidth: _resultsCompactWidth,
               rows: rounds,
@@ -320,7 +348,7 @@ class _RecentResultsCard extends StatelessWidget {
                   cell: (r) => Text(r.points == null ? '' : '${r.points}', style: kTabularStyle),
                 ),
               ],
-            ),
+            )),
     );
   }
 }
@@ -369,9 +397,12 @@ class _Position extends StatelessWidget {
 
 /// 위쪽 순위 + 내 앞뒤(내 줄은 강조). 1·2·3위 순위 숫자는 금·은·동.
 class _StandingsCard extends StatelessWidget {
-  const _StandingsCard({required this.drivers});
+  const _StandingsCard({required this.drivers, this.fillerRows = 0});
 
   final List<DriverStanding> drivers;
+
+  /// 표 아래에 비워 둘 줄 수(옆 카드와 높이 맞춤).
+  final int fillerRows;
 
   @override
   Widget build(BuildContext context) {
@@ -381,7 +412,7 @@ class _StandingsCard extends StatelessWidget {
       padded: drivers.isEmpty,
       child: drivers.isEmpty
           ? const SessionEmptyText(_noStandingsText)
-          : CompactTable<DriverStanding>(
+          : _withFiller(fillerRows, CompactTable<DriverStanding>(
               framed: false,
               compactWidth: 0,
               rows: drivers,
@@ -410,7 +441,7 @@ class _StandingsCard extends StatelessWidget {
                   cell: (d) => Text('${d.points}', style: kTabularStyle.copyWith(fontWeight: FontWeight.w600)),
                 ),
               ],
-            ),
+            )),
     );
   }
 }
