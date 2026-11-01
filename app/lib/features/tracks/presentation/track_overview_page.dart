@@ -16,6 +16,7 @@ import '../../../core/widgets/stat.dart';
 import '../../../core/widgets/team_name_cell.dart';
 import '../../lap_detail/application/lap_detail_providers.dart';
 import '../../lap_detail/domain/lap_compare.dart';
+import '../../lap_detail/domain/lap_corners.dart';
 import '../../lap_detail/presentation/detail_list.dart';
 import '../../lap_detail/presentation/track_map.dart';
 import '../../laps/domain/lap_display.dart';
@@ -24,6 +25,7 @@ import '../../profile/application/selected_game_provider.dart';
 import '../../sessions/presentation/session_widgets.dart';
 import '../../setups/domain/setups_display.dart';
 import '../../setups/presentation/page_heading.dart';
+import '../application/track_corners_provider.dart';
 import '../application/track_outlines_provider.dart';
 import '../application/tracks_providers.dart';
 import '../domain/track_overview_models.dart';
@@ -439,10 +441,8 @@ class _TrackOverviewMapState extends ConsumerState<_TrackOverviewMap> {
     final traceState = lapId == null ? null : ref.watch(comparisonTraceProvider(lapId));
     final trace = traceState?.valueOrNull;
     if (trace == null || !trace.hasPositions) {
-      // 기록 지도를 읽는 중이면 기다리고, 없거나 위치가 없으면 서킷 윤곽(bacinger/f1-circuits)으로 대신한다.
-      if (traceState?.isLoading ?? false) {
-        return const SizedBox.shrink();
-      }
+      // 기록 지도가 없거나, 아직 읽는 중이거나, 읽지 못했거나, 위치가 없으면 서킷 윤곽(bacinger/f1-circuits)을 보인다 —
+      // 트랙 상세에 그림이 비는 일이 없게 한다. 기록 지도를 다 읽으면 그쪽으로 바뀐다.
       final outline = ref.watch(trackOutlinesProvider).valueOrNull?[widget.trackName];
       return outline == null
           ? const SizedBox.shrink()
@@ -458,6 +458,8 @@ class _TrackOverviewMapState extends ConsumerState<_TrackOverviewMap> {
         cursor: _noCursor,
         showLegend: sectors.isNotEmpty,
         paintKey: const ValueKey('track-overview-map'),
+        // 공식 트랙 지도처럼 코너 번호를 붙인다(공식 코너 자료가 있는 트랙만).
+        corners: resolveLapCorners(trace, ref.watch(trackCornersProvider).valueOrNull?[widget.trackName]),
       ),
     );
   }

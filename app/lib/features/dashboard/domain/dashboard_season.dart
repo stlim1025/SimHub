@@ -4,7 +4,7 @@ import '../../seasons/domain/season_models.dart';
 const int kDashboardRecentRoundCount = 5;
 
 /// 대시보드 순위 미리보기에서 항상 보이는 위쪽 순위 수.
-const int kStandingsPreviewTop = 3;
+const int kStandingsPreviewTop = 5;
 
 /// 순위 미리보기에서 내 위·아래로 함께 보이는 드라이버 수.
 const int _standingsPreviewNeighbours = 1;

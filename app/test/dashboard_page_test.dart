@@ -189,7 +189,7 @@ void main() {
       expect(statText(t, 'dashboard-next-round'), contains('Suzuka'));
     });
 
-    testWidgets('최근 결과는 최근 라운드부터, 순위는 위쪽 3명과 내 앞뒤만 보여준다', (t) async {
+    testWidgets('최근 결과는 최근 라운드부터, 순위는 위쪽 5명까지 보여준다', (t) async {
       await _pumpDashboard(t, const [], seasons: seasonRepo());
 
       final r2 = t.getTopLeft(find.byKey(const ValueKey('dashboard-round-2')));
@@ -197,10 +197,9 @@ void main() {
       expect(r2.dy, lessThan(r1.dy));
       expect(find.byKey(const ValueKey('dashboard-round-3')), findsNothing);
 
-      for (final position in [1, 2, 3, 4]) {
+      for (final position in [1, 2, 3, 4, 5]) {
         expect(find.byKey(ValueKey('dashboard-standing-$position')), findsOneWidget);
       }
-      expect(find.byKey(const ValueKey('dashboard-standing-5')), findsNothing);
       expect(find.text('You'), findsOneWidget);
     });
 

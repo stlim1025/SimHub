@@ -98,10 +98,10 @@ class AppColors {
   static const Color wearHigh = Color(0xFFF97316);
   static const Color wearCritical = Color(0xFFEF4444);
 
-  /// 트랙 지도 섹터 색(Cockpit HUD: S1 보라 · S2 초록 · S3 앰버, 두 테마 공통).
-  static const Color trackSector1 = Color(0xFFB26BFF);
-  static const Color trackSector2 = Color(0xFF22E06B);
-  static const Color trackSector3 = Color(0xFFFFB400);
+  /// 트랙 지도 섹터 색(F1 공식 트랙 지도처럼 S1 빨강 · S2 노랑 · S3 파랑, 두 테마 공통).
+  static const Color trackSector1 = Color(0xFFEF3B5C);
+  static const Color trackSector2 = Color(0xFFFACC15);
+  static const Color trackSector3 = Color(0xFF3B9BEF);
 
   /// 트랙 지도 바깥 테두리(굵은 어두운 선, 두 테마 공통).
   static const Color trackOutline = Color(0xFF0B0D12);

@@ -21,17 +21,17 @@ enum CarPart {
 }
 
 /// 그림 폭/높이 비율(세로로 긴 위에서 본 차). 둥근 모서리의 세로 반경을 맞출 때 쓴다.
-const double kCarAspect = 200 / 320;
+const double kCarAspect = 150 / 330;
 
 // 위에서 본 현대 F1 차, 단위 좌표(0~1). 앞이 위, 좌우 대칭 — 왼쪽 절반을 만들고 거울상으로 오른쪽을 얻는다.
 const double _mid = 0.5;
 
 // 바퀴(앞·뒤). 뒷바퀴가 더 넓다.
-const double _frontTyreOuter = 0.03;
-const double _frontTyreInner = 0.19;
-const double _frontTyreTop = 0.11;
-const double _frontTyreBottom = 0.23;
-const double _rearTyreOuter = 0.015;
+const double _frontTyreOuter = 0.05;
+const double _frontTyreInner = 0.2;
+const double _frontTyreTop = 0.19;
+const double _frontTyreBottom = 0.3;
+const double _rearTyreOuter = 0.03;
 const double _rearTyreInner = 0.2;
 const double _rearTyreTop = 0.72;
 const double _rearTyreBottom = 0.865;
@@ -43,8 +43,8 @@ const double kRearWheelCenterFactor = (_rearTyreTop + _rearTyreBottom) / 2;
 
 /// 서스펜션 암: 바퀴 안쪽 한 점에서 섀시 두 점으로 벌어지는 위시본.
 const Offset _frontHub = Offset(_frontTyreInner, (_frontTyreTop + _frontTyreBottom) / 2);
-const Offset _frontArmFore = Offset(0.455, 0.14);
-const Offset _frontArmAft = Offset(0.44, 0.27);
+const Offset _frontArmFore = Offset(0.455, 0.2);
+const Offset _frontArmAft = Offset(0.44, 0.31);
 const Offset _rearHub = Offset(_rearTyreInner, (_rearTyreTop + _rearTyreBottom) / 2);
 const Offset _rearArmFore = Offset(0.42, 0.74);
 const Offset _rearArmAft = Offset(0.43, 0.85);
@@ -77,6 +77,8 @@ List<DiagramShape<CarPart>> carShapes() => [
   DiagramShape(CarPart.chassis, _halo(), kind: DiagramShapeKind.line),
   DiagramShape(CarPart.frontWingLeft, _frontWing()),
   DiagramShape(CarPart.frontWingRight, mirrorX(_frontWing())),
+  DiagramShape(CarPart.frontWingLeft, _frontWingFlaps(), kind: DiagramShapeKind.line),
+  DiagramShape(CarPart.frontWingRight, mirrorX(_frontWingFlaps()), kind: DiagramShapeKind.line),
   DiagramShape(CarPart.rearWing, symmetric(_rearWingHalf())),
 ];
 
@@ -93,13 +95,24 @@ Path _wishbone(Offset hub, Offset fore, Offset aft) => Path()
 
 /// 앞날개 왼쪽 판: 가운데에서 바깥으로 갈수록 뒤로 휘는 날개 + 바깥 끝판.
 Path _frontWing() {
+  // 게임 단면처럼 바깥으로 갈수록 뒤로 크게 젖힌 판.
   final plate = Path()
-    ..moveTo(0.475, 0.02)
-    ..quadraticBezierTo(0.26, 0.012, 0.07, 0.04)
-    ..lineTo(0.07, 0.088)
-    ..quadraticBezierTo(0.26, 0.07, 0.475, 0.062)
+    ..moveTo(0.475, 0.015)
+    ..quadraticBezierTo(0.28, 0.022, 0.085, 0.05)
+    ..lineTo(0.085, 0.16)
+    ..quadraticBezierTo(0.28, 0.128, 0.475, 0.11)
     ..close();
-  return Path.combine(PathOperation.union, plate, roundedRect(0.035, 0.028, 0.075, 0.105, 0.015, aspect: kCarAspect));
+  return Path.combine(PathOperation.union, plate, roundedRect(0.045, 0.04, 0.09, 0.175, 0.015, aspect: kCarAspect));
+}
+
+/// 앞날개 왼쪽 판 안의 플랩 경계선 두 줄(메인 플레인 → 플랩 2단).
+Path _frontWingFlaps() {
+  Path flap(double inner, double outer) => Path()
+    ..moveTo(0.47, inner)
+    ..quadraticBezierTo(0.28, (inner + outer) / 2 + 0.008, 0.09, outer);
+  return Path()
+    ..addPath(flap(0.05, 0.088), Offset.zero)
+    ..addPath(flap(0.08, 0.124), Offset.zero);
 }
 
 /// 노즈 콘: 둥근 끝에서 섀시 쪽으로 조금씩 넓어진다.
@@ -122,11 +135,12 @@ Path _chassisHalf() => Path()
 
 /// 사이드포드(왼쪽): 조종석 옆에서 넓게 벌어졌다가 뒤로 좁아지는 콜라병 모양.
 Path _sidepod() => Path()
-  ..moveTo(0.42, 0.355)
-  ..cubicTo(0.3, 0.355, 0.205, 0.375, 0.2, 0.44)
-  ..lineTo(0.2, 0.54)
-  ..cubicTo(0.2, 0.64, 0.33, 0.7, 0.4, 0.8)
-  ..lineTo(0.42, 0.8)
+  ..moveTo(0.42, 0.36)
+  ..cubicTo(0.33, 0.36, 0.27, 0.38, 0.265, 0.44)
+  ..lineTo(0.265, 0.49)
+  // 2026 차처럼 조종석 뒤에서 급하게 좁아지는 콜라병 허리.
+  ..cubicTo(0.265, 0.58, 0.38, 0.64, 0.415, 0.76)
+  ..lineTo(0.43, 0.8)
   ..close();
 
 /// 플로어: 사이드포드 바깥으로 보이는 바닥 가장자리, 뒷바퀴 앞에서 안으로 꺾여 디퓨저로 이어진다.
@@ -134,10 +148,10 @@ Path _floor() {
   final half = Path()
     ..moveTo(_mid, 0.33)
     ..lineTo(0.42, 0.33)
-    ..cubicTo(0.28, 0.335, 0.18, 0.36, 0.175, 0.43)
-    ..lineTo(0.175, 0.6)
-    ..cubicTo(0.175, 0.66, 0.2, 0.69, 0.235, 0.71)
-    ..lineTo(0.27, 0.86)
+    ..cubicTo(0.31, 0.335, 0.24, 0.36, 0.235, 0.43)
+    ..lineTo(0.235, 0.6)
+    ..cubicTo(0.235, 0.66, 0.26, 0.69, 0.285, 0.71)
+    ..lineTo(0.3, 0.86)
     ..lineTo(_mid, 0.86)
     ..close();
   return symmetric(half);
@@ -146,8 +160,8 @@ Path _floor() {
 /// 엔진 커버(에어박스 척추): 조종석 뒤에서 시작해 뒤로 가늘어진다.
 Path _engineCoverHalf() => Path()
   ..moveTo(_mid, 0.46)
-  ..quadraticBezierTo(0.425, 0.46, 0.415, 0.53)
-  ..cubicTo(0.41, 0.65, 0.45, 0.76, 0.465, 0.87)
+  ..quadraticBezierTo(0.432, 0.46, 0.425, 0.53)
+  ..cubicTo(0.42, 0.65, 0.455, 0.76, 0.468, 0.87)
   ..lineTo(_mid, 0.87)
   ..close();
 
@@ -163,19 +177,19 @@ Path _halo() => Path()
 /// 디퓨저: 뒤 끝의 넓은 사다리꼴.
 Path _diffuserHalf() => Path()
   ..moveTo(_mid, 0.85)
-  ..lineTo(0.3, 0.85)
-  ..lineTo(0.28, 0.9)
-  ..quadraticBezierTo(0.28, 0.915, 0.3, 0.915)
+  ..lineTo(0.33, 0.85)
+  ..lineTo(0.31, 0.9)
+  ..quadraticBezierTo(0.31, 0.915, 0.33, 0.915)
   ..lineTo(_mid, 0.915)
   ..close();
 
 /// 뒷날개: 맨 아래 넓은 판 + 양끝 끝판.
 Path _rearWingHalf() {
   final plate = Path()
-    ..moveTo(_mid, 0.93)
-    ..lineTo(0.2, 0.93)
-    ..lineTo(0.2, 0.975)
-    ..lineTo(_mid, 0.975)
+    ..moveTo(_mid, 0.92)
+    ..lineTo(0.22, 0.92)
+    ..lineTo(0.22, 0.985)
+    ..lineTo(_mid, 0.985)
     ..close();
-  return Path.combine(PathOperation.union, plate, roundedRect(0.17, 0.915, 0.205, 0.99, 0.012, aspect: kCarAspect));
+  return Path.combine(PathOperation.union, plate, roundedRect(0.19, 0.905, 0.225, 0.995, 0.012, aspect: kCarAspect));
 }

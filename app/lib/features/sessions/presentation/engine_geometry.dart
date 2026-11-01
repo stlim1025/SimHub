@@ -4,22 +4,29 @@ import 'dart:ui';
 /// 그림의 부품 순서(색 목록도 이 순서). Engine Damage는 그림 대신 목록에만 있다(docs/15 §11.3).
 enum EnginePart { ice, turboCharger, mguH, mguK, energyStore, controlElectronics, gearbox }
 
-// F1 V6 하이브리드 파워 유닛을 3D 상자·원기둥으로 만들고(단위 = 대략 m), 앞-왼쪽 위에서 비스듬히 본 투영으로 그린다.
-// x = 오른쪽, y = 위, z = 뒤(앞이 -z). 배치는 실제 파워 유닛을 따른다: V자 골 위에 MGU-H, 그 축 앞뒤에 터보 컴프레서·터빈,
-// 크랭크케이스 왼쪽 앞에 MGU-K, 엔진 앞 아래에 Energy Store, 따로 떨어진 Control Electronics(ECU), 뒤에 기어박스.
+// F1 V6 하이브리드 파워 유닛을 앞-왼쪽 위에서 비스듬히 본 선화. 부품마다 3D 기준점(단위 ≈ m, x 오른쪽 · y 위 · z 뒤)을
+// 투영한 뒤 둥근 상자·원통·나선 볼류트·굵은 관 같은 곡선 모양으로 그린다. 그리는 순서(뒤 → 앞)는 이 시점에 맞춰 직접 정한다.
+// 배치는 실제 파워 유닛: V자 골 위 MGU-H, 그 축 앞 컴프레서·뒤 터빈, 양쪽 뱅크 바깥에서 터빈으로 가는 배기관,
+// 크랭크케이스 왼쪽 앞 MGU-K, 앞 아래 Energy Store, 따로 떨어진 Control Electronics(ECU), 뒤 기어박스.
 
 /// 보는 방향(도): 세로축으로 돌린 뒤 앞으로 숙인다.
-const double _yawDegrees = -38;
-const double _pitchDegrees = 33;
+const double _yawDegrees = -40;
+const double _pitchDegrees = 30;
 
-/// 원기둥 둘레를 나누는 면 수.
-const int _cylinderSegments = 20;
-
-/// 세부 선(터보 허브 고리·점화 플러그)을 면보다 앞에 두려고 바깥으로 띄우는 거리.
-const double _detailLift = 0.004;
+/// 둥근 모서리·원·나선을 나누는 점 수.
+const int _arcSteps = 8;
+const int _circleSteps = 36;
+const int _spiralSteps = 48;
 
 /// V 뱅크 각(한쪽, 도) — F1 V6는 90°.
 const double _bankHalfAngleDegrees = 45;
+
+/// 볼류트 나선이 한 바퀴에 커지는 비율·출구 길이(반지름 배수)·흡입구 원 크기(반지름 배수).
+const double _voluteGrowth = 0.45;
+const double _voluteOutlet = 0.9;
+const double _voluteEye = 0.55;
+const double _voluteHub = 0.22;
+const double _voluteEyeLift = 0.01;
 
 /// 3D 벡터.
 class Vec3 {
@@ -37,250 +44,255 @@ class Vec3 {
   Vec3 get unit => this * (1 / length);
 }
 
-/// 면을 그리는 방식.
-enum FaceStyle {
-  /// 채움 + 네온 테두리(상자 면·원기둥 뚜껑).
-  solid,
+/// 그리는 방식.
+enum StrokeKind {
+  /// 표면 색으로 채우고 네온 테두리(부품 몸통 윤곽).
+  body,
 
-  /// 채움만(원기둥 옆면 — 띠마다 선을 그으면 톱니처럼 보여 윤곽은 [outline]으로 따로 그린다).
-  fillOnly,
+  /// 네온 선만(캠 커버 윤곽·허브·띠·나선 등 세부).
+  line,
 
-  /// 선만(허브 고리·점화 플러그·원기둥 윤곽).
-  outline,
+  /// 굵은 관: 네온 테두리 두 줄 사이를 표면 색으로(배기관·흡기관). [EngineStroke.tubeWidth]가 굵기.
+  tube,
 }
 
-/// 3D 면 하나: 꼭짓점들 + 바깥 법선. 원기둥 옆면은 [cylinder] 번호로 묶어 투영 뒤 윤곽을 만든다.
-class EngineFace {
-  const EngineFace(this.part, this.points, this.normal, {this.style = FaceStyle.solid, this.cylinder});
+/// 그림 한 획: 단위 좌표(0~1, 그림 상자 기준) 점들. [closed]면 닫힌 모양.
+class EngineStroke {
+  const EngineStroke(this.part, this.kind, this.points, {this.closed = true, this.tubeWidth = 0});
 
   final EnginePart part;
-  final List<Vec3> points;
-  final Vec3 normal;
-  final FaceStyle style;
-  final int? cylinder;
-}
-
-/// 투영된 면: 모델 전체를 감싸는 상자 기준 단위 좌표(0~1) + 깊이(클수록 가깝다).
-class ProjectedFace {
-  const ProjectedFace(this.part, this.points, this.depth, {this.style = FaceStyle.solid});
-
-  final EnginePart part;
+  final StrokeKind kind;
   final List<Offset> points;
-  final double depth;
-  final FaceStyle style;
+  final bool closed;
+
+  /// [StrokeKind.tube]의 굵기(그림 폭에 대한 비율).
+  final double tubeWidth;
+}
+
+/// 투영 결과: 뒤 → 앞 순서의 획들 + 그림의 가로/세로 비율.
+class EngineDrawing {
+  const EngineDrawing(this.strokes, this.aspect);
+
+  final List<EngineStroke> strokes;
+  final double aspect;
 }
 
 double _rad(double degrees) => degrees * math.pi / 180;
 
-/// 중심 [c]와 서로 수직인 반축 [u]·[v]·[w]로 만든 상자의 여섯 면.
-List<EngineFace> _box(EnginePart part, Vec3 c, Vec3 u, Vec3 v, Vec3 w) {
-  Vec3 p(int a, int b, int d) => c + u * a.toDouble() + v * b.toDouble() + w * d.toDouble();
-  return [
-    EngineFace(part, [p(1, -1, -1), p(1, 1, -1), p(1, 1, 1), p(1, -1, 1)], u),
-    EngineFace(part, [p(-1, -1, -1), p(-1, -1, 1), p(-1, 1, 1), p(-1, 1, -1)], u * -1),
-    EngineFace(part, [p(-1, 1, -1), p(-1, 1, 1), p(1, 1, 1), p(1, 1, -1)], v),
-    EngineFace(part, [p(-1, -1, -1), p(1, -1, -1), p(1, -1, 1), p(-1, -1, 1)], v * -1),
-    EngineFace(part, [p(-1, -1, 1), p(1, -1, 1), p(1, 1, 1), p(-1, 1, 1)], w),
-    EngineFace(part, [p(-1, -1, -1), p(-1, 1, -1), p(1, 1, -1), p(1, -1, -1)], w * -1),
-  ];
-}
-
-/// 축에 맞춘 상자(중심·반 크기).
-List<EngineFace> _aabb(EnginePart part, Vec3 c, double hx, double hy, double hz) =>
-    _box(part, c, Vec3(hx, 0, 0), Vec3(0, hy, 0), Vec3(0, 0, hz));
-
-/// 중심 [c], 축 방향 [axis], 반지름 [r], 길이 [length]인 원기둥(옆면 + 양 끝 뚜껑). [hubRatio]가 있으면 양 끝에 허브 고리.
-/// [id]는 원기둥마다 다른 번호(투영 뒤 윤곽을 만들 때 옆면을 묶는다).
-List<EngineFace> _cylinder(int id, EnginePart part, Vec3 c, Vec3 axis, double r, double length, {double? hubRatio}) {
-  final a = axis.unit;
-  final helper = a.y.abs() < 0.9 ? const Vec3(0, 1, 0) : const Vec3(1, 0, 0);
-  final e1 = a.cross(helper).unit;
-  final e2 = a.cross(e1).unit;
-  final half = a * (length / 2);
-  Vec3 radial(double t) => e1 * math.cos(t) + e2 * math.sin(t);
-  List<Vec3> ring(Vec3 center, double radius) => [
-        for (var i = 0; i < _cylinderSegments; i++) center + radial(2 * math.pi * i / _cylinderSegments) * radius,
-      ];
-  final front = ring(c - half, r);
-  final back = ring(c + half, r);
-  final faces = <EngineFace>[
-    for (var i = 0; i < _cylinderSegments; i++)
-      EngineFace(
-        part,
-        [front[i], front[(i + 1) % _cylinderSegments], back[(i + 1) % _cylinderSegments], back[i]],
-        radial(2 * math.pi * (i + 0.5) / _cylinderSegments),
-        style: FaceStyle.fillOnly,
-        cylinder: id,
-      ),
-    EngineFace(part, front, a * -1, cylinder: id),
-    EngineFace(part, back, a, cylinder: id),
-  ];
-  if (hubRatio != null) {
-    faces
-      ..add(EngineFace(part, ring(c - half - a * _detailLift, r * hubRatio), a * -1, style: FaceStyle.outline))
-      ..add(EngineFace(part, ring(c + half + a * _detailLift, r * hubRatio), a, style: FaceStyle.outline));
-  }
-  return faces;
-}
-
-/// 두 점 [from]→[to]를 잇는 원기둥(배기관 토막).
-List<EngineFace> _pipe(int id, EnginePart part, Vec3 from, Vec3 to, double r) =>
-    _cylinder(id, part, (from + to) * 0.5, to - from, r, (to - from).length);
-
-/// 배기관 굵기와 꺾이는 점들(뱅크 바깥 아래를 따라 뒤로 → 뒤 터빈으로 올라간다). x는 오른쪽 기준, 왼쪽은 부호를 뒤집는다.
-const double _exhaustRadius = 0.028;
-const Vec3 _exhaustFront = Vec3(0.4, 0.34, -0.22);
-const Vec3 _exhaustRear = Vec3(0.4, 0.34, 0.24);
-const Vec3 _exhaustTurbine = Vec3(0.09, 0.62, 0.3);
-
-/// 한쪽 배기관 두 토막(터빈으로 가는 배기 — 터보 색). [side]는 왼쪽 -1, 오른쪽 1, [firstId]부터 번호 둘을 쓴다.
-List<EngineFace> _exhaust(int side, int firstId) {
-  Vec3 sided(Vec3 p) => Vec3(p.x * side, p.y, p.z);
-  return [
-    ..._pipe(firstId, EnginePart.turboCharger, sided(_exhaustFront), sided(_exhaustRear), _exhaustRadius),
-    ..._pipe(firstId + 1, EnginePart.turboCharger, sided(_exhaustRear), sided(_exhaustTurbine), _exhaustRadius),
-  ];
-}
-
-/// 한쪽 실린더 뱅크(블록 + 캠 커버 + 점화 플러그 3개). [side]는 왼쪽 -1, 오른쪽 1.
-List<EngineFace> _bank(int side) {
-  final angle = _rad(_bankHalfAngleDegrees);
-  final up = Vec3(side * math.sin(angle), math.cos(angle), 0);
-  final across = Vec3(math.cos(angle), -side * math.sin(angle), 0);
-  const depth = Vec3(0, 0, 1);
-  const base = Vec3(0, 0.3, 0.02);
-  final block = base + up * 0.2;
-  final cover = base + up * 0.36;
-  final faces = [
-    ..._box(EnginePart.ice, block, up * 0.12, across * 0.13, depth * 0.3),
-    ..._box(EnginePart.ice, cover, up * 0.04, across * 0.1, depth * 0.27),
-  ];
-  for (final z in const [-0.17, 0.0, 0.17]) {
-    final top = cover + up * (0.04 + _detailLift) + depth * z;
-    faces.add(EngineFace(
-      EnginePart.ice,
-      [
-        for (var i = 0; i < _cylinderSegments; i++)
-          top +
-              across * (0.035 * math.cos(2 * math.pi * i / _cylinderSegments)) +
-              depth * (0.035 * math.sin(2 * math.pi * i / _cylinderSegments)),
-      ],
-      up,
-      style: FaceStyle.outline,
-    ));
-  }
-  return faces;
-}
-
-/// 파워 유닛 3D 면 전부(그리는 순서는 투영 뒤 깊이로 정한다).
-List<EngineFace> engineFaces() => [
-      // ICE: 크랭크케이스 + 좌우 뱅크 + V 골의 흡기 플레넘.
-      ..._aabb(EnginePart.ice, const Vec3(0, 0.15, 0.02), 0.25, 0.15, 0.32),
-      ..._bank(-1),
-      ..._bank(1),
-      ..._aabb(EnginePart.ice, const Vec3(0, 0.5, 0.02), 0.09, 0.07, 0.24),
-      // 배기관: 양쪽 뱅크 바깥에서 뒤 터빈으로.
-      ..._exhaust(-1, 4),
-      ..._exhaust(1, 6),
-      // MGU-H: V 골 위 앞뒤로 누운 원기둥, 그 앞(컴프레서)·뒤(터빈) 터보 달팽이.
-      ..._cylinder(0, EnginePart.mguH, const Vec3(0, 0.66, 0.03), const Vec3(0, 0, 1), 0.065, 0.3),
-      ..._cylinder(1, EnginePart.turboCharger, const Vec3(0, 0.66, -0.25), const Vec3(0, 0, 1), 0.13, 0.11, hubRatio: 0.38),
-      ..._cylinder(2, EnginePart.turboCharger, const Vec3(0, 0.66, 0.31), const Vec3(0, 0, 1), 0.12, 0.1, hubRatio: 0.38),
-      // MGU-K: 크랭크케이스 왼쪽 앞 아래.
-      ..._cylinder(3, EnginePart.mguK, const Vec3(-0.34, 0.13, -0.2), const Vec3(0, 0, 1), 0.075, 0.24, hubRatio: 0.45),
-      // Energy Store: 엔진 앞 아래 납작한 팩.
-      ..._aabb(EnginePart.energyStore, const Vec3(0, 0.06, -0.58), 0.22, 0.06, 0.13),
-      // Control Electronics(ECU): 왼쪽에 떨어진 상자 + 위 칩.
-      ..._aabb(EnginePart.controlElectronics, const Vec3(-0.82, 0.04, -0.35), 0.14, 0.035, 0.11),
-      ..._aabb(EnginePart.controlElectronics, const Vec3(-0.82, 0.095, -0.35), 0.06, 0.02, 0.05),
-      // 기어박스: 뒤쪽으로 길게, 끝으로 갈수록 좁아지는 두 토막.
-      ..._aabb(EnginePart.gearbox, const Vec3(0, 0.16, 0.5), 0.16, 0.13, 0.16),
-      ..._aabb(EnginePart.gearbox, const Vec3(0, 0.15, 0.78), 0.11, 0.1, 0.13),
-    ];
-
-/// 보는 방향으로 돌린 좌표(z가 클수록 보는 사람 쪽).
-Vec3 _view(Vec3 p) {
+/// 보는 방향으로 돌려 화면 평면으로 투영(y는 위가 +).
+Offset _project(Vec3 p) {
   final yaw = _rad(_yawDegrees);
   final pitch = _rad(_pitchDegrees);
   final x1 = p.x * math.cos(yaw) + p.z * math.sin(yaw);
   final z1 = -p.x * math.sin(yaw) + p.z * math.cos(yaw);
   final y2 = p.y * math.cos(pitch) + z1 * math.sin(pitch);
-  final z2 = -p.y * math.sin(pitch) + z1 * math.cos(pitch);
-  return Vec3(x1, y2, -z2);
+  return Offset(x1, y2);
 }
 
-/// 투영 결과: 보이는 쪽을 향한 면만 먼 것부터(뒤 → 앞) + 모델의 가로/세로 비율.
-class EngineProjection {
-  const EngineProjection(this.faces, this.aspect);
-
-  final List<ProjectedFace> faces;
-  final double aspect;
+(Vec3, Vec3) _basis(Vec3 axis) {
+  final a = axis.unit;
+  final helper = a.y.abs() < 0.9 ? const Vec3(0, 1, 0) : const Vec3(1, 0, 0);
+  final e1 = a.cross(helper).unit;
+  return (e1, a.cross(e1).unit);
 }
 
-/// 파워 유닛을 정해진 시점으로 투영한다(순수 함수 — 같은 결과라 그림은 한 번만 계산해 둔다).
-EngineProjection projectEngine() {
-  final viewed = [
-    for (final f in engineFaces()) (face: f, points: [for (final p in f.points) _view(p)], normal: _view(f.normal)),
+/// [center]에서 [u]·[v] 평면 위 반 크기 [hu]×[hv], 모서리 반경 [r]인 둥근 직사각형 둘레 점.
+List<Vec3> _roundedRect(Vec3 center, Vec3 u, Vec3 v, double hu, double hv, double r) {
+  final points = <Vec3>[];
+  final corners = [(hu - r, hv - r, 0.0), (-(hu - r), hv - r, 90.0), (-(hu - r), -(hv - r), 180.0), (hu - r, -(hv - r), 270.0)];
+  for (final (cu, cv, start) in corners) {
+    for (var i = 0; i <= _arcSteps; i++) {
+      final t = _rad(start + 90.0 * i / _arcSteps);
+      points.add(center + u * (cu + r * math.cos(t)) + v * (cv + r * math.sin(t)));
+    }
+  }
+  return points;
+}
+
+/// 수평 둥근 직사각형(윗면).
+List<Vec3> _flatRect(Vec3 center, double hx, double hz, double r) =>
+    _roundedRect(center, const Vec3(1, 0, 0), const Vec3(0, 0, 1), hx, hz, r);
+
+/// [center]에서 [axis]에 수직인 원(반지름 [r]) 둘레 점.
+List<Vec3> _circle(Vec3 center, Vec3 axis, double r) {
+  final (e1, e2) = _basis(axis);
+  return [
+    for (var i = 0; i < _circleSteps; i++)
+      center + e1 * (r * math.cos(2 * math.pi * i / _circleSteps)) + e2 * (r * math.sin(2 * math.pi * i / _circleSteps)),
   ];
+}
+
+/// 터보 볼류트(달팽이 하우징) 나선: 반지름이 한 바퀴에 걸쳐 커지고 끝에서 접선으로 출구가 뻗는다.
+List<Vec3> _spiral(Vec3 center, Vec3 axis, double r0) {
+  final (e1, e2) = _basis(axis);
+  final points = <Vec3>[
+    for (var i = 0; i <= _spiralSteps; i++)
+      center +
+          e1 * (r0 * (1 + _voluteGrowth * i / _spiralSteps) * math.cos(2 * math.pi * i / _spiralSteps)) +
+          e2 * (r0 * (1 + _voluteGrowth * i / _spiralSteps) * math.sin(2 * math.pi * i / _spiralSteps)),
+  ];
+  final end = points.last;
+  points
+    ..add(end + e2 * (r0 * _voluteOutlet))
+    ..add(center + e1 * r0 + e2 * (r0 * _voluteOutlet))
+    ..add(center + e1 * r0);
+  return points;
+}
+
+/// 투영 전 획.
+class _Stroke3 {
+  _Stroke3(this.part, this.kind, this.points, {this.closed = true, this.tubeWidth = 0, this.hull = false});
+
+  final EnginePart part;
+  final StrokeKind kind;
+  final List<Vec3> points;
+  final bool closed;
+  final double tubeWidth;
+
+  /// 투영 뒤 볼록 껍질로 바꾼다(입체의 화면 윤곽).
+  final bool hull;
+}
+
+/// 윗면 둘레 [top]을 [down]만큼 내린 입체: 화면 윤곽(껍질) + 윗면 선.
+List<_Stroke3> _prism(EnginePart part, List<Vec3> top, Vec3 down) => [
+      _Stroke3(part, StrokeKind.body, [...top, for (final p in top) p + down], hull: true),
+      _Stroke3(part, StrokeKind.line, top),
+    ];
+
+/// 원통: 화면 윤곽 + 가까운 끝 원 + (선택) 허브 원·띠.
+List<_Stroke3> _cylinder(EnginePart part, Vec3 center, Vec3 axis, double r, double length,
+    {double? hub, List<double> bands = const []}) {
+  final a = axis.unit;
+  final near = center - a * (length / 2);
+  final far = center + a * (length / 2);
+  return [
+    _Stroke3(part, StrokeKind.body, [..._circle(near, a, r), ..._circle(far, a, r)], hull: true),
+    _Stroke3(part, StrokeKind.line, _circle(near, a, r)),
+    if (hub != null) _Stroke3(part, StrokeKind.line, _circle(near, a, r * hub)),
+    for (final b in bands) _Stroke3(part, StrokeKind.line, _circle(near + a * (length * b), a, r)),
+  ];
+}
+
+/// 볼류트 하우징: 두께 [width]의 나선 입체 + 앞 나선 선 + 가운데 흡입구 원 두 개. [axis]는 보는 쪽을 향한다.
+List<_Stroke3> _volute(EnginePart part, Vec3 center, Vec3 axis, double r0, double width) {
+  final a = axis.unit;
+  final front = _spiral(center - a * (width / 2), a, r0);
+  final back = _spiral(center + a * (width / 2), a, r0);
+  final eye = center - a * (width / 2 + _voluteEyeLift);
+  return [
+    _Stroke3(part, StrokeKind.body, [...front, ...back], hull: true),
+    _Stroke3(part, StrokeKind.line, front),
+    _Stroke3(part, StrokeKind.line, _circle(eye, a, r0 * _voluteEye)),
+    _Stroke3(part, StrokeKind.line, _circle(eye, a, r0 * _voluteHub)),
+  ];
+}
+
+/// 3D 꺾은선을 따라가는 굵은 관.
+_Stroke3 _tube(EnginePart part, List<Vec3> path, double width) =>
+    _Stroke3(part, StrokeKind.tube, path, closed: false, tubeWidth: width);
+
+/// 한쪽 실린더 뱅크: 블록(둥근 상자) + 캠 커버 윤곽 + 점화 플러그 3개. [side]는 왼쪽 -1, 오른쪽 1.
+List<_Stroke3> _bank(int side) {
+  final angle = _rad(_bankHalfAngleDegrees);
+  final up = Vec3(side * math.sin(angle), math.cos(angle), 0);
+  final across = Vec3(math.cos(angle), -side * math.sin(angle), 0);
+  const along = Vec3(0, 0, 1);
+  const base = Vec3(0, 0.28, 0.0);
+  final top = base + up * 0.34;
+  return [
+    ..._prism(EnginePart.ice, _roundedRect(top, across, along, 0.11, 0.31, 0.06), up * -0.26),
+    _Stroke3(EnginePart.ice, StrokeKind.line, _roundedRect(top + up * 0.005, across, along, 0.075, 0.27, 0.05)),
+    for (final z in const [-0.17, 0.0, 0.17])
+      _Stroke3(EnginePart.ice, StrokeKind.line, _circle(top + up * 0.006 + along * z, up, 0.028)),
+  ];
+}
+
+/// 배기관 굵기와 꺾이는 점들(뱅크 바깥 아래를 따라 뒤로 → 뒤 터빈으로 올라간다). x는 오른쪽 기준.
+const double _exhaustWidth = 0.05;
+const double _intakeWidth = 0.05;
+const List<Vec3> _exhaustRight = [Vec3(0.37, 0.34, -0.26), Vec3(0.4, 0.36, 0.16), Vec3(0.2, 0.62, 0.3), Vec3(0.06, 0.7, 0.32)];
+
+List<Vec3> _sided(List<Vec3> points, int side) => [for (final p in points) Vec3(p.x * side, p.y, p.z)];
+
+/// 뒤 → 앞 순서의 획(투영 전).
+List<_Stroke3> _strokes() => [
+      // 기어박스(뒤, 가장 멀다): 둥근 상자 두 토막.
+      ..._prism(EnginePart.gearbox, _flatRect(const Vec3(0, 0.3, 0.68), 0.1, 0.16, 0.04), const Vec3(0, -0.2, 0)),
+      ..._prism(EnginePart.gearbox, _flatRect(const Vec3(0, 0.32, 0.44), 0.15, 0.12, 0.04), const Vec3(0, -0.26, 0)),
+      // 터빈 볼류트(뒤)와 오른쪽(먼 쪽) 배기관.
+      ..._volute(EnginePart.turboCharger, const Vec3(0, 0.74, 0.34), const Vec3(0, 0, -1), 0.085, 0.09),
+      _tube(EnginePart.turboCharger, _sided(_exhaustRight, 1), _exhaustWidth),
+      // 크랭크케이스.
+      ..._prism(EnginePart.ice, _flatRect(const Vec3(0, 0.3, 0.0), 0.25, 0.33, 0.06), const Vec3(0, -0.28, 0)),
+      // 오른쪽 뱅크 → V 골의 플레넘 → MGU-H → 왼쪽(가까운) 뱅크.
+      ..._bank(1),
+      ..._prism(EnginePart.ice, _flatRect(const Vec3(0, 0.6, 0.0), 0.085, 0.25, 0.05), const Vec3(0, -0.14, 0)),
+      ..._cylinder(EnginePart.mguH, const Vec3(0, 0.74, 0.04), const Vec3(0, 0, 1), 0.058, 0.3, hub: 0.5, bands: [0.33, 0.66]),
+      // 왼쪽(가까운) 배기관은 뱅크 바깥을 지나 뒤로 올라가므로 뱅크보다 먼저 그려 겹치는 부분을 뱅크가 가린다.
+      _tube(EnginePart.turboCharger, _sided(_exhaustRight, -1), _exhaustWidth),
+      ..._bank(-1),
+      // 컴프레서(앞) + 플레넘으로 가는 흡기관.
+      _tube(EnginePart.turboCharger, const [Vec3(0.11, 0.74, -0.26), Vec3(0.12, 0.7, -0.12), Vec3(0.06, 0.66, -0.06)], _intakeWidth),
+      ..._volute(EnginePart.turboCharger, const Vec3(0, 0.74, -0.27), const Vec3(0, 0, -1), 0.085, 0.08),
+      // MGU-K(왼쪽 앞 아래, 기어 허브).
+      ..._cylinder(EnginePart.mguK, const Vec3(-0.34, 0.12, -0.2), const Vec3(0, 0, 1), 0.07, 0.22, hub: 0.45, bands: [0.5]),
+      // Energy Store(앞 아래 팩, 셀 줄).
+      ..._prism(EnginePart.energyStore, _flatRect(const Vec3(0, 0.1, -0.6), 0.22, 0.12, 0.03), const Vec3(0, -0.09, 0)),
+      for (final x in const [-0.11, 0.0, 0.11])
+        _Stroke3(EnginePart.energyStore, StrokeKind.line, [Vec3(x, 0.1, -0.7), Vec3(x, 0.1, -0.5)], closed: false),
+      // Control Electronics(ECU): 왼쪽에 떨어진 납작한 상자 + 위 칩.
+      ..._prism(EnginePart.controlElectronics, _flatRect(const Vec3(-0.86, 0.08, -0.42), 0.14, 0.11, 0.02), const Vec3(0, -0.07, 0)),
+      ..._prism(EnginePart.controlElectronics, _flatRect(const Vec3(-0.86, 0.12, -0.42), 0.06, 0.05, 0.01), const Vec3(0, -0.04, 0)),
+    ];
+
+/// 파워 유닛 선화(순수 함수 — 시점이 고정이라 그림은 한 번만 계산해 둔다).
+EngineDrawing drawEngine() {
+  final raw = [for (final s in _strokes()) (stroke: s, points: [for (final p in s.points) _project(p)])];
   var minX = double.infinity, maxX = -double.infinity, minY = double.infinity, maxY = -double.infinity;
-  for (final v in viewed) {
-    for (final p in v.points) {
-      minX = math.min(minX, p.x);
-      maxX = math.max(maxX, p.x);
-      minY = math.min(minY, p.y);
-      maxY = math.max(maxY, p.y);
+  for (final r in raw) {
+    final pad = r.stroke.tubeWidth / 2;
+    for (final p in r.points) {
+      minX = math.min(minX, p.dx - pad);
+      maxX = math.max(maxX, p.dx + pad);
+      minY = math.min(minY, p.dy - pad);
+      maxY = math.max(maxY, p.dy + pad);
     }
   }
   final w = maxX - minX;
   final h = maxY - minY;
-  Offset unit(Vec3 p) => Offset((p.x - minX) / w, (maxY - p.y) / h);
-  double depth(List<Vec3> pts) => pts.fold(0.0, (s, p) => s + p.z) / pts.length;
-  final faces = [
-    for (final v in viewed)
-      if (v.normal.z > 0) ProjectedFace(v.face.part, [for (final p in v.points) unit(p)], depth(v.points), style: v.face.style),
-  ];
-  // 원기둥마다 투영된 모든 점의 볼록 껍질 = 화면에서의 윤곽. 원기둥에서 가장 가까운 점보다 살짝 앞에 둬 옆면 채움 위에 그린다.
-  final byCylinder = <int, List<({EngineFace face, List<Vec3> points})>>{};
-  for (final v in viewed) {
-    final id = v.face.cylinder;
-    if (id != null) {
-      (byCylinder[id] ??= []).add((face: v.face, points: v.points));
-    }
-  }
-  for (final group in byCylinder.values) {
-    final points = [for (final g in group) ...g.points];
-    final nearest = points.fold(-double.infinity, (m, p) => math.max(m, p.z));
-    faces.add(ProjectedFace(
-      group.first.face.part,
-      convexHull([for (final p in points) unit(p)]),
-      nearest + _detailLift,
-      style: FaceStyle.outline,
-    ));
-  }
-  faces.sort((a, b) => a.depth.compareTo(b.depth));
-  return EngineProjection(faces, w / h);
+  Offset unit(Offset p) => Offset((p.dx - minX) / w, (maxY - p.dy) / h);
+  return EngineDrawing(
+    [
+      for (final r in raw)
+        EngineStroke(
+          r.stroke.part,
+          r.stroke.kind,
+          r.stroke.hull ? convexHull([for (final p in r.points) unit(p)]) : [for (final p in r.points) unit(p)],
+          closed: r.stroke.closed,
+          tubeWidth: r.stroke.tubeWidth / w,
+        ),
+    ],
+    w / h,
+  );
 }
 
-/// 점들의 볼록 껍질(반시계, 단조 사슬). 점이 셋 미만이면 그대로.
+/// 점들의 볼록 껍질(단조 사슬). 점이 셋 미만이면 그대로.
 List<Offset> convexHull(List<Offset> points) {
   if (points.length < 3) {
     return points;
   }
   final sorted = [...points]..sort((a, b) => a.dx != b.dx ? a.dx.compareTo(b.dx) : a.dy.compareTo(b.dy));
   double turn(Offset o, Offset a, Offset b) => (a.dx - o.dx) * (b.dy - o.dy) - (a.dy - o.dy) * (b.dx - o.dx);
-  final lower = <Offset>[];
-  for (final p in sorted) {
-    while (lower.length >= 2 && turn(lower[lower.length - 2], lower.last, p) <= 0) {
-      lower.removeLast();
+  List<Offset> chain(Iterable<Offset> ordered) {
+    final out = <Offset>[];
+    for (final p in ordered) {
+      while (out.length >= 2 && turn(out[out.length - 2], out.last, p) <= 0) {
+        out.removeLast();
+      }
+      out.add(p);
     }
-    lower.add(p);
+    return out..removeLast();
   }
-  final upper = <Offset>[];
-  for (final p in sorted.reversed) {
-    while (upper.length >= 2 && turn(upper[upper.length - 2], upper.last, p) <= 0) {
-      upper.removeLast();
-    }
-    upper.add(p);
-  }
-  return [...lower..removeLast(), ...upper..removeLast()];
+
+  return [...chain(sorted), ...chain(sorted.reversed)];
 }

@@ -42,20 +42,20 @@ void main() {
   });
 
   group('standingsPreview', () {
-    test('내가 위쪽 3명 안이면 위쪽과 바로 뒤 한 명', () {
+    test('내가 위쪽 5명 안이면 위쪽 5명만', () {
       final preview = standingsPreview([
-        for (var p = 1; p <= 6; p++) driverStandingOf(p, isPlayer: p == 2),
+        for (var p = 1; p <= 8; p++) driverStandingOf(p, isPlayer: p == 2),
       ]);
 
-      expect([for (final d in preview) d.position], [1, 2, 3]);
+      expect([for (final d in preview) d.position], [1, 2, 3, 4, 5]);
     });
 
-    test('내가 뒤쪽이면 위쪽 3명 + 내 앞뒤', () {
+    test('내가 뒤쪽이면 위쪽 5명 + 내 앞뒤', () {
       final preview = standingsPreview([
-        for (var p = 1; p <= 10; p++) driverStandingOf(p, isPlayer: p == 7),
+        for (var p = 1; p <= 12; p++) driverStandingOf(p, isPlayer: p == 9),
       ]);
 
-      expect([for (final d in preview) d.position], [1, 2, 3, 6, 7, 8]);
+      expect([for (final d in preview) d.position], [1, 2, 3, 4, 5, 8, 9, 10]);
     });
   });
 

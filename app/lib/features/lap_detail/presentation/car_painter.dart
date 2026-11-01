@@ -9,7 +9,7 @@ import 'diagram_style.dart';
 export 'car_geometry.dart' show CarPart, kFrontWheelCenterFactor, kRearWheelCenterFactor;
 
 /// 차 그림의 기본 크기(논리 px).
-const double kCarDiagramWidth = 200;
+const double kCarDiagramWidth = 150;
 const double kCarDiagramHeight = kCarDiagramWidth / kCarAspect;
 const Size kCarDiagramSize = Size(kCarDiagramWidth, kCarDiagramHeight);
 

@@ -49,23 +49,20 @@ void main() {
       expect(engineColorFor(EnginePart.controlElectronics, wear, palette), palette.textMuted);
     });
 
-    test('모든 부품이 투영된 그림에 보이고, 좌표는 모델을 감싸는 단위 상자 안', () {
-      final projection = projectEngine();
-      expect(projection.faces.map((f) => f.part).toSet(), EnginePart.values.toSet());
-      for (final face in projection.faces) {
-        for (final p in face.points) {
+    test('모든 부품이 그림에 있고, 좌표는 그림 상자(0~1) 안', () {
+      final drawing = drawEngine();
+      expect(drawing.strokes.map((s) => s.part).toSet(), EnginePart.values.toSet());
+      for (final stroke in drawing.strokes) {
+        for (final p in stroke.points) {
           expect(p.dx >= -_epsilon && p.dx <= 1 + _epsilon && p.dy >= -_epsilon && p.dy <= 1 + _epsilon, isTrue);
         }
       }
-      expect(projection.aspect, inInclusiveRange(0.5, 2));
+      expect(drawing.aspect, inInclusiveRange(0.5, 2));
     });
 
-    test('면은 먼 것부터 그리고, 보는 쪽을 향한 면만 남긴다', () {
-      final faces = projectEngine().faces;
-      for (var i = 1; i < faces.length; i++) {
-        expect(faces[i].depth, greaterThanOrEqualTo(faces[i - 1].depth));
-      }
-      expect(faces.length, lessThan(engineFaces().length));
+    test('볼록 껍질은 안쪽 점을 빼고 바깥 꼭짓점만 남긴다', () {
+      final hull = convexHull(const [Offset(0, 0), Offset(1, 0), Offset(0.5, 0.5), Offset(1, 1), Offset(0, 1)]);
+      expect(hull.toSet(), {const Offset(0, 0), const Offset(1, 0), const Offset(1, 1), const Offset(0, 1)});
     });
   });
 
