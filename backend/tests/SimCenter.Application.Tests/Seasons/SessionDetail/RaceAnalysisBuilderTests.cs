@@ -99,6 +99,18 @@ public class RaceAnalysisBuilderTests
     }
 
     [Fact]
+    public void Build_FieldErs_IgnoresInsertedSamplesAndSpikes()
+    {
+        var analysis = RaceAnalysisBuilder.Build(
+            Session(SessionType.Race), [Ai1, Me, Ai2], SessionHistory.Parse(History()), 0, MyLaps(),
+            Enumerable.Range(1, TotalLaps).Select(n => Trace(n)).ToList(), [AiSamples(jitter: true)], 1000)!;
+
+        // 고정 표본 사이에 끼운 표본(잔량 +300kJ)과 고정 표본 하나의 튄 값(+400kJ)이 없을 때와 같은 값이어야 한다.
+        Assert.Equal(new FieldSegmentErsDto(2, 0, 290, 1, null, 2900), analysis.FieldErs[2]);
+        Assert.Equal(new FieldSegmentErsDto(3, 55, 0, 1, null, 1100), analysis.FieldErs[3]);
+    }
+
+    [Fact]
     public void Build_ShortGapBetweenCorners_JoinsTheCornerBeforeIt()
     {
         var analysis = RaceAnalysisBuilder.Build(
@@ -200,25 +212,38 @@ public class RaceAnalysisBuilderTests
         extra[prefix + "RR"] = others;
     }
 
-    /// <summary>AI 차 1의 한 랩 표본(5, 15, … 995m, 다음 랩 5m): 직선 510~790m에서 표본마다 10kJ 쓰고 코너 B에서 5kJ씩 채운다.</summary>
-    private static DecodedTrackSamples AiSamples()
+    /// <summary>
+    /// AI 차 1의 한 랩 표본(5, 15, … 995m, 다음 랩 5m): 직선 510~790m에서 표본마다 10kJ 쓰고 코너 B에서 5kJ씩 채운다.
+    /// [jitter]면 직선·코너 B의 고정 표본마다 3ms 뒤 1m 앞에 잔량이 300kJ 많은 표본을 끼우고, 600m 고정 표본의 잔량을 400kJ 튀게 한다.
+    /// </summary>
+    private static DecodedTrackSamples AiSamples(bool jitter = false)
     {
         const int count = 101;
-        var distance = Enumerable.Range(0, count).Select(k => k < 100 ? 5f + 10 * k : 5f).ToArray();
-        var ers = Enumerable.Range(0, count)
-            .Select(k => (ushort)(k <= 50 ? 2000 : k <= 79 ? 2000 - 10 * (k - 50) : k <= 90 ? 1710 + 5 * (k - 79) : 1765))
-            .ToArray();
+        static ushort Ers(int k) => (ushort)(k <= 50 ? 2000 : k <= 79 ? 2000 - 10 * (k - 50) : k <= 90 ? 1710 + 5 * (k - 79) : 1765);
+
+        var samples = new List<(int TimeMs, float DistanceM, ushort ErsKj)>();
+        for (var k = 0; k < count; k++)
+        {
+            var distanceM = k < 100 ? 5f + 10 * k : 5f;
+            samples.Add((k * 100, distanceM, (ushort)(Ers(k) + (jitter && k == 59 ? 400 : 0))));
+            if (jitter && k is >= 51 and <= 90)
+            {
+                samples.Add((k * 100 + 3, distanceM + 1, (ushort)(Ers(k) + 300)));
+            }
+        }
+
+        var n = samples.Count;
         return new DecodedTrackSamples(
             5,
-            Enumerable.Range(0, count).Select(k => k * 100).ToArray(),
-            Enumerable.Repeat((byte)1, count).ToArray(),
-            distance,
-            new float[count],
-            new float[count],
-            new ushort[count],
-            new byte[count],
+            samples.Select(s => s.TimeMs).ToArray(),
+            Enumerable.Repeat((byte)1, n).ToArray(),
+            samples.Select(s => s.DistanceM).ToArray(),
+            new float[n],
+            new float[n],
+            new ushort[n],
+            new byte[n],
             null, null, null, null, null, null, null, null,
-            ers);
+            samples.Select(s => s.ErsKj).ToArray());
     }
 
     /// <summary>내 랩 1~10: 마모(앞 w·뒤 w+2)는 랩마다 2%p씩, 5랩에 새 타이어. 스냅샷 details = 피트 창 + 타이어 세트.</summary>
