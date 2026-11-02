@@ -31,6 +31,10 @@ const double _kerbFunnelSlope = 0.2;
 const int _apexCurvatureBins = 2;
 const double _apexSideCurvature = 0.002;
 
+/// 도로 끝을 안쪽 연석에 붙이는 에이펙스: 이 곡률(1/m, 반지름 약 125m)보다 급하게 굽는 칸의 안쪽 연석만.
+/// 거의 곧은 킹크(Spa 블랑쉬몽 뒤)의 연석까지 붙이면 직선에서 도로가 한쪽으로 움푹 패고 방호벽이 길로 튀어나온다.
+const double _apexPinCurvature = 0.008;
+
 /// 모든 차 표본으로 서버가 만든 트랙 형상(`GET /tracks/{trackId}/geometry`). 칸 i = 랩 거리 i × [resolutionM].
 /// 선([x]·[z])은 레이싱 라인(차들이 달린 위치의 중앙값)이고 도로 한가운데가 아니다. 띠는 그 선에서 차들이 달린 왼쪽·오른쪽 끝(m),
 /// 연석은 그 쪽을 밟은 적이 있는지. 왼쪽 = 진행 방향 법선 (−sin, cos) 쪽(앱 서킷 그림과 같은 규칙).
@@ -209,9 +213,9 @@ TrackWidthProfile trackProfileFromSamples(TrackSampleGeometry geometry, {require
     return funnel;
   }
 
-  /// 한쪽 가장자리([inside] = 그 쪽이 코너 안쪽인 곡률 부호: 왼쪽 1, 오른쪽 −1)와 연석 깔때기 둘:
-  /// 모든 연석 칸에서 퍼지는 것(`kerbs`), 굽은 안쪽 연석(에이펙스) 칸에서만 퍼지는 것(`apex`). 연석이 없으면 무한대.
-  ({List<double> edge, List<double> kerbs, List<double> apex}) edge(
+  /// 한쪽 가장자리([inside] = 그 쪽이 코너 안쪽인 곡률 부호: 왼쪽 1, 오른쪽 −1)와,
+  /// 굽은 안쪽 연석(에이펙스) 칸에서만 퍼지는 연석 깔때기(`apex`, 그런 연석이 없으면 무한대).
+  ({List<double> edge, List<double> apex}) edge(
     List<double>? wheels,
     List<double>? kerbOuter,
     List<bool> kerbs,
@@ -263,9 +267,8 @@ TrackWidthProfile trackProfileFromSamples(TrackSampleGeometry geometry, {require
                   .reduce((a, b) => a + b) /
               (_edgeFinalSmoothBins * 2 + 1),
       ],
-      kerbs: funnel,
       apex: funnelFrom([
-        for (var k = 0; k < n; k++) inside * curvatures[k] >= _apexSideCurvature ? kerbInner[k] : null,
+        for (var k = 0; k < n; k++) inside * curvatures[k] >= _apexPinCurvature ? kerbInner[k] : null,
       ]),
     );
   }
@@ -321,7 +324,8 @@ TrackWidthProfile trackProfileFromSamples(TrackSampleGeometry geometry, {require
 
   // 레이싱 라인에서 왼쪽·오른쪽 도로 끝(m). 기본은 옮긴 가운데에서 반폭이지만, 굽은 안쪽 연석(에이펙스) 둘레는 그 쪽 끝을
   // 연석 안쪽 끝에 붙인다 — 가운데 이동은 넓게 고르므로 꼭짓점에서 무뎌져, 반폭만으로는 레이싱 라인이 에이펙스 연석에서 떨어져 보인다.
-  // 그래서 모자란 폭은 덜 붙은 쪽으로 넘기되 그 쪽 연석 너머로는 넓히지 않는다.
+  // 도로 폭은 [widthM]보다 좁아지지 않게, 모자란 폭은 덜 붙은 쪽(에이펙스에서 먼 쪽)으로 넘긴다.
+  // (그 쪽 연석에서 막으면 양쪽 연석이 다 밟힌 구간 — Spa 블랑쉬몽 뒤 — 도로가 반으로 좁아지고 방호벽이 길로 튀어나온다.)
   final leftEnd = List<double>.filled(n, 0);
   final rightEnd = List<double>.filled(n, 0);
   for (var k = 0; k < n; k++) {
@@ -330,12 +334,12 @@ TrackWidthProfile trackProfileFromSamples(TrackSampleGeometry geometry, {require
     final deficit = widthM - l - r;
     if (deficit > 0) {
       if (left.apex[k] > right.apex[k]) {
-        l = math.min(l + deficit, math.max(l, left.kerbs[k]));
+        l += deficit;
       } else if (right.apex[k] > left.apex[k]) {
-        r = math.min(r + deficit, math.max(r, right.kerbs[k]));
+        r += deficit;
       } else {
-        l = math.min(l + deficit / 2, math.max(l, left.kerbs[k]));
-        r = math.min(r + deficit / 2, math.max(r, right.kerbs[k]));
+        l += deficit / 2;
+        r += deficit / 2;
       }
     }
     leftEnd[k] = l;
