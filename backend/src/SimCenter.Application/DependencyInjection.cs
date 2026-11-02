@@ -44,6 +44,7 @@ public static class DependencyInjection
         services.AddScoped<ICommunitySetupService, CommunitySetupService>();
         services.AddScoped<ICommunitySetupRefresher, CommunitySetupRefresher>();
         services.AddScoped<ITrackOverviewService, TrackOverviewService>();
+        services.AddScoped<ITheoreticalBestService, TheoreticalBestService>();
         return services;
     }
 }

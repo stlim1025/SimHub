@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_provider.dart';
 import '../domain/track_overview_models.dart';
+import '../domain/theoretical_best.dart';
 import '../domain/track_sample_geometry.dart';
 
 const int _httpNotFound = 404;
@@ -20,6 +21,17 @@ class TracksRepository {
     try {
       final res = await _dio.get<Map<String, dynamic>>('/tracks/${Uri.encodeComponent(trackId)}/overview');
       return TrackOverview.fromJson(res.data!);
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// 이론상 최고 랩(조건별, Time Trial 먼저). 계산할 랩이 없으면 빈 목록, 없는 트랙이면 404 [ApiException].
+  /// `GET /tracks/{trackId}/theoretical-best`.
+  Future<List<TheoreticalBestGroup>> getTheoreticalBest(String trackId) async {
+    try {
+      final res = await _dio.get<Map<String, dynamic>>('/tracks/${Uri.encodeComponent(trackId)}/theoretical-best');
+      return parseTheoreticalBest(res.data!);
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }

@@ -15,6 +15,7 @@ namespace SimCenter.Api.Controllers;
 public sealed class TracksController(
     IRankingService rankingService,
     ITrackOverviewService overviewService,
+    ITheoreticalBestService theoreticalBestService,
     ITrackGeometryService geometryService) : ControllerBase
 {
     /// <summary>트랙 목록(마스터). gameCode(선택) = F1_25|F1_26이면 그 게임만, 생략하면 전체. 그 밖의 값은 400.</summary>
@@ -30,6 +31,15 @@ public sealed class TracksController(
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<TrackOverviewResponse>> GetOverview(Guid trackId, CancellationToken cancellationToken)
         => Ok(await overviewService.GetAsync(User.GetRequiredUserId(), trackId, cancellationToken));
+
+    /// <summary>
+    /// 이론상 최고 랩: Time Trial·예선의 내 랩을 조건(세션 종류 + 컴파운드)별로 구간마다 가장 잘 달린 기록을 배터리 한도 안에서 이은 랩. 트랙이 없으면 404.
+    /// </summary>
+    [HttpGet("{trackId:guid}/theoretical-best")]
+    [ProducesResponseType(typeof(TheoreticalBestResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<TheoreticalBestResponse>> GetTheoreticalBest(Guid trackId, CancellationToken cancellationToken)
+        => Ok(await theoreticalBestService.GetAsync(User.GetRequiredUserId(), trackId, cancellationToken));
 
     /// <summary>
     /// 트랙 형상: 모든 오프라인 세션의 전체 차 표본으로 랩 거리 5m마다 레이싱 라인·높이·차들이 달린 폭·연석 쪽.

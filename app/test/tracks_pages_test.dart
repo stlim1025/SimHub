@@ -10,6 +10,7 @@ import 'package:simcenter_app/features/setups/data/setups_repository.dart';
 import 'package:simcenter_app/features/tracks/application/track_corners_provider.dart';
 import 'package:simcenter_app/features/tracks/application/track_outlines_provider.dart';
 import 'package:simcenter_app/features/tracks/data/tracks_repository.dart';
+import 'package:simcenter_app/features/tracks/domain/theoretical_best.dart';
 import 'package:simcenter_app/features/tracks/domain/track_outline.dart';
 import 'package:simcenter_app/features/tracks/domain/track_overview_models.dart';
 import 'package:simcenter_app/features/tracks/presentation/track_overview_page.dart';
@@ -91,6 +92,52 @@ final _best = [
     sessionType: 'Race',
     isValid: false,
     setAt: DateTime.utc(2026, 10, 19, 10),
+  ),
+];
+
+TheoreticalSegment _segment(int index, String lapId, int timeMs, int bestMs, {double? deploy, double? bestDeploy}) =>
+    TheoreticalSegment(
+      index: index,
+      startM: index * 1000,
+      endM: (index + 1) * 1000,
+      lapId: lapId,
+      lapSetAt: DateTime.utc(2026, 10, 20, 10),
+      timeMs: timeMs,
+      bestLapTimeMs: bestMs,
+      deployKj: deploy,
+      harvestKj: deploy == null ? null : 0,
+      bestLapDeployKj: bestDeploy,
+      bestLapHarvestKj: bestDeploy == null ? null : 0,
+    );
+
+/// Time Trial(배터리 없음, 0.2초) · 예선(배터리 있음, 0.3초 — 구간 1은 배터리를 1MJ 더 쓴 랩 q2).
+final _theoretical = [
+  TheoreticalBestGroup(
+    sessionType: 'TimeTrial',
+    visualTyreCompound: 16,
+    lapCount: 4,
+    lapLengthM: 2000,
+    bestLapId: 't1',
+    bestLapMs: 78100,
+    theoreticalMs: 77900,
+    unlimitedMs: 77900,
+    hasBattery: false,
+    segments: [_segment(0, 't2', 38800, 39000), _segment(1, 't1', 39100, 39100)],
+  ),
+  TheoreticalBestGroup(
+    sessionType: 'Qualifying',
+    visualTyreCompound: 17,
+    lapCount: 3,
+    lapLengthM: 2000,
+    bestLapId: 'q1',
+    bestLapMs: 79000,
+    theoreticalMs: 78700,
+    unlimitedMs: 78600,
+    hasBattery: true,
+    segments: [
+      _segment(0, 'q1', 39500, 39500, deploy: 500, bestDeploy: 500),
+      _segment(1, 'q2', 39200, 39500, deploy: 1500, bestDeploy: 500),
+    ],
   ),
 ];
 
@@ -268,6 +315,38 @@ void main() {
       expect(_location(router), '/laps/m1');
     });
 
+    testWidgets('Theoretical Best: 조건을 고르면 그 조건의 이론상 최고·줄일 곳, 줄을 누르면 그 구간을 달린 랩으로', (t) async {
+      final router = await _pump(
+        t,
+        '/tracks/au',
+        tracksRepo: FakeTracksRepository(overviews: {'au': trackOverviewOf()}, theoreticalBest: {'au': _theoretical}),
+      );
+
+      final card = find.byKey(const ValueKey('track-theoretical-best'));
+      await t.ensureVisible(card);
+      expect(find.descendant(of: card, matching: find.text('Time Trial · Soft')), findsOneWidget);
+      expect(find.descendant(of: card, matching: find.text('1:17.900')), findsOneWidget);
+      expect(find.descendant(of: card, matching: find.text('-0.200')), findsWidgets);
+      // 배터리를 따지지 않는 Time Trial은 배터리 안내가 없다.
+      expect(find.byKey(const ValueKey('theoretical-battery-note')), findsNothing);
+
+      await t.tap(find.text('Qualifying · Medium'));
+      await t.pumpAndSettle();
+      expect(find.descendant(of: card, matching: find.text('1:18.700')), findsOneWidget);
+      expect(find.byKey(const ValueKey('theoretical-battery-note')), findsOneWidget);
+      expect(find.text('씀 +25%'), findsOneWidget);
+
+      await t.tap(find.byKey(const ValueKey('theoretical-segment-1')));
+      await t.pumpAndSettle();
+      expect(_location(router), '/laps/q2');
+    });
+
+    testWidgets('Theoretical Best: 계산할 랩이 없으면 안내', (t) async {
+      await _pump(t, '/tracks/au', tracksRepo: FakeTracksRepository(overviews: {'au': trackOverviewOf()}));
+
+      expect(find.text('이론상 최고 랩을 낼 Time Trial·예선 랩이 아직 없다.'), findsOneWidget);
+    });
+
     testWidgets('없는 트랙이면 404 상태', (t) async {
       await _pump(t, '/tracks/zz');
 
@@ -278,7 +357,10 @@ void main() {
       await _pump(
         t,
         '/tracks/au',
-        tracksRepo: FakeTracksRepository(overviews: {'au': trackOverviewOf(top: _top, best: _best)}),
+        tracksRepo: FakeTracksRepository(
+          overviews: {'au': trackOverviewOf(top: _top, best: _best)},
+          theoreticalBest: {'au': _theoretical},
+        ),
         size: const Size(400, 3000),
       );
 

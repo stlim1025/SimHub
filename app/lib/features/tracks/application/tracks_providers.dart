@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/tracks_repository.dart';
+import '../domain/theoretical_best.dart';
 import '../domain/track_overview_models.dart';
 import '../domain/track_sample_geometry.dart';
 import 'track_corners_provider.dart';
@@ -14,6 +15,11 @@ final trackGeometryProvider = FutureProvider.autoDispose.family<TrackSampleGeome
 
 final trackOverviewProvider = FutureProvider.autoDispose.family<TrackOverview, String>(
   (ref, trackId) => ref.watch(tracksRepositoryProvider).getOverview(trackId),
+);
+
+/// 트랙 하나의 이론상 최고 랩(조건별). 화면을 다시 열면 새로 불러온다.
+final theoreticalBestProvider = FutureProvider.autoDispose.family<List<TheoreticalBestGroup>, String>(
+  (ref, trackId) => ref.watch(tracksRepositoryProvider).getTheoreticalBest(trackId),
 );
 
 /// 다시보기 서킷 재료(실측 트랙 폭·표본 트랙 형상·공식 코너)가 아직 오는 중인지. 다 온 뒤에 다시보기를 띄워야

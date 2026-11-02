@@ -3,6 +3,7 @@ import 'package:simcenter_app/features/sessions/domain/setup_display.dart';
 import 'package:simcenter_app/features/setups/data/setups_repository.dart';
 import 'package:simcenter_app/features/setups/domain/setup_models.dart';
 import 'package:simcenter_app/features/tracks/data/tracks_repository.dart';
+import 'package:simcenter_app/features/tracks/domain/theoretical_best.dart';
 import 'package:simcenter_app/features/tracks/domain/track_overview_models.dart';
 import 'package:simcenter_app/features/tracks/domain/track_sample_geometry.dart';
 
@@ -51,9 +52,12 @@ class FakeSetupsRepository implements SetupsRepository {
 
 /// 트랙 개요 저장소(메모리). [overviews]에 없는 트랙은 404.
 class FakeTracksRepository implements TracksRepository {
-  FakeTracksRepository({this.overviews = const {}});
+  FakeTracksRepository({this.overviews = const {}, this.theoreticalBest = const {}});
 
   final Map<String, TrackOverview> overviews;
+
+  /// 트랙별 이론상 최고 랩(없으면 빈 목록).
+  final Map<String, List<TheoreticalBestGroup>> theoreticalBest;
   final requests = <String>[];
 
   @override
@@ -68,6 +72,9 @@ class FakeTracksRepository implements TracksRepository {
 
   @override
   Future<TrackSampleGeometry?> getGeometry(String trackId, String gameCode) async => null;
+
+  @override
+  Future<List<TheoreticalBestGroup>> getTheoreticalBest(String trackId) async => theoreticalBest[trackId] ?? const [];
 }
 
 SetupTrackSummary setupTrackOf(

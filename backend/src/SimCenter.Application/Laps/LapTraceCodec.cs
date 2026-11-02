@@ -59,6 +59,106 @@ public static class LapTraceCodec
         }
     }
 
+    /// <summary>
+    /// 기본 7채널과 <paramref name="extraChannels"/>에 든 추가 채널만 푼다 — 랩 수십 개를 한꺼번에 읽을 때 쓰지 않는 추가 채널(100여 개) 배열을 만들지 않는다.
+    /// 고른 추가 채널이 하나도 없으면 <see cref="LapTraceChannels.Extra"/>는 null.
+    /// </summary>
+    /// <exception cref="InvalidDataException">gzip·JSON이 깨졌거나 기본 채널이 빠졌을 때(저장 데이터 손상).</exception>
+    public static LapTraceChannels Decode(byte[] payload, IReadOnlySet<string> extraChannels)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+        ArgumentNullException.ThrowIfNull(extraChannels);
+
+        using var input = new MemoryStream(payload);
+        using var gzip = new GZipStream(input, CompressionMode.Decompress);
+        using var json = new MemoryStream();
+        gzip.CopyTo(json);
+        try
+        {
+            return ReadSelected(json.ToArray(), extraChannels);
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException)
+        {
+            throw new InvalidDataException("트레이스 JSON을 읽지 못했습니다.", ex);
+        }
+    }
+
+    private static LapTraceChannels ReadSelected(byte[] json, IReadOnlySet<string> extraChannels)
+    {
+        var reader = new Utf8JsonReader(json);
+        var basic = new Dictionary<string, int[]>(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, double[]>? extra = null;
+        if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject)
+        {
+            throw new JsonException("트레이스는 객체여야 합니다.");
+        }
+
+        while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+        {
+            var name = reader.GetString()!;
+            reader.Read();
+            if (string.Equals(name, nameof(LapTraceChannels.Extra), StringComparison.OrdinalIgnoreCase)
+                && reader.TokenType == JsonTokenType.StartObject)
+            {
+                while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+                {
+                    var channel = reader.GetString()!;
+                    reader.Read();
+                    if (extraChannels.Contains(channel) && reader.TokenType == JsonTokenType.StartArray)
+                    {
+                        (extra ??= new Dictionary<string, double[]>())[channel] = ReadDoubles(ref reader);
+                    }
+                    else
+                    {
+                        reader.Skip();
+                    }
+                }
+            }
+            else if (reader.TokenType == JsonTokenType.StartArray)
+            {
+                basic[name] = ReadInts(ref reader);
+            }
+            else
+            {
+                reader.Skip();
+            }
+        }
+
+        int[] Basic(string name) => basic.TryGetValue(name, out var values) ? values : null!;
+        var channels = new LapTraceChannels(
+            Basic(nameof(LapTraceChannels.TimeMs)),
+            Basic(nameof(LapTraceChannels.SpeedKph)),
+            Basic(nameof(LapTraceChannels.Throttle)),
+            Basic(nameof(LapTraceChannels.Brake)),
+            Basic(nameof(LapTraceChannels.Steer)),
+            Basic(nameof(LapTraceChannels.Gear)),
+            Basic(nameof(LapTraceChannels.Rpm)),
+            extra);
+        return IsComplete(channels) ? channels : throw new InvalidDataException("트레이스 채널이 빠졌습니다.");
+    }
+
+    private static int[] ReadInts(ref Utf8JsonReader reader)
+    {
+        var values = new List<int>();
+        while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
+        {
+            values.Add(reader.GetInt32());
+        }
+
+        return values.ToArray();
+    }
+
+    private static double[] ReadDoubles(ref Utf8JsonReader reader)
+    {
+        var values = new List<double>();
+        while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
+        {
+            values.Add(reader.GetDouble());
+        }
+
+        return values.ToArray();
+    }
+
     private static bool IsComplete(LapTraceChannels? c)
         => c is { TimeMs: not null, SpeedKph: not null, Throttle: not null, Brake: not null, Steer: not null, Gear: not null, Rpm: not null };
 }

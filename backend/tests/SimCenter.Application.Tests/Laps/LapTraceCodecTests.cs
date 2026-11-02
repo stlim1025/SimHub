@@ -50,6 +50,33 @@ public class LapTraceCodecTests
     }
 
     [Fact]
+    public void DecodeSelected_KeepsBasicChannels_AndOnlyTheChosenExtra()
+    {
+        var extra = new Dictionary<string, double[]> { ["ersStoreEnergy"] = [4_000_000, 3_990_000.5], ["brakeTempFL"] = [512.37, 515.1] };
+        var channels = new LapTraceChannels([0, 1], [1, 2], [0, 5], [3, 0], [-7, 7], [1, 2], [9000, 9100], extra);
+
+        var restored = LapTraceCodec.Decode(LapTraceCodec.Encode(channels), new HashSet<string> { "ersStoreEnergy", "gForceLateral" });
+
+        Assert.Equal(channels.TimeMs, restored.TimeMs);
+        Assert.Equal(channels.Throttle, restored.Throttle);
+        Assert.Equal(channels.Steer, restored.Steer);
+        Assert.Equal(channels.Rpm, restored.Rpm);
+        Assert.Equal(["ersStoreEnergy"], restored.Extra!.Keys);
+        Assert.Equal(extra["ersStoreEnergy"], restored.Extra["ersStoreEnergy"]);
+    }
+
+    [Fact]
+    public void DecodeSelected_NoChosenChannelOrCorrupt_NullExtraOrInvalidData()
+    {
+        var old = Gzip("{\"timeMs\":[0],\"speedKph\":[1],\"throttle\":[0],\"brake\":[0],\"steer\":[0],\"gear\":[1],\"rpm\":[9000],\"extra\":{\"drs\":[0]}}");
+        var chosen = new HashSet<string> { "ersStoreEnergy" };
+
+        Assert.Null(LapTraceCodec.Decode(old, chosen).Extra);
+        Assert.Throws<InvalidDataException>(() => LapTraceCodec.Decode(Gzip("{\"timeMs\":[1,2]}"), chosen));
+        Assert.Throws<InvalidDataException>(() => LapTraceCodec.Decode(Gzip("not json"), chosen));
+    }
+
+    [Fact]
     public void Decode_BlobWithoutExtra_HasNullExtra()
     {
         // D-49 이전에 저장한 blob(extra 키 없음).

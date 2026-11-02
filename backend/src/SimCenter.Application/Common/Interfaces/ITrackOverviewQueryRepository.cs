@@ -32,6 +32,17 @@ public sealed record TrackMyLapRow(Guid LapId, int LapTimeMs, SessionType Sessio
 /// <summary>트레이스가 있는 내 랩(빠른 순)과 그 트레이스 blob.</summary>
 public sealed record TrackTracedLapRow(Guid LapId, byte[] Payload);
 
+/// <summary>트레이스가 있는 내 랩의 조건(이론상 최고 랩 재료 고르기). 스냅샷이 없으면 컴파운드·날씨는 null.</summary>
+public sealed record TrackTracedLapFactRow(
+    Guid LapId,
+    int LapTimeMs,
+    SessionType SessionType,
+    bool IsValid,
+    int? VisualTyreCompound,
+    Weather? Weather,
+    DateTime SetAt,
+    int ResolutionM);
+
 /// <summary>트랙 개요 화면 전용 읽기 포트(no tracking).</summary>
 public interface ITrackOverviewQueryRepository
 {
@@ -50,4 +61,12 @@ public interface ITrackOverviewQueryRepository
     /// <summary>트레이스가 있는 내 랩 빠른 순(유효 랩 우선) <paramref name="take"/>개와 트레이스.</summary>
     Task<IReadOnlyList<TrackTracedLapRow>> GetMyTracedLapsAsync(
         Guid userId, Guid trackId, int take, CancellationToken cancellationToken = default);
+
+    /// <summary>트레이스가 있는 내 랩 중 <paramref name="sessionTypes"/> 세션의 랩 조건(트레이스 blob은 읽지 않는다). 수동 무효 랩은 뺀다.</summary>
+    Task<IReadOnlyList<TrackTracedLapFactRow>> GetMyTracedLapFactsAsync(
+        Guid userId, Guid trackId, IReadOnlyCollection<SessionType> sessionTypes, CancellationToken cancellationToken = default);
+
+    /// <summary>랩들의 트레이스 blob.</summary>
+    Task<IReadOnlyList<TrackTracedLapRow>> GetTracePayloadsAsync(
+        IReadOnlyCollection<Guid> lapIds, CancellationToken cancellationToken = default);
 }

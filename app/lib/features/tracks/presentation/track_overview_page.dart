@@ -29,6 +29,7 @@ import '../application/track_corners_provider.dart';
 import '../application/track_outlines_provider.dart';
 import '../application/tracks_providers.dart';
 import '../domain/track_overview_models.dart';
+import 'theoretical_best_card.dart';
 import 'track_outline_view.dart';
 
 const String _tracksLabel = 'Tracks';
@@ -85,7 +86,7 @@ const double kTrackLinksRowWidth = 560;
 const double kTrackStatsRowWidth = 900;
 
 /// 트랙 개요(`/tracks/:trackId`, F1Laps `F1 26 Australia` 모양): 이동 경로 + 국기·제목·서킷 이름,
-/// 바로가기(Top Setups · Leaderboard), `{트랙} stats`(내 기록 요약 + Fastest Time Trial laps), Best Lap Times(내 빠른 랩 10개),
+/// 바로가기(Top Setups · Leaderboard), `{트랙} stats`(내 기록 요약 + Fastest Time Trial laps), Theoretical Best(이론상 최고 랩), Best Lap Times(내 빠른 랩 10개),
 /// Track Details(+ [TrackOverview.mapLapId] 랩의 트랙 지도).
 class TrackOverviewPage extends ConsumerWidget {
   const TrackOverviewPage({super.key, required this.trackId});
@@ -161,6 +162,8 @@ class _OverviewBody extends StatelessWidget {
         Text('${track.name} $_statsSuffix', style: cardTitleStyle(context)),
         const SizedBox(height: _headingGap),
         _Responsive(minRowWidth: kTrackStatsRowWidth, children: [stats, top]),
+        const SizedBox(height: _sectionGap),
+        TheoreticalBestCard(trackId: track.trackId, trackName: track.name),
         const SizedBox(height: _sectionGap),
         _BestLapsCard(laps: overview.myBestLaps),
         const SizedBox(height: _sectionGap),

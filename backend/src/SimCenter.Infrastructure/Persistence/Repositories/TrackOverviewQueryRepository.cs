@@ -129,4 +129,31 @@ public sealed class TrackOverviewQueryRepository : ITrackOverviewQueryRepository
                   select new TrackTracedLapRow(lap.Id, trace.Payload))
             .Take(take)
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<TrackTracedLapFactRow>> GetMyTracedLapFactsAsync(
+        Guid userId, Guid trackId, IReadOnlyCollection<SessionType> sessionTypes, CancellationToken cancellationToken = default)
+        => await (from lap in _context.Laps.AsNoTracking()
+                  join trace in _context.LapTelemetryTraces.AsNoTracking() on lap.Id equals trace.LapId
+                  where lap.UserId == userId
+                      && lap.TrackId == trackId
+                      && !lap.IsInvalidatedManually
+                      && sessionTypes.Contains(lap.SessionType)
+                  select new TrackTracedLapFactRow(
+                      lap.Id,
+                      lap.LapTimeMs,
+                      lap.SessionType,
+                      lap.IsValid,
+                      lap.Snapshot == null ? null : lap.Snapshot.VisualTyreCompound,
+                      lap.Snapshot == null ? null : lap.Snapshot.Weather,
+                      lap.SetAt,
+                      trace.ResolutionM))
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<TrackTracedLapRow>> GetTracePayloadsAsync(
+        IReadOnlyCollection<Guid> lapIds, CancellationToken cancellationToken = default)
+        => await _context.LapTelemetryTraces
+            .AsNoTracking()
+            .Where(t => lapIds.Contains(t.LapId))
+            .Select(t => new TrackTracedLapRow(t.LapId, t.Payload))
+            .ToListAsync(cancellationToken);
 }
