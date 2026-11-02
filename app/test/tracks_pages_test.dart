@@ -110,7 +110,7 @@ TheoreticalSegment _segment(int index, String lapId, int timeMs, int bestMs, {do
       bestLapHarvestKj: bestDeploy == null ? null : 0,
     );
 
-/// Time Trial(배터리 없음, 0.2초) · 예선(배터리 있음, 0.3초 — 구간 1은 배터리를 1MJ 더 쓴 랩 q2).
+/// Time Trial(배터리 없음, 0.2초) · 비 오는 예선(배터리 있음, 0.3초 — 구간 1은 배터리를 1MJ 더 쓴 랩 q2).
 final _theoretical = [
   TheoreticalBestGroup(
     sessionType: 'TimeTrial',
@@ -127,6 +127,7 @@ final _theoretical = [
   TheoreticalBestGroup(
     sessionType: 'Qualifying',
     visualTyreCompound: 17,
+    isWet: true,
     lapCount: 3,
     lapLengthM: 2000,
     bestLapId: 'q1',
@@ -330,7 +331,7 @@ void main() {
       // 배터리를 따지지 않는 Time Trial은 배터리 안내가 없다.
       expect(find.byKey(const ValueKey('theoretical-battery-note')), findsNothing);
 
-      await t.tap(find.text('Qualifying · Medium'));
+      await t.tap(find.text('Qualifying · Medium · Rain'));
       await t.pumpAndSettle();
       expect(find.descendant(of: card, matching: find.text('1:18.700')), findsOneWidget);
       expect(find.byKey(const ValueKey('theoretical-battery-note')), findsOneWidget);
@@ -344,7 +345,7 @@ void main() {
     testWidgets('Theoretical Best: 계산할 랩이 없으면 안내', (t) async {
       await _pump(t, '/tracks/au', tracksRepo: FakeTracksRepository(overviews: {'au': trackOverviewOf()}));
 
-      expect(find.text('이론상 최고 랩을 낼 Time Trial·예선 랩이 아직 없다.'), findsOneWidget);
+      expect(find.text('이론상 최고 랩은 텔레메트리가 온전히 기록된 유효한 Time Trial·예선 랩으로 계산한다. 이 트랙에는 아직 그런 랩이 없다.'), findsOneWidget);
     });
 
     testWidgets('없는 트랙이면 404 상태', (t) async {

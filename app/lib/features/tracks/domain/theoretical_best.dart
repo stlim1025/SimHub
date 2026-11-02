@@ -6,7 +6,7 @@ const double _ersCapacityJ = 4000000;
 const double _joulesPerKj = 1000;
 const double _percent = 100;
 
-/// 이만큼(ms) 이상 줄일 수 있는 구간만 줄일 곳으로 보인다.
+/// 최고 랩과 이만큼(ms) 이상 다른 구간만 표에 보인다.
 const int kTheoreticalGainMinMs = 10;
 
 /// 최고 랩과 배터리 사용이 이보다(kJ, 배터리 2.5%) 적게 다르면 같게 본다.
@@ -85,10 +85,14 @@ class TheoreticalBestGroup {
     required this.hasBattery,
     required this.segments,
     this.visualTyreCompound,
+    this.isWet = false,
   });
 
   final String sessionType;
   final int? visualTyreCompound;
+
+  /// 랩 끝 날씨가 약한 비 이상인 조건(마른 노면 랩과 따로 잇는다).
+  final bool isWet;
   final int lapCount;
   final int lapLengthM;
   final String bestLapId;
@@ -104,9 +108,9 @@ class TheoreticalBestGroup {
   /// 배터리 한도 때문에 못 쓰는 시간(ms, 0 이상) — 구간 최고 기록끼리 이으면 한 랩에 쓸 수 있는 배터리를 넘는다.
   int get batteryLimitMs => theoreticalMs - unlimitedMs;
 
-  /// 줄일 곳: [kTheoreticalGainMinMs] 이상 줄어드는 구간, 많이 줄어드는 순.
-  List<TheoreticalSegment> get gains =>
-      [for (final s in segments) if (-s.gainMs >= kTheoreticalGainMinMs) s]..sort((a, b) => a.gainMs.compareTo(b.gainMs));
+  /// 최고 랩과 [kTheoreticalGainMinMs] 이상 다른 구간, 많이 줄어드는 순(느려지는 구간은 뒤). 느려지는 구간은 다른 곳에 쓸 배터리를 아끼는 자리다.
+  List<TheoreticalSegment> get changes =>
+      [for (final s in segments) if (s.gainMs.abs() >= kTheoreticalGainMinMs) s]..sort((a, b) => a.gainMs.compareTo(b.gainMs));
 
   static TheoreticalBestGroup? fromJsonOrNull(Map<String, dynamic> json) {
     final sessionType = jsonString(json['sessionType']);
@@ -120,6 +124,7 @@ class TheoreticalBestGroup {
     return TheoreticalBestGroup(
       sessionType: sessionType,
       visualTyreCompound: jsonInt(json['visualTyreCompound']),
+      isWet: jsonBool(json['isWet']),
       lapCount: jsonInt(json['lapCount']) ?? 0,
       lapLengthM: jsonInt(json['lapLengthM']) ?? 0,
       bestLapId: bestLapId,

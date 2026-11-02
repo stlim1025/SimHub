@@ -87,7 +87,7 @@ public static class TheoreticalBestCalculator
     {
         ArgumentNullException.ThrowIfNull(laps);
         ErsBudget? budget = null;
-        foreach (var lap in laps)
+        foreach (var lap in laps.Select(Repair))
         {
             if (Store(lap) is not { Length: > 1 } store)
             {
@@ -114,7 +114,7 @@ public static class TheoreticalBestCalculator
     public static TheoreticalBestResult? Compute(IReadOnlyList<TheoreticalLap> laps, ErsBudget? budget)
     {
         ArgumentNullException.ThrowIfNull(laps);
-        var usable = laps.Where(l => l.ResolutionM > 0 && l.Channels.TimeMs.Length > 1).ToList();
+        var usable = laps.Where(l => l.ResolutionM > 0 && l.Channels.TimeMs.Length > 1).Select(Repair).ToList();
         var best = usable.Where(l => l.IsValid).OrderBy(l => l.LapTimeMs).ThenBy(l => l.SetAt).FirstOrDefault();
         var reference = usable
             .Where(l => l.IsValid && Extra(l, TraceChannelNames.LateralG) is not null)
@@ -127,7 +127,8 @@ public static class TheoreticalBestCalculator
 
         var lengthM = reference.Channels.TimeMs.Length * reference.ResolutionM;
         var bounds = Boundaries(reference, lengthM);
-        if (bounds.Count < 2)
+        // 구간이 하나뿐이면(코너를 못 찾은 짧은·깨진 트레이스) 이을 것이 없다.
+        if (bounds.Count < 3)
         {
             return null;
         }
@@ -416,6 +417,73 @@ public static class TheoreticalBestCalculator
         }
 
         return chosen;
+    }
+
+    /// <summary>
+    /// 랩 시간 순서를 깨는 표본(마지막 정상 표본보다 시간이 줄었거나, 다음 표본보다 커서 혼자 튀어 오른 표본 — 게임이 가끔 다른 순간의 값이
+    /// 섞인 표본을 보낸다)을 앞뒤 정상 표본으로 메운다. 시간·잔량·횡 G는 거리 비율로, 노면은 앞 정상 표본 값으로. 앱 랩 상세(<c>brokenSampleIndices</c>)와 같은 규칙이다.
+    /// 그런 표본 하나 때문에 구간 전체(최고 랩이면 결과 전체)를 버리지 않게 한다.
+    /// </summary>
+    private static TheoreticalLap Repair(TheoreticalLap lap)
+    {
+        var time = lap.Channels.TimeMs;
+        var broken = new List<int>();
+        int? lastGood = null;
+        for (var i = 0; i < time.Length; i++)
+        {
+            var wentBackwards = lastGood is { } good && time[i] < time[good];
+            var jumpedAhead = i + 1 < time.Length && time[i] > time[i + 1] && (lastGood is not { } g || time[g] <= time[i + 1]);
+            if (wentBackwards || jumpedAhead)
+            {
+                broken.Add(i);
+            }
+            else
+            {
+                lastGood = i;
+            }
+        }
+
+        if (broken.Count == 0)
+        {
+            return lap;
+        }
+
+        var brokenSet = broken.ToHashSet();
+        var repairedTime = Fill(time.Select(v => (double)v).ToArray(), brokenSet, discrete: false).Select(v => (int)Math.Round(v)).ToArray();
+        var extra = lap.Channels.Extra?.ToDictionary(
+            pair => pair.Key,
+            pair => pair.Value.Length == time.Length
+                ? Fill(pair.Value, brokenSet, discrete: pair.Key.StartsWith(TraceChannelNames.Surface, StringComparison.Ordinal))
+                : pair.Value);
+        return lap with { Channels = lap.Channels with { TimeMs = repairedTime, Extra = extra } };
+    }
+
+    /// <summary><paramref name="broken"/> 표본을 앞뒤 정상 표본 사이 비율로(<paramref name="discrete"/>면 앞 값으로) 메운다. 한쪽만 있으면 그 값.</summary>
+    private static double[] Fill(double[] values, HashSet<int> broken, bool discrete)
+    {
+        var filled = (double[])values.Clone();
+        foreach (var i in broken)
+        {
+            var before = i - 1;
+            while (before >= 0 && broken.Contains(before))
+            {
+                before--;
+            }
+
+            var after = i + 1;
+            while (after < values.Length && broken.Contains(after))
+            {
+                after++;
+            }
+
+            var hasBefore = before >= 0;
+            var hasAfter = after < values.Length;
+            filled[i] = hasBefore && hasAfter && !discrete
+                ? values[before] + ((values[after] - values[before]) * (i - before) / (after - before))
+                : hasBefore ? values[before] : hasAfter ? values[after] : values[i];
+        }
+
+        return filled;
     }
 
     private static double[]? Store(TheoreticalLap lap) => Extra(lap, TraceChannelNames.ErsStore);

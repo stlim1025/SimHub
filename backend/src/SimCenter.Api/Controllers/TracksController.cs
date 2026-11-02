@@ -33,7 +33,7 @@ public sealed class TracksController(
         => Ok(await overviewService.GetAsync(User.GetRequiredUserId(), trackId, cancellationToken));
 
     /// <summary>
-    /// 이론상 최고 랩: Time Trial·예선의 내 랩을 조건(세션 종류 + 컴파운드)별로 구간마다 가장 잘 달린 기록을 배터리 한도 안에서 이은 랩. 트랙이 없으면 404.
+    /// 이론상 최고 랩: Time Trial·예선의 내 랩을 조건(세션 종류 + 컴파운드 + 비)별로 구간마다 가장 잘 달린 기록을 배터리 한도 안에서 이은 랩. 트랙이 없으면 404.
     /// </summary>
     [HttpGet("{trackId:guid}/theoretical-best")]
     [ProducesResponseType(typeof(TheoreticalBestResponse), StatusCodes.Status200OK)]

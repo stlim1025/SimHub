@@ -36,11 +36,17 @@ public sealed class TheoreticalBestApiE2ETests : IClassFixture<ApiFactory>
             LapDetailPayloads.LapFinished(1, 100_000, true, T0, trace: Trace([30_000, 40_000, 30_000]), gameTrackId: MonzaGameTrackId),
             LapDetailPayloads.LapFinished(2, 100_200, true, T0.AddMinutes(1), trace: Trace([29_500, 40_500, 30_200]), gameTrackId: MonzaGameTrackId),
             LapDetailPayloads.LapFinished(3, 95_000, true, T0.AddMinutes(2), trace: Trace([25_000, 40_000, 30_000]),
-                gameTrackId: MonzaGameTrackId, sessionType: "Race"));
+                gameTrackId: MonzaGameTrackId, sessionType: "Race"),
+            // 비 오는 랩은 마른 노면 랩과 잇지 않고 따로 조건이 된다.
+            LapDetailPayloads.LapFinished(4, 99_000, true, T0.AddMinutes(3), trace: Trace([29_000, 40_000, 30_000]),
+                conditions: new { weather = "LightRain", airTempC = 18, trackTempC = 22, rainForecastPercent = 80 }, gameTrackId: MonzaGameTrackId));
 
         var response = await me.GetFromJsonAsync<JsonElement>($"/api/v1/tracks/{trackId}/theoretical-best");
 
-        var group = Assert.Single(response.GetProperty("groups").EnumerateArray());
+        var groups = response.GetProperty("groups").EnumerateArray().ToList();
+        Assert.Equal([false, true], groups.Select(g => g.GetProperty("isWet").GetBoolean()));
+        Assert.Equal((1, 99_000), (groups[1].GetProperty("lapCount").GetInt32(), groups[1].GetProperty("theoreticalMs").GetInt32()));
+        var group = groups[0];
         Assert.Equal(("TimeTrial", 2, 1000), (group.GetProperty("sessionType").GetString(), group.GetProperty("lapCount").GetInt32(), group.GetProperty("lapLengthM").GetInt32()));
         Assert.Equal((100_000, 99_500, 99_500),
             (group.GetProperty("bestLapMs").GetInt32(), group.GetProperty("theoreticalMs").GetInt32(), group.GetProperty("unlimitedMs").GetInt32()));

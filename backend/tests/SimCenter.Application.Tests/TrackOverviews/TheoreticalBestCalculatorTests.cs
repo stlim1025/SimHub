@@ -102,6 +102,21 @@ public class TheoreticalBestCalculatorTests
     }
 
     [Fact]
+    public void Compute_SampleWhoseTimeGoesBackwards_IsFilledInsteadOfDroppingTheBestLap()
+    {
+        // 최고 랩의 구간 1 한가운데(표본 50) 시간이 앞 표본보다 줄어든 표본 — 게임이 다른 순간의 값을 섞어 보낸 것.
+        // 예전에는 그 구간을 버려 최고 랩의 기준이 사라지고 결과 전체가 null이었다(Spa 예선 실측).
+        var a = Lap(1, [30_000, 40_000, 30_000], brokenAt: 50);
+        var b = Lap(2, [29_500, 40_500, 30_200]);
+
+        var result = TheoreticalBestCalculator.Compute([a, b], budget: null)!;
+
+        Assert.Equal((a.LapId, 99_500), (result.BestLapId, result.TheoreticalMs));
+        Assert.Equal([b.LapId, a.LapId, a.LapId], result.Segments.Select(s => s.LapId));
+        Assert.Equal(40_000, result.Segments[1].BestLapTimeMs);
+    }
+
+    [Fact]
     public void Compute_NoValidLap_IsNull()
     {
         Assert.Null(TheoreticalBestCalculator.Compute([Lap(1, [30_000, 40_000, 30_000], valid: false, offTrack: (80, 82))], budget: null));
@@ -119,7 +134,8 @@ public class TheoreticalBestCalculatorTests
         double[]? harvestJ = null,
         double startJ = FullStoreJ,
         bool valid = true,
-        (int From, int To)? offTrack = null)
+        (int From, int To)? offTrack = null,
+        int? brokenAt = null)
     {
         int[] edges = [0, FirstBoundary, SecondBoundary, SampleCount - 1];
         var time = new int[SampleCount];
@@ -140,6 +156,11 @@ public class TheoreticalBestCalculatorTests
             }
 
             elapsed += segmentMs[s];
+        }
+
+        if (brokenAt is { } broken)
+        {
+            time[broken] = time[broken - 1] - 5_000;
         }
 
         var lateral = Enumerable.Range(0, SampleCount).Select(i => i is >= 30 and <= 40 or >= 70 and <= 78 ? 1.6 : 0).ToArray();

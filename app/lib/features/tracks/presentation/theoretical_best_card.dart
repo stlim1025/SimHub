@@ -19,7 +19,8 @@ import '../domain/theoretical_best.dart';
 
 const String _title = 'Theoretical Best';
 const String _errorMessage = '이론상 최고 랩을 불러오지 못했다.';
-const String _emptyMessage = '이론상 최고 랩을 낼 Time Trial·예선 랩이 아직 없다.';
+const String _emptyMessage = '이론상 최고 랩은 텔레메트리가 온전히 기록된 유효한 Time Trial·예선 랩으로 계산한다. 이 트랙에는 아직 그런 랩이 없다.';
+const String _rainLabel = 'Rain';
 const String _noGainMessage = '최고 랩이 모든 구간에서 가장 빠르다.';
 const String _statTheoretical = 'Theoretical best';
 const String _statBest = 'My best';
@@ -38,7 +39,8 @@ const int _msPerSecond = 1000;
 const int _secondDigits = 3;
 
 /// 이론상 최고 랩 카드: 조건(세션 종류 · 컴파운드) 고르기, 이론상 최고 · 내 최고 · 줄일 수 있는 시간 · 쓴 랩 수,
-/// 배터리 한도로 뺀 시간 안내, 줄일 곳 표(구간 · 줄어드는 시간 · 그 구간을 가장 잘 달린 랩 날짜 · 최고 랩 대비 배터리). 줄을 누르면 그 랩 상세로 간다.
+/// 배터리 한도로 뺀 시간 안내, 최고 랩과 다른 구간 표(구간 · 최고 랩 대비 시간 — 빨라지면 초록, 배터리를 아끼느라 느려지면 빨강 · 그 구간을 달린 랩 날짜 ·
+/// 최고 랩 대비 배터리). 줄을 누르면 그 랩 상세로 간다.
 class TheoreticalBestCard extends ConsumerStatefulWidget {
   const TheoreticalBestCard({super.key, required this.trackId, required this.trackName});
 
@@ -106,12 +108,12 @@ class _TheoreticalBestCardState extends ConsumerState<TheoreticalBestCard> {
   }
 }
 
-/// `Time Trial · Soft`(컴파운드를 모르면 세션 종류만).
-String _conditionOf(TheoreticalBestGroup group) {
-  final compound = visualCompoundName(group.visualTyreCompound);
-  final session = sessionTypeLabel(group.sessionType);
-  return compound == null ? session : '$session$_conditionSeparator$compound';
-}
+/// `Time Trial · Soft`, 비 오는 조건은 `Qualifying · Soft · Rain`(컴파운드를 모르면 빼고).
+String _conditionOf(TheoreticalBestGroup group) => [
+      sessionTypeLabel(group.sessionType),
+      ?visualCompoundName(group.visualTyreCompound),
+      if (group.isWet) _rainLabel,
+    ].join(_conditionSeparator);
 
 String _seconds(int ms) => (ms / _msPerSecond).toStringAsFixed(_secondDigits);
 
@@ -125,7 +127,7 @@ class _GroupView extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final labels = theoreticalSegmentLabels(group, corners);
-    final gains = group.gains;
+    final changes = group.changes;
     final stats = <Widget>[
       Stat(key: const ValueKey('theoretical-stat-theoretical'), label: _statTheoretical, value: formatLapTime(group.theoreticalMs)),
       Stat(
@@ -151,22 +153,22 @@ class _GroupView extends StatelessWidget {
           ),
         ],
         const SizedBox(height: _blockGap),
-        if (gains.isEmpty)
+        if (changes.isEmpty)
           Text(_noGainMessage, style: TextStyle(color: palette.textMuted))
         else
           CompactTable<TheoreticalSegment>(
             framed: false,
-            rows: gains,
+            rows: changes,
             rowKey: (s) => ValueKey('theoretical-segment-${s.index}'),
             onRowTap: (s) => context.go('/laps/${Uri.encodeComponent(s.lapId)}'),
             columns: [
               CompactColumn(label: 'Segment', width: _segmentWidth, cell: (s) => Text(labels[s.index])),
               CompactColumn(
-                label: 'Gain',
+                label: 'vs best',
                 width: _gainWidth,
                 cell: (s) => Text(
                   formatDeltaMs(s.gainMs),
-                  style: kTabularStyle.copyWith(color: palette.success, fontWeight: FontWeight.w600),
+                  style: kTabularStyle.copyWith(color: s.gainMs < 0 ? palette.success : palette.danger, fontWeight: FontWeight.w600),
                 ),
               ),
               CompactColumn(

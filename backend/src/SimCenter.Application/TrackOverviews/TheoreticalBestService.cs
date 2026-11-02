@@ -20,12 +20,13 @@ public sealed record TheoreticalSegmentDto(
     double? BestLapHarvestKj);
 
 /// <summary>
-/// 한 조건(세션 종류 + 컴파운드)의 이론상 최고 랩. <see cref="VisualTyreCompound"/> = F1 UDP 보이는 컴파운드 번호(모르면 null).
-/// <see cref="TheoreticalMs"/> = 배터리 한도를 지킨 값, <see cref="UnlimitedMs"/> = 배터리를 무시한 구간 최고 기록의 합.
+/// 한 조건(세션 종류 + 컴파운드 + 비)의 이론상 최고 랩. <see cref="VisualTyreCompound"/> = F1 UDP 보이는 컴파운드 번호(모르면 null),
+/// <see cref="IsWet"/> = 랩 끝 날씨가 약한 비 이상. <see cref="TheoreticalMs"/> = 배터리 한도를 지킨 값, <see cref="UnlimitedMs"/> = 배터리를 무시한 구간 최고 기록의 합.
 /// </summary>
 public sealed record TheoreticalBestGroupDto(
     string SessionType,
     int? VisualTyreCompound,
+    bool IsWet,
     int LapCount,
     int LapLengthM,
     Guid BestLapId,
@@ -47,14 +48,12 @@ public interface ITheoreticalBestService
 
 /// <summary>
 /// <see cref="ITheoreticalBestService"/> 구현. 한 랩 승부인 Time Trial·예선만 계산한다 — 레이스는 랩마다 연료·타이어가 달라 여러 랩을 잇는 값이 뜻이 없다.
-/// 조건 = 세션 종류 + 보이는 컴파운드, 비(약한 비 이상)·인터·웨트 랩은 뺀다. 조건마다 빠른 랩 <see cref="LapsPerGroup"/>개까지만 푼다
+/// 조건 = 세션 종류 + 보이는 컴파운드 + 비(약한 비 이상) — 젖은 노면 랩은 마른 노면 랩과 잇지 않고 자기들끼리 잇는다. 조건마다 빠른 랩 <see cref="LapsPerGroup"/>개까지만 푼다
 /// (구간 최고 기록은 거의 빠른 랩들에서 나온다). 배터리 한도는 읽은 모든 랩에서 함께 잰다(게임 규정은 조건과 무관하다).
 /// </summary>
 public sealed class TheoreticalBestService : ITheoreticalBestService
 {
     private const int LapsPerGroup = 40;
-    private const int IntermediateCompound = 7;
-    private const int WetCompound = 8;
     private const double JoulesPerKj = 1000;
     private const int KjDecimals = 1;
 
@@ -76,8 +75,7 @@ public sealed class TheoreticalBestService : ITheoreticalBestService
 
         var facts = await _queries.GetMyTracedLapFactsAsync(userId, trackId, OneLapSessions, cancellationToken);
         var groups = facts
-            .Where(f => f.Weather is null or < Weather.LightRain && f.VisualTyreCompound is not (IntermediateCompound or WetCompound))
-            .GroupBy(f => (f.SessionType, f.VisualTyreCompound))
+            .GroupBy(f => (f.SessionType, f.VisualTyreCompound, IsWet: f.Weather >= Weather.LightRain))
             .Select(g => (g.Key, Laps: Pick(g)))
             .ToList();
         if (groups.Count == 0)
@@ -114,12 +112,13 @@ public sealed class TheoreticalBestService : ITheoreticalBestService
             var material = laps.Where(f => decoded.ContainsKey(f.LapId)).Select(f => decoded[f.LapId]).ToList();
             if (TheoreticalBestCalculator.Compute(material, budget) is { } result)
             {
-                results.Add(ToDto(key.SessionType, key.VisualTyreCompound, result));
+                results.Add(ToDto(key.SessionType, key.VisualTyreCompound, key.IsWet, result));
             }
         }
 
         return new TheoreticalBestResponse(results
             .OrderBy(g => g.SessionType == nameof(SessionType.TimeTrial) ? 0 : 1)
+            .ThenBy(g => g.IsWet)
             .ThenBy(g => g.TheoreticalMs)
             .ToList());
     }
@@ -137,10 +136,11 @@ public sealed class TheoreticalBestService : ITheoreticalBestService
         return picked;
     }
 
-    private static TheoreticalBestGroupDto ToDto(SessionType sessionType, int? compound, TheoreticalBestResult result)
+    private static TheoreticalBestGroupDto ToDto(SessionType sessionType, int? compound, bool isWet, TheoreticalBestResult result)
         => new(
             sessionType.ToString(),
             compound,
+            isWet,
             result.LapCount,
             result.LapLengthM,
             result.BestLapId,
