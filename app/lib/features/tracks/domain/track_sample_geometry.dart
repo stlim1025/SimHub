@@ -10,7 +10,15 @@ const double _kerbEdgeAllowanceM = 0.5;
 const double _offsetFadeM = 100;
 
 /// 도로 가운데 이동량을 고르는 이동 평균 반폭(칸). 연석 단서가 칸마다 조금씩 달라 가운데가 좌우로 흔들리지 않게 넓게 고른다.
+/// 한 번 평균한 이동량은 단서가 끊기는 자리마다 꺾인 계단이 되므로(양쪽 도로 끝이 같이 삐뚤어진다) 좁게 한 번 더 평균해 둥글게 잇는다.
 const int _offsetSmoothBins = 6;
+const int _offsetRoundBins = 3;
+
+/// 마지막 도로 끝(레이싱 라인에서 잰 왼쪽·오른쪽)을 두 번 고르는 이동 평균 반폭(칸).
+const int _endRoundBins = 1;
+
+/// 도로 가운데 선은 양쪽 도로 끝에서 적어도 이만큼(m) 안쪽에 둔다.
+const double _centerInsideM = 2;
 
 /// 연석 안쪽 끝(연석 바깥 끝 − 연석 폭)을 고르는 가운데값 반폭(칸, 연석 칸끼리만): 칸마다 튀는 연석 측정값이 가장자리를 톱니처럼 만들지 않게.
 const int _kerbMedianBins = 2;
@@ -37,6 +45,12 @@ const double _apexPinCurvature = 0.001;
 
 /// 아스팔트 바퀴 끝이 연석 안쪽 끝보다 이 거리(m) 넘게 바깥이면 그 칸 연석은 붙이지 않는다(반대쪽 연석을 밟은 차의 바퀴가 섞인 값).
 const double _apexKerbWheelSlackM = 1.3;
+
+/// 에이펙스 칸에 붙일 안쪽 연석이 없으면(밟은 기록이 없거나, 연석이 1.5m보다 좁아 아스팔트 바퀴가 잰 연석 안쪽 끝보다 바깥에 있으면)
+/// 이 곡률(1/m, 반지름 약 125m)보다 급한 코너는 도로 끝을 아스팔트 바퀴 끝에 붙인다. 차들이 연석을 타지 않는 코너(Hungaroring T12·T13)나
+/// 연석이 꼭짓점 일부에만 잡힌 코너는 연석 단서가 모자라 도로 가운데가 레이싱 라인에 머물고, 라인이 에이펙스에서 안쪽 도로 끝과 3~8m
+/// 떨어져 보인다. 완만한 코너는 안쪽까지 붙여 달리지 않고 반대쪽 연석을 밟은 바퀴가 섞이므로(Spa 블랑쉬몽) 붙이지 않는다.
+const double _apexTarmacCurvature = 0.008;
 
 /// 이 칸 수보다 짧게 이어진 에이펙스 연석은 붙이지 않고, 붙는 구간 사이가 이 칸 수 이하로 비면 이어 메운다.
 const int _apexMinRunBins = 3;
@@ -240,13 +254,16 @@ TrackWidthProfile trackProfileFromSamples(TrackSampleGeometry geometry, {require
   /// 아스팔트 바퀴 끝([wheels])이 연석 안쪽 끝 가까이에 있는 것만 — 그보다 훨씬 바깥까지 아스팔트를 밟았다면 그 쪽 연석 표본은
   /// 반대쪽 연석을 밟은 차의 바퀴다(Spa 블랑쉬몽: 양쪽 "연석"이 다 레이싱 라인 0.5m 안). 한두 칸만 붙는 연석은 빼고(그 자리만 도로 끝이
   /// V자로 파인다), 붙는 구간 사이의 짧은 틈은 앞뒤 값을 이어 메운다(틈에서 끝이 풀렸다 다시 붙어 삐쭉해지지 않게).
-  List<double?> apexPins(List<double?> kerbInner, List<double>? wheels, int inside) {
+  /// 붙일 연석이 없는 칸은 급한 코너([_apexTarmacCurvature])의 꼭짓점이면 아스팔트 바퀴 끝([tarmac])에 붙인다.
+  List<double?> apexPins(List<double?> kerbInner, List<double>? wheels, List<double>? tarmac, int inside) {
+    bool atApex(int k, double minCurvature) =>
+        inside * curvatures[k] >= math.max(minCurvature, _apexPeakFraction * insidePeak(k, inside));
     final pins = [
       for (var k = 0; k < n; k++)
         switch (kerbInner[k]) {
-          final inner? when inside * curvatures[k] >= math.max(_apexPinCurvature, _apexPeakFraction * insidePeak(k, inside)) &&
-              (wheels == null || wheels[k] <= inner + _apexKerbWheelSlackM) =>
+          final inner? when atApex(k, _apexPinCurvature) && (wheels == null || wheels[k] <= inner + _apexKerbWheelSlackM) =>
             inner,
+          _ when tarmac != null && atApex(k, _apexTarmacCurvature) => tarmac[k],
           _ => null,
         },
     ];
@@ -345,7 +362,10 @@ TrackWidthProfile trackProfileFromSamples(TrackSampleGeometry geometry, {require
                   .reduce((a, b) => a + b) /
               (_edgeFinalSmoothBins * 2 + 1),
       ],
-      apex: funnelFrom(apexPins(kerbInner, wheels, inside), slope: _apexFunnelSlope),
+      apex: funnelFrom(
+        apexPins(kerbInner, wheels, wheels == null || kerbOuter == null ? null : despiked, inside),
+        slope: _apexFunnelSlope,
+      ),
     );
   }
 
@@ -392,11 +412,11 @@ TrackWidthProfile trackProfileFromSamples(TrackSampleGeometry geometry, {require
     final high = half - rightEdge[k];
     offsets[k] = low > high ? (low + high) / 2 : offsets[k].clamp(low, high);
   }
-  final smoothed = [
-    for (var k = 0; k < n; k++)
-      [for (var j = -_offsetSmoothBins; j <= _offsetSmoothBins; j++) offsets[at(k + j)]].reduce((a, b) => a + b) /
-          (_offsetSmoothBins * 2 + 1),
-  ];
+  List<double> average(List<double> values, int bins) => [
+        for (var k = 0; k < n; k++)
+          [for (var j = -bins; j <= bins; j++) values[at(k + j)]].reduce((a, b) => a + b) / (bins * 2 + 1),
+      ];
+  final smoothed = average(average(offsets, _offsetSmoothBins), _offsetRoundBins);
 
   // 레이싱 라인에서 왼쪽·오른쪽 도로 끝(m). 기본은 옮긴 가운데에서 반폭이지만, 굽은 안쪽 연석(에이펙스) 둘레는 그 쪽 끝을
   // 연석 안쪽 끝에 붙인다 — 가운데 이동은 넓게 고르므로 꼭짓점에서 무뎌져, 반폭만으로는 레이싱 라인이 에이펙스 연석에서 떨어져 보인다.
@@ -418,14 +438,29 @@ TrackWidthProfile trackProfileFromSamples(TrackSampleGeometry geometry, {require
     leftEnd[k] = l;
     rightEnd[k] = r;
   }
+  // 에이펙스에 붙는 칸에서는 안쪽 끝이 한두 칸 만에 연석으로 들어오고 모자란 폭이 반대쪽으로 넘어가 도로 전체가 옆으로 꺾이므로,
+  // 두 끝을 좁게 두 번 평균해 둥글게 잇는다(두 쪽 합은 평균해도 [widthM] 이상). 차들이 달린 가장자리 안으로는 들이지 않는다.
+  final leftRounded = average(average(leftEnd, _endRoundBins), _endRoundBins);
+  final rightRounded = average(average(rightEnd, _endRoundBins), _endRoundBins);
+  for (var k = 0; k < n; k++) {
+    leftEnd[k] = math.max(leftEdge[k], leftRounded[k]);
+    rightEnd[k] = math.max(rightEdge[k], rightRounded[k]);
+  }
+  // 도로 가운데는 두 끝에서 [_centerInsideM] 안에 둔다. 에이펙스에 붙인 안쪽 끝은 넓게 고른 가운데 이동보다 라인에 가까워
+  // 가운데가 도로 밖으로 나갈 수 있다(그 쪽 폭이 음수가 되면 서킷이 0으로 잘라 도로 끝을 가운데에 그린다).
+  // 자른 자리가 꺾이지 않게 좁게 고른 뒤 한 번 더 자른다.
+  List<double> inside(List<double> values) => [
+        for (var k = 0; k < n; k++) values[k].clamp(_centerInsideM - rightEnd[k], leftEnd[k] - _centerInsideM),
+      ];
+  final shift = inside(average(average(inside(smoothed), _endRoundBins), _endRoundBins));
 
   final reachLeft = geometry.reachLeftM;
   final reachRight = geometry.reachRightM;
   return TrackWidthProfile(
-    center: [for (var k = 0; k < n; k++) line[k] + normals[k] * smoothed[k]],
-    leftM: [for (var k = 0; k < n; k++) leftEnd[k] - smoothed[k]],
-    rightM: [for (var k = 0; k < n; k++) rightEnd[k] + smoothed[k]],
-    reachLeftM: reachLeft == null ? null : [for (var k = 0; k < n; k++) reachLeft[k] - smoothed[k]],
-    reachRightM: reachRight == null ? null : [for (var k = 0; k < n; k++) reachRight[k] + smoothed[k]],
+    center: [for (var k = 0; k < n; k++) line[k] + normals[k] * shift[k]],
+    leftM: [for (var k = 0; k < n; k++) leftEnd[k] - shift[k]],
+    rightM: [for (var k = 0; k < n; k++) rightEnd[k] + shift[k]],
+    reachLeftM: reachLeft == null ? null : [for (var k = 0; k < n; k++) reachLeft[k] - shift[k]],
+    reachRightM: reachRight == null ? null : [for (var k = 0; k < n; k++) reachRight[k] + shift[k]],
   );
 }

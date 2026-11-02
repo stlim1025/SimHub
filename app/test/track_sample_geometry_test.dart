@@ -51,15 +51,39 @@ LapTrace _circleLap({double radius = 100, int resolutionM = 5}) {
 }
 
 void main() {
-  test('피트 레인 선을 읽어 서킷에 피트 레인(점·높이·법선)을 싣는다', () {
+  test('피트 레인 선을 읽어 서킷에 피트 레인(점·높이·법선)을 싣고, 도로 밖에서 시작·끝나면 도로 끝에서 갈라지는 입구·출구 길을 잇는다', () {
     final geometry = TrackSampleGeometry.fromJsonOrNull(_geometryJson())!;
     final circuit = ReplayCircuit.build(LapReplay(_circleLap()), samples: geometry);
+    final first = circuit.pitLane.indexOf(geometry.pitLine.first);
 
     expect(geometry.pitLine, hasLength(10));
-    expect(circuit.pitLane, hasLength(10));
-    expect(circuit.pitElevations.first, 1.5);
+    // 표본 피트 레인(반지름 115m)은 도로(바깥 끝 106.5m) 밖이라, 피트 상태가 켜지기 전 입구 길과 꺼진 뒤 출구 길이 없다.
+    expect(circuit.pitLane, containsAllInOrder(geometry.pitLine));
+    expect(first, greaterThan(0));
+    expect(circuit.pitLane.length, greaterThan(first + geometry.pitLine.length));
+    expect(circuit.pitLane.first.distance, closeTo(106.5, 0.01));
+    expect(circuit.pitLane.last.distance, closeTo(106.5, 0.01));
+    expect(circuit.pitElevations[first], 1.5);
+    expect(circuit.pitElevations.first, 2); // 이은 길은 가까운 도로 높이
     expect(circuit.pitNormals.first.distance, closeTo(1, 1e-9));
     expect(circuit.pitAsphalt.getBounds().isEmpty, isFalse);
+  });
+
+  test('안쪽 연석 기록이 없는 급한 코너는 안쪽 도로 끝을 아스팔트 바퀴 끝에 붙여, 레이싱 라인이 꼭짓점에서 안쪽 끝을 지난다', () {
+    // 원(반지름 100m)을 반시계로 돈다(왼쪽 = 안쪽). 연석 기록이 없고 차들의 아스팔트 바퀴는 라인 왼쪽 1.5m까지만 갔다
+    // (Hungaroring T12·T13). 연석 단서가 없으면 도로 가운데가 라인에 머물러 안쪽 끝이 반폭 6.5m에 선다.
+    final geometry = TrackSampleGeometry.fromJsonOrNull(_geometryJson(
+      pit: false,
+      columns: {'edgeLeftM': 1.5, 'edgeRightM': 3, 'kerbOuterLeftM': 0, 'kerbOuterRightM': 0},
+    ))!;
+    final circuit = ReplayCircuit.build(LapReplay(_circleLap()), samples: geometry);
+    Offset at(double radius) => Offset(radius * math.cos(1.0), radius * math.sin(1.0));
+
+    expect(circuit.asphalt.contains(at(98.7)), isTrue);
+    expect(circuit.asphalt.contains(at(98.2)), isFalse);
+    expect(circuit.kerbRed.contains(at(97.8)) || circuit.kerbWhite.contains(at(97.8)), isTrue);
+    // 도로 폭(13m)은 바깥으로 채운다.
+    expect(circuit.asphalt.contains(at(110.8)), isTrue);
   });
 
   test('피트 레인이 없으면 비어 있다', () {
@@ -105,7 +129,8 @@ void main() {
   test('연석이 있는 칸은 아스팔트가 연석 안쪽 끝까지, 연석은 그 바깥에 그린다(그 너머 포장 런오프는 도로가 아니다)', () {
     final json = _geometryJson(
       pit: false,
-      columns: {'edgeLeftM': 2, 'edgeRightM': 20, 'kerbOuterLeftM': 0, 'kerbOuterRightM': 8},
+      // 안쪽(왼쪽)은 아스팔트 바퀴 끝 3.5m — 안쪽 끝에 붙여도 연석 안쪽 끝(6.5m)까지 도로 폭 10m가 찬다.
+      columns: {'edgeLeftM': 3.5, 'edgeRightM': 20, 'kerbOuterLeftM': 0, 'kerbOuterRightM': 8},
     );
     json['kerbRight'] = [for (var i = 0; i < (json['x'] as List).length; i++) true];
     final circuit = ReplayCircuit.build(
@@ -191,7 +216,7 @@ void main() {
     );
     Offset polar(double radius, double angle) => Offset(radius * math.cos(angle), radius * math.sin(angle));
 
-    expect(circuit.asphalt.contains(polar(96, 3.0)), isTrue); // 기본 반폭 5m 안
+    expect(circuit.asphalt.contains(polar(97.5, 3.0)), isTrue); // 안쪽 아스팔트 바퀴 끝 3m 안
     expect(circuit.asphalt.contains(polar(88, 3.0)), isFalse); // 칸 60(300m)에서 20m로 튄 값은 누른다
   });
 
@@ -298,9 +323,9 @@ void main() {
       expect(track.hasWallRight[i], isTrue);
       expect(wallRadius, lessThan(140 - kCircuitPitLaneWidthM / 2));
     }
-    // 피트 레인 앞뒤 끝에서 피트 월(약 16m)과 런오프 끝 벽(약 40m)을 비스듬히 잇지 않는다.
-    expect([for (var i = n - 8; i < n; i++) track.hasWallRight[i]], contains(false));
-    expect([for (var i = 8; i <= 16; i++) track.hasWallRight[i]], contains(false));
+    // 피트 레인 앞뒤(도로에서 갈라지는 입구·출구 길 끝)에서 피트 월과 런오프 끝 벽(약 40m)을 비스듬히 잇지 않는다.
+    expect([for (var i = n ~/ 2; i < n; i++) track.hasWallRight[i]], contains(false));
+    expect([for (var i = 10; i < n ~/ 2; i++) track.hasWallRight[i]], contains(false));
     // 피트 레인과 먼 곳은 차가 닿은 자리 바깥에 그대로 선다.
     expect(circuit.rightWidths[n ~/ 2] + track.wallRightM[n ~/ 2], greaterThanOrEqualTo(45.3 - 1e-9));
   });

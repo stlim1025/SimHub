@@ -31,6 +31,12 @@ const double kCircuitGravelWidthM = 12;
 /// 피트 레인 폭(m).
 const double kCircuitPitLaneWidthM = 7;
 
+/// 표본 피트 레인은 피트 상태가 켜진 자리(피트 입구 선)부터라, 도로에서 갈라져 그 선까지 가는 입구 길·출구 선에서 도로로 합류하는 길이
+/// 없다(Hungaroring T13 안쪽·Austria·Catalunya). 피트 레인 끝이 도로 밖이면 도로 끝에서 이 기울기(옆 m / 진행 m)로 벌어지는 길을 잇고,
+/// 그 길이는 [_pitJoinMaxM]까지만.
+const double _pitJoinSlope = 0.1;
+const double _pitJoinMaxM = 200;
+
 /// 첫·마지막 표본이 이 거리(m)보다 가까우면 한 바퀴로 이어진 닫힌 서킷으로 본다.
 const double _closedLoopM = 40;
 
@@ -314,7 +320,17 @@ class ReplayCircuit {
 
     final start = _nearestIndex(center, playerLine.first);
     final elevations = _elevations(player.trace, playerLine, center, at, samples);
-    final pitLane = samples?.pitLine ?? const <Offset>[];
+    final joined = _joinedPitLane(
+      samples?.pitLine ?? const <Offset>[],
+      samples?.pitY,
+      center,
+      normals,
+      leftWidths,
+      rightWidths,
+      spacing: spacing,
+      closed: closed,
+    );
+    final pitLane = joined.lane;
     final pitNormals = [
       for (var i = 0; i < pitLane.length; i++)
         () {
@@ -328,7 +344,7 @@ class ReplayCircuit {
       final b = pitNormals[i + 1] * (kCircuitPitLaneWidthM / 2);
       _quad(pitAsphalt, pitLane[i] + a, pitLane[i + 1] + b, pitLane[i + 1] - b, pitLane[i] - a);
     }
-    final pitHeights = samples?.pitY;
+    final pitHeights = joined.heights;
     return ReplayCircuit._(
       pitLane: pitLane,
       pitNormals: pitNormals,
@@ -431,6 +447,52 @@ class ReplayCircuit {
   }
 
   static double _lerp(double a, double b, double t) => a + (b - a) * t;
+
+  /// 표본 피트 레인([lane], 입구 → 출구)의 첫·마지막 점이 도로 밖이면, 그 점에서 도로를 따라 거꾸로(입구)·앞으로(출구) 가며
+  /// 도로 끝과의 사이를 [_pitJoinSlope]로 줄여 도로 끝에 닿는 길을 잇는다(피트에 들어가는 차가 입구 선 전에 잔디 위를 달려 보이지 않게).
+  /// 이은 점의 높이([heights])는 null(가까운 중심선 높이를 쓴다).
+  static ({List<Offset> lane, List<double?>? heights}) _joinedPitLane(
+    List<Offset> lane,
+    List<double>? heights,
+    List<Offset> center,
+    List<Offset> normals,
+    List<double> leftWidths,
+    List<double> rightWidths, {
+    required double spacing,
+    required bool closed,
+  }) {
+    if (lane.length < 2 || !closed) {
+      return (lane: lane, heights: heights);
+    }
+    final n = center.length;
+    int at(int i) => (i % n + n) % n;
+    // 피트 레인 끝점([point])에서 [step](−1 = 입구 쪽으로 거꾸로, 1 = 출구 쪽으로 앞으로) 방향으로 도로 끝까지 잇는 점들(끝점에서 먼 순).
+    List<Offset> join(Offset point, int step) {
+      final j0 = _nearestIndex(center, point);
+      final lateral = (point.dx - center[j0].dx) * normals[j0].dx + (point.dy - center[j0].dy) * normals[j0].dy;
+      final side = lateral >= 0 ? 1.0 : -1.0;
+      final widths = lateral >= 0 ? leftWidths : rightWidths;
+      final gap = lateral.abs() - widths[j0];
+      if (gap <= 0) {
+        return const [];
+      }
+      final bins = math.min((gap / (_pitJoinSlope * spacing)).ceil(), (_pitJoinMaxM / spacing).floor());
+      return [
+        for (var s = 1; s <= bins; s++)
+          () {
+            final j = at(j0 + step * s);
+            return center[j] + normals[j] * (side * (widths[j] + gap * (1 - s / bins)));
+          }(),
+      ];
+    }
+
+    final entry = join(lane.first, -1);
+    final exit = join(lane.last, 1);
+    return (
+      lane: [...entry.reversed, ...lane, ...exit],
+      heights: heights == null ? null : [for (final _ in entry) null, ...heights, for (final _ in exit) null],
+    );
+  }
 
   /// 중심선 점마다 가장 가까운 표본 형상 칸의 연석(그 칸에서 차들이 그 쪽 연석을 밟은 적이 있으면).
   /// [_kerbGapFillM]보다 짧게 끊긴 틈은 이어 그린다(한 연석이 조각나 보이지 않게).
@@ -641,8 +703,9 @@ class ReplayCircuit {
     return _widened(geometry, needLeft, needRight);
   }
 
-  /// 점마다 그 쪽에 있어야 할 폭([needLeft]·[needRight], m)만큼 폭을 넓힌다. 앞뒤로 퍼뜨린 뒤 평균해 폭이 부드럽게 늘고 준다
-  /// (퍼뜨린 범위 안에서 평균하므로 넓힌 폭은 점마다 필요한 폭 이상이다).
+  /// 점마다 그 쪽에 있어야 할 폭([needLeft]·[needRight], m)만큼 폭을 넓힌다. 모자란 만큼을 앞뒤로 퍼뜨린 뒤 평균해 폭이 부드럽게
+  /// 늘고 준다(퍼뜨린 범위 안에서 평균하므로 넓힌 폭은 점마다 필요한 폭 이상이다). 필요한 폭 자체를 퍼뜨리면 에이펙스처럼 칸마다 폭이
+  /// 빠르게 바뀌는 곳에서 이웃 칸의 넓은 폭이 좁은 칸으로 번져, 연석에 붙인 안쪽 도로 끝이 1~2m 밀려난다(Hungaroring T10).
   static _Geometry _widened(_Geometry geometry, List<double> needLeft, List<double> needRight) {
     final center = geometry.center;
     final n = center.length;
@@ -650,18 +713,19 @@ class ReplayCircuit {
     int at(int i) => closed ? (i % n + n) % n : i.clamp(0, n - 1);
     final spread = math.max(1, (_shiftSpreadM / _spacing(center, closed: closed)).round());
     List<double> widen(List<double> base, List<double> need) {
+      final shortfall = [for (var j = 0; j < n; j++) math.max(0.0, need[j] - base[j])];
       final dilated = [
         for (var j = 0; j < n; j++)
           () {
             var best = 0.0;
             for (var k = j - spread; k <= j + spread; k++) {
-              best = math.max(best, need[at(k)]);
+              best = math.max(best, shortfall[at(k)]);
             }
             return best;
           }(),
       ];
       final smooth = _movingAverage(dilated, spread, at);
-      return [for (var j = 0; j < n; j++) math.max(base[j], smooth[j])];
+      return [for (var j = 0; j < n; j++) base[j] + smooth[j]];
     }
 
     return (
