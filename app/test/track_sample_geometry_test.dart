@@ -161,6 +161,23 @@ void main() {
     expect(circuit.asphalt.contains(at(111.5)), isTrue);
   });
 
+  test('에이펙스 연석 칸에서는 내 랩이 연석 바로 옆을 지나도 차 반폭만큼 도로를 넓혀 연석을 밀어내지 않는다', () {
+    // 원을 반시계로 돈다(왼쪽 = 안쪽). 모든 칸에서 안쪽 연석이 밟혔고 연석 안쪽 끝은 라인에서 0.5m(바깥 끝 2m).
+    // 내 랩은 라인 위를 달리고 연석 접촉 기록이 없다 — 차 반폭(1m)이 아스팔트 안에 들게 넓히면 연석이 1m 넘게 밀려난다.
+    final json = _geometryJson(
+      pit: false,
+      columns: {'edgeLeftM': 0.5, 'edgeRightM': 1, 'kerbOuterLeftM': 2, 'kerbOuterRightM': 0},
+    );
+    final n = (json['x'] as List).length;
+    json['kerbLeft'] = [for (var i = 0; i < n; i++) true];
+    final circuit = ReplayCircuit.build(LapReplay(_circleLap()), samples: TrackSampleGeometry.fromJsonOrNull(json)!);
+    Offset at(double radius) => Offset(radius * math.cos(1.0), radius * math.sin(1.0));
+
+    expect(circuit.asphalt.contains(at(99.7)), isTrue);
+    expect(circuit.asphalt.contains(at(99.2)), isFalse);
+    expect(circuit.kerbRed.contains(at(99.0)) || circuit.kerbWhite.contains(at(99.0)), isTrue);
+  });
+
   test('한두 칸만 튄 가장자리(피트 입구로 갈라지는 차 등)는 앞뒤 가운데값으로 눌러 도로가 부풀지 않는다', () {
     final json = _geometryJson(
       pit: false,

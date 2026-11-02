@@ -31,9 +31,16 @@ const double _kerbFunnelSlope = 0.2;
 const int _apexCurvatureBins = 2;
 const double _apexSideCurvature = 0.002;
 
-/// 도로 끝을 안쪽 연석에 붙이는 에이펙스: 이 곡률(1/m, 반지름 약 125m)보다 급하게 굽는 칸의 안쪽 연석만.
-/// 거의 곧은 킹크(Spa 블랑쉬몽 뒤)의 연석까지 붙이면 직선에서 도로가 한쪽으로 움푹 패고 방호벽이 길로 튀어나온다.
-const double _apexPinCurvature = 0.008;
+/// 도로 끝을 안쪽 연석에 붙이는 에이펙스: 이 곡률(1/m, 반지름 약 1km)보다 굽는 칸의 안쪽 연석만. 위에서 보면 거의 곧은
+/// 고속 코너(Spa Eau Rouge·Raidillon)도 차들이 연석을 타고 지나므로 붙인다.
+const double _apexPinCurvature = 0.001;
+
+/// 아스팔트 바퀴 끝이 연석 안쪽 끝보다 이 거리(m) 넘게 바깥이면 그 칸 연석은 붙이지 않는다(반대쪽 연석을 밟은 차의 바퀴가 섞인 값).
+const double _apexKerbWheelSlackM = 1.3;
+
+/// 이 칸 수보다 짧게 이어진 에이펙스 연석은 붙이지 않고, 붙는 구간 사이가 이 칸 수 이하로 비면 이어 메운다.
+const int _apexMinRunBins = 3;
+const int _apexGapFillBins = 6;
 
 /// 에이펙스는 코너 꼭짓점 둘레만: 앞뒤 이 칸 수 안에서 가장 급한 곡률의 이 비율 이상인 칸의 연석만 붙인다.
 /// 코너를 빠져나가며 레이싱 라인이 반대쪽으로 건너가는 중에 밟힌 안쪽 연석(Spa Bus Stop 출구)까지 붙이면 그 자리에서 도로 끝이 라인 쪽으로 움푹 꺾인다.
@@ -42,7 +49,7 @@ const double _apexPeakFraction = 0.5;
 
 /// 에이펙스 연석에서 멀어질 때 붙인 끝이 풀리는 기울기(옆 m / 진행 m). 레이싱 라인은 에이펙스를 지나면 반대쪽 트랙아웃으로 빠르게
 /// 건너가므로, 라인에서 잰 끝이 연석 깔때기처럼 천천히 풀리면 라인에 끌려 직선 쪽 도로 끝과 방호벽이 길로 들어온다(Spa Bus Stop 뒤).
-const double _apexFunnelSlope = 0.6;
+const double _apexFunnelSlope = 0.35;
 
 /// 모자란 폭은 덜 붙은 쪽에 주되, 양쪽 에이펙스 깔때기 차이가 이 값(m)의 두 배 안이면 차이에 비례해 나눈다 —
 /// 시케인(Spa Bus Stop)처럼 에이펙스가 한쪽에서 반대쪽으로 바뀌는 칸에서 한 칸 만에 넘기면 도로가 옆으로 몇 m씩 튄다.
@@ -229,6 +236,61 @@ TrackWidthProfile trackProfileFromSamples(TrackSampleGeometry geometry, {require
     return funnel;
   }
 
+  /// 도로 끝을 붙일 에이펙스 연석 안쪽 끝(칸마다, 붙이지 않는 칸은 null): 코너 꼭짓점 둘레에서 안쪽으로 굽는 칸의 연석 가운데
+  /// 아스팔트 바퀴 끝([wheels])이 연석 안쪽 끝 가까이에 있는 것만 — 그보다 훨씬 바깥까지 아스팔트를 밟았다면 그 쪽 연석 표본은
+  /// 반대쪽 연석을 밟은 차의 바퀴다(Spa 블랑쉬몽: 양쪽 "연석"이 다 레이싱 라인 0.5m 안). 한두 칸만 붙는 연석은 빼고(그 자리만 도로 끝이
+  /// V자로 파인다), 붙는 구간 사이의 짧은 틈은 앞뒤 값을 이어 메운다(틈에서 끝이 풀렸다 다시 붙어 삐쭉해지지 않게).
+  List<double?> apexPins(List<double?> kerbInner, List<double>? wheels, int inside) {
+    final pins = [
+      for (var k = 0; k < n; k++)
+        switch (kerbInner[k]) {
+          final inner? when inside * curvatures[k] >= math.max(_apexPinCurvature, _apexPeakFraction * insidePeak(k, inside)) &&
+              (wheels == null || wheels[k] <= inner + _apexKerbWheelSlackM) =>
+            inner,
+          _ => null,
+        },
+    ];
+    // 붙는 칸이 이어진 구간(서킷은 닫혀 있다). 시작 칸에서 앞으로 센다.
+    final runs = <(int, int)>[];
+    final start = pins.indexWhere((p) => p == null);
+    if (start < 0) {
+      return pins;
+    }
+    for (var s = 0; s < n; s++) {
+      final k = at(start + s);
+      if (pins[k] == null) {
+        continue;
+      }
+      if (runs.isNotEmpty && at(runs.last.$1 + runs.last.$2) == k) {
+        runs[runs.length - 1] = (runs.last.$1, runs.last.$2 + 1);
+      } else {
+        runs.add((k, 1));
+      }
+    }
+    final kept = [for (final run in runs) if (run.$2 >= _apexMinRunBins) run];
+    final out = List<double?>.filled(n, null);
+    for (final (first, length) in kept) {
+      for (var s = 0; s < length; s++) {
+        out[at(first + s)] = pins[at(first + s)];
+      }
+    }
+    for (var r = 0; r < kept.length; r++) {
+      final (first, length) = kept[r];
+      final last = at(first + length - 1);
+      final next = kept[(r + 1) % kept.length].$1;
+      final gap = (next - last - 1 + n) % n;
+      if (gap == 0 || gap > _apexGapFillBins || (kept.length == 1 && gap >= n - length)) {
+        continue;
+      }
+      final from = out[last]!;
+      final to = out[next]!;
+      for (var s = 1; s <= gap; s++) {
+        out[at(last + s)] = from + (to - from) * s / (gap + 1);
+      }
+    }
+    return out;
+  }
+
   /// 한쪽 가장자리([inside] = 그 쪽이 코너 안쪽인 곡률 부호: 왼쪽 1, 오른쪽 −1)와,
   /// 굽은 안쪽 연석(에이펙스) 칸에서만 퍼지는 연석 깔때기(`apex`, 그런 연석이 없으면 무한대).
   ({List<double> edge, List<double> apex}) edge(
@@ -283,13 +345,7 @@ TrackWidthProfile trackProfileFromSamples(TrackSampleGeometry geometry, {require
                   .reduce((a, b) => a + b) /
               (_edgeFinalSmoothBins * 2 + 1),
       ],
-      apex: funnelFrom(
-        [
-          for (var k = 0; k < n; k++)
-            inside * curvatures[k] >= math.max(_apexPinCurvature, _apexPeakFraction * insidePeak(k, inside)) ? kerbInner[k] : null,
-        ],
-        slope: _apexFunnelSlope,
-      ),
+      apex: funnelFrom(apexPins(kerbInner, wheels, inside), slope: _apexFunnelSlope),
     );
   }
 

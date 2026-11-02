@@ -202,7 +202,12 @@ class ReplayCircuit {
     final aligned = sampled != null || real == null ? null : alignTrackProfile(real, playerLine);
     final geometry = _covering(
       sampled != null
-          ? _coveringLines((center: sampled.center, left: sampled.leftM, right: sampled.rightM, closed: true), lines)
+          ? _coveringLines(
+              (center: sampled.center, left: sampled.leftM, right: sampled.rightM, closed: true),
+              lines,
+              kerbLeft: samples!.kerbLeft,
+              kerbRight: samples.kerbRight,
+            )
           : () {
               final estimated = _estimated(player, ghost, baseWidthM);
               return aligned == null ? estimated : _keepLinesInside(_withMeasured(estimated, aligned), lines);
@@ -607,8 +612,10 @@ class ReplayCircuit {
   }
 
   /// 주행선(내 랩·비교 랩)이 도로 안에 들도록 그 쪽 폭만 넓힌다(가운데는 그대로 — 표본 형상의 다른 차들이 제자리에 남게).
-  /// 연석을 밟은 표본은 차 가운데가 가장자리 밖 [_kerbCarAllowanceM]까지 나가도 되고, 아니면 차 반폭만큼 안쪽에 들어야 한다.
-  static _Geometry _coveringLines(_Geometry geometry, List<LapTrace> lines) {
+  /// 연석을 밟은 표본이나 그 쪽에 표본 연석([kerbLeft]·[kerbRight], 표본 칸 = 가운데 점)이 있는 칸은 차 가운데가 가장자리 밖
+  /// [_kerbCarAllowanceM]까지 나가도 되고(몸체가 연석 위 — 에이펙스에서 연석에 붙인 도로 끝을 차 반폭만큼 도로 쪽으로 다시 밀어내지 않게),
+  /// 아니면 차 반폭만큼 안쪽에 들어야 한다.
+  static _Geometry _coveringLines(_Geometry geometry, List<LapTrace> lines, {List<bool>? kerbLeft, List<bool>? kerbRight}) {
     final center = geometry.center;
     final n = center.length;
     final closed = geometry.closed;
@@ -621,7 +628,8 @@ class ReplayCircuit {
         final p = Offset(line.worldPosX[i], line.worldPosZ[i]);
         final j = matcher.match(p);
         final lateral = (p.dx - center[j].dx) * normals[j].dx + (p.dy - center[j].dy) * normals[j].dy;
-        final onKerb = line.hasKerbContact && line.kerbContact[i];
+        final kerbs = lateral >= 0 ? kerbLeft : kerbRight;
+        final onKerb = (line.hasKerbContact && line.kerbContact[i]) || (kerbs != null && kerbs.length == n && kerbs[j]);
         final need = lateral.abs() + (onKerb ? -_kerbCarAllowanceM : _carHalfWidthM);
         if (lateral >= 0) {
           needLeft[j] = math.max(needLeft[j], need);
