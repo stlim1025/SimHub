@@ -140,6 +140,27 @@ void main() {
     expect(circuit.kerbRed.contains(at(98.3)) || circuit.kerbWhite.contains(at(98.3)), isTrue);
   });
 
+  test('에이펙스 안쪽 연석 앞뒤로 바깥 연석이 밟혀도 안쪽 가장자리는 연석 안쪽 끝에 붙는다', () {
+    // 원을 반시계로 돈다(왼쪽 = 안쪽). 40~44칸은 안쪽 연석(에이펙스), 그 앞뒤 34~37·47~50칸은 바깥 연석(진입·탈출).
+    // 연석 바깥 끝은 모두 라인에서 2.5m(안쪽 끝 1m). 고른 가운데 이동은 두 단서가 섞여 꼭짓점에서 0 가까이 무뎌진다.
+    final json = _geometryJson(
+      pit: false,
+      columns: {'edgeLeftM': 1, 'edgeRightM': 1, 'kerbOuterLeftM': 2.5, 'kerbOuterRightM': 2.5},
+    );
+    final n = (json['x'] as List).length;
+    json['kerbLeft'] = [for (var i = 0; i < n; i++) i >= 40 && i <= 44];
+    json['kerbRight'] = [for (var i = 0; i < n; i++) (i >= 34 && i <= 37) || (i >= 47 && i <= 50)];
+    final circuit = ReplayCircuit.build(LapReplay(_circleLap()), samples: TrackSampleGeometry.fromJsonOrNull(json)!);
+    Offset at(double radius) => Offset(radius * math.cos(42 * 0.05), radius * math.sin(42 * 0.05));
+
+    // 꼭짓점(42칸): 안쪽 가장자리 = 라인에서 1m, 그 안쪽은 연석(고른 가운데 이동만 쓰면 반폭 6.5m에 가까이 선다).
+    // 바깥은 모자란 폭만큼 넓어지되 앞뒤 바깥 연석에서 퍼지는 깔때기(5칸 떨어져 1m + 5m)를 넘지 않는다.
+    expect(circuit.asphalt.contains(at(99.3)), isTrue);
+    expect(circuit.asphalt.contains(at(98.7)), isFalse);
+    expect(circuit.kerbRed.contains(at(98.3)) || circuit.kerbWhite.contains(at(98.3)), isTrue);
+    expect(circuit.asphalt.contains(at(105.5)), isTrue);
+  });
+
   test('한두 칸만 튄 가장자리(피트 입구로 갈라지는 차 등)는 앞뒤 가운데값으로 눌러 도로가 부풀지 않는다', () {
     final json = _geometryJson(
       pit: false,

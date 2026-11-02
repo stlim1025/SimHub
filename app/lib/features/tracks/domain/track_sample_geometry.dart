@@ -167,6 +167,7 @@ class TrackSampleGeometry {
 /// 연석 칸 둘레는 연석에서 멀어질수록 천천히 넓어지게 다시 자른다(연석이 제자리에 남게).
 /// 연석을 밟은 칸에서는 그 쪽 가장자리가 그 자리라 보고 도로 가운데를 레이싱 라인에서 옮기고,
 /// 단서 사이는 이어 메운다(멀어지면 레이싱 라인 = 가운데로 돌아간다). 그래서 코너에서 레이싱 라인이 바깥 → 안쪽 → 바깥으로 지난다.
+/// 굽은 안쪽 연석(에이펙스) 둘레는 고른 가운데 이동이 꼭짓점에서 무뎌지므로 그 쪽 끝을 연석 안쪽 끝에 붙이고, 모자란 폭은 반대쪽에 준다.
 /// 차 몸체가 닿은 끝(있으면)은 옮긴 도로 가운데에서 잰 값으로 바꿔 함께 싣는다.
 TrackWidthProfile trackProfileFromSamples(TrackSampleGeometry geometry, {required double widthM, required double kerbWidthM}) {
   final n = geometry.length;
@@ -180,7 +181,43 @@ TrackWidthProfile trackProfileFromSamples(TrackSampleGeometry geometry, {require
         return d.distance == 0 ? Offset.zero : Offset(-d.dy, d.dx) / d.distance;
       }(),
   ];
-  List<double> edge(List<double>? wheels, List<double>? kerbOuter, List<bool> kerbs, List<double> band) {
+  // 칸마다 레이싱 라인이 굽는 정도(1/m, + = 왼쪽으로 굽는다 = 왼쪽이 코너 안쪽).
+  double headingAt(int k) {
+    final d = line[at(k + 1)] - line[at(k - 1)];
+    return math.atan2(d.dy, d.dx);
+  }
+
+  double curvatureAt(int k) {
+    final turn = headingAt(k + _apexCurvatureBins) - headingAt(k - _apexCurvatureBins);
+    final wrapped = (turn + math.pi) % (2 * math.pi) - math.pi;
+    return wrapped / (2 * _apexCurvatureBins * geometry.resolutionM);
+  }
+
+  final curvatures = [for (var k = 0; k < n; k++) curvatureAt(k)];
+  // 연석 칸에서 멀어질수록 칸마다 이만큼씩만 넓어질 수 있다(서킷이 닫혀 있어 두 바퀴 돌며 끝과 처음을 잇는다).
+  final step = _kerbFunnelSlope * geometry.resolutionM;
+  List<double> funnelFrom(List<double?> limits) {
+    final funnel = [for (final limit in limits) limit ?? double.infinity];
+    for (var round = 0; round < 2; round++) {
+      for (var k = 0; k < n; k++) {
+        funnel[k] = math.min(funnel[k], funnel[at(k - 1)] + step);
+      }
+      for (var k = n - 1; k >= 0; k--) {
+        funnel[k] = math.min(funnel[k], funnel[at(k + 1)] + step);
+      }
+    }
+    return funnel;
+  }
+
+  /// 한쪽 가장자리([inside] = 그 쪽이 코너 안쪽인 곡률 부호: 왼쪽 1, 오른쪽 −1)와 연석 깔때기 둘:
+  /// 모든 연석 칸에서 퍼지는 것(`kerbs`), 굽은 안쪽 연석(에이펙스) 칸에서만 퍼지는 것(`apex`). 연석이 없으면 무한대.
+  ({List<double> edge, List<double> kerbs, List<double> apex}) edge(
+    List<double>? wheels,
+    List<double>? kerbOuter,
+    List<bool> kerbs,
+    List<double> band,
+    int inside,
+  ) {
     // 연석 칸의 가장자리 = 연석 안쪽 끝(그 너머 표본은 연석 위나 연석 밖이다). 칸마다 튀는 측정값은 앞뒤 연석 칸의 가운데값으로 누른다.
     final rawKerbInner = [
       for (var k = 0; k < n; k++)
@@ -217,46 +254,33 @@ TrackWidthProfile trackProfileFromSamples(TrackSampleGeometry geometry, {require
         [for (var j = -_edgeSmoothBins; j <= _edgeSmoothBins; j++) widened[at(k + j)]].reduce((a, b) => a + b) /
             (_edgeSmoothBins * 2 + 1),
     ];
-    // 연석 칸에서 멀어질수록 칸마다 이만큼씩만 넓어질 수 있다(서킷이 닫혀 있어 두 바퀴 돌며 끝과 처음을 잇는다).
-    final step = _kerbFunnelSlope * geometry.resolutionM;
-    final funnel = [for (var k = 0; k < n; k++) kerbInner[k] ?? double.infinity];
-    for (var round = 0; round < 2; round++) {
-      for (var k = 0; k < n; k++) {
-        funnel[k] = math.min(funnel[k], funnel[at(k - 1)] + step);
-      }
-      for (var k = n - 1; k >= 0; k--) {
-        funnel[k] = math.min(funnel[k], funnel[at(k + 1)] + step);
-      }
-    }
+    final funnel = funnelFrom(kerbInner);
     final limited = [for (var k = 0; k < n; k++) math.min(smoothed[k], funnel[k])];
-    return [
-      for (var k = 0; k < n; k++)
-        [for (var j = -_edgeFinalSmoothBins; j <= _edgeFinalSmoothBins; j++) limited[at(k + j)]].reduce((a, b) => a + b) /
-            (_edgeFinalSmoothBins * 2 + 1),
-    ];
+    return (
+      edge: [
+        for (var k = 0; k < n; k++)
+          [for (var j = -_edgeFinalSmoothBins; j <= _edgeFinalSmoothBins; j++) limited[at(k + j)]]
+                  .reduce((a, b) => a + b) /
+              (_edgeFinalSmoothBins * 2 + 1),
+      ],
+      kerbs: funnel,
+      apex: funnelFrom([
+        for (var k = 0; k < n; k++) inside * curvatures[k] >= _apexSideCurvature ? kerbInner[k] : null,
+      ]),
+    );
   }
 
-  final leftEdge = edge(geometry.edgeLeftM, geometry.kerbOuterLeftM, geometry.kerbLeft, geometry.bandLeftM);
-  final rightEdge = edge(geometry.edgeRightM, geometry.kerbOuterRightM, geometry.kerbRight, geometry.bandRightM);
-
-  // 칸마다 레이싱 라인이 굽는 정도(1/m, + = 왼쪽으로 굽는다 = 왼쪽이 코너 안쪽).
-  double headingAt(int k) {
-    final d = line[at(k + 1)] - line[at(k - 1)];
-    return math.atan2(d.dy, d.dx);
-  }
-
-  double curvatureAt(int k) {
-    final turn = headingAt(k + _apexCurvatureBins) - headingAt(k - _apexCurvatureBins);
-    final wrapped = (turn + math.pi) % (2 * math.pi) - math.pi;
-    return wrapped / (2 * _apexCurvatureBins * geometry.resolutionM);
-  }
+  final left = edge(geometry.edgeLeftM, geometry.kerbOuterLeftM, geometry.kerbLeft, geometry.bandLeftM, 1);
+  final right = edge(geometry.edgeRightM, geometry.kerbOuterRightM, geometry.kerbRight, geometry.bandRightM, -1);
+  final leftEdge = left.edge;
+  final rightEdge = right.edge;
 
   // 연석 단서가 있는 칸의 도로 가운데 이동량(+ = 왼쪽). 양쪽 다 밟힌 칸(코너 꼭짓점 — S자에서 차마다 어느 쪽 연석을 밟느냐가 다르다)은
   // 굽는 안쪽 연석을 따른다. 둘을 평균하면 가운데가 레이싱 라인으로 돌아와 꼭짓점에서 차가 연석이 아니라 도로 한가운데를 지나 보인다.
   final known = <int, double>{};
   for (var k = 0; k < n; k++) {
     final both = geometry.kerbLeft[k] && geometry.kerbRight[k];
-    final curvature = both ? curvatureAt(k) : 0.0;
+    final curvature = both ? curvatures[k] : 0.0;
     final insideLeft = both && curvature >= _apexSideCurvature;
     final insideRight = both && curvature <= -_apexSideCurvature;
     final values = [
@@ -295,12 +319,35 @@ TrackWidthProfile trackProfileFromSamples(TrackSampleGeometry geometry, {require
           (_offsetSmoothBins * 2 + 1),
   ];
 
+  // 레이싱 라인에서 왼쪽·오른쪽 도로 끝(m). 기본은 옮긴 가운데에서 반폭이지만, 굽은 안쪽 연석(에이펙스) 둘레는 그 쪽 끝을
+  // 연석 안쪽 끝에 붙인다 — 가운데 이동은 넓게 고르므로 꼭짓점에서 무뎌져, 반폭만으로는 레이싱 라인이 에이펙스 연석에서 떨어져 보인다.
+  // 그래서 모자란 폭은 덜 붙은 쪽으로 넘기되 그 쪽 연석 너머로는 넓히지 않는다.
+  final leftEnd = List<double>.filled(n, 0);
+  final rightEnd = List<double>.filled(n, 0);
+  for (var k = 0; k < n; k++) {
+    var l = math.max(leftEdge[k], math.min(half + smoothed[k], left.apex[k]));
+    var r = math.max(rightEdge[k], math.min(half - smoothed[k], right.apex[k]));
+    final deficit = widthM - l - r;
+    if (deficit > 0) {
+      if (left.apex[k] > right.apex[k]) {
+        l = math.min(l + deficit, math.max(l, left.kerbs[k]));
+      } else if (right.apex[k] > left.apex[k]) {
+        r = math.min(r + deficit, math.max(r, right.kerbs[k]));
+      } else {
+        l = math.min(l + deficit / 2, math.max(l, left.kerbs[k]));
+        r = math.min(r + deficit / 2, math.max(r, right.kerbs[k]));
+      }
+    }
+    leftEnd[k] = l;
+    rightEnd[k] = r;
+  }
+
   final reachLeft = geometry.reachLeftM;
   final reachRight = geometry.reachRightM;
   return TrackWidthProfile(
     center: [for (var k = 0; k < n; k++) line[k] + normals[k] * smoothed[k]],
-    leftM: [for (var k = 0; k < n; k++) math.max(half, leftEdge[k] - smoothed[k])],
-    rightM: [for (var k = 0; k < n; k++) math.max(half, rightEdge[k] + smoothed[k])],
+    leftM: [for (var k = 0; k < n; k++) leftEnd[k] - smoothed[k]],
+    rightM: [for (var k = 0; k < n; k++) rightEnd[k] + smoothed[k]],
     reachLeftM: reachLeft == null ? null : [for (var k = 0; k < n; k++) reachLeft[k] - smoothed[k]],
     reachRightM: reachRight == null ? null : [for (var k = 0; k < n; k++) reachRight[k] + smoothed[k]],
   );

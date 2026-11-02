@@ -52,8 +52,9 @@ const double _kerbCarAllowanceM = 0.5;
 /// 실측 중심선을 좌우로 옮기는 보정이 앞뒤로 퍼지는 거리(m) — 갑자기 꺾이지 않게.
 const double _shiftSpreadM = 20;
 
-/// 도로 안에 들어야 할 자리(출발 그리드 등)를 덮을 때 차 반폭 바깥으로 더 남기는 폭(m).
-const double _coverMarginM = 1;
+/// 도로 안에 들어야 할 자리(출발 그리드 등)를 덮을 때 차 반폭 바깥으로 더 남기는 폭(m) — 그리드에 선 차 옆으로
+/// 다른 차(폭 2m)가 지나가도 아스팔트 위에 있게(바깥 줄 바로 옆이 잔디면 출발 직후 추월하는 차가 잔디를 밟아 보인다).
+const double _coverMarginM = 2.5;
 
 /// 추정 중심선 점이 실측 중심선에서 이 거리(m) 안이면 같은 길로 보고 실측 중심·폭을 쓴다(멀면 레이아웃이 바뀐 구간).
 const double _measuredMatchM = 15;
