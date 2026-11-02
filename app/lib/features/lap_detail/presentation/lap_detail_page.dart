@@ -193,16 +193,18 @@ class _LapDetailPageState extends ConsumerState<LapDetailPage> with SingleTicker
             onCompare: _selectCompare,
           )
         else
-          detail.when(
-            loading: () => const PageLoadingBar(),
-            error: (e, _) => _isNotFound(e)
-                ? const NotFoundState(message: _notFoundMessage, backLabel: _notFoundBackLabel, backPath: _lapsPath)
-                : ErrorRetry(
-                    error: e,
-                    fallbackMessage: '랩 상세를 불러오지 못했어요.',
-                    onRetry: () => ref.invalidate(lapDetailProvider(key)),
-                  ),
-            data: (_) => const SizedBox.shrink(),
+          _MainColumn(
+            child: detail.when(
+              loading: () => const PageLoadingBar(),
+              error: (e, _) => _isNotFound(e)
+                  ? const NotFoundState(message: _notFoundMessage, backLabel: _notFoundBackLabel, backPath: _lapsPath)
+                  : ErrorRetry(
+                      error: e,
+                      fallbackMessage: '랩 상세를 불러오지 못했어요.',
+                      onRetry: () => ref.invalidate(lapDetailProvider(key)),
+                    ),
+              data: (_) => const SizedBox.shrink(),
+            ),
           ),
       ],
     );
@@ -273,14 +275,18 @@ class _DetailBody extends StatelessWidget {
             ],
           ),
         ),
-        _TabContent(tab: tab, detail: detail, compare: compare),
+        // 지도 칸이 붙는 Telemetry·Analysis만 오른쪽으로 넓게 쓰고, 나머지 탭(과 트레이스 없는 랩)은 같은 그래프 칸 폭이다.
+        if ((tab == kLapTabTelemetry || tab == kLapTabAnalysis) && detail.lap.hasTrace)
+          _TabContent(tab: tab, detail: detail, compare: compare)
+        else
+          _MainColumn(child: _TabContent(tab: tab, detail: detail, compare: compare)),
       ],
     );
   }
 }
 
 /// 화면이 Telemetry·Analysis 탭의 지도 칸을 옆에 둘 만큼 넓으면([lapPanelMainWidth]) 자식을 왼쪽 그래프 칸 폭으로 줄인다 —
-/// 머리줄·탭 막대·비교 선택은 모든 탭에서 같은 폭이고, 지도 칸은 그 아래로 들어가지 않고 오른쪽에 붙는다. 좁으면 전체 폭 그대로.
+/// 페이지는 모든 탭에서 이 폭이고, Telemetry·Analysis만 그 오른쪽에 지도 칸이 붙는다. 좁으면 전체 폭 그대로.
 class _MainColumn extends StatelessWidget {
   const _MainColumn({required this.child});
 
