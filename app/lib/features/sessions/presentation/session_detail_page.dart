@@ -126,19 +126,21 @@ class _SessionDetailPageState extends ConsumerState<SessionDetailPage> with Sing
     final backSeasonId = widget.from == kSessionFromSeason ? header?.seasonId : null;
 
     return ListView(
-      // Race Review 탭은 오른쪽 트랙 지도 칸만큼 더 넓게 써서 리뷰 폭은 그대로 둔다.
+      // Race Review 탭은 오른쪽 트랙 지도 칸만큼 더 넓게 써서 리뷰 폭은 그대로 둔다(헤더·탭 막대는 본문 폭 그대로).
       padding: pagePadding(
         context,
         maxWidth: _tab == kSessionTabReview ? kContentMaxWidth + _reviewMapWidth + _sectionGap : kContentMaxWidth,
       ),
       children: [
-        _Header(
-          header: header,
-          backTooltip: backSeasonId == null ? _backToSessionsTooltip : _backToSeasonTooltip,
-          onBack: () => context.go(backSeasonId == null ? _sessionsPath : seasonLocation(backSeasonId)),
-          onHighlights: header != null && header.sessionType == 'Race' && header.hasFieldSamples
-              ? () => context.go(sessionHighlightsLocation(sessionId))
-              : null,
+        _ContentWidth(
+          child: _Header(
+            header: header,
+            backTooltip: backSeasonId == null ? _backToSessionsTooltip : _backToSeasonTooltip,
+            onBack: () => context.go(backSeasonId == null ? _sessionsPath : seasonLocation(backSeasonId)),
+            onHighlights: header != null && header.sessionType == 'Race' && header.hasFieldSamples
+                ? () => context.go(sessionHighlightsLocation(sessionId))
+                : null,
+          ),
         ),
         const SizedBox(height: _sectionGap),
         detail.when(
@@ -161,6 +163,20 @@ class _SessionDetailPageState extends ConsumerState<SessionDetailPage> with Sing
   }
 
   static bool _isNotFound(Object error) => error is ApiException && error.statusCode == _httpNotFound;
+}
+
+/// 자식을 왼쪽에 붙여 본문 최대 폭([kContentMaxWidth])까지만 쓰게 한다 — Race Review 탭이 지도 칸만큼 넓어져도
+/// 헤더·탭 막대·지도 없는 리뷰는 Results 탭과 같은 폭으로 둔다.
+class _ContentWidth extends StatelessWidget {
+  const _ContentWidth({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Align(
+        alignment: Alignment.topLeft,
+        child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: kContentMaxWidth), child: child),
+      );
 }
 
 /// ← + 국기 + 트랙 이름 + 세션 종류(`Qualifying 3`). 아직 모르면 `Session`.
@@ -232,10 +248,12 @@ class _SessionCards extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        TabBar(
-          controller: tabController,
-          onTap: onTab,
-          tabs: [for (final tab in kSessionTabs) Tab(text: _tabLabels[tab])],
+        _ContentWidth(
+          child: TabBar(
+            controller: tabController,
+            onTap: onTab,
+            tabs: [for (final tab in kSessionTabs) Tab(text: _tabLabels[tab])],
+          ),
         ),
         const SizedBox(height: _sectionGap),
         if (tab == kSessionTabReview) _RaceReviewTab(detail: detail, review: review) else _ResultCards(detail: detail),
@@ -274,7 +292,7 @@ class _RaceReviewTab extends ConsumerWidget {
         final card = RaceReviewCard(review: review, analysis: data, officialCorners: official, setup: detail.setup);
         final lapTrace = trace?.valueOrNull;
         if (mapLap == null || lapTrace == null || !lapTrace.hasPositions) {
-          return card;
+          return _ContentWidth(child: card);
         }
         final map = RaceReviewTrackMap(
           trace: lapTrace,
