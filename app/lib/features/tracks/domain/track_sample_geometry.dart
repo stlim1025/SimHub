@@ -35,6 +35,19 @@ const double _apexSideCurvature = 0.002;
 /// 거의 곧은 킹크(Spa 블랑쉬몽 뒤)의 연석까지 붙이면 직선에서 도로가 한쪽으로 움푹 패고 방호벽이 길로 튀어나온다.
 const double _apexPinCurvature = 0.008;
 
+/// 에이펙스는 코너 꼭짓점 둘레만: 앞뒤 이 칸 수 안에서 가장 급한 곡률의 이 비율 이상인 칸의 연석만 붙인다.
+/// 코너를 빠져나가며 레이싱 라인이 반대쪽으로 건너가는 중에 밟힌 안쪽 연석(Spa Bus Stop 출구)까지 붙이면 그 자리에서 도로 끝이 라인 쪽으로 움푹 꺾인다.
+const int _apexPeakBins = 6;
+const double _apexPeakFraction = 0.5;
+
+/// 에이펙스 연석에서 멀어질 때 붙인 끝이 풀리는 기울기(옆 m / 진행 m). 레이싱 라인은 에이펙스를 지나면 반대쪽 트랙아웃으로 빠르게
+/// 건너가므로, 라인에서 잰 끝이 연석 깔때기처럼 천천히 풀리면 라인에 끌려 직선 쪽 도로 끝과 방호벽이 길로 들어온다(Spa Bus Stop 뒤).
+const double _apexFunnelSlope = 0.6;
+
+/// 모자란 폭은 덜 붙은 쪽에 주되, 양쪽 에이펙스 깔때기 차이가 이 값(m)의 두 배 안이면 차이에 비례해 나눈다 —
+/// 시케인(Spa Bus Stop)처럼 에이펙스가 한쪽에서 반대쪽으로 바뀌는 칸에서 한 칸 만에 넘기면 도로가 옆으로 몇 m씩 튄다.
+const double _apexShareSpanM = 8;
+
 /// 모든 차 표본으로 서버가 만든 트랙 형상(`GET /tracks/{trackId}/geometry`). 칸 i = 랩 거리 i × [resolutionM].
 /// 선([x]·[z])은 레이싱 라인(차들이 달린 위치의 중앙값)이고 도로 한가운데가 아니다. 띠는 그 선에서 차들이 달린 왼쪽·오른쪽 끝(m),
 /// 연석은 그 쪽을 밟은 적이 있는지. 왼쪽 = 진행 방향 법선 (−sin, cos) 쪽(앱 서킷 그림과 같은 규칙).
@@ -198,9 +211,12 @@ TrackWidthProfile trackProfileFromSamples(TrackSampleGeometry geometry, {require
   }
 
   final curvatures = [for (var k = 0; k < n; k++) curvatureAt(k)];
+  // 앞뒤 [_apexPeakBins] 칸 안에서 [inside] 쪽으로 가장 급하게 굽는 정도(1/m).
+  double insidePeak(int k, int inside) =>
+      [for (var j = -_apexPeakBins; j <= _apexPeakBins; j++) inside * curvatures[at(k + j)]].reduce(math.max);
   // 연석 칸에서 멀어질수록 칸마다 이만큼씩만 넓어질 수 있다(서킷이 닫혀 있어 두 바퀴 돌며 끝과 처음을 잇는다).
-  final step = _kerbFunnelSlope * geometry.resolutionM;
-  List<double> funnelFrom(List<double?> limits) {
+  List<double> funnelFrom(List<double?> limits, {double slope = _kerbFunnelSlope}) {
+    final step = slope * geometry.resolutionM;
     final funnel = [for (final limit in limits) limit ?? double.infinity];
     for (var round = 0; round < 2; round++) {
       for (var k = 0; k < n; k++) {
@@ -267,9 +283,13 @@ TrackWidthProfile trackProfileFromSamples(TrackSampleGeometry geometry, {require
                   .reduce((a, b) => a + b) /
               (_edgeFinalSmoothBins * 2 + 1),
       ],
-      apex: funnelFrom([
-        for (var k = 0; k < n; k++) inside * curvatures[k] >= _apexPinCurvature ? kerbInner[k] : null,
-      ]),
+      apex: funnelFrom(
+        [
+          for (var k = 0; k < n; k++)
+            inside * curvatures[k] >= math.max(_apexPinCurvature, _apexPeakFraction * insidePeak(k, inside)) ? kerbInner[k] : null,
+        ],
+        slope: _apexFunnelSlope,
+      ),
     );
   }
 
@@ -324,7 +344,7 @@ TrackWidthProfile trackProfileFromSamples(TrackSampleGeometry geometry, {require
 
   // 레이싱 라인에서 왼쪽·오른쪽 도로 끝(m). 기본은 옮긴 가운데에서 반폭이지만, 굽은 안쪽 연석(에이펙스) 둘레는 그 쪽 끝을
   // 연석 안쪽 끝에 붙인다 — 가운데 이동은 넓게 고르므로 꼭짓점에서 무뎌져, 반폭만으로는 레이싱 라인이 에이펙스 연석에서 떨어져 보인다.
-  // 도로 폭은 [widthM]보다 좁아지지 않게, 모자란 폭은 덜 붙은 쪽(에이펙스에서 먼 쪽)으로 넘긴다.
+  // 도로 폭은 [widthM]보다 좁아지지 않게, 모자란 폭은 덜 붙은 쪽(에이펙스에서 먼 쪽)으로 넘긴다([_apexShareSpanM]).
   // (그 쪽 연석에서 막으면 양쪽 연석이 다 밟힌 구간 — Spa 블랑쉬몽 뒤 — 도로가 반으로 좁아지고 방호벽이 길로 튀어나온다.)
   final leftEnd = List<double>.filled(n, 0);
   final rightEnd = List<double>.filled(n, 0);
@@ -333,14 +353,11 @@ TrackWidthProfile trackProfileFromSamples(TrackSampleGeometry geometry, {require
     var r = math.max(rightEdge[k], math.min(half - smoothed[k], right.apex[k]));
     final deficit = widthM - l - r;
     if (deficit > 0) {
-      if (left.apex[k] > right.apex[k]) {
-        l += deficit;
-      } else if (right.apex[k] > left.apex[k]) {
-        r += deficit;
-      } else {
-        l += deficit / 2;
-        r += deficit / 2;
-      }
+      final a = left.apex[k];
+      final b = right.apex[k];
+      final toLeft = a == b ? 0.5 : ((a - b) / (2 * _apexShareSpanM) + 0.5).clamp(0.0, 1.0);
+      l += deficit * toLeft;
+      r += deficit * (1 - toLeft);
     }
     leftEnd[k] = l;
     rightEnd[k] = r;

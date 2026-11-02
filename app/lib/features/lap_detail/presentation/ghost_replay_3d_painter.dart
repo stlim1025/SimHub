@@ -48,6 +48,16 @@ const double _pitWallSearchOutM = 25;
 const double _pitWallSearchAlongM = 6;
 const double _pitWallMinGapM = 1.2;
 
+/// 멀리 있는 피트 레인은 바깥쪽으로 간 거리에 이 비율을 곱한 만큼 옆으로 비껴 있어도 본다 — 헤어핀(Spa La Source) 안쪽은
+/// 가장자리에서 뻗은 방향이 한곳으로 모여 피트 레인 굽이 옆을 지나가므로, 못 보면 그 안쪽 들판 한가운데에 벽 조각이 선다.
+const double _pitWallSearchSpread = 0.3;
+
+/// 피트 레인을 찾을 때 피트 레인 선을 이 간격(m)으로 메워 본다.
+const double _pitLaneProbeStepM = 2;
+
+/// 피트 월과 이웃한 런오프 끝 벽의 거리 차이(m)가 이보다 크면 두 벽을 잇지 않는다.
+const double _pitWallBreakM = 2;
+
 /// 가까운 중심선 점을 찾는 격자 칸 크기(m).
 const double _gridCellM = 20;
 
@@ -467,9 +477,21 @@ class ReplayTrack3d {
       return false;
     }
 
-    // 도로 가장자리 [edge]에서 바깥쪽 [outward]으로 피트 레인 가장자리까지 거리(m). 그 쪽 가까이에 피트 레인이 없으면 null.
-    final lane = circuit.pitLane;
-    double? pitGapAt(Offset edge, Offset outward) {
+    // 도로 가장자리 [edge]에서 바깥쪽 [outward]으로 [searchOut](m) 안의 피트 레인 가장자리까지 거리(m). 그 쪽 가까이에 피트 레인이 없으면 null.
+    // 피트 레인 표본은 듬성듬성하므로(Spa 약 17m) 촘촘히 메운다 — 옆으로 [_pitWallSearchAlongM] 안에 점이 없으면 피트 레인을 못 보고
+    // 벽이 그 칸에서만 피트 레인 너머로 튀어나간다.
+    final lane = <Offset>[];
+    final pit = circuit.pitLane;
+    for (var i = 0; i + 1 < pit.length; i++) {
+      final steps = math.max(1, ((pit[i + 1] - pit[i]).distance / _pitLaneProbeStepM).ceil());
+      for (var s = 0; s < steps; s++) {
+        lane.add(Offset.lerp(pit[i], pit[i + 1], s / steps)!);
+      }
+    }
+    if (pit.isNotEmpty) {
+      lane.add(pit.last);
+    }
+    double? pitGapAt(Offset edge, Offset outward, double searchOut) {
       double? best;
       for (final p in lane) {
         final d = p - edge;
@@ -478,7 +500,7 @@ class ReplayTrack3d {
           continue;
         }
         final sideways = (d - outward * ahead).distance;
-        if (sideways > _pitWallSearchAlongM || ahead > _pitWallSearchOutM) {
+        if (sideways > math.max(_pitWallSearchAlongM, ahead * _pitWallSearchSpread) || ahead > searchOut) {
           continue;
         }
         final gap = math.max(0.0, ahead - kCircuitPitLaneWidthM / 2);
@@ -517,9 +539,10 @@ class ReplayTrack3d {
           offset = shrunk;
           clear = !onOtherRoad(edges[i] + outward[i] * offset, i);
         }
-        // 이 쪽에 피트 레인이 나란히 있으면 벽은 도로와 피트 레인 사이 가운데(피트 월)에 세운다 — 피트 레인을 가로지르지 않게.
-        // 사이가 거의 없는 피트 입구·출구는 벽을 뺀다(차가 드나드는 길이다).
-        if (pitGapAt(edges[i], outward[i]) case final gap?) {
+        // 이 쪽에 피트 레인이 나란히 있으면(벽을 세울 자리보다 안쪽에 있는 것까지) 벽은 도로와 피트 레인 사이 가운데(피트 월)에 세운다
+        // — 피트 레인을 가로지르지 않게. 사이가 거의 없는 피트 입구·출구는 벽을 뺀다(차가 드나드는 길이다).
+        final searchOut = math.max(_pitWallSearchOutM, offset + kCircuitPitLaneWidthM / 2);
+        if (pitGapAt(edges[i], outward[i], searchOut) case final gap?) {
           pitWall[i] = true;
           if (gap < _pitWallMinGapM) {
             clear = false;
@@ -530,23 +553,35 @@ class ReplayTrack3d {
         offsets.add(offset);
         standing.add(clear);
       }
-      // 피트 월 둘레는 앞뒤 가장 가까운 값으로 좁힌 뒤 평균해, 피트 레인이 끝나는 곳에서 벽이 계단처럼 꺾이지 않고 비스듬히 이어지게 한다
+      // 피트 월은 앞뒤 피트 월 점끼리만 가장 가까운 값으로 좁힌 뒤 평균해 피트 레인 표본 간격으로 들쭉날쭉하지 않게 한다
       // (같은 범위로 좁히고 평균하므로 점마다 원래 값 이하 — 피트 레인 쪽으로 나가지 않는다).
       const span = _wallSmoothSamples * 2;
+      List<double> pitNeighbours(int i, List<double> values) => [
+            for (var k = i - span; k <= i + span; k++)
+              if (pitWall[at(k)]) values[at(k)],
+          ];
       final narrowed = [
-        for (var i = 0; i < n; i++) [for (var k = i - span; k <= i + span; k++) offsets[at(k)]].reduce(math.min),
+        for (var i = 0; i < n; i++) pitWall[i] ? pitNeighbours(i, offsets).reduce(math.min) : offsets[i],
       ];
       final eased = [
         for (var i = 0; i < n; i++)
-          [for (var k = i - span; k <= i + span; k++) narrowed[at(k)]].reduce((a, b) => a + b) / (span * 2 + 1),
+          if (pitWall[i])
+            () {
+              final near = pitNeighbours(i, narrowed);
+              return near.reduce((a, b) => a + b) / near.length;
+            }()
+          else
+            offsets[i],
       ];
-      return (
-        offsets: [
-          for (var i = 0; i < n; i++)
-            [for (var k = i - span; k <= i + span; k++) pitWall[at(k)]].contains(true) ? eased[i] : offsets[i],
-        ],
-        standing: standing,
-      );
+      // 피트 월과 런오프 끝 벽은 다른 벽이다: 둘 사이가 크게 벌어진 곳(피트 입구·출구)은 잇지 않고 끊는다 —
+      // 이으면 벽이 도로 쪽으로 비스듬히 튀어나와 보인다.
+      for (var i = 0; i < n; i++) {
+        final j = at(i + 1);
+        if (pitWall[i] != pitWall[j] && (eased[i] - eased[j]).abs() > _pitWallBreakM) {
+          standing[pitWall[i] ? i : j] = false;
+        }
+      }
+      return (offsets: eased, standing: standing);
     }
 
     final outwardLeft = [for (var i = 0; i < n; i++) outward(circuit.leftPoints[i], i)];

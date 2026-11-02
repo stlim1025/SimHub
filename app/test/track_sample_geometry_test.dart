@@ -268,4 +268,23 @@ void main() {
     expect(track.wallRightM[far], closeTo(plain.wallRightM[far], 1e-9));
     expect(track.wallLeftM[far], closeTo(plain.wallLeftM[far], 1e-9));
   });
+
+  test('차가 닿은 자리가 피트 레인 너머여도 방호벽은 피트 레인 안쪽에 서고, 런오프 끝 벽과 잇지 않고 끊긴다', () {
+    // 도로(반지름 100m, 폭 10m) 바깥 40m에 피트 레인, 피트 레인 차까지 45m 밖에 닿았다 — 차가 닿은 자리대로 세우면 벽이 피트 레인 너머에 선다.
+    final geometry = TrackSampleGeometry.fromJsonOrNull(_geometryJson(pitRadius: 140, columns: {'reachLeftM': 2, 'reachRightM': 45}))!;
+    final circuit = ReplayCircuit.build(LapReplay(_circleLap()), samples: geometry, baseWidthM: 10);
+    final track = ReplayTrack3d.build(circuit);
+    final n = circuit.center.length;
+
+    for (var i = 2; i <= 7; i++) {
+      final wallRadius = 100 + circuit.rightWidths[i] + track.wallRightM[i];
+      expect(track.hasWallRight[i], isTrue);
+      expect(wallRadius, lessThan(140 - kCircuitPitLaneWidthM / 2));
+    }
+    // 피트 레인 앞뒤 끝에서 피트 월(약 16m)과 런오프 끝 벽(약 40m)을 비스듬히 잇지 않는다.
+    expect([for (var i = n - 8; i < n; i++) track.hasWallRight[i]], contains(false));
+    expect([for (var i = 8; i <= 16; i++) track.hasWallRight[i]], contains(false));
+    // 피트 레인과 먼 곳은 차가 닿은 자리 바깥에 그대로 선다.
+    expect(circuit.rightWidths[n ~/ 2] + track.wallRightM[n ~/ 2], greaterThanOrEqualTo(45.3 - 1e-9));
+  });
 }
