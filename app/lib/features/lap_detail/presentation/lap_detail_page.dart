@@ -171,14 +171,10 @@ class _LapDetailPageState extends ConsumerState<LapDetailPage> with SingleTicker
     final stale = _lastLoaded?.lap.lapId == widget.lapId ? _lastLoaded : null;
     final shown = fresh ?? (detail.isLoading ? stale : null);
 
-    // Telemetry·Analysis 탭은 오른쪽에 지도 칸이 붙으므로 머리줄·탭 막대·비교 선택은 그래프 칸 폭까지만 쓴다.
-    final besideMap = shown != null && (_tab == kLapTabTelemetry || _tab == kLapTabAnalysis) && shown.lap.hasTrace;
-
     return ListView(
       padding: pagePadding(context, maxWidth: kWideContentMaxWidth),
       children: [
         _MainColumn(
-          besideMap: besideMap,
           child: _Header(
             detail: shown,
             onBack: () => context.go(shown == null ? _lapsPath : trackLapsLocation(shown.trackId)),
@@ -189,7 +185,6 @@ class _LapDetailPageState extends ConsumerState<LapDetailPage> with SingleTicker
         if (shown != null)
           _DetailBody(
             detail: shown,
-            besideMap: besideMap,
             reloading: fresh == null,
             tab: _tab,
             compare: widget.compare,
@@ -236,7 +231,6 @@ class _LapDetailPageState extends ConsumerState<LapDetailPage> with SingleTicker
 class _DetailBody extends StatelessWidget {
   const _DetailBody({
     required this.detail,
-    required this.besideMap,
     required this.reloading,
     required this.tab,
     required this.compare,
@@ -246,9 +240,6 @@ class _DetailBody extends StatelessWidget {
   });
 
   final LapDetail detail;
-
-  /// 탭 내용 오른쪽에 지도 칸이 붙는지([_MainColumn] 참고).
-  final bool besideMap;
   final bool reloading;
   final String tab;
   final LapCompareSelection compare;
@@ -262,7 +253,6 @@ class _DetailBody extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _MainColumn(
-          besideMap: besideMap,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -289,19 +279,15 @@ class _DetailBody extends StatelessWidget {
   }
 }
 
-/// [besideMap]이고 탭 내용이 지도 칸을 옆에 둘 만큼 넓으면([lapPanelMainWidth]) 자식을 왼쪽 그래프 칸 폭으로 줄인다 —
-/// 지도 칸은 탭 막대 아래로 들어가지 않고 오른쪽에 붙는다. 그 밖에는 전체 폭 그대로.
+/// 화면이 Telemetry·Analysis 탭의 지도 칸을 옆에 둘 만큼 넓으면([lapPanelMainWidth]) 자식을 왼쪽 그래프 칸 폭으로 줄인다 —
+/// 머리줄·탭 막대·비교 선택은 모든 탭에서 같은 폭이고, 지도 칸은 그 아래로 들어가지 않고 오른쪽에 붙는다. 좁으면 전체 폭 그대로.
 class _MainColumn extends StatelessWidget {
-  const _MainColumn({required this.besideMap, required this.child});
+  const _MainColumn({required this.child});
 
-  final bool besideMap;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    if (!besideMap) {
-      return child;
-    }
     return LayoutBuilder(
       builder: (context, box) {
         final width = lapPanelMainWidth(box.maxWidth);
