@@ -221,13 +221,15 @@ void main() {
     );
   });
 
-  test('전략: 피트 창과 스톱, 남은 랩으로 못 되찾는 스톱, 짧게 탄 컴파운드, 추정 대안', () {
+  test('전략: 피트 창과 스톱, 수명만큼 더 탔으면 잃었을 시간, 가장 좋은 스톱 랩, 남은 랩으로 못 되찾는 스톱, 짧게 탄 컴파운드, 추정 대안', () {
     final lines = deepStrategyLines(_analysis, _stints);
     expect(lines[0], '출발할 때 게임이 알려 준 피트 시기는 5~8랩이었어. 피트에는 5랩에 1번 들어갔어. 모두 그때 게임이 가장 좋다고 본 랩이야');
+    // 피트 1번은 규정상 꼭 들어가야 해서 되찾는 랩은 말하지 않는다. 남은 수명 3랩은 다음 스틴트가 3랩은 남도록 2랩까지만 늦춰 본다.
     expect(
       lines[1],
-      '5랩에 새 소프트로 바꿨어. 그때 타이어는 40% 닳아 있었어. 게임은 이 타이어로 3랩 더 갈 수 있다고 봤어(피트 시기 마지막은 8랩). '
-      '새 소프트가 랩당 2.000초 빨라도, 피트 스톱 한 번에 잃는 20.0초를 되찾으려면 10랩이 필요한데 남은 랩은 5랩뿐이야 '
+      '5랩에 새 소프트로 바꿨어. 그때 타이어는 40% 닳아 있었어. 게임은 이 타이어가 3랩 더 버틴다고 봤어(피트 시기 마지막은 8랩). '
+      '버틸 수는 있어도 소프트는 랩마다 0.250초씩 느려지고 있어서, 2랩 더 타고 7랩에 들어왔으면 계산상 1.0초 느렸어. '
+      '새 소프트가 랩당 2.000초 빨라. 계산해 보면 5랩이 들어오기 가장 좋은 랩이었어 '
       '→ 타이어가 한계라서가 아니라 계획대로 들어온 거야',
     );
     // 피트 1번은 마른 노면의 최소라 일찍 바꿨어도 스톱을 줄이라고 하지 않는다.
@@ -237,8 +239,16 @@ void main() {
       RaceStintReview(compound: 'Medium', startLap: 6, endLap: 8),
       RaceStintReview(compound: 'Soft', startLap: 9, endLap: 10),
     ];
+    final threeStops = deepStrategyLines(_analysis, threeStints);
+    // 줄일 수 있는 스톱이면 새 타이어로 스톱 손실을 되찾는지 말한다(미디엄 모델이 없어 시기는 계산하지 않는다).
     expect(
-      deepStrategyLines(_analysis, threeStints),
+      threeStops[1],
+      '5랩에 새 소프트로 바꿨어. 그때 타이어는 40% 닳아 있었어. 게임은 이 타이어가 3랩 더 버틴다고 봤어(피트 시기 마지막은 8랩). '
+      '새 소프트가 랩당 2.000초 빨라도, 피트 스톱 한 번에 잃는 20.0초를 되찾으려면 10랩이 필요한데 남은 랩은 5랩뿐이야 '
+      '→ 타이어가 한계라서가 아니라 계획대로 들어온 거야',
+    );
+    expect(
+      threeStops,
       contains('게임이 본 타이어 수명보다 일찍 바꾼 타이어가 있어. 소프트는 9랩까지 탈 수 있는데 5랩만 탔어 → 스틴트를 더 길게 가져가면 피트 스톱을 줄일 수 있어'),
     );
     expect(lines.last, '계산해 봐도 지금 전략이 가장 빨랐어. 피트에 들어가는 횟수를 바꿔도 차이가 1.0초도 안 나');
@@ -259,6 +269,34 @@ void main() {
           '피트에 1번 덜 들어가니 21.5초를 아끼고, 새 타이어로 벌던 시간은 8.9초만 줄어',
       '피트에 3번 들어갈 거라면 미디엄 8랩, 소프트 8랩, 소프트 8랩, 소프트 9랩으로 나눴어야 3.4초 빨랐어',
     ]);
+  });
+
+  test('전략: 하드로 남은 수명 8랩을 더 버텼으면 계속 느려져서 시간을 잃는다(헝가로링 1스톱 실측 값)', () {
+    final hungaroring = RaceAnalysis.fromJson({
+      'strategy': {
+        'totalLaps': 35, 'idealLap': 19, 'latestLap': 25, 'pitLossMs': 18000,
+        'stops': [
+          {'lap': 19, 'idealLap': 19, 'latestLap': 25, 'wearPct': 44.8, 'lifeLapsLeft': 8, 'fromCompound': 'Hard', 'toCompound': 'Medium', 'newSetGainMs': 3237},
+        ],
+        'compounds': [
+          {'compound': 'Medium', 'offsetMs': -756, 'degMsPerLap': 217, 'usableLaps': 18, 'sets': 1},
+          {'compound': 'Hard', 'offsetMs': 0, 'degMsPerLap': 141, 'usableLaps': 22, 'sets': 1},
+        ],
+        'options': const [],
+      },
+    });
+    const stints = [
+      RaceStintReview(compound: 'Hard', startLap: 1, endLap: 19),
+      RaceStintReview(compound: 'Medium', startLap: 20, endLap: 35),
+    ];
+
+    expect(
+      deepStrategyLines(hungaroring, stints)[1],
+      '19랩에 하드에서 미디엄으로 바꿨어. 그때 타이어는 45% 닳아 있었어. 게임은 이 타이어가 8랩 더 버틴다고 봤어(피트 시기 마지막은 25랩). '
+      '버틸 수는 있어도 하드는 랩마다 0.141초씩 느려지고 있어서, 8랩 더 타고 27랩에 들어왔으면 계산상 11.5초 느렸어. '
+      '새 미디엄이 랩당 3.237초 빨라. 계산해 보면 19랩이 들어오기 가장 좋은 랩이었어 '
+      '→ 타이어가 한계라서가 아니라 계획대로 들어온 거야',
+    );
   });
 
   test('페이스: 기준 읽는 법, 스틴트마다 같은 타이어·같은 랩·스틴트 기준, 가장 느린 스틴트', () {

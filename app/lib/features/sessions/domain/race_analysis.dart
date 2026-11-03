@@ -79,6 +79,9 @@ const double _forcedWearPct = 70;
 const int _spareLaps = 3;
 const int kStrategyGainMs = 1000;
 
+/// 스톱 시기를 옮겨 볼 때 스틴트 최소 랩(백엔드 대안 전략과 같다).
+const int _minStintLaps = 3;
+
 const double _kjPerMj = 1000;
 const double _jPerKj = 1000;
 const double _msPerSecond = 1000;
@@ -1255,8 +1258,9 @@ bool _ranFlat(RaceSegmentDriving d) => (d.emptyM ?? 0) >= _emptyM && (d.emptyLap
 double? _entryStore(RaceStintDriving stint, int index, int segmentCount) =>
     stint.segment(index == 0 ? segmentCount - 1 : index - 1)?.storeEndKj;
 
-/// 전략 심층 줄: 출발 때 게임 피트 창과 실제 스톱, 스톱마다 타이어 사정(마모·남은 수명·새 세트 이득·되찾는 랩)과 타이어 때문인지,
-/// 게임 기준 쓸 수 있는 랩보다 짧게 탄 컴파운드, 추정 대안 전략. 분석이 없으면 빈 목록.
+/// 전략 심층 줄: 출발 때 게임 피트 창과 실제 스톱, 스톱마다 타이어 사정(마모·남은 수명만큼 더 탔으면 잃었을 시간·새 세트 이득·
+/// 줄일 수 있는 스톱이면 되찾는 랩·가장 좋았던 스톱 랩)과 타이어 때문인지, 게임 기준 쓸 수 있는 랩보다 짧게 탄 컴파운드, 추정 대안 전략.
+/// 분석이 없으면 빈 목록.
 /// [review]가 내 스톱 수가 실제로 가장 잘 통했다고 하면, 스톱 수가 다른 추정 대안에 실제 결과를 믿으라는 말을 붙인다.
 List<String> deepStrategyLines(RaceAnalysis analysis, List<RaceStintReview> reviewStints, {RaceStrategyReview? review}) {
   final strategy = analysis.strategy;
@@ -1274,11 +1278,13 @@ List<String> deepStrategyLines(RaceAnalysis analysis, List<RaceStintReview> revi
         '${onIdeal ? '. 모두 그때 게임이 가장 좋다고 본 랩이야' : ''}');
   }
 
+  // 규정상 꼭 들어가야 하는 스톱뿐이면 스톱 손실은 어차피 내는 시간이라 되찾는 랩을 말하지 않는다.
+  final required = reviewStints.isNotEmpty && !canDropStop(reviewStints);
   for (final stop in strategy.stops) {
     final wear = stop.wearPct;
     final life = stop.lifeLapsLeft;
     final gain = stop.newSetGainMs;
-    final payback = gain != null && gain > 0 && loss != null ? (loss / gain).ceil() : null;
+    final payback = gain != null && gain > 0 && loss != null && !required ? (loss / gain).ceil() : null;
     final remaining = strategy.totalLaps - stop.lap;
     final to = compoundName(stop.toCompound);
     final gainText = payback == null
@@ -1287,11 +1293,14 @@ List<String> deepStrategyLines(RaceAnalysis analysis, List<RaceStintReview> revi
             ? '새 ${withParticle(to, '이', '가')} 랩당 ${_sec(gain!)} 빨라서, 피트 스톱 한 번에 잃는 ${_sec1(loss!)}를 $payback랩이면 되찾아'
             : '새 ${withParticle(to, '이', '가')} 랩당 ${_sec(gain!)} 빨라도, 피트 스톱 한 번에 잃는 ${_sec1(loss!)}를 되찾으려면 '
                 '$payback랩이 필요한데 남은 랩은 $remaining랩뿐이야';
+    final split = _stopSplit(strategy, reviewStints, stop);
     final facts = [
       if (wear != null) '그때 타이어는 ${wear.round()}% 닳아 있었어',
       if (life != null)
-        '게임은 이 타이어로 $life랩 더 갈 수 있다고 봤어${stop.latestLap == null ? '' : '(피트 시기 마지막은 ${stop.latestLap}랩)'}',
+        '게임은 이 타이어가 $life랩 더 버틴다고 봤어${stop.latestLap == null ? '' : '(피트 시기 마지막은 ${stop.latestLap}랩)'}',
+      if (life != null && split != null) ?_laterStopLine(strategy, split, stop.lap, life),
       if (gain != null && gain > 0) gainText,
+      if (split != null) ?_bestStopLine(strategy, split, stop.lap),
     ];
     final forced = (life != null && life <= _forcedLifeLaps) || (wear != null && wear >= _forcedWearPct);
     final into = withParticle(to, '으로', '로', rieulAsVowel: true);
@@ -1351,6 +1360,94 @@ List<String> deepStrategyLines(RaceAnalysis analysis, List<RaceStintReview> revi
 
 /// `피트에 2번 들어갔으면`(0번이면 들어가지 않았으면).
 String _pitStops(int stops) => stops == 0 ? '피트에 들어가지 않았으면' : '피트에 $stops번 들어갔으면';
+
+/// 스톱 앞뒤 스틴트: 컴파운드와 랩 수(마지막 스틴트는 체커까지).
+typedef _StopSplit = ({String from, String to, int before, int after});
+
+/// 스톱 앞뒤 스틴트(스톱 랩에 끝난 스틴트와 그다음 스틴트). 없으면 null.
+_StopSplit? _stopSplit(RaceStrategyAnalysis strategy, List<RaceStintReview> stints, RaceStopContext stop) {
+  final k = stints.indexWhere((s) => s.endLap == stop.lap);
+  if (k < 0 || k + 1 >= stints.length) {
+    return null;
+  }
+  final next = stints[k + 1];
+  final nextEnd = k + 1 == stints.length - 1 ? strategy.totalLaps : next.endLap;
+  return (
+    from: stints[k].compound,
+    to: next.compound,
+    before: stints[k].endLap - stints[k].startLap + 1,
+    after: nextEnd - next.startLap + 1,
+  );
+}
+
+/// 컴파운드 모델이 본 스틴트 시간(ms, 랩 수 × 새 타이어 차 + 기울기 × 랩 수(랩 수 − 1)/2 — 백엔드 대안 전략과 같은 식). 모델이 없으면 null.
+double? _stintCostMs(RaceStrategyAnalysis strategy, String compound, int laps) {
+  for (final model in strategy.compounds) {
+    if (model.compound == compound) {
+      final (offset, deg) = (model.offsetMs, model.degMsPerLap);
+      return offset == null || deg == null ? null : laps * offset + deg * laps * (laps - 1) / 2;
+    }
+  }
+  return null;
+}
+
+/// 스톱을 [shift]랩 늦췄을 때(−면 당겼을 때) 시간 차(ms, +면 느리다). 모델이 없으면 null.
+int? _shiftedStopMs(RaceStrategyAnalysis strategy, _StopSplit split, int shift) {
+  final costs = [
+    _stintCostMs(strategy, split.from, split.before + shift),
+    _stintCostMs(strategy, split.to, split.after - shift),
+    _stintCostMs(strategy, split.from, split.before),
+    _stintCostMs(strategy, split.to, split.after),
+  ];
+  return costs.contains(null) ? null : (costs[0]! + costs[1]! - costs[2]! - costs[3]!).round();
+}
+
+/// 게임이 본 남은 수명만큼 더 타고 들어왔으면 어땠는지(컴파운드 모델 추정): 버틸 수 있다는 건 빠르다는 게 아니라서, 그동안 느려진 만큼 잃는다.
+/// 다음 스틴트가 [_minStintLaps]랩보다 짧아지지 않는 데까지만 늦춘다. 늦출 수 없거나 모델이 없으면 null.
+String? _laterStopLine(RaceStrategyAnalysis strategy, _StopSplit split, int lap, int life) {
+  final shift = math.min(life, split.after - _minStintLaps);
+  final ms = shift <= 0 ? null : _shiftedStopMs(strategy, split, shift);
+  if (ms == null) {
+    return null;
+  }
+  final later = '$shift랩 더 타고 ${lap + shift}랩에 들어왔으면 계산상 ${_sec1(ms)}';
+  if (ms < 0) {
+    return '$later 빨랐어';
+  }
+  final deg = strategy.compounds.where((c) => c.compound == split.from).firstOrNull?.degMsPerLap;
+  final slowing = deg != null && deg > 0 ? '${withParticle(compoundName(split.from), '은', '는')} 랩마다 ${_sec(deg)}씩 느려지고 있어서, ' : '';
+  return '버틸 수는 있어도 $slowing$later 느렸어';
+}
+
+/// 다른 스톱은 그대로 두고 이 스톱 랩만 옮겨 봤을 때 가장 빠른 랩(앞뒤 스틴트는 [_minStintLaps]랩 이상·게임이 본 쓸 수 있는 랩 이하). 모델이 없으면 null.
+String? _bestStopLine(RaceStrategyAnalysis strategy, _StopSplit split, int lap) {
+  int? usable(String compound) => strategy.compounds.where((c) => c.compound == compound).firstOrNull?.usableLaps;
+  final (fromUsable, toUsable) = (usable(split.from), usable(split.to));
+  ({int shift, int ms})? best;
+  for (var shift = _minStintLaps - split.before; shift <= split.after - _minStintLaps; shift++) {
+    if (shift != 0 &&
+        ((fromUsable != null && split.before + shift > fromUsable) || (toUsable != null && split.after - shift > toUsable))) {
+      continue;
+    }
+    final ms = _shiftedStopMs(strategy, split, shift);
+    if (ms == null) {
+      return null;
+    }
+    if (best == null || ms < best.ms) {
+      best = (shift: shift, ms: ms);
+    }
+  }
+  if (best == null) {
+    return null;
+  }
+  final bestLap = lap + best.shift;
+  if (best.shift == 0) {
+    return '계산해 보면 $lap랩이 들어오기 가장 좋은 랩이었어';
+  }
+  return -best.ms < kStrategyGainMs
+      ? '계산해 보면 $bestLap랩이 가장 좋았지만 $lap랩과 차이는 ${_sec1(kStrategyGainMs)}도 안 나'
+      : '계산해 보면 $bestLap랩에 들어갔으면 ${_sec1(best.ms)} 빨랐어';
+}
 
 /// 페이스 심층 줄: 기준 읽는 법, 스틴트마다 같은 타이어·같은 랩·스틴트 중앙값 기준 AI 대비(랩당), 같은 타이어로 가장 느렸던 스틴트.
 /// 기준 값이 하나도 없으면 빈 목록.
