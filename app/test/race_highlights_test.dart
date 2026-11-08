@@ -328,6 +328,20 @@ void main() {
       expect(banner, findsNothing);
     });
 
+    testWidgets('넓으면 오른쪽 아래에 중심 차 텔레메트리(이름·속도·기어), 좁으면 없다', (t) async {
+      await _pumpPlayer(t, _highlights());
+
+      final panel = find.byKey(const ValueKey('highlights-telemetry'));
+      expect(panel, findsOneWidget);
+      expect(t.widget<Text>(find.byKey(const ValueKey('highlights-telemetry-name'))).data, 'ME');
+      expect(find.byKey(const ValueKey('highlights-telemetry-speed')), findsOneWidget);
+      expect(find.byKey(const ValueKey('highlights-telemetry-gear')), findsOneWidget);
+      expect(find.byKey(const ValueKey('highlights-telemetry-rpm')), findsNothing);
+
+      await _pumpPlayer(t, _highlights(), width: 400);
+      expect(panel, findsNothing);
+    });
+
     testWidgets('옐로 플래그면 순위표 배너에 섹터를 쓴다', (t) async {
       await _pumpPlayer(t, _highlights(flags: [
         {'kind': 'YellowFlag', 'fromMs': 0, 'toMs': 3000, 'sectors': [1, 3]},

@@ -115,7 +115,6 @@ class GhostReplayHud extends StatelessWidget {
         builder: (context, box) {
           final narrow = box.maxWidth < _narrowWidth;
           final fraction = narrow ? _narrowMaxWidthFraction : _wideMaxWidthFraction;
-          final baseStyle = DefaultTextStyle.of(context).style;
           final ghostFrame = ghost;
           Widget place(Widget child, {required bool right}) => Positioned(
                 left: right ? null : _inset,
@@ -141,7 +140,6 @@ class GhostReplayHud extends StatelessWidget {
               if (ghostFrame != null)
                 place(
                   _dashboard(
-                    baseStyle: baseStyle,
                     keyName: 'ghost-replay-ghost-hud',
                     frame: ghostFrame,
                     color: ghostColor,
@@ -152,7 +150,6 @@ class GhostReplayHud extends StatelessWidget {
                 ),
               place(
                 _dashboard(
-                  baseStyle: baseStyle,
                   keyName: 'ghost-replay-player-hud',
                   frame: player,
                   color: playerColor,
@@ -167,9 +164,7 @@ class GhostReplayHud extends StatelessWidget {
       );
 
   /// 계기판 하나. [isPlayer]면 경과 시간·시간 차·타이어·섹터도 넣는다.
-  /// [baseStyle]은 다이얼 글자(눈금·THROTTLE·BRAKE)가 앱 글꼴을 따르게 넘긴다.
   Widget _dashboard({
-    required TextStyle baseStyle,
     required String keyName,
     required ReplayFrame frame,
     required Color color,
@@ -233,76 +228,7 @@ class GhostReplayHud extends StatelessWidget {
               ],
             ),
           ],
-          SizedBox(
-            height: _dialHeight,
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: CustomPaint(
-                    key: ValueKey('$keyName-dial'),
-                    painter: _DialPainter(
-                      throttle: frame.throttle / _percentMax,
-                      brake: frame.brake / _percentMax,
-                      speed: _speedIn(frame.speedKph, units),
-                      imperial: units == UnitSystem.imperial,
-                      baseStyle: baseStyle,
-                    ),
-                  ),
-                ),
-                Align(
-                  alignment: const Alignment(0, 0.08),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '${_speedIn(frame.speedKph, units).round()}',
-                        key: ValueKey('$keyName-speed'),
-                        style: const TextStyle(
-                          color: AppColors.replayHudText,
-                          fontSize: _speedFontSize,
-                          fontWeight: FontWeight.w700,
-                          fontFeatures: _tabular,
-                          height: 1,
-                        ),
-                      ),
-                      _unit(units == UnitSystem.imperial ? 'MPH' : 'KMH'),
-                      const SizedBox(height: 6),
-                      Text(
-                        '${frame.rpm}',
-                        key: ValueKey('$keyName-rpm'),
-                        style: const TextStyle(
-                          color: AppColors.replayHudText,
-                          fontSize: _rpmFontSize,
-                          fontWeight: FontWeight.w600,
-                          fontFeatures: _tabular,
-                          height: 1,
-                        ),
-                      ),
-                      _unit(_rpmLabel),
-                    ],
-                  ),
-                ),
-                // 기어: 다이얼 아래 열린 자리.
-                Align(
-                  alignment: Alignment.bottomCenter,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      _unit(_gearLabel),
-                      const SizedBox(width: 6),
-                      Text(
-                        gearLabel(frame.gear),
-                        key: ValueKey('$keyName-gear'),
-                        style: const TextStyle(color: AppColors.replayHudText, fontSize: _gearFontSize, fontWeight: FontWeight.w700),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+          ReplayDial(keyName: keyName, frame: frame, units: units),
           if (battery != null && flow != null) ...[
             const SizedBox(height: 8),
             Row(
@@ -347,16 +273,105 @@ class GhostReplayHud extends StatelessWidget {
     );
   }
 
-  static Widget _unit(String text) => Text(
-        text,
-        style: const TextStyle(
-          color: AppColors.replayHudMuted,
-          fontSize: _unitFontSize,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1,
+}
+
+/// 계기판 다이얼(고스트 재생·하이라이트 공용): 바깥 고리 속도(파랑, 눈금), 안쪽 고리 스로틀(초록, 넓게)·브레이크(빨강),
+/// 가운데 속도(와 [showRpm]이면 RPM), 아래 기어. 키는 `[keyName]-dial`·`-speed`·`-rpm`·`-gear`.
+/// 다이얼 글자(눈금·THROTTLE·BRAKE)는 앱 글꼴을 따른다.
+class ReplayDial extends StatelessWidget {
+  const ReplayDial({super.key, required this.keyName, required this.frame, required this.units, this.showRpm = true});
+
+  final String keyName;
+  final ReplayFrame frame;
+  final UnitSystem units;
+
+  /// RPM을 보일지(하이라이트 표본에는 RPM이 없다).
+  final bool showRpm;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        height: _dialHeight,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: CustomPaint(
+                key: ValueKey('$keyName-dial'),
+                painter: _DialPainter(
+                  throttle: frame.throttle / _percentMax,
+                  brake: frame.brake / _percentMax,
+                  speed: _speedIn(frame.speedKph, units),
+                  imperial: units == UnitSystem.imperial,
+                  baseStyle: DefaultTextStyle.of(context).style,
+                ),
+              ),
+            ),
+            Align(
+              alignment: const Alignment(0, 0.08),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '${_speedIn(frame.speedKph, units).round()}',
+                    key: ValueKey('$keyName-speed'),
+                    style: const TextStyle(
+                      color: AppColors.replayHudText,
+                      fontSize: _speedFontSize,
+                      fontWeight: FontWeight.w700,
+                      fontFeatures: _tabular,
+                      height: 1,
+                    ),
+                  ),
+                  _unit(units == UnitSystem.imperial ? 'MPH' : 'KMH'),
+                  if (showRpm) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      '${frame.rpm}',
+                      key: ValueKey('$keyName-rpm'),
+                      style: const TextStyle(
+                        color: AppColors.replayHudText,
+                        fontSize: _rpmFontSize,
+                        fontWeight: FontWeight.w600,
+                        fontFeatures: _tabular,
+                        height: 1,
+                      ),
+                    ),
+                    _unit(_rpmLabel),
+                  ],
+                ],
+              ),
+            ),
+            // 기어: 다이얼 아래 열린 자리.
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  _unit(_gearLabel),
+                  const SizedBox(width: 6),
+                  Text(
+                    gearLabel(frame.gear),
+                    key: ValueKey('$keyName-gear'),
+                    style: const TextStyle(color: AppColors.replayHudText, fontSize: _gearFontSize, fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       );
 }
+
+Widget _unit(String text) => Text(
+      text,
+      style: const TextStyle(
+        color: AppColors.replayHudMuted,
+        fontSize: _unitFontSize,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 1,
+      ),
+    );
 
 double _speedIn(double kph, UnitSystem units) => units == UnitSystem.imperial ? kphToMph(kph) : kph;
 

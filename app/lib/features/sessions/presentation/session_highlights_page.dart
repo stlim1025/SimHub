@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,6 +15,8 @@ import '../../../core/widgets/button_group.dart';
 import '../../../core/widgets/compact_table.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/page_loading_bar.dart';
+import '../../auth/application/auth_controller.dart';
+import '../../auth/domain/user_preferences.dart';
 import '../../lap_detail/application/lap_detail_providers.dart';
 import '../../lap_detail/domain/ghost_replay.dart';
 import '../../lap_detail/domain/lap_corners.dart';
@@ -76,6 +80,10 @@ const double _bannerGap = 6;
 
 /// 재생 화면 폭이 이보다 좁으면 순위표를 좁게(간격 칸 없이).
 const double _compactTowerMaxViewWidth = 600;
+
+/// 오른쪽 아래 텔레메트리 판이 차지할 수 있는 재생 화면 폭·높이 비율(넘으면 줄인다).
+const double _telemetryWidthFraction = 0.24;
+const double _telemetryHeightFraction = 0.55;
 
 /// 조작 줄 폭이 이보다 좁으면 시간 막대를 아랫줄로 내린다.
 const double _singleRowControlsMinWidth = 760;
@@ -268,6 +276,7 @@ class _Loaded extends ConsumerWidget {
       streetCircuit: kStreetCircuits.contains(trackName),
       officialCorners: ref.watch(trackCornersProvider).valueOrNull?[trackName],
       teamLogoUrl: ref.watch(teamLogoUrlProvider),
+      units: ref.watch(authControllerProvider).valueOrNull?.preferences.units ?? UnitSystem.metric,
     );
   }
 }
@@ -299,6 +308,7 @@ class HighlightsPlayer extends StatefulWidget {
     this.streetCircuit = false,
     this.officialCorners,
     this.teamLogoUrl,
+    this.units = UnitSystem.metric,
   });
 
   final RaceHighlights highlights;
@@ -315,6 +325,9 @@ class HighlightsPlayer extends StatefulWidget {
 
   /// 팀 로고 URL(순위표). null이면 로고 없이 팀 색 띠.
   final TeamLogoUrlBuilder? teamLogoUrl;
+
+  /// 텔레메트리 판 속도 단위(내 설정).
+  final UnitSystem units;
 
   @override
   State<HighlightsPlayer> createState() => _HighlightsPlayerState();
@@ -769,13 +782,17 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
 
   Widget _view(BuildContext context, HighlightClip clip) => LayoutBuilder(builder: (context, box) => _viewSized(context, clip, box));
 
-  /// 재생 화면(중계 그래픽: 왼쪽 순위표 — 깃발은 순위표 위쪽 배너, 아래 자막, 위 피니시 띠·순위표가 없을 때의 깃발 띠).
-  /// 좁으면(폰) 순위표는 간격 칸 없이 좁게.
+  /// 재생 화면(중계 그래픽: 왼쪽 순위표 — 깃발은 순위표 위쪽 배너, 아래 자막, 오른쪽 아래 중심 차 텔레메트리,
+  /// 위 피니시 띠·순위표가 없을 때의 깃발 띠). 좁으면(폰) 순위표는 간격 칸 없이 좁게, 텔레메트리는 뺀다.
   Widget _viewSized(BuildContext context, HighlightClip clip, BoxConstraints box) {
     final highlights = widget.highlights;
     final compact = box.maxWidth < _compactTowerMaxViewWidth;
     final towerWidth = clip.standings.isEmpty ? 0.0 : (compact ? kBroadcastCompactTowerWidth : kBroadcastTowerWidth);
     final captionLeft = _overlayInset + (towerWidth == 0 ? 0 : towerWidth + _overlayInset);
+    final focus = compact ? null : _focus;
+    final telemetryMaxWidth = box.maxWidth * _telemetryWidthFraction;
+    final captionRight = _overlayInset +
+        (focus == null ? 0 : math.min(telemetryMaxWidth, kBroadcastTelemetryWidth) + _overlayInset);
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -801,9 +818,30 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
               ),
             ),
           ),
+        if (focus != null)
+          Positioned(
+            right: _overlayInset,
+            bottom: _overlayInset,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: telemetryMaxWidth, maxHeight: box.maxHeight * _telemetryHeightFraction),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.bottomRight,
+                child: ValueListenableBuilder<double>(
+                  valueListenable: _time,
+                  builder: (context, time, _) => BroadcastTelemetry(
+                    name: highlights.nameOf(clip.focusCar),
+                    color: _colorOf(clip.focusCar),
+                    frame: focus.frameAt(time),
+                    units: widget.units,
+                  ),
+                ),
+              ),
+            ),
+          ),
         Positioned(
           left: captionLeft,
-          right: _overlayInset,
+          right: captionRight,
           bottom: _overlayInset,
           child: Align(
             alignment: Alignment.bottomLeft,

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../auth/domain/user_preferences.dart';
+import '../../lap_detail/domain/ghost_replay.dart';
+import '../../lap_detail/presentation/ghost_replay_hud.dart';
 import '../domain/race_highlights.dart';
 import 'tyre_stints_view.dart';
 
@@ -430,6 +433,59 @@ class BroadcastStandingsTower extends StatelessWidget {
               ? BoxDecoration(color: AppColors.replayTowerBody, borderRadius: BorderRadius.circular(_towerBadgeRadius))
               : null,
           child: Text(tyreLetterOf(compound), style: _towerText(context, color: tyreColorOf(compound), weight: FontWeight.w900)),
+        ),
+      );
+}
+
+/// 하단 오른쪽 텔레메트리 판 치수(디자인 크기 — 재생 화면에 맞춰 줄어든다).
+const double kBroadcastTelemetryWidth = 230;
+const double _telemetryRadius = 8;
+const EdgeInsets _telemetryPadding = EdgeInsets.fromLTRB(12, 10, 12, 8);
+const double _telemetryNameSize = 13;
+const double _telemetryBarWidth = 3;
+const double _telemetryBarHeight = 14;
+const double _telemetryNameGap = 6;
+
+/// 하단 오른쪽 텔레메트리: 카메라가 따라가는 차의 팀 색 띠·이름 아래, 텔레메트리 고스트 재생과 같은 다이얼
+/// (바깥 고리 속도, 안쪽 고리 스로틀·브레이크, 가운데 속도, 아래 기어 — 하이라이트 표본에는 RPM이 없어 뺀다).
+class BroadcastTelemetry extends StatelessWidget {
+  const BroadcastTelemetry({super.key, required this.name, required this.color, required this.frame, required this.units});
+
+  final String name;
+  final Color color;
+  final ReplayFrame frame;
+  final UnitSystem units;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        key: const ValueKey('highlights-telemetry'),
+        width: kBroadcastTelemetryWidth,
+        padding: _telemetryPadding,
+        decoration: BoxDecoration(
+          color: AppColors.replayDashPanel.withValues(alpha: _panelOpacity),
+          borderRadius: BorderRadius.circular(_telemetryRadius),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Container(width: _telemetryBarWidth, height: _telemetryBarHeight, color: color),
+                const SizedBox(width: _telemetryNameGap),
+                Expanded(
+                  child: Text(
+                    name.toUpperCase(),
+                    key: const ValueKey('highlights-telemetry-name'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _broadcastText(context, size: _telemetryNameSize),
+                  ),
+                ),
+              ],
+            ),
+            ReplayDial(keyName: 'highlights-telemetry', frame: frame, units: units, showRpm: false),
+          ],
         ),
       );
 }
