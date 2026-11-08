@@ -385,19 +385,55 @@ void main() {
       await t.pump();
     });
 
-    testWidgets('왼쪽에 순위표: 랩, 순위·이름·간격, 피트 P', (t) async {
+    testWidgets('왼쪽에 순위표: 랩, 순위·이름·간격, 피트는 IN PIT + P 칸, 따라가는 차 줄은 성만', (t) async {
       await _pumpPlayer(t, _highlights());
 
       final tower = find.byKey(const ValueKey('highlights-standings'));
       expect(t.widget<Text>(find.descendant(of: tower, matching: find.byKey(const ValueKey('highlights-standings-lap')))).textSpan!.toPlainText(), 'LAP 3 /39');
       expect(find.descendant(of: find.byKey(const ValueKey('standing-row-4')), matching: find.text('Leader')), findsOneWidget);
-      expect(find.descendant(of: find.byKey(const ValueKey('standing-row-21')), matching: find.text('+1.2')), findsOneWidget);
-      expect(find.descendant(of: find.byKey(const ValueKey('standing-row-21')), matching: find.text('PIT')), findsOneWidget);
-      expect(find.descendant(of: find.byKey(const ValueKey('standing-row-21')), matching: find.text('ME')), findsOneWidget);
-      // 컴파운드 원: 소프트 S·하드 H, 모르는 차는 원 없음.
       expect(find.descendant(of: find.byKey(const ValueKey('standing-tyre-4')), matching: find.text('S')), findsOneWidget);
-      expect(find.descendant(of: find.byKey(const ValueKey('standing-tyre-21')), matching: find.text('H')), findsOneWidget);
+      // 따라가는 차(ME)는 성만 보이고 간격·피트 글자·컴파운드는 숨긴다. 몸통 밖 피트 P 칸은 남는다.
+      final me = find.byKey(const ValueKey('standing-row-21'));
+      expect(find.descendant(of: me, matching: find.text('ME')), findsOneWidget);
+      expect(find.descendant(of: me, matching: find.text('IN PIT')), findsNothing);
+      expect(find.descendant(of: me, matching: find.text('P')), findsOneWidget);
+      expect(find.byKey(const ValueKey('standing-tyre-21')), findsNothing);
+      // 모르는 컴파운드는 글자 없음.
       expect(find.byKey(const ValueKey('standing-tyre-2')), findsNothing);
+
+      // 다른 차를 따라가는 장면에서는 ME 줄이 세 글자 이름 + IN PIT(간격 대신) + 하드 H.
+      await t.tap(find.byKey(const ValueKey('highlights-reel-race')));
+      await t.pump();
+      expect(find.descendant(of: find.byKey(const ValueKey('standing-row-4')), matching: find.text('VERSTAPPEN')), findsOneWidget);
+      expect(find.descendant(of: me, matching: find.text('ME')), findsOneWidget);
+      expect(find.descendant(of: me, matching: find.text('IN PIT')), findsOneWidget);
+      expect(find.descendant(of: me, matching: find.text('+1.2')), findsNothing);
+      expect(find.descendant(of: find.byKey(const ValueKey('standing-tyre-21')), matching: find.text('H')), findsOneWidget);
+    });
+
+    testWidgets('순위표는 재생 화면 높이에 맞춰 커지고, 깃발 배너가 떠도 줄이 잘리지 않는다', (t) async {
+      await _pumpPlayer(t, _highlights(), width: 1600);
+      final plain = t.getRect(find.byKey(const ValueKey('highlights-standings')));
+      final rowHeight = t.getRect(find.byKey(const ValueKey('standing-row-4'))).height;
+      expect(rowHeight, greaterThan(20));
+
+      await _pumpPlayer(t, _highlights(flags: [
+        {'kind': 'SafetyCar', 'fromMs': 0, 'toMs': 3000},
+      ]), width: 1600);
+      await t.pump(const Duration(milliseconds: 400));
+      for (final car in [4, 21, 2]) {
+        expect(find.byKey(ValueKey('standing-row-$car')), findsOneWidget);
+      }
+      final flagged = t.getRect(find.byKey(const ValueKey('highlights-standings')));
+      expect(flagged.width, lessThanOrEqualTo(plain.width + 0.5));
+    });
+
+    test('순위표 폭은 높이에 맞춘 배율(상한 있음)과 최대 폭을 넘지 않는다', () {
+      final tall = broadcastTowerWidth(height: 2000, maxWidth: 1000, rows: 3, compact: false);
+      expect(tall, closeTo(kBroadcastTowerDesignWidth * 0.75, 0.01));
+      final fit = broadcastTowerWidth(height: 700, maxWidth: 1000, rows: 22, compact: false);
+      expect(fit, closeTo(kBroadcastTowerDesignWidth * 700 / broadcastTowerDesignHeight(22, banner: false), 0.01));
+      expect(broadcastTowerWidth(height: 700, maxWidth: 100, rows: 22, compact: false), closeTo(100, 0.01));
     });
 
     testWidgets('넓으면 오른쪽에 장면 목록표, 재생기는 나머지 폭을 다 쓰고, 줄을 누르면 그 장면으로', (t) async {

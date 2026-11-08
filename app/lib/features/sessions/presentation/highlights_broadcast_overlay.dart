@@ -1,3 +1,6 @@
+import 'dart:math' as math;
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -10,45 +13,139 @@ import 'tyre_stints_view.dart';
 /// 중계 그래픽 공통: 판 불투명도, 숫자는 폭이 고정된 숫자 글꼴(간격이 바뀌어도 칸이 흔들리지 않게).
 const double _panelOpacity = 0.88;
 const List<FontFeature> _tabular = [FontFeature.tabularFigures()];
+const double _letterSpacing = 0.4;
 
-/// 왼쪽 순위표(방송 타워) 치수: 몸통(왼쪽 모서리는 크게 둥글게)·테두리, 위 빨간 띠, 랩 띠, 줄.
-const double kBroadcastTowerWidth = 184;
-const double kBroadcastCompactTowerWidth = 112;
-const double _towerOpacity = 0.92;
-const double _towerOuterRadius = 12;
-const double _towerInnerRadius = 4;
-const double _towerBorderWidth = 1.5;
-const double _towerAccentHeight = 3;
-const double _towerLapHeight = 28;
-const double _towerLapLabelSize = 11;
-const double _towerLapNumberSize = 17;
-const double _towerRowHeight = 20;
-const double _towerBottomPadding = 4;
-const double _towerFontSize = 12;
-const double _towerSmallFontSize = 9.5;
-const double _towerPositionWidth = 24;
-const double _towerCompactPositionWidth = 18;
-const double _towerDividerWidth = 1;
-const double _towerLogoSize = 17;
-const double _towerLogoPadding = 2.5;
-const double _towerBarWidth = 3;
-const double _towerBarHeight = 13;
-const double _towerGap = 5;
-const double _towerSidePadding = 6;
-const double _towerPitWidth = 24;
-const double _towerPitHeight = 13;
-const double _towerBadgeRadius = 3;
-const double _towerTyreWidth = 12;
-const double _towerTyreFocusSize = 14;
+// -- 순위표(방송 타워) 설계 치수 ------------------------------------------------------------
+// 참고한 중계 그래픽(F1TV-HUD-Reworked 리더보드)의 픽셀 단위 그대로 그리고, 화면에서는 재생 화면 높이에 맞춰
+// 통째로 키우거나 줄인다([broadcastTowerWidth]). 아래 값은 모두 그 설계 단위다.
 
-/// 순위표 깃발 배너(랩 띠 바로 아래): 높이, 옐로 플래그 섹터 띠 높이, 글자 크기, 사선 줄무늬 간격·굵기.
-const double _flagBannerHeight = 36;
-const double _flagSectorHeight = 15;
-const double _flagTitleSize = 15;
-const double _flagSubtitleSize = 10.5;
-const double _flagSectorSize = 11;
-const double _flagStripeGap = 7;
-const double _flagStripeWidth = 2;
+/// 몸통(둥근 틀 포함) 폭: 넓은 순위표·좁은 순위표(간격 칸 없음).
+const double _dBodyWidth = 333;
+const double _dCompactBodyWidth = 227;
+
+/// 몸통 오른쪽 밖 표시 칸(피트 P·체커) 폭.
+const double _dBadgeLaneWidth = 40;
+
+/// 넓은 순위표·좁은 순위표 설계 폭(몸통 + 오른쪽 밖 표시 칸).
+const double kBroadcastTowerDesignWidth = _dBodyWidth + _dBadgeLaneWidth;
+const double kBroadcastCompactTowerDesignWidth = _dCompactBodyWidth + _dBadgeLaneWidth;
+
+/// 화면 배율 상한(차가 적어도 지나치게 커지지 않게)과 깃발 배너가 뜰 때 줄어드는 시간.
+const double _maxTowerScale = 0.75;
+const Duration _towerScaleDuration = Duration(milliseconds: 300);
+
+/// 둥근 틀: 바깥 모서리, 안쪽 판 위치·모서리, 판 아래 여백.
+const double _dBezelRadius = 36;
+const double _dPanelLeft = 19;
+const double _dPanelTop = 22;
+const double _dPanelRadius = 25;
+const double _dBezelBelowPanel = 16;
+const double _bezelOpacity = 0.9;
+const double _towerPanelOpacity = 0.85;
+
+/// 판 안쪽 회색 선(오른쪽은 열린 둥근 테두리): 판에서 들어간 거리, 굵기, 모서리, 마지막 줄 아래 거리.
+const double _dEdgeLeft = 4;
+const double _dEdgeTop = 3;
+const double _dEdgeWidth = 4;
+const double _dEdgeRadius = 20;
+const double _dEdgeBelowRows = 3;
+
+/// 깃발 테두리: 옐로·그린은 왼쪽 위 모서리에서 이 거리까지만 색이 번진다. 세이프티카·적기는 오른쪽 끝으로 갈수록 옅어진다.
+const double _dEdgeFlagReach = 430;
+const double _edgeFlagSolidStop = 0.55;
+
+/// 머리(로고·세션 이름), 랩 띠, 랩 띠와 첫 줄 사이, 줄, 마지막 줄 아래 판 여백, 깃발 배너(위 줄무늬 칸).
+const double _dContentLeft = 27;
+const double _dHeaderHeight = 75;
+const double _dLapHeight = 50;
+const double _dRowsGap = 13;
+const double _dRowHeight = 50;
+const double _dPanelBelowRows = 11;
+const double _dBannerHeight = 105;
+const double _dBannerTopHeight = 50;
+
+/// 머리: 왼쪽 로고 글자(상표 대신 앱 이름), 오른쪽 세션 이름(회색, 칸에 맞춰 줄인다).
+const String _brandWordmark = 'SIMHUB';
+const String _sessionLabel = 'RACE';
+const double _dBrandLeft = 35;
+const double _dBrandTop = 44;
+const double _dBrandHeight = 40;
+const double _dBrandSize = 38;
+const double _dSessionLeft = 189;
+const double _dSessionWidth = 135;
+const double _dSessionTop = 46;
+const double _dSessionHeight = 40;
+const double _dSessionSize = 40;
+
+/// 랩 띠 글자: `LAP`(회색), 지금 랩(굵게), `/39`(회색).
+const double _dLapLabelSize = 28;
+const double _dLapNumberSize = 36;
+const double _dLapTotalSize = 26;
+
+/// 줄 칸(줄 왼쪽 기준): 순위, 팀 로고, 이름, 간격(오른쪽 끝 맞춤), 컴파운드 글자. 순위 칸 오른쪽 세로선.
+const double _dPositionWidth = 45;
+const double _dLogoLeft = 45;
+const double _dLogoWidth = 55;
+const double _dLogoPadding = 5;
+const double _dNameLeft = 100;
+const double _dNameWidth = 100;
+const double _dCompactNameWidth = 65;
+const double _dTimingLeft = 140;
+const double _dTimingWidth = 125;
+const double _dTimingPadding = 5;
+const double _dTyreLeft = 265;
+const double _dCompactTyreLeft = 165;
+const double _dTyreWidth = 35;
+const double _dDividerWidth = 1;
+const double _dTeamBarWidth = 5;
+const double _dTeamBarHeight = 30;
+
+/// 줄 글자 크기: 순위, 이름, 간격, `Leader`, `OUT`, `IN PIT`, 컴파운드. `OUT` 줄은 흐리게.
+const double _dPositionSize = 23;
+const double _dPositionFocusSize = 26;
+const double _dNameSize = 28;
+const double _dTimingSize = 24;
+const double _dLeaderSize = 22;
+const double _dOutSize = 23;
+const double _dPitSize = 23;
+const double _dTyreSize = 27;
+const double _outOpacity = 0.65;
+
+/// 따라가는 차 줄: 밝은 사선 줄무늬 바탕(줄 왼쪽 1부터), 팀 색 로고 칸, 성 칸(칸에 맞춰 줄인다).
+const double _dFocusLeft = 1;
+const double _dFocusLogoWidth = 65;
+const double _dFocusLogoPadding = 4;
+const double _dFocusNameLeft = 115;
+const double _dFocusNameSize = 27;
+const double _dFocusStripeGap = 6;
+const double _dFocusStripeWidth = 1.2;
+
+/// 몸통 오른쪽 밖 칸(피트 P·체커): 위치, 크기, 모서리, P 글자, 체커 칸 수.
+const double _dBadgeOverlap = 3;
+const double _dBadgeTop = 5;
+const double _dBadgeWidth = 35;
+const double _dBadgeHeight = 40;
+const double _dBadgeRadius = 5;
+const double _dBadgeTextSize = 26;
+const double _dCheckerInset = 3;
+const int _checkerCells = 5;
+const String _pitBadgeLabel = 'P';
+
+/// 깃발 배너 글자 크기(설계 단위)와 사선 줄무늬 간격·굵기, 아래 칸 + 무늬 간격·팔 길이·굵기, 적기 위 빨강 덧칠.
+const double _dSafetySize = 40;
+const double _dVirtualSize = 40;
+const double _dVirtualSubSize = 28;
+const double _dFlagTitleSize = 32;
+const double _dSectorLabelSize = 28;
+const double _dSectorNumberSize = 42;
+const double _dTrackClearSize = 30;
+const double _dRedFlagSize = 50;
+const double _dBannerStripeGap = 4.2;
+const double _dBannerStripeWidth = 1.6;
+const double _dBandGridStep = 9;
+const double _dBandGridArm = 2;
+const double _dBandGridStroke = 1;
+const double _redOverlayOpacity = 0.15;
 
 /// 순위표 깃발 배너 글자(중계 그래픽이라 영어).
 const String _safetyLabel = 'SAFETY';
@@ -58,9 +155,29 @@ const String _safetyCarLabel = 'SAFETY CAR';
 const String _yellowFlagLabel = 'YELLOW FLAG';
 const String _redFlagLabel = 'RED FLAG';
 const String _greenFlagLabel = 'GREEN FLAG';
+const String _trackClearLabel = 'TRACK CLEAR';
 const String _sectorLabel = 'SECTOR';
 const String _sectorsLabel = 'SECTORS';
 const String _sectorSeparator = ' · ';
+const String _outLabel = 'OUT';
+const String _inPitLabel = 'IN PIT';
+
+/// 어두운 단색 로고(검정·남색 글자, 흰 바탕 포함) 판별: 흰 바탕으로 볼 밝기, 흰 바탕을 뺀 화소의 평균 밝기 상한,
+/// 무채색으로 볼 채도 폭(0~255)과 그 비율. 팀 색이 [_darkTintLuminance]보다 어두우면 흰색으로 칠한다.
+/// 밝기를 잴 때 건너뛰는 화소 간격·불투명 기준.
+const double _logoWhiteLuminance = 0.85;
+const double _darkLogoLuminance = 0.3;
+const int _monoChroma = 80;
+const double _monoShare = 0.85;
+const double _darkTintLuminance = 0.15;
+const int _logoSampleStride = 4;
+const int _opaqueAlpha = 128;
+const double _channelMax = 255;
+
+/// 밝기 가중치(Rec. 709): 어두운 단색 로고의 흰 바탕을 투명하게 빼는 색 행렬에 쓴다.
+const double _lumaRed = 0.2126;
+const double _lumaGreen = 0.7152;
+const double _lumaBlue = 0.0722;
 
 /// 순위표 컴파운드 글자에 넘길 이름(`tyreColorOf`·`tyreLetterOf` 기준). 모르면 글자를 그리지 않는다.
 const Map<HighlightTyre, String> kHighlightTyreNames = {
@@ -70,7 +187,6 @@ const Map<HighlightTyre, String> kHighlightTyreNames = {
   HighlightTyre.intermediate: 'Intermediate',
   HighlightTyre.wet: 'Wet',
 };
-const double _letterSpacing = 0.4;
 
 /// 하단 자막·위 띠 치수.
 const EdgeInsets _tagPadding = EdgeInsets.symmetric(horizontal: 10, vertical: 5);
@@ -85,7 +201,7 @@ const double _checkerCell = 6;
 const int _checkerColumns = 4;
 const double _stripGap = 8;
 
-TextStyle _broadcastText(BuildContext context, {double size = _towerFontSize, Color color = AppColors.replayHudText}) =>
+TextStyle _broadcastText(BuildContext context, {double size = _stripFontSize, Color color = AppColors.replayHudText}) =>
     DefaultTextStyle.of(context).style.copyWith(
           color: color,
           fontSize: size,
@@ -95,10 +211,10 @@ TextStyle _broadcastText(BuildContext context, {double size = _towerFontSize, Co
           decoration: TextDecoration.none,
         );
 
-/// 순위표 글자: 숫자는 기울인 고정폭 숫자(간격이 바뀌어도 칸이 흔들리지 않게), 이름은 바로 세운다.
+/// 순위표 글자(설계 단위 크기): 숫자는 고정폭 숫자, 기울임은 [italic].
 TextStyle _towerText(
   BuildContext context, {
-  double size = _towerFontSize,
+  required double size,
   Color color = AppColors.replayHudText,
   FontWeight weight = FontWeight.w700,
   bool italic = true,
@@ -114,13 +230,37 @@ TextStyle _towerText(
           height: 1,
         );
 
-/// 중계 화면 왼쪽 순위표(방송 타워): 둥근 테두리 몸통, 위 빨간 띠 + 그러데이션 랩 띠(`LAP 16 /39`),
-/// 줄마다 기울인 순위 · 세로 구분선 · 팀 색 원 안의 팀 로고(로고가 없으면 팀 색 띠) · 세 글자 이름 · 기울인 간격(리더는 작게 `Leader`) ·
-/// 컴파운드 색 글자(S·M·H·I·W, 모르면 없음). 피트면 `PIT` 칸, 피니시면 체커기, 리타이어면 `OUT`.
-/// 카메라가 따라가는 차의 줄은 흰 바탕에 검은 글자로 뒤집고, 넓으면 이름을 다 쓴다(길면 줄여 맞춘다).
-/// [compact](좁은 화면)면 간격 칸을 빼고 로고 대신 팀 색 띠를 쓴다. 높이가 모자라면 들어가는 줄까지만.
-/// 깃발이 걸리면([flag]) 실제 중계처럼 랩 띠 바로 아래에 배너를 띄우고 테두리를 깃발 색으로 바꾼다 — 세이프티카·버추얼은 노랑 사선 줄무늬,
-/// 옐로 플래그는 노랑 줄무늬 + 섹터 띠, 적기는 빨강. 깃발이 걷힌 직후([trackClear])는 초록 그린 플래그.
+/// 순위표 [rows]줄과 깃발 배너([banner])를 그릴 때의 설계 높이(순수 함수).
+double broadcastTowerDesignHeight(int rows, {required bool banner}) =>
+    _dPanelTop +
+    _dHeaderHeight +
+    _dLapHeight +
+    (banner ? _dBannerHeight : 0) +
+    _dRowsGap +
+    rows * _dRowHeight +
+    _dPanelBelowRows +
+    _dBezelBelowPanel;
+
+/// 순위표 [rows]줄이 재생 화면 높이 [height] 안에 다 들어가는 화면 폭(설계 폭 × 배율). 배율은 [_maxTowerScale]까지,
+/// 폭은 [maxWidth]까지다. 깃발 배너가 뜨면 순위표가 이 폭 안에서 잠시 줄어 줄이 잘리지 않는다(순수 함수).
+double broadcastTowerWidth({required double height, required double maxWidth, required int rows, required bool compact}) {
+  final designWidth = compact ? kBroadcastCompactTowerDesignWidth : kBroadcastTowerDesignWidth;
+  final scale = [_maxTowerScale, height / broadcastTowerDesignHeight(rows, banner: false), maxWidth / designWidth].reduce(math.min);
+  return designWidth * math.max(0, scale);
+}
+
+/// 깃발 테두리 색이 번지는 방식: 없음, 테두리 전체(세이프티카·버추얼·적기), 왼쪽 위 모서리만(옐로·그린).
+enum _EdgeFlag { none, full, corner }
+
+/// 중계 화면 왼쪽 순위표(방송 타워, F1TV-HUD-Reworked 리더보드와 같은 모양).
+/// 둥근 회색 틀 안 어두운 판: 머리(앱 이름 + 회색 `RACE`), 그러데이션 랩 띠(`LAP 16 /39`), 줄마다 기울인 순위 · 세로선 ·
+/// 팀 로고 · 세 글자 이름 · 간격(리더는 `Leader`) · 컴파운드 색 글자. 피트면 간격 자리에 팀 색 `IN PIT`와 몸통 밖 `P` 칸,
+/// 피니시면 몸통 밖 체커 칸, 리타이어면 흐린 `OUT`.
+/// 카메라가 따라가는 차의 줄은 밝은 줄무늬 바탕에 팀 색 로고 칸 + 검은 성(간격·컴파운드는 숨긴다).
+/// 깃발이 걸리면([flag]) 랩 띠 바로 아래에 배너(세이프티카·버추얼은 노랑 줄무늬, 옐로 플래그는 노랑 줄무늬 + 섹터 칸,
+/// 적기는 빨강), 걷힌 직후([trackClear])는 초록 GREEN FLAG + TRACK CLEAR, 테두리도 그 색으로 바꾼다.
+/// 설계 크기로 그려 받은 폭에 맞춰 키우거나 줄이고, 배너가 뜨면 [rowCapacity]줄이 높이 안에 들어가게 잠시 더 줄인다.
+/// [compact](좁은 화면)면 간격 칸을 뺀다.
 class BroadcastStandingsTower extends StatelessWidget {
   const BroadcastStandingsTower({
     super.key,
@@ -133,6 +273,7 @@ class BroadcastStandingsTower extends StatelessWidget {
     this.flag,
     this.trackClear = false,
     this.compact = false,
+    this.rowCapacity,
   });
 
   /// 지금 걸린 깃발(없으면 null).
@@ -151,57 +292,162 @@ class BroadcastStandingsTower extends StatelessWidget {
   final String? Function(int carIndex)? logoUrlOf;
   final bool compact;
 
-  static const BorderRadius _outerRadius =
-      BorderRadius.horizontal(left: Radius.circular(_towerOuterRadius), right: Radius.circular(_towerInnerRadius));
-  static const BorderRadius _clipRadius = BorderRadius.horizontal(
-    left: Radius.circular(_towerOuterRadius - _towerBorderWidth),
-    right: Radius.circular(_towerInnerRadius - _towerBorderWidth),
-  );
+  /// 높이에 맞출 줄 수(클립에서 가장 많은 줄). null이면 지금 줄 수.
+  final int? rowCapacity;
+
+  double get _bodyWidth => compact ? _dCompactBodyWidth : _dBodyWidth;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
         builder: (context, box) {
           final banner = _flagBanner(context);
-          final chrome = _towerBorderWidth * 2 +
-              _towerAccentHeight +
-              _towerLapHeight +
-              _towerBottomPadding +
-              (banner == null ? 0 : _flagBannerHeight);
-          final fit = ((box.maxHeight - chrome) / _towerRowHeight).floor();
-          final rows = standing.rows.take(fit.clamp(0, standing.rows.length)).toList();
-          return Align(
-            alignment: Alignment.topLeft,
-            child: Container(
-              key: const ValueKey('highlights-standings'),
-              decoration: BoxDecoration(
-                color: AppColors.replayTowerBody.withValues(alpha: _towerOpacity),
-                border: Border.all(color: _borderColor, width: _towerBorderWidth),
-                borderRadius: _outerRadius,
-              ),
-              child: ClipRRect(
-                borderRadius: _clipRadius,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Container(height: _towerAccentHeight, color: AppColors.replayBroadcastRed),
-                    _lapBar(context),
-                    ?banner,
-                    for (var i = 0; i < rows.length; i++) _row(context, i, rows[i]),
-                    const SizedBox(height: _towerBottomPadding),
-                  ],
+          final designWidth = _bodyWidth + _dBadgeLaneWidth;
+          final capacity = math.max(rowCapacity ?? standing.rows.length, standing.rows.length);
+          final widthScale = box.maxWidth / designWidth;
+          final heightScale = box.maxHeight.isFinite
+              ? box.maxHeight / broadcastTowerDesignHeight(capacity, banner: banner != null)
+              : widthScale;
+          return TweenAnimationBuilder<double>(
+            tween: Tween(end: math.max(0, math.min(widthScale, heightScale))),
+            duration: _towerScaleDuration,
+            curve: Curves.easeOut,
+            builder: (context, scale, _) {
+              final emptyHeight = broadcastTowerDesignHeight(0, banner: banner != null);
+              final fit = scale <= 0 || !box.maxHeight.isFinite
+                  ? standing.rows.length
+                  : ((box.maxHeight / scale - emptyHeight) / _dRowHeight).floor();
+              final rows = standing.rows.take(fit.clamp(0, standing.rows.length)).toList();
+              final height = broadcastTowerDesignHeight(rows.length, banner: banner != null);
+              return Align(
+                alignment: Alignment.topLeft,
+                child: SizedBox(
+                  key: const ValueKey('highlights-standings'),
+                  width: designWidth * scale,
+                  height: height * scale,
+                  child: FittedBox(
+                    fit: BoxFit.fill,
+                    alignment: Alignment.topLeft,
+                    child: _design(context, rows, banner, height),
+                  ),
                 ),
-              ),
-            ),
+              );
+            },
           );
         },
       );
 
-  /// 테두리: 깃발이 걸리면 그 색(노랑·빨강), 걷힌 직후는 초록, 평소는 회색.
-  Color get _borderColor => switch (flag?.kind) {
-        RaceFlagKind.safetyCar || RaceFlagKind.virtualSafetyCar || RaceFlagKind.yellowFlag => AppColors.replayTowerFlagYellow,
+  /// 설계 크기 그대로의 순위표.
+  Widget _design(BuildContext context, List<HighlightStandingRow> rows, Widget? banner, double height) {
+    final bodyWidth = _bodyWidth;
+    final contentWidth = bodyWidth - _dContentLeft;
+    const lapTop = _dPanelTop + _dHeaderHeight;
+    const lapBottom = lapTop + _dLapHeight;
+    final rowsTop = lapBottom + (banner == null ? 0 : _dBannerHeight) + _dRowsGap;
+    final rowsBottom = rowsTop + rows.length * _dRowHeight;
+    final panelBottom = rowsBottom + _dPanelBelowRows;
+    return SizedBox(
+      width: bodyWidth + _dBadgeLaneWidth,
+      height: height,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: 0,
+            top: 0,
+            width: bodyWidth,
+            height: height,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: const BorderRadius.horizontal(left: Radius.circular(_dBezelRadius)),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    AppColors.replayTowerBezelTop.withValues(alpha: _bezelOpacity),
+                    AppColors.replayTowerBezelBottom.withValues(alpha: _bezelOpacity),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: _dPanelLeft,
+            top: _dPanelTop,
+            width: bodyWidth - _dPanelLeft,
+            height: panelBottom - _dPanelTop,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: AppColors.replayTowerBody.withValues(alpha: _towerPanelOpacity),
+                borderRadius: const BorderRadius.horizontal(left: Radius.circular(_dPanelRadius)),
+              ),
+            ),
+          ),
+          Positioned(
+            left: _dContentLeft + _dPositionWidth,
+            top: lapBottom,
+            width: _dDividerWidth,
+            height: rowsBottom - lapBottom,
+            child: const ColoredBox(color: AppColors.replayTowerDivider),
+          ),
+          Positioned(
+            left: _dBrandLeft,
+            top: _dBrandTop,
+            height: _dBrandHeight,
+            child: Center(
+              child: Text(
+                _brandWordmark,
+                style: _towerText(context, size: _dBrandSize, weight: FontWeight.w900),
+              ),
+            ),
+          ),
+          if (!compact)
+            Positioned(
+              left: _dSessionLeft,
+              top: _dSessionTop,
+              width: _dSessionWidth,
+              height: _dSessionHeight,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  _sessionLabel,
+                  style: _towerText(context, size: _dSessionSize, color: AppColors.replayTowerSession, weight: FontWeight.w900, italic: false),
+                ),
+              ),
+            ),
+          Positioned(left: _dContentLeft, top: lapTop, width: contentWidth, height: _dLapHeight, child: _lapBar(context)),
+          if (banner != null)
+            Positioned(left: _dContentLeft, top: lapBottom, width: contentWidth, height: _dBannerHeight, child: banner),
+          for (var i = 0; i < rows.length; i++)
+            Positioned(
+              left: _dContentLeft,
+              top: rowsTop + i * _dRowHeight,
+              width: contentWidth + _dBadgeLaneWidth,
+              height: _dRowHeight,
+              child: _row(context, i, rows[i], contentWidth),
+            ),
+          Positioned(
+            left: _dPanelLeft + _dEdgeLeft,
+            top: _dPanelTop + _dEdgeTop,
+            width: bodyWidth - _dPanelLeft - _dEdgeLeft,
+            height: rowsBottom + _dEdgeBelowRows - _dPanelTop - _dEdgeTop,
+            child: CustomPaint(painter: _TowerEdgePainter(_edgeFlag, _edgeFlagColor)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 깃발 테두리: 세이프티카·버추얼·적기는 테두리 전체, 옐로·그린은 왼쪽 위 모서리.
+  _EdgeFlag get _edgeFlag => switch (flag?.kind) {
+        RaceFlagKind.safetyCar || RaceFlagKind.virtualSafetyCar || RaceFlagKind.redFlag => _EdgeFlag.full,
+        RaceFlagKind.yellowFlag => _EdgeFlag.corner,
+        _ => trackClear && flag == null ? _EdgeFlag.corner : _EdgeFlag.none,
+      };
+
+  Color get _edgeFlagColor => switch (flag?.kind) {
         RaceFlagKind.redFlag => AppColors.replayFlagRed,
-        _ => trackClear && flag == null ? AppColors.replayTowerFlagGreen : AppColors.replayTowerBorder,
+        null => AppColors.replayTowerFlagGreen,
+        _ => AppColors.replayTowerFlagYellow,
       };
 
   /// 랩 띠 아래 깃발 배너. 띄울 것이 없으면 null.
@@ -209,11 +455,16 @@ class BroadcastStandingsTower extends StatelessWidget {
     final flag = this.flag;
     if (flag == null) {
       return trackClear
-          ? _stripedBanner(
+          ? _splitBanner(
+              context,
               AppColors.replayTowerFlagGreen,
               AppColors.replayTowerFlagGreenStripe,
-              _flagBannerHeight,
-              [_flagText(context, _greenFlagLabel, _flagTitleSize)],
+              _greenFlagLabel,
+              Text(
+                _trackClearLabel,
+                maxLines: 1,
+                style: _towerText(context, size: _dTrackClearSize, color: AppColors.replayTowerTrackClear, weight: FontWeight.w400, italic: false),
+              ),
             )
           : null;
     }
@@ -221,221 +472,553 @@ class BroadcastStandingsTower extends StatelessWidget {
       RaceFlagKind.safetyCar => _stripedBanner(
           AppColors.replayTowerFlagYellow,
           AppColors.replayTowerFlagYellowStripe,
-          _flagBannerHeight,
-          [_flagText(context, _safetyLabel, _flagTitleSize), _flagText(context, _carLabel, _flagSubtitleSize)],
+          [_flagText(context, _safetyLabel, _dSafetySize), _flagText(context, _carLabel, _dSafetySize)],
         ),
       RaceFlagKind.virtualSafetyCar => _stripedBanner(
           AppColors.replayTowerFlagYellow,
           AppColors.replayTowerFlagYellowStripe,
-          _flagBannerHeight,
-          [_flagText(context, _virtualLabel, _flagTitleSize), _flagText(context, _safetyCarLabel, _flagSubtitleSize)],
+          [_flagText(context, _virtualLabel, _dVirtualSize), _flagText(context, _safetyCarLabel, _dVirtualSubSize)],
         ),
-      RaceFlagKind.yellowFlag => Column(
-          key: const ValueKey('highlights-standings-flag'),
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _stripedBanner(
-              AppColors.replayTowerFlagYellow,
-              AppColors.replayTowerFlagYellowStripe,
-              _flagBannerHeight - _flagSectorHeight,
-              [_flagText(context, _yellowFlagLabel, _flagTitleSize)],
-              keyed: false,
-            ),
-            Container(
-              height: _flagSectorHeight,
-              alignment: Alignment.center,
-              color: AppColors.replayTowerBody,
-              child: Text(
-                _sectorText(flag.sectors),
-                style: _towerText(context, size: _flagSectorSize, color: AppColors.replayTowerSectorText, weight: FontWeight.w800),
-              ),
-            ),
-          ],
+      RaceFlagKind.yellowFlag => _splitBanner(
+          context,
+          AppColors.replayTowerFlagYellow,
+          AppColors.replayTowerFlagYellowStripe,
+          _yellowFlagLabel,
+          _sectorText(context, flag.sectors),
         ),
-      RaceFlagKind.redFlag => Container(
+      RaceFlagKind.redFlag => SizedBox(
           key: const ValueKey('highlights-standings-flag'),
-          height: _flagBannerHeight,
-          alignment: Alignment.center,
-          color: AppColors.replayFlagRed,
-          child: _flagText(context, _redFlagLabel, _flagTitleSize, color: AppColors.replayHudText),
+          height: _dBannerHeight,
+          child: CustomPaint(
+            painter: const _TowerStripePainter(AppColors.replayTowerFlagRed, AppColors.replayTowerFlagRedStripe),
+            child: ColoredBox(
+              color: AppColors.replayFlagRed.withValues(alpha: _redOverlayOpacity),
+              child: Center(child: _flagText(context, _redFlagLabel, _dRedFlagSize, color: AppColors.replayHudText)),
+            ),
+          ),
         ),
       RaceFlagKind.unknown => null,
     };
   }
 
-  /// 옐로 플래그 섹터 글자: `SECTOR 2`, 여럿이면 `SECTORS 1 · 3`, 모르면 빈 글자.
-  static String _sectorText(List<int> sectors) => switch (sectors.length) {
-        0 => '',
-        1 => '$_sectorLabel ${sectors.single}',
-        _ => '$_sectorsLabel ${sectors.join(_sectorSeparator)}',
-      };
+  /// 옐로 플래그 섹터 칸: `SECTOR 2`, 여럿이면 `SECTORS 1 · 3`(숫자는 크게), 모르면 빈 글자.
+  Widget _sectorText(BuildContext context, List<int> sectors) {
+    final (label, numbers) = switch (sectors.length) {
+      0 => ('', ''),
+      1 => (_sectorLabel, '${sectors.single}'),
+      _ => (_sectorsLabel, sectors.join(_sectorSeparator)),
+    };
+    return Text.rich(
+      TextSpan(children: [
+        if (label.isNotEmpty)
+          TextSpan(
+            text: '$label ',
+            style: _towerText(context, size: _dSectorLabelSize, color: AppColors.replayTowerSectorText, weight: FontWeight.w500, italic: false),
+          ),
+        TextSpan(
+          text: numbers,
+          style: _towerText(context, size: _dSectorNumberSize, color: AppColors.replayTowerSectorText, weight: FontWeight.w400, italic: false),
+        ),
+      ]),
+      maxLines: 1,
+    );
+  }
 
-  Widget _flagText(BuildContext context, String text, double size, {Color color = AppColors.replayFlagYellowText}) =>
-      Text(text, maxLines: 1, style: _towerText(context, size: size, color: color, weight: FontWeight.w900));
+  Widget _flagText(BuildContext context, String text, double size, {Color color = AppColors.replayTowerFocusInk}) =>
+      Text(text, maxLines: 1, style: _towerText(context, size: size, color: color, weight: FontWeight.w800));
 
-  /// 사선 줄무늬 바탕 위에 가운데 정렬한 글자 줄들.
-  Widget _stripedBanner(Color base, Color stripe, double height, List<Widget> lines, {bool keyed = true}) => SizedBox(
-        key: keyed ? const ValueKey('highlights-standings-flag') : null,
-        height: height,
+  /// 배너 전체가 사선 줄무늬이고 글자 줄들을 가운데에 쌓는다(세이프티카·버추얼).
+  Widget _stripedBanner(Color base, Color stripe, List<Widget> lines) => SizedBox(
+        key: const ValueKey('highlights-standings-flag'),
+        height: _dBannerHeight,
         child: CustomPaint(
-          painter: _StripePainter(base, stripe),
-          child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: lines)),
+          painter: _TowerStripePainter(base, stripe),
+          child: Center(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Column(mainAxisSize: MainAxisSize.min, children: lines),
+            ),
+          ),
+        ),
+      );
+
+  /// 위는 사선 줄무늬 + [title], 아래는 + 무늬 어두운 칸 + [detail](옐로 플래그 섹터, 그린 플래그 TRACK CLEAR).
+  Widget _splitBanner(BuildContext context, Color base, Color stripe, String title, Widget detail) => SizedBox(
+        key: const ValueKey('highlights-standings-flag'),
+        height: _dBannerHeight,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              height: _dBannerTopHeight,
+              child: CustomPaint(
+                painter: _TowerStripePainter(base, stripe),
+                child: Center(child: FittedBox(fit: BoxFit.scaleDown, child: _flagText(context, title, _dFlagTitleSize))),
+              ),
+            ),
+            Expanded(
+              child: CustomPaint(
+                painter: const _BandPainter(),
+                child: Center(child: FittedBox(fit: BoxFit.scaleDown, child: detail)),
+              ),
+            ),
+          ],
         ),
       );
 
   Widget _lapBar(BuildContext context) {
-    final label = _towerText(context, size: _towerLapLabelSize, color: AppColors.replayHudMuted, weight: FontWeight.w600);
-    return Container(
-      height: _towerLapHeight,
-      alignment: Alignment.center,
+    final label = _towerText(context, size: _dLapLabelSize, color: AppColors.replayTowerPosition, weight: FontWeight.w400);
+    return DecoratedBox(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [AppColors.replayTowerLapTop, AppColors.replayTowerLapBottom],
         ),
-        border: Border(bottom: BorderSide(color: AppColors.replayTowerDivider)),
       ),
-      child: Text.rich(
-        TextSpan(children: [
-          TextSpan(text: 'LAP ', style: label),
-          TextSpan(text: '${standing.lap}', style: _towerText(context, size: _towerLapNumberSize, weight: FontWeight.w900)),
-          if (totalLaps > 0) TextSpan(text: ' /$totalLaps', style: label),
-        ]),
-        key: const ValueKey('highlights-standings-lap'),
+      child: Center(
+        child: Text.rich(
+          TextSpan(children: [
+            TextSpan(text: 'LAP ', style: label),
+            TextSpan(text: '${standing.lap}', style: _towerText(context, size: _dLapNumberSize, weight: FontWeight.w800)),
+            if (totalLaps > 0)
+              TextSpan(
+                text: ' /$totalLaps',
+                style: _towerText(context, size: _dLapTotalSize, color: AppColors.replayTowerPosition, weight: FontWeight.w400),
+              ),
+          ]),
+          key: const ValueKey('highlights-standings-lap'),
+        ),
       ),
     );
   }
 
-  Widget _row(BuildContext context, int index, HighlightStandingRow row) {
+  Widget _row(BuildContext context, int index, HighlightStandingRow row, double contentWidth) {
     final focused = row.carIndex == focusCar;
-    final ink = focused ? AppColors.replayTowerBody : AppColors.replayHudText;
     final name = nameOf(row.carIndex);
     final out = row.state == StandingState.out;
-    final leader = index == 0 && !out;
-    final gap = out ? 'OUT' : (compact ? '' : standingGapText(row, leader: index == 0));
-    final gapStyle = _towerText(
-      context,
-      size: leader ? _towerSmallFontSize : _towerFontSize - 1,
-      color: focused ? ink : (leader || out ? AppColors.replayHudMuted : AppColors.replayHudText),
-    );
-    final mark = switch (row.state) {
-      StandingState.pit => Container(
-          width: _towerPitWidth,
-          height: _towerPitHeight,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: focused ? AppColors.replayTowerBody : AppColors.replayTowerPitBadge,
-            borderRadius: BorderRadius.circular(_towerBadgeRadius),
-          ),
-          child: Text(
-            'PIT',
-            style: _towerText(
-              context,
-              size: _towerSmallFontSize,
-              color: focused ? AppColors.replayHudText : AppColors.replayTowerBody,
-              weight: FontWeight.w900,
-              italic: false,
-            ),
-          ),
+    final pit = row.state == StandingState.pit;
+    final color = colorOf(row.carIndex);
+    final tyre = kHighlightTyreNames[row.tyre];
+    final timing = _timing(context, index, row);
+    final badge = switch (row.state) {
+      StandingState.pit => _badge(
+          Text(_pitBadgeLabel, style: _towerText(context, size: _dBadgeTextSize, weight: FontWeight.w800)),
         ),
-      StandingState.finished => Icon(Icons.sports_score, size: _towerPitHeight + 2, color: ink),
+      StandingState.finished => _badge(
+          const Padding(padding: EdgeInsets.all(_dCheckerInset), child: CustomPaint(painter: _BadgeCheckerPainter(), size: Size.infinite)),
+        ),
       _ => null,
     };
-    final tyre = kHighlightTyreNames[row.tyre];
-    return Container(
+    final nameLeft = focused ? _dFocusNameLeft : _dNameLeft;
+    final nameRight = compact ? _dCompactTyreLeft : (focused ? contentWidth : _dNameLeft + _dNameWidth);
+    return Stack(
       key: ValueKey('standing-row-${row.carIndex}'),
-      height: _towerRowHeight,
-      color: focused ? AppColors.replayHudText : null,
-      padding: const EdgeInsets.only(right: _towerSidePadding),
-      child: Row(
-        children: [
-          SizedBox(
-            width: compact ? _towerCompactPositionWidth : _towerPositionWidth,
+      clipBehavior: Clip.none,
+      children: [
+        if (focused) ...[
+          Positioned(
+            left: _dFocusLeft,
+            top: 0,
+            width: contentWidth - _dFocusLeft,
+            height: _dRowHeight,
+            child: const CustomPaint(
+              painter: _TowerStripePainter(
+                AppColors.replayTowerFocus,
+                AppColors.replayTowerFocusStripe,
+                gap: _dFocusStripeGap,
+                width: _dFocusStripeWidth,
+              ),
+            ),
+          ),
+          Positioned(left: _dLogoLeft, top: 0, width: _dFocusLogoWidth, height: _dRowHeight, child: ColoredBox(color: color)),
+        ],
+        Positioned(
+          left: 0,
+          top: 0,
+          width: _dPositionWidth,
+          height: _dRowHeight,
+          child: Center(
             child: Text(
               '${index + 1}',
-              textAlign: TextAlign.center,
-              style: _towerText(context, color: focused ? ink : AppColors.replayTowerPosition, weight: FontWeight.w600),
+              style: _towerText(
+                context,
+                size: focused ? _dPositionFocusSize : _dPositionSize,
+                color: focused ? AppColors.replayTowerFocusInk : AppColors.replayTowerPosition,
+                weight: focused ? FontWeight.w800 : FontWeight.w500,
+              ),
             ),
           ),
-          Container(
-            width: _towerDividerWidth,
-            height: _towerRowHeight,
-            color: focused ? AppColors.replayTowerPitBadge : AppColors.replayTowerDivider,
+        ),
+        Positioned(
+          left: _dLogoLeft,
+          top: 0,
+          width: focused ? _dFocusLogoWidth : _dLogoWidth,
+          height: _dRowHeight,
+          child: Padding(
+            padding: EdgeInsets.all(focused ? _dFocusLogoPadding : _dLogoPadding),
+            child: _teamMark(row.carIndex, color, onTeamColor: focused),
           ),
-          const SizedBox(width: _towerGap),
-          SizedBox(width: compact ? _towerBarWidth : _towerLogoSize, height: _towerLogoSize, child: _teamMark(row.carIndex)),
-          const SizedBox(width: _towerGap),
-          Expanded(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Flexible(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      focused && !compact ? name.toUpperCase() : standingAbbreviation(name),
-                      style: _towerText(context, color: ink, weight: FontWeight.w800, italic: false),
-                    ),
-                  ),
+        ),
+        Positioned(
+          left: nameLeft,
+          top: 0,
+          width: math.max(0, (compact && !focused ? _dNameLeft + _dCompactNameWidth : nameRight) - nameLeft),
+          height: _dRowHeight,
+          child: Opacity(
+            opacity: out && !focused ? _outOpacity : 1,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  focused ? name.toUpperCase() : standingAbbreviation(name),
+                  style: focused
+                      ? _towerText(context, size: _dFocusNameSize, color: AppColors.replayTowerFocusInk, weight: FontWeight.w800)
+                      : _towerText(context, size: _dNameSize, weight: FontWeight.w700, italic: false),
                 ),
-                if (gap.isNotEmpty)
-                  Padding(padding: const EdgeInsets.only(left: _towerGap), child: Text(gap, style: gapStyle)),
-              ],
+              ),
             ),
           ),
-          if (mark != null) ...[const SizedBox(width: _towerGap), mark],
-          if (tyre != null) ...[const SizedBox(width: _towerGap), _tyre(context, row.carIndex, tyre, focused)],
-        ],
-      ),
+        ),
+        if (!focused && !compact && timing != null)
+          Positioned(
+            left: _dTimingLeft,
+            top: 0,
+            width: _dTimingWidth,
+            height: _dRowHeight,
+            child: Padding(
+              padding: const EdgeInsets.only(right: _dTimingPadding),
+              child: Align(
+                alignment: pit || out ? Alignment.center : Alignment.centerRight,
+                child: FittedBox(fit: BoxFit.scaleDown, child: timing),
+              ),
+            ),
+          ),
+        if (!focused && !out && tyre != null)
+          Positioned(
+            left: compact ? _dCompactTyreLeft : _dTyreLeft,
+            top: 0,
+            width: _dTyreWidth,
+            height: _dRowHeight,
+            child: Tooltip(
+              message: tyre,
+              child: Center(
+                key: ValueKey('standing-tyre-${row.carIndex}'),
+                child: Text(tyreLetterOf(tyre), style: _towerText(context, size: _dTyreSize, color: tyreColorOf(tyre), weight: FontWeight.w800)),
+              ),
+            ),
+          ),
+        if (badge != null)
+          Positioned(
+            left: contentWidth - _dBadgeOverlap,
+            top: _dBadgeTop,
+            width: _dBadgeWidth,
+            height: _dBadgeHeight,
+            child: badge,
+          ),
+      ],
     );
   }
 
-  /// 팀 표시: 로고가 있으면 팀 색 원 안의 로고(서버 로고는 팀 색 바탕에 맞춘 그림이라 프로필 사진처럼 원에 얹는다,
-  /// 읽는 중·못 읽으면 빈 원), 로고가 없거나 좁은 화면이면 팀 색 세로 띠.
-  Widget _teamMark(int carIndex) {
-    final color = colorOf(carIndex);
-    final url = compact ? null : logoUrlOf?.call(carIndex);
-    if (url == null) {
-      return Center(
-        child: Container(
-          width: _towerBarWidth,
-          height: _towerBarHeight,
-          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(_towerBarWidth / 2)),
-        ),
+  /// 간격 칸 글자: 피트면 팀 색 `IN PIT`(간격 대신), 리타이어면 흐린 `OUT`, 리더는 `Leader`, 나머지는 `+1.2`·`+1 LAP`. 없으면 null.
+  Widget? _timing(BuildContext context, int index, HighlightStandingRow row) {
+    if (row.state == StandingState.pit) {
+      return Text(_inPitLabel, style: _towerText(context, size: _dPitSize, color: _tintOf(colorOf(row.carIndex)), weight: FontWeight.w800));
+    }
+    if (row.state == StandingState.out) {
+      return Opacity(
+        opacity: _outOpacity,
+        child: Text(_outLabel, style: _towerText(context, size: _dOutSize, weight: FontWeight.w400)),
       );
     }
-    return Container(
-      decoration: BoxDecoration(shape: BoxShape.circle, color: color),
-      padding: const EdgeInsets.all(_towerLogoPadding),
-      child: Image.network(
-        url,
-        key: ValueKey('standing-logo-$carIndex'),
-        fit: BoxFit.contain,
-        frameBuilder: (_, child, frame, wasSynchronouslyLoaded) =>
-            frame == null && !wasSynchronouslyLoaded ? const SizedBox.shrink() : child,
-        errorBuilder: (_, _, _) => const SizedBox.shrink(),
-      ),
-    );
+    final leader = index == 0;
+    final text = standingGapText(row, leader: leader);
+    return text.isEmpty
+        ? null
+        : Text(text, style: _towerText(context, size: leader ? _dLeaderSize : _dTimingSize, weight: FontWeight.w500));
   }
 
-  /// 컴파운드 색 글자. 흰 바탕(따라가는 차) 줄에서는 색이 묻히지 않게 어두운 칸 위에 쓴다.
-  Widget _tyre(BuildContext context, int carIndex, String compound, bool focused) => Tooltip(
-        message: compound,
-        child: Container(
-          key: ValueKey('standing-tyre-$carIndex'),
-          width: focused ? _towerTyreFocusSize : _towerTyreWidth,
-          height: focused ? _towerTyreFocusSize : null,
-          alignment: Alignment.center,
-          decoration: focused
-              ? BoxDecoration(color: AppColors.replayTowerBody, borderRadius: BorderRadius.circular(_towerBadgeRadius))
-              : null,
-          child: Text(tyreLetterOf(compound), style: _towerText(context, color: tyreColorOf(compound), weight: FontWeight.w900)),
+  /// 몸통 오른쪽 밖 칸(피트 P·체커): 흰 그러데이션 바탕, 오른쪽 모서리만 둥글게.
+  Widget _badge(Widget child) => DecoratedBox(
+        decoration: const BoxDecoration(
+          borderRadius: BorderRadius.horizontal(right: Radius.circular(_dBadgeRadius)),
+          gradient: LinearGradient(colors: [AppColors.replayTowerBadgeTop, AppColors.replayTowerBadgeBottom]),
         ),
+        child: Center(child: child),
       );
+
+  /// 팀 표시: 로고가 있으면 로고(따라가는 차 줄은 팀 색 칸 위, 나머지는 어두운 판 위 — 어두운 단색 로고는 팀 색으로 칠한다),
+  /// 로고가 없으면 팀 색 세로 띠.
+  Widget _teamMark(int carIndex, Color color, {required bool onTeamColor}) {
+    final bar = Center(
+      child: Container(
+        width: _dTeamBarWidth,
+        height: _dTeamBarHeight,
+        decoration: BoxDecoration(
+          color: onTeamColor ? AppColors.replayTowerFocusInk : color,
+          borderRadius: BorderRadius.circular(_dTeamBarWidth / 2),
+        ),
+      ),
+    );
+    final url = logoUrlOf?.call(carIndex);
+    return url == null
+        ? bar
+        : _TowerLogo(key: ValueKey('standing-logo-$carIndex'), url: url, tint: onTeamColor ? null : _tintOf(color), fallback: bar);
+  }
+
+  /// 어두운 단색 로고를 칠할 색: 팀 색, 팀 색도 어두우면 흰색.
+  static Color _tintOf(Color team) => team.computeLuminance() < _darkTintLuminance ? AppColors.replayHudText : team;
 }
+
+/// 순위표 팀 로고. [tint]가 있으면 로고 화소를 한 번 재서(주소별로 기억) 어두운 단색 로고(검정·남색 글자, 흰 바탕 포함)면
+/// 흰 바탕은 투명하게 빼고 글자를 그 색으로 칠한다 — 어두운 판 위에서 로고가 묻히거나 흰 네모로 보이지 않게.
+/// 읽는 중이면 빈 칸, 못 읽으면 [fallback].
+class _TowerLogo extends StatefulWidget {
+  const _TowerLogo({super.key, required this.url, required this.tint, required this.fallback});
+
+  final String url;
+  final Color? tint;
+  final Widget fallback;
+
+  @override
+  State<_TowerLogo> createState() => _TowerLogoState();
+}
+
+class _TowerLogoState extends State<_TowerLogo> {
+  /// 로고 주소 → 어두운 단색인지(잰 결과).
+  static final Map<String, bool> _darkLogos = {};
+
+  ImageStream? _stream;
+  ImageStreamListener? _listener;
+
+  @override
+  void initState() {
+    super.initState();
+    _probe();
+  }
+
+  @override
+  void didUpdateWidget(_TowerLogo oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.url != widget.url || (oldWidget.tint == null) != (widget.tint == null)) {
+      _stop();
+      _probe();
+    }
+  }
+
+  @override
+  void dispose() {
+    _stop();
+    super.dispose();
+  }
+
+  void _probe() {
+    if (widget.tint == null || _darkLogos.containsKey(widget.url)) {
+      return;
+    }
+    final url = widget.url;
+    final listener = ImageStreamListener(
+      (info, _) {
+        final image = info.image.clone();
+        info.dispose();
+        _stop();
+        _measure(url, image);
+      },
+      onError: (_, _) => _stop(),
+    );
+    _listener = listener;
+    _stream = NetworkImage(url).resolve(ImageConfiguration.empty)..addListener(listener);
+  }
+
+  void _stop() {
+    final listener = _listener;
+    if (listener != null) {
+      _stream?.removeListener(listener);
+    }
+    _stream = null;
+    _listener = null;
+  }
+
+  Future<void> _measure(String url, ui.Image image) async {
+    try {
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      if (bytes == null) {
+        return;
+      }
+      // 흰 바탕을 뺀 불투명 화소의 평균 밝기와 무채색 비율.
+      var sum = 0.0;
+      var count = 0;
+      var mono = 0;
+      for (var i = 0; i + 3 < bytes.lengthInBytes; i += 4 * _logoSampleStride) {
+        if (bytes.getUint8(i + 3) < _opaqueAlpha) {
+          continue;
+        }
+        final r = bytes.getUint8(i);
+        final g = bytes.getUint8(i + 1);
+        final b = bytes.getUint8(i + 2);
+        final luminance = Color.fromARGB(0xFF, r, g, b).computeLuminance();
+        if (luminance >= _logoWhiteLuminance) {
+          continue;
+        }
+        sum += luminance;
+        count++;
+        if ([r, g, b].reduce(math.max) - [r, g, b].reduce(math.min) < _monoChroma) {
+          mono++;
+        }
+      }
+      _darkLogos[url] = count > 0 && sum / count < _darkLogoLuminance && mono / count >= _monoShare;
+      if (mounted && widget.url == url) {
+        setState(() {});
+      }
+    } on Object {
+      // 밝기를 못 재면 칠하지 않고 그대로 그린다.
+    } finally {
+      image.dispose();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tint = widget.tint != null && (_darkLogos[widget.url] ?? false) ? widget.tint : null;
+    final image = Image.network(
+      widget.url,
+      fit: BoxFit.contain,
+      frameBuilder: (_, child, frame, wasSynchronouslyLoaded) =>
+          frame == null && !wasSynchronouslyLoaded ? const SizedBox.shrink() : child,
+      errorBuilder: (_, _, _) => widget.fallback,
+    );
+    return tint == null ? image : ColorFiltered(colorFilter: _knockOut(tint), child: image);
+  }
+
+  /// 밝을수록 투명하게(흰 바탕은 사라지고 어두운 글자는 남는다) 하면서 색은 [tint]로 바꾸는 색 행렬.
+  static ColorFilter _knockOut(Color tint) => ColorFilter.matrix([
+        0, 0, 0, 0, tint.r * _channelMax, //
+        0, 0, 0, 0, tint.g * _channelMax, //
+        0, 0, 0, 0, tint.b * _channelMax, //
+        -_lumaRed, -_lumaGreen, -_lumaBlue, 1, 0,
+      ]);
+}
+
+/// 판 안쪽 회색 테두리(오른쪽은 열린 둥근 사각형). 깃발이면 그 색을 덧칠한다 — 전체는 오른쪽 끝으로 갈수록 옅게,
+/// 모서리는 왼쪽 위에서 [_dEdgeFlagReach]까지 번지게.
+class _TowerEdgePainter extends CustomPainter {
+  const _TowerEdgePainter(this.flag, this.color);
+
+  final _EdgeFlag flag;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const half = _dEdgeWidth / 2;
+    final right = size.width;
+    final bottom = size.height - half;
+    const radius = _dEdgeRadius - half;
+    final path = Path()
+      ..moveTo(right, half)
+      ..lineTo(half + radius, half)
+      ..arcToPoint(const Offset(half, half + radius), radius: const Radius.circular(radius), clockwise: false)
+      ..lineTo(half, bottom - radius)
+      ..arcToPoint(Offset(half + radius, bottom), radius: const Radius.circular(radius), clockwise: false)
+      ..lineTo(right, bottom);
+    final stroke = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = _dEdgeWidth;
+    canvas.drawPath(path, stroke..color = AppColors.replayTowerBorder);
+    if (flag == _EdgeFlag.none) {
+      return;
+    }
+    final transparent = color.withValues(alpha: 0);
+    final shader = flag == _EdgeFlag.full
+        ? LinearGradient(colors: [color, color, transparent], stops: const [0, _edgeFlagSolidStop, 1])
+            .createShader(Offset.zero & size)
+        : RadialGradient(
+            center: Alignment.topLeft,
+            radius: 1,
+            colors: [color, color, transparent],
+            stops: const [0, _edgeFlagSolidStop, 1],
+          ).createShader(Rect.fromCircle(center: Offset.zero, radius: _dEdgeFlagReach));
+    canvas.drawPath(path, stroke..shader = shader);
+  }
+
+  @override
+  bool shouldRepaint(_TowerEdgePainter oldDelegate) => oldDelegate.flag != flag || oldDelegate.color != color;
+}
+
+/// [base] 색 위에 왼쪽 아래에서 오른쪽 위로 가는 [stripe] 색 사선 줄무늬(깃발 배너·따라가는 차 줄).
+class _TowerStripePainter extends CustomPainter {
+  const _TowerStripePainter(this.base, this.stripe, {this.gap = _dBannerStripeGap, this.width = _dBannerStripeWidth});
+
+  final Color base;
+  final Color stripe;
+  final double gap;
+  final double width;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRect(Offset.zero & size, Paint()..color = base);
+    final paint = Paint()
+      ..color = stripe
+      ..strokeWidth = width;
+    canvas.save();
+    canvas.clipRect(Offset.zero & size);
+    for (var x = -size.height; x < size.width; x += gap) {
+      canvas.drawLine(Offset(x, size.height), Offset(x + size.height, 0), paint);
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_TowerStripePainter oldDelegate) =>
+      oldDelegate.base != base || oldDelegate.stripe != stripe || oldDelegate.gap != gap || oldDelegate.width != width;
+}
+
+/// 깃발 배너 아래 칸: 어두운 바탕에 옅은 + 무늬 격자.
+class _BandPainter extends CustomPainter {
+  const _BandPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRect(Offset.zero & size, Paint()..color = AppColors.replayTowerBandBody);
+    final grid = Paint()
+      ..color = AppColors.replayTowerBandGrid
+      ..strokeWidth = _dBandGridStroke;
+    for (var y = _dBandGridStep / 2; y < size.height; y += _dBandGridStep) {
+      for (var x = _dBandGridStep / 2; x < size.width; x += _dBandGridStep) {
+        canvas
+          ..drawLine(Offset(x - _dBandGridArm, y), Offset(x + _dBandGridArm, y), grid)
+          ..drawLine(Offset(x, y - _dBandGridArm), Offset(x, y + _dBandGridArm), grid);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_BandPainter oldDelegate) => false;
+}
+
+/// 피니시 칸 체커 무늬(흰·검정 칸).
+class _BadgeCheckerPainter extends CustomPainter {
+  const _BadgeCheckerPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cell = size.width / _checkerCells;
+    final rows = (size.height / cell).floor();
+    final top = (size.height - rows * cell) / 2;
+    final white = Paint()..color = AppColors.replayHudText;
+    final black = Paint()..color = AppColors.replayTowerFocusInk;
+    for (var r = 0; r < rows; r++) {
+      for (var c = 0; c < _checkerCells; c++) {
+        canvas.drawRect(Rect.fromLTWH(c * cell, top + r * cell, cell, cell), (r + c).isEven ? white : black);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_BadgeCheckerPainter oldDelegate) => false;
+}
+
 
 /// 하단 오른쪽 텔레메트리 판 치수(디자인 크기 — 재생 화면에 맞춰 줄어든다).
 const double kBroadcastTelemetryWidth = 230;
@@ -585,28 +1168,6 @@ class BroadcastFinishStrip extends StatelessWidget {
           ),
         ),
       );
-}
-
-/// 깃발 배너 바탕: [base] 색 위에 왼쪽 아래에서 오른쪽 위로 가는 [stripe] 색 사선 줄무늬.
-class _StripePainter extends CustomPainter {
-  const _StripePainter(this.base, this.stripe);
-
-  final Color base;
-  final Color stripe;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.drawRect(Offset.zero & size, Paint()..color = base);
-    final paint = Paint()
-      ..color = stripe
-      ..strokeWidth = _flagStripeWidth;
-    for (var x = -size.height; x < size.width; x += _flagStripeGap) {
-      canvas.drawLine(Offset(x, size.height), Offset(x + size.height, 0), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_StripePainter oldDelegate) => oldDelegate.base != base || oldDelegate.stripe != stripe;
 }
 
 /// 체커 무늬 칸(세로는 부모 높이를 채운다).

@@ -81,6 +81,9 @@ const double _bannerGap = 6;
 /// 재생 화면 폭이 이보다 좁으면 순위표를 좁게(간격 칸 없이).
 const double _compactTowerMaxViewWidth = 600;
 
+/// 순위표가 차지할 수 있는 재생 화면 폭 비율(높이에 맞춰 키우다 이 폭에서 멈춘다).
+const double _towerWidthFraction = 0.3;
+
 /// 오른쪽 아래 텔레메트리 판이 차지할 수 있는 재생 화면 폭·높이 비율(넘으면 줄인다).
 const double _telemetryWidthFraction = 0.24;
 const double _telemetryHeightFraction = 0.55;
@@ -802,7 +805,15 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
   Widget _viewSized(BuildContext context, HighlightClip clip, BoxConstraints box) {
     final highlights = widget.highlights;
     final compact = box.maxWidth < _compactTowerMaxViewWidth;
-    final towerWidth = clip.standings.isEmpty ? 0.0 : (compact ? kBroadcastCompactTowerWidth : kBroadcastTowerWidth);
+    final towerRows = clip.standings.fold(0, (rows, standing) => math.max(rows, standing.rows.length));
+    final towerWidth = clip.standings.isEmpty
+        ? 0.0
+        : broadcastTowerWidth(
+            height: box.maxHeight - _overlayInset * 2,
+            maxWidth: box.maxWidth * _towerWidthFraction,
+            rows: towerRows,
+            compact: compact,
+          );
     final captionLeft = _overlayInset + (towerWidth == 0 ? 0 : towerWidth + _overlayInset);
     final focus = compact ? null : _focus;
     final telemetryMaxWidth = box.maxWidth * _telemetryWidthFraction;
@@ -822,6 +833,7 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
               valueListenable: _time,
               builder: (context, time, _) => BroadcastStandingsTower(
                 compact: compact,
+                rowCapacity: towerRows,
                 standing: clip.standingAt(time)!,
                 totalLaps: highlights.totalLaps,
                 nameOf: highlights.nameOf,
