@@ -91,6 +91,15 @@ const double _singleRowControlsMinWidth = 760;
 /// 재생 화면 폭이 이보다 넓으면 큰 화면 높이.
 const double _wideViewMinWidth = 700;
 
+/// 넓은 재생 화면 높이: 폭의 16:9. 최소 [kGhostReplayWideHeight], 최대는 브라우저 높이 − [_viewChromeHeight]
+/// (위쪽 바·머리·묶음 버튼·조작 줄이 한 화면에 들어오게, 순수 함수).
+const double _viewAspect = 9 / 16;
+const double _viewChromeHeight = 300;
+double highlightsViewHeight(double viewWidth, double screenHeight) {
+  final fit = math.max(kGhostReplayWideHeight, screenHeight - _viewChromeHeight);
+  return (viewWidth * _viewAspect).clamp(kGhostReplayWideHeight, fit).toDouble();
+}
+
 /// 장면 목록표: 재생기와의 간격, 오른쪽에 둘 때 최소·최대 폭(최소 폭이 안 남으면 재생기 아래), 아래에 둘 때 최대 높이.
 const double _listGap = 12;
 const double _listMinWidth = 300;
@@ -708,7 +717,9 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
               builder: (context, box) => ClipRRect(
                 borderRadius: BorderRadius.circular(_viewRadius),
                 child: SizedBox(
-                  height: box.maxWidth >= _wideViewMinWidth ? kGhostReplayWideHeight : kGhostReplayNarrowHeight,
+                  height: box.maxWidth >= _wideViewMinWidth
+                      ? highlightsViewHeight(box.maxWidth, MediaQuery.sizeOf(context).height)
+                      : kGhostReplayNarrowHeight,
                   child: clip == null ? _emptyView(palette) : _view(context, clip),
                 ),
               ),
