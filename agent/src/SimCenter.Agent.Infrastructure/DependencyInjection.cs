@@ -35,11 +35,8 @@ public static class DependencyInjection
         services.AddSingleton<ConnectionThresholds>();
         services.AddSingleton<GameConnectionMonitor>();
 
-        services.AddSingleton(sp =>
-        {
-            var options = sp.GetRequiredService<IOptions<AgentOptions>>().Value;
-            return new F1PacketMapper(options.ExpectedPacketFormat, sp.GetRequiredService<ILogger<F1PacketMapper>>());
-        });
+        // UDP 형식 2025·2026을 모두 읽는다(F1PacketFormats).
+        services.AddSingleton<F1PacketMapper>();
 
         // 세션별 게임 에디션(F1 25 / F1 26 = 2026 시즌팩) 판별. 파이프라인이 프레임을 먹이고 봉투 생성기가 현재 값을 쓴다 — 같은 인스턴스.
         services.AddSingleton(sp =>

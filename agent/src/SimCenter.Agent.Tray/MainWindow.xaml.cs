@@ -9,6 +9,7 @@ using SimCenter.Agent.Core.Connection;
 using SimCenter.Agent.Core.Telemetry;
 using SimCenter.Agent.Infrastructure.Configuration;
 using SimCenter.Agent.Infrastructure.Credentials;
+using SimCenter.Agent.Infrastructure.Mapping;
 using SimCenter.Agent.Infrastructure.Pairing;
 using SimCenter.Agent.Infrastructure.Upload;
 using Brush = System.Windows.Media.Brush;
@@ -112,7 +113,7 @@ public partial class MainWindow : Window
 
         // 패킷 포맷 옆에 지금 세션의 게임(F1 25 / 2026 시즌팩 = F1 26)을 함께 보인다.
         PacketFormatValue.Text = snapshot.DetectedPacketFormat is { } fmt
-            ? (fmt == _options.ExpectedPacketFormat ? fmt.ToString() : $"{fmt} (기대 {_options.ExpectedPacketFormat})")
+            ? (F1PacketFormats.IsSupported(fmt) ? fmt.ToString() : $"{fmt} (지원 {F1PacketFormats.SupportedLabel})")
               + $" · {GameEditions.DisplayName(_edition.GameCode)}"
             : "—";
 

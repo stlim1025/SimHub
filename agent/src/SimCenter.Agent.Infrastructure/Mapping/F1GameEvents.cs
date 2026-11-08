@@ -15,14 +15,14 @@ internal static class F1GameEvents
     private const int MillisecondsPerSecond = 1000;
     private const int CodeLength = 4;
 
-    /// <summary>싣지 않는 이벤트면 null.</summary>
-    public static (string Code, IReadOnlyDictionary<string, object?> Details)? Map(EventDataPacket packet)
+    /// <summary>싣지 않는 이벤트면 null. 충돌 강도(0 낮음 · 1 중간 · 2 높음)는 2026 형식에만 있어 그때만 충돌 상세에 싣는다.</summary>
+    public static (string Code, IReadOnlyDictionary<string, object?> Details)? Map(EventDataPacket packet, byte? collisionSeverity)
     {
         var details = packet.EventDetails;
         return details.EventType switch
         {
             F1Events.EventType.SessionStarted or F1Events.EventType.SessionEnded or F1Events.EventType.ButtonStatus => null,
-            _ => (CodeOf(details.EventType), DetailsOf(details)),
+            _ => (CodeOf(details.EventType), DetailsOf(details, collisionSeverity)),
         };
     }
 
@@ -34,7 +34,7 @@ internal static class F1GameEvents
         return Encoding.ASCII.GetString(bytes);
     }
 
-    private static IReadOnlyDictionary<string, object?> DetailsOf(F1Events.EventDetails details)
+    private static IReadOnlyDictionary<string, object?> DetailsOf(F1Events.EventDetails details, byte? collisionSeverity)
     {
         var bag = new DetailBag();
         if (details.TryGetPenaltyEvent(out var penalty))
@@ -78,13 +78,13 @@ internal static class F1GameEvents
         }
         else
         {
-            AddOtherDetails(bag, details);
+            AddOtherDetails(bag, details, collisionSeverity);
         }
 
         return bag.Build();
     }
 
-    private static void AddOtherDetails(DetailBag bag, F1Events.EventDetails details)
+    private static void AddOtherDetails(DetailBag bag, F1Events.EventDetails details, byte? collisionSeverity)
     {
         if (details.TryGetStartLightsEvent(out var lights))
         {
@@ -115,6 +115,10 @@ internal static class F1GameEvents
         else if (details.TryGetCollisionEvent(out var collision))
         {
             bag.Add("vehicle1Index", collision.Vehicle1Index).Add("vehicle2Index", collision.Vehicle2Index);
+            if (collisionSeverity is { } severity)
+            {
+                bag.Add("severity", severity);
+            }
         }
     }
 

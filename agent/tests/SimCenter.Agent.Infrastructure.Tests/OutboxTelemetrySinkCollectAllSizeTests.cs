@@ -32,7 +32,7 @@ public sealed class OutboxTelemetrySinkCollectAllSizeTests : IAsyncLifetime
     private readonly ITestOutputHelper _output;
     private readonly TelemetryOutbox _outbox = new(Options.Create(new AgentOptions { OutboxPath = ":memory:" }));
     private readonly OutboxTelemetrySink _sut;
-    private readonly F1PacketMapper _mapper = new(2025, NullLogger<F1PacketMapper>.Instance);
+    private readonly F1PacketMapper _mapper = new(NullLogger<F1PacketMapper>.Instance);
     private readonly Random _random = new(RandomSeed);
 
     public OutboxTelemetrySinkCollectAllSizeTests(ITestOutputHelper output)
@@ -62,7 +62,7 @@ public sealed class OutboxTelemetrySinkCollectAllSizeTests : IAsyncLifetime
         _output.WriteLine(
             $"Spa 7,004m: {trace.TimeMs.Count} samples @5m, extra {trace.Extra!.Count} channels — payload @5m {fullBytes} bytes; " +
             $"enqueued envelope {Utf8Bytes(json)} bytes @{resolution}m (limit {OutboxTelemetrySink.MaxEnvelopeBytes})");
-        Assert.Equal(118, trace.Extra.Count);
+        Assert.Equal(124, trace.Extra.Count);   // 2025 118 + 2026 Car Telemetry 2 여섯
         Assert.True(Utf8Bytes(json) <= OutboxTelemetrySink.MaxEnvelopeBytes);
         Assert.Equal(trace.Extra.Count, wireTrace.GetProperty("extra").EnumerateObject().Count());   // 해상도는 낮아져도 채널은 다 간다
         Assert.Equal(JsonValueKind.Object, payload.GetProperty("car").GetProperty("details").ValueKind);
@@ -84,6 +84,7 @@ public sealed class OutboxTelemetrySinkCollectAllSizeTests : IAsyncLifetime
             Feed(recorder, F1ExtraChannels.FromLapData(LapDataAt(phase)));
             var telemetry = Telemetry(phase);
             Feed(recorder, F1ExtraChannels.FromCarTelemetry(telemetry, suggestedGear: 0));
+            Feed(recorder, F1ExtraChannels.FromCarTelemetry2(Telemetry2(phase)));
             recorder.UpdatePosition(i * LapTraceRecorder.DefaultResolutionM, (int)(phase * SpaLapTimeMs));
             recorder.Record(_mapper.MapCarTelemetry(telemetry, header));
         }
@@ -115,6 +116,17 @@ public sealed class OutboxTelemetrySinkCollectAllSizeTests : IAsyncLifetime
         TyresPressure = Wheels(() => (float)(21.5 + Noise(1.5))),
         SurfaceType = Wheels(() => _random.NextDouble() < 0.1 ? F1Enums.Surface.RumbleStrip : F1Enums.Surface.Tarmac),
     };
+
+    /// <summary>2026 형식 Car Telemetry 2 — 가장 큰 경우(UDP 형식 2026)를 재려고 싣는다.</summary>
+    private Season2026CarTelemetry2 Telemetry2(double phase) => new(
+        ActiveAeroMode: (byte)(phase is > 0.1 and < 0.2 ? 1 : 0),
+        ActiveAeroAvailable: true,
+        ActiveAeroActivationDistance: (ushort)_random.Next(2_000),
+        OvertakeAvailable: _random.NextDouble() < 0.5,
+        OvertakeActive: _random.NextDouble() < 0.1,
+        OvertakeActivationDistance: (ushort)_random.Next(2_000),
+        Regulations2026Applicable: true,
+        IsDrivingWrongWay: false);
 
     private CarStatusData Status(double phase) => new()
     {
@@ -209,15 +221,23 @@ public sealed class OutboxTelemetrySinkCollectAllSizeTests : IAsyncLifetime
         {
             [F1DetailSections.Setup] = DetailValues.Sanitize(F1DetailSections.FromSetup(new CarSetupData { FrontCamber = -3.5f, TyresPressure = Wheels(() => 22.4f) }, 30f)),
             [F1DetailSections.Damage] = DetailValues.Sanitize(F1DetailSections.FromDamage(default)),
-            [F1DetailSections.Status] = DetailValues.Sanitize(F1DetailSections.FromStatus(new CarStatusData { MaxRPM = 13_000, EnginePowerICE = 592_123.4f })),
+            [F1DetailSections.Status] = DetailValues.Sanitize(F1DetailSections.FromStatus(new CarStatusData { MaxRPM = 13_000, EnginePowerICE = 592_123.4f }, 8_500_000.5f)),
             [F1DetailSections.TyreSets] = DetailValues.Sanitize(F1DetailSections.FromTyreSets(tyreSets)),
-            [F1DetailSections.TimeTrial] = DetailValues.Sanitize(F1DetailSections.FromTimeTrial(default)),
-            [F1DetailSections.Session] = DetailValues.Sanitize(F1SessionDetails.From(session)),
+            [F1DetailSections.TimeTrial] = DetailValues.Sanitize(F1DetailSections.FromTimeTrial(default, default, default)),
+            [F1DetailSections.Session] = DetailValues.Sanitize(F1SessionDetails.From(session, LargestSessionTail())),
             [F1DetailSections.Participant] = DetailValues.Sanitize(F1DetailSections.FromParticipant(default, 0, "S. LIM")),
-            [F1DetailSections.LapData] = DetailValues.Sanitize(F1DetailSections.FromLapData(default, 0, default)),
+            [F1DetailSections.LapData] = DetailValues.Sanitize(F1DetailSections.FromLapData(default, 0, default, default)),
             [LapDetailsTracker.EventsKey] = events,
             [LapDetailsTracker.SessionHistoryKey] = new LapHistoryEntry(5, 106_123, 31_456, 44_789, 29_878, true, true, true, true),
         };
+    }
+
+    /// <summary>2026 형식 Session 꼬리의 가장 큰 경우 — 액티브 에어로 구역 8 + 8, DRS 구역 4.</summary>
+    private static Season2026SessionTail LargestSessionTail()
+    {
+        var aero = Enumerable.Range(0, 8).Select(i => (Start: (i * 0.1f) + 0.012f, End: (i * 0.1f) + 0.058f)).ToArray();
+        var drs = Enumerable.Range(0, 4).Select(i => (Start: (i * 0.2f) + 0.013f, End: (i * 0.2f) + 0.091f)).ToArray();
+        return new Season2026SessionTail(1, aero, aero, drs, 0.234f, 1, 2);
     }
 
     private static LapFinished Lap(LapTrace trace, IReadOnlyDictionary<string, object?> details) => new(

@@ -82,6 +82,33 @@ internal static class F1SessionDetails
         .Add("sector3LapDistanceStart", packet.Sector3LapDistanceStart)
         .Build();
 
+    /// <summary>
+    /// 2026 형식: 2025 묶음 + Session 꼬리 — 액티브 에어로 상태(0 전체 · 1 부분)와 구역(전체·부분), DRS 구역(랩 비율 시작·끝),
+    /// 출발 반응 시간(초), 세션 ABS·TC 보조 설정(게임 원시 값).
+    /// </summary>
+    public static IReadOnlyDictionary<string, object?> From(SessionDataPacket packet, Season2026SessionTail tail) =>
+        new Dictionary<string, object?>(From(packet), StringComparer.Ordinal)
+        {
+            ["activeAeroTrackStatus"] = (int)tail.ActiveAeroTrackStatus,
+            ["activeAeroZonesFull"] = Zones(tail.ActiveAeroZonesFull),
+            ["activeAeroZonesPartial"] = Zones(tail.ActiveAeroZonesPartial),
+            ["drsZones"] = Zones(tail.DrsZones),
+            ["startReactionTimeS"] = tail.StartReactionTime,
+            ["antiLockBrakesAssist"] = (int)tail.AntiLockBrakesAssist,
+            ["tractionControlAssist"] = (int)tail.TractionControlAssist,
+        };
+
+    private static object?[] Zones(IReadOnlyList<(float Start, float End)> zones)
+    {
+        var mapped = new object?[zones.Count];
+        for (var i = 0; i < zones.Count; i++)
+        {
+            mapped[i] = new DetailBag().Add("zoneStart", zones[i].Start).Add("zoneEnd", zones[i].End).Build();
+        }
+
+        return mapped;
+    }
+
     private static object?[] MarshalZones(SessionDataPacket packet)
     {
         var zones = packet.MarshalZones.AsReadOnlySpan();

@@ -14,9 +14,6 @@ public sealed class AgentOptions
     /// <summary>대상 게임 코드(D-14).</summary>
     public string GameCode { get; set; } = "F1_25";
 
-    /// <summary>기대 UDP 패킷 포맷(F1 25 = 2025). 불일치 패킷은 스킵(OCP, D-20).</summary>
-    public int ExpectedPacketFormat { get; set; } = 2025;
-
     /// <summary>
     /// 서버 기본 주소(예: http://localhost:5284). 연결 API·TelemetryHub 주소는 <see cref="AgentEndpoints"/>로 만든다.
     /// 비면 업로드 비활성(이벤트는 Outbox에 계속 적재된다).

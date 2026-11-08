@@ -15,7 +15,6 @@ namespace SimCenter.Agent.Infrastructure.Tests;
 
 public class TelemetryPipelineAnalyzerTests
 {
-    private const int ExpectedPacketFormat = 2025;
     private static readonly DateTime Now = new(2026, 10, 17, 9, 0, 0, DateTimeKind.Utc);
 
     private static EventMarker Frame(string sessionRef = "s1") => new(sessionRef, SessionBoundary.Start);
@@ -43,7 +42,7 @@ public class TelemetryPipelineAnalyzerTests
         var edition = new GameEditionDetector(GameEditions.F1_25);
         return new TelemetryPipeline(
             new UdpTelemetryListener(port: 0, NullLogger<UdpTelemetryListener>.Instance),
-            new F1PacketMapper(ExpectedPacketFormat, NullLogger<F1PacketMapper>.Instance),
+            new F1PacketMapper(NullLogger<F1PacketMapper>.Instance),
             analyzers,
             new DomainEventFactory(clock, new SequentialIds(), edition),
             edition,

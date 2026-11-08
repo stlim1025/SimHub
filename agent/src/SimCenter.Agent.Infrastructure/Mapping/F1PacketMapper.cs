@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using F1Game.UDP;
 using F1Game.UDP.Data;
 using F1Game.UDP.Packets;
@@ -36,42 +37,56 @@ public sealed partial class F1PacketMapper
 
     private static readonly IReadOnlyList<ITelemetryFrame> Empty = Array.Empty<ITelemetryFrame>();
 
-    private readonly int _expectedPacketFormat;
     private readonly ILogger<F1PacketMapper> _logger;
 
     /// <summary>이미 경고한 버림 사유(예: <c>parse:2</c>, <c>format:2024</c>). 파이프라인이 단일 스레드로 호출하므로 잠금 없이 쓴다.</summary>
     private readonly HashSet<string> _warnedDropReasons = [];
 
-    public F1PacketMapper(int expectedPacketFormat, ILogger<F1PacketMapper> logger)
+    public F1PacketMapper(ILogger<F1PacketMapper> logger)
     {
-        _expectedPacketFormat = expectedPacketFormat;
         _logger = logger;
     }
 
-    /// <summary>원시 데이터그램을 파싱해 프레임으로 매핑한다. 파싱 실패/무관 패킷은 빈 목록.</summary>
+    /// <summary>원시 데이터그램을 파싱해 프레임으로 매핑한다. 파싱 실패/무관 패킷은 빈 목록. 2026 형식은 <see cref="Season2026Wire"/>로 읽는다.</summary>
     public IReadOnlyList<ITelemetryFrame> Map(ReadOnlySpan<byte> datagram)
     {
-        UnionPacket packet;
+        if (datagram.Length >= sizeof(ushort) && BinaryPrimitives.ReadUInt16LittleEndian(datagram) == F1PacketFormats.Season2026)
+        {
+            return MapSeason2026(datagram);
+        }
+
+        return TryParse(datagram, out var packet) ? Map(packet) : Empty;
+    }
+
+    /// <summary>F1Game.UDP 25.1.1로 해석한다. 실패하면 패킷 종류마다 한 번 경고하고 false.</summary>
+    private bool TryParse(ReadOnlySpan<byte> datagram, out UnionPacket packet)
+    {
         try
         {
             packet = PacketReader.ToPacket(datagram);
+            return true;
         }
         catch (Exception ex) when (ex is ParsingException or NotEnoughBytesException or InvalidPacketTypeException)
         {
-            var packetId = datagram.Length > PacketIdOffset ? datagram[PacketIdOffset].ToString() : UnknownPacketId;
-            if (IsFirstDrop($"parse:{packetId}"))
-            {
-                _logger.LogWarning(
-                    "F1 패킷 해석 실패(packetId={PacketId}, {Length}바이트) — F1Game.UDP 버전이 게임의 UDP 형식과 맞는지 확인하세요. 같은 종류는 다시 기록하지 않습니다: {Reason}",
-                    packetId,
-                    datagram.Length,
-                    ex.Message);
-            }
-
-            return Empty;
+            WarnUnreadable(datagram, ex.Message);
+            packet = default;
+            return false;
         }
+    }
 
-        return Map(packet);
+    private void WarnUnreadable(ReadOnlySpan<byte> datagram, string reason)
+    {
+        var packetId = datagram.Length > PacketIdOffset ? datagram[PacketIdOffset].ToString() : UnknownPacketId;
+        var format = datagram.Length >= sizeof(ushort) ? BinaryPrimitives.ReadUInt16LittleEndian(datagram) : 0;
+        if (IsFirstDrop($"parse:{format}:{packetId}"))
+        {
+            _logger.LogWarning(
+                "F1 패킷 해석 실패(형식 {Format}, packetId={PacketId}, {Length}바이트) — 게임의 UDP 형식이 Agent가 아는 배치와 맞는지 확인하세요. 같은 종류는 다시 기록하지 않습니다: {Reason}",
+                format,
+                packetId,
+                datagram.Length,
+                reason);
+        }
     }
 
     /// <summary>
@@ -80,45 +95,55 @@ public sealed partial class F1PacketMapper
     /// </summary>
     private bool IsFirstDrop(string reason) => _warnedDropReasons.Add(reason);
 
-    /// <summary>파싱된 UnionPacket을 프레임으로 매핑(버전 검증 포함).</summary>
+    /// <summary>파싱된 UnionPacket(2025 형식)을 프레임으로 매핑(버전 검증 포함). 2026 형식은 원시 데이터그램으로만 들어온다(<see cref="Map(ReadOnlySpan{byte})"/>).</summary>
     public IReadOnlyList<ITelemetryFrame> Map(UnionPacket packet)
     {
-        // 버전 가드: 기대 포맷이 아니면 스킵(다른 연식 패킷, D-20/OCP).
-        if (packet.Header.PacketFormat != _expectedPacketFormat)
+        // 버전 가드: 다른 연식 패킷은 스킵(D-20/OCP).
+        if (packet.Header.PacketFormat != F1PacketFormats.Season2025)
         {
-            if (IsFirstDrop($"format:{packet.Header.PacketFormat}"))
-            {
-                _logger.LogWarning(
-                    "UDP 형식 {Actual} 패킷을 버립니다 — Agent는 {ExpectedFormat} 형식만 읽습니다. 게임의 텔레메트리 설정에서 UDP 형식을 확인하세요. 같은 형식은 다시 기록하지 않습니다",
-                    packet.Header.PacketFormat,
-                    _expectedPacketFormat);
-            }
-
+            WarnUnsupportedFormat(packet.Header.PacketFormat);
             return Empty;
         }
 
+        return MapParsed(packet);
+    }
+
+    private void WarnUnsupportedFormat(int packetFormat)
+    {
+        if (IsFirstDrop($"format:{packetFormat}"))
+        {
+            _logger.LogWarning(
+                "UDP 형식 {Actual} 패킷을 버립니다 — Agent는 {Supported} 형식만 읽습니다. 게임의 텔레메트리 설정에서 UDP 형식을 확인하세요. 같은 형식은 다시 기록하지 않습니다",
+                packetFormat,
+                F1PacketFormats.SupportedLabel);
+        }
+    }
+
+    /// <summary>형식 검사를 마친 패킷. 2026 형식에서 배치가 2025와 같은 패킷(Session 앞부분·Event·Session History·Tyre Sets·Motion Ex)도 여기로 온다.</summary>
+    private IReadOnlyList<ITelemetryFrame> MapParsed(UnionPacket packet)
+    {
         switch (packet.PacketType)
         {
             case F1Enums.PacketType.Session when packet.TryGetSessionDataPacket(out var session):
                 return [MapSession(session), DetailsFrame(session.Header, F1DetailSections.Session, F1SessionDetails.From(session))];
 
             case F1Enums.PacketType.LapData when packet.TryGetLapDataPacket(out var lapPacket):
-                return MapLapDataPacket(lapPacket);
+                return MapLapDataPacket(lapPacket.Header, lapPacket.LapData.AsReadOnlySpan(), lapPacket.TimeTrialPBCarIdx, lapPacket.TimeTrialRivalCarIdx);
 
             case F1Enums.PacketType.CarTelemetry when packet.TryGetCarTelemetryDataPacket(out var telemetry):
-                return MapCarTelemetryPacket(telemetry);
+                return MapCarTelemetryPacket(telemetry.Header, telemetry.CarTelemetryData.AsReadOnlySpan(), telemetry.SuggestedGear);
 
             case F1Enums.PacketType.CarStatus when packet.TryGetCarStatusDataPacket(out var status):
-                return [.. MapPlayerCar(packet.PacketType, packet.Header, status.CarStatusData.AsReadOnlySpan(), MapCarStatusFrames), MapFieldStatus(status)];
+                return MapCarStatusPacket(status.Header, status.CarStatusData.AsReadOnlySpan(), ersHarvestLimitPerLap: null);
 
             case F1Enums.PacketType.CarDamage when packet.TryGetCarDamageDataPacket(out var damage):
-                return [.. MapPlayerCar(packet.PacketType, packet.Header, damage.CarDamageData.AsReadOnlySpan(), MapCarDamageFrames), MapFieldDamage(damage)];
+                return MapCarDamagePacket(damage.Header, damage.CarDamageData.AsReadOnlySpan());
 
             case F1Enums.PacketType.Event when packet.TryGetEventDataPacket(out var eventPacket):
-                return MapEventFrames(eventPacket);
+                return MapEventFrames(eventPacket, collisionSeverity: null);
 
             case F1Enums.PacketType.Participants when packet.TryGetParticipantsDataPacket(out var participants):
-                return MapParticipantsFrames(participants);
+                return MapParticipantsFrames(participants.Header, ParticipantSlot.From(participants.Participants.AsReadOnlySpan()));
 
             case F1Enums.PacketType.FinalClassification when packet.TryGetFinalClassificationDataPacket(out var classification):
                 return [MapClassification(classification)];
@@ -182,29 +207,33 @@ public sealed partial class F1PacketMapper
         RainForecastPercent: RainForecast.Select(packet));
 
     /// <summary>참가자 배열 전체를 carIndex 순서로 매핑한다(12 §5.2). 사람(네트워크) 드라이버는 <c>GameDriverId = null</c>.</summary>
-    public ParticipantsFrame MapParticipants(ParticipantsDataPacket packet)
+    public ParticipantsFrame MapParticipants(ParticipantsDataPacket packet) =>
+        MapParticipants(packet.Header, ParticipantSlot.From(packet.Participants.AsReadOnlySpan()));
+
+    private static ParticipantsFrame MapParticipants(PacketHeader header, IReadOnlyList<ParticipantSlot> slots)
     {
-        var slots = packet.Participants.AsReadOnlySpan();
-        var participants = new List<ParticipantInfo>(slots.Length);
-        for (var carIndex = 0; carIndex < slots.Length; carIndex++)
+        var participants = new List<ParticipantInfo>(slots.Count);
+        for (var carIndex = 0; carIndex < slots.Count; carIndex++)
         {
             var slot = slots[carIndex];
             participants.Add(new ParticipantInfo(
                 CarIndex: carIndex,
                 Name: CutAtFirstNul(slot.Name),
-                GameDriverId: slot.Driver == F1Enums.Driver.NetworkHuman ? null : (int)slot.Driver,
-                TeamId: (int)slot.Team,
-                RaceNumber: slot.RaceNumber,
-                IsAiControlled: slot.IsAiControlled));
+                GameDriverId: slot.IsNetworkHuman ? null : slot.DriverId,
+                TeamId: slot.TeamId,
+                RaceNumber: slot.Data.RaceNumber,
+                IsAiControlled: slot.Data.IsAiControlled));
         }
 
-        return new ParticipantsFrame(packet.Header.SessionUID.ToString(), participants, packet.Header.PlayerCarIndex);
+        return new ParticipantsFrame(header.SessionUID.ToString(), participants, header.PlayerCarIndex);
     }
 
     /// <summary>최종 순위표를 매핑한다. 빈 그리드 칸(Invalid·Inactive 또는 Position 0)은 뺀다(12 §5.2).</summary>
-    public ClassificationFrame MapClassification(FinalClassificationDataPacket packet)
+    public ClassificationFrame MapClassification(FinalClassificationDataPacket packet) =>
+        MapClassification(packet.Header, packet.ClassificationData.AsReadOnlySpan());
+
+    private static ClassificationFrame MapClassification(PacketHeader header, ReadOnlySpan<FinalClassificationData> slots)
     {
-        var slots = packet.ClassificationData.AsReadOnlySpan();
         var rows = new List<ClassificationRow>(slots.Length);
         for (var carIndex = 0; carIndex < slots.Length; carIndex++)
         {
@@ -217,7 +246,7 @@ public sealed partial class F1PacketMapper
             rows.Add(MapClassificationRow(carIndex, slot));
         }
 
-        return new ClassificationFrame(packet.Header.SessionUID.ToString(), packet.Header.PlayerCarIndex, rows);
+        return new ClassificationFrame(header.SessionUID.ToString(), header.PlayerCarIndex, rows);
     }
 
     /// <summary>Invalid·Inactive 칸, 순위 0, 또는 백엔드가 받는 상한(<see cref="MaxClassifiedPosition"/>)을 넘는 쓰레기 순위는 빈 칸이다.</summary>

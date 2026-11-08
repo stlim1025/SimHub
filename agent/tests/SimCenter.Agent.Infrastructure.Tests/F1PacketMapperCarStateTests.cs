@@ -19,7 +19,7 @@ public class F1PacketMapperCarStateTests
     private const int ForecastSlotCount = 64;
     private const byte PlayerIndex = 3;
 
-    private readonly F1PacketMapper _sut = new(expectedPacketFormat: Format, NullLogger<F1PacketMapper>.Instance);
+    private readonly F1PacketMapper _sut = new(NullLogger<F1PacketMapper>.Instance);
 
     private static PacketHeader Header(ulong uid = 1001, byte playerIndex = PlayerIndex) =>
         new() { PacketFormat = Format, SessionUID = uid, PlayerCarIndex = playerIndex };

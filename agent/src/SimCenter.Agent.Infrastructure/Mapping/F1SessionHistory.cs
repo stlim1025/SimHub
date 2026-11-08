@@ -43,6 +43,20 @@ internal static class F1SessionHistory
         return new LapPositionsFrame(packet.Header.SessionUID.ToString(), FirstLapNumber: packet.StartingLap + 1, positions);
     }
 
+    /// <summary>Lap Positions(2026 형식 — 랩마다 24칸, <see cref="Season2026Wire"/>).</summary>
+    public static LapPositionsFrame MapSeason2026(ReadOnlySpan<byte> datagram, PacketHeader header)
+    {
+        var (numberOfLaps, startingLap) = Season2026Wire.LapPositionsRange(datagram);
+        var count = Math.Min(numberOfLaps, Season2026Wire.MaxLapPositionLaps);
+        var positions = new IReadOnlyList<int>[count];
+        for (var i = 0; i < count; i++)
+        {
+            positions[i] = ToInts(Season2026Wire.LapPositionsRow(datagram, i));
+        }
+
+        return new LapPositionsFrame(header.SessionUID.ToString(), FirstLapNumber: startingLap + 1, positions);
+    }
+
     private static LapHistoryEntry ToEntry(int lapNumber, LapHistoryData lap) => new(
         LapNumber: lapNumber,
         LapTimeMs: lap.LapTimeInMS > int.MaxValue ? int.MaxValue : (int)lap.LapTimeInMS,

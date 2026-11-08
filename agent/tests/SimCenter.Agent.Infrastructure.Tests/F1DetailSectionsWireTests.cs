@@ -21,7 +21,7 @@ public class F1DetailSectionsWireTests
     private const byte PlayerIndex = 2;
     private const string FixtureFolder = "Fixtures/F1_25";
 
-    private static readonly F1PacketMapper Mapper = new(Format, NullLogger<F1PacketMapper>.Instance);
+    private static readonly F1PacketMapper Mapper = new(NullLogger<F1PacketMapper>.Instance);
 
     [Fact]
     public void CarSetups_PlayerCar_MapsAllFieldsWithWheelNames()

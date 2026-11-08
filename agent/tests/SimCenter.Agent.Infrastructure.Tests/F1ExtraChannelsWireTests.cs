@@ -28,7 +28,7 @@ public class F1ExtraChannelsWireTests
     private const int CarStatusCarSize = 55;
     private const int MotionExPacketSize = 273;
 
-    private static readonly F1PacketMapper Mapper = new(Format, NullLogger<F1PacketMapper>.Instance);
+    private static readonly F1PacketMapper Mapper = new(NullLogger<F1PacketMapper>.Instance);
 
     [Fact]
     public void CarTelemetry_ExtraChannels_ComeBeforeTelemetryFrame_WithWheelNames()

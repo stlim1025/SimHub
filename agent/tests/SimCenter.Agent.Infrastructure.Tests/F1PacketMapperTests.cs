@@ -16,7 +16,7 @@ namespace SimCenter.Agent.Infrastructure.Tests;
 public class F1PacketMapperTests
 {
     private const int Format = 2025;
-    private readonly F1PacketMapper _sut = new(expectedPacketFormat: Format, NullLogger<F1PacketMapper>.Instance);
+    private readonly F1PacketMapper _sut = new(NullLogger<F1PacketMapper>.Instance);
 
     private static PacketHeader Header(ulong uid = 1001, byte playerIndex = 0) =>
         new() { PacketFormat = Format, SessionUID = uid, PlayerCarIndex = playerIndex };

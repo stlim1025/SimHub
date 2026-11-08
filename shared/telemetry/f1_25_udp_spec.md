@@ -357,3 +357,31 @@
 
 세션이 바뀌면 비운다. 봉투 한도를 넘으면 **랩 기록 → 타이어 스틴트** 순으로 뺀다. 22대 × 78랩(모나코 100%) ≈ 324KB로 보통은 그대로 간다.
 Session History의 타이어 스틴트 칸은 Final Classification의 `tyreStints`와 같아 싣지 않는다.
+
+---
+
+## 9. UDP 형식 2026 (F1 25 2026 시즌팩)
+
+게임 텔레메트리 설정의 UDP 형식을 2026으로 두면 `m_packetFormat` = 2026으로 온다(기존 저장 데이터는 2025, 새로 깐 게임은 2026이 기본). Agent는 2025·2026을 모두 읽는다.
+배치의 출처는 EA 2026 시즌팩 UDP 스펙을 옮긴 F1Game.UDP 26.0.0(MIT) — 25.1.1과 어셈블리 이름이 같아 함께 쓸 수 없으므로 Agent의 `Season2026Wire`가 2026 바이트를 25.1.1 구조체로 옮겨 같은 매핑을 탄다.
+
+| 2025와 다른 점 | 2026 |
+|---|---|
+| 차 칸 | 22 → **24**(My Team 12팀). 모든 차 표본·순위표·참가자도 24칸 |
+| Motion(0) G-force | float → int16, **1/1000 g**(Agent가 g로 바꿔 기존 채널·표본에 싣는다) |
+| Car Telemetry(6) 엔진 온도 | uint16 → uint8 |
+| Car Status(7) | MGU-H 회수량 뒤 `m_ersHarvestLimitPerLap`(float, J) 추가. ERS 모드 3 = Boost |
+| Participants(4) | 드라이버·네트워크·팀 ID uint8 → uint16(2026 팀 476~486, 사람 드라이버 65535) |
+| Time Trial(14) | 팀 ID uint8 → uint16 |
+| Session(1) | 끝에 173바이트: 액티브 에어로 상태·구역(전체·부분 각 8칸), DRS 구역(4칸, 랩 비율 시작·끝), 출발 반응 시간, ABS·TC 보조 등 |
+| Event(3) `COLL` | 차 두 대 뒤 강도 1바이트(0 낮음 · 1 중간 · 2 높음) |
+| Car Telemetry 2(**16**, 새 패킷) | 차마다 액티브 에어로 모드(0 코너 · 1 직선)·사용 가능·가능 지점까지 거리, 오버테이크 모드 사용 가능·사용 중·가능 지점까지 거리, 2026 규정 여부, 역주행 |
+
+2026에서만 싣는 값(2025 형식이면 키가 없다):
+
+| 위치 | 키 |
+|---|---|
+| 트레이스 extra(§6) | `activeAeroMode` `activeAeroAvailable` `activeAeroActivationDistance`(m) `overtakeAvailable` `overtakeActive` `overtakeActivationDistance`(m) — Car Telemetry 2의 플레이어 칸 |
+| `car.details.status`(§7) | `ersHarvestLimitPerLap`(J) |
+| `car.details.session`(§7) | `activeAeroTrackStatus` `activeAeroZonesFull[]` `activeAeroZonesPartial[]` `drsZones[]`(각 { `zoneStart` `zoneEnd` } 랩 비율) `startReactionTimeS` `antiLockBrakesAssist` `tractionControlAssist` |
+| `car.details.events[]` `COLL`(§7) | `severity` |

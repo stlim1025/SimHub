@@ -23,7 +23,7 @@ public class F1WireLayoutTests
     private const string FixtureFolder = "Fixtures/F1_25";
 
     private static F1PacketMapper Mapper(ILogger<F1PacketMapper>? logger = null) =>
-        new(Format, logger ?? NullLogger<F1PacketMapper>.Instance);
+        new(logger ?? NullLogger<F1PacketMapper>.Instance);
 
     private static byte[] ReadFixture(string name) =>
         File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, FixtureFolder, name));

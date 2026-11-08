@@ -99,6 +99,16 @@ internal static class F1ExtraChannels
         .Add("chassisPitchDeg", motion.ChassisPitch * DegreesPerRadian)
         .Build();
 
+    /// <summary>Car Telemetry 2(16, 2026 형식 전용) — 액티브 에어로(0 코너 · 1 직선 모드)·오버테이크 모드, 쓸 수 있게 되기까지 거리(m).</summary>
+    public static IReadOnlyDictionary<string, double> FromCarTelemetry2(Season2026CarTelemetry2 car) => new ChannelBag()
+        .Add("activeAeroMode", car.ActiveAeroMode, Integer)
+        .Add("activeAeroAvailable", car.ActiveAeroAvailable)
+        .Add("activeAeroActivationDistance", car.ActiveAeroActivationDistance, Integer)
+        .Add("overtakeAvailable", car.OvertakeAvailable)
+        .Add("overtakeActive", car.OvertakeActive)
+        .Add("overtakeActivationDistance", car.OvertakeActivationDistance, Integer)
+        .Build();
+
     /// <summary>Lap Data(2)의 플레이어 칸 — 순위·간격·세이프티카 델타.</summary>
     public static IReadOnlyDictionary<string, double> FromLapData(LapData lap) => new ChannelBag()
         .Add("carPosition", lap.CarPosition, Integer)

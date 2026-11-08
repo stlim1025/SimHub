@@ -61,8 +61,22 @@ internal static class F1DetailSections
         .Add("engineSeized", car.EngineSeized)
         .Build();
 
-    /// <summary>Car Status(7)의 나머지 — 보조 장치·한계값·출력·깃발(연료·ERS·타이어는 <c>car</c> 본체에 있다).</summary>
-    public static IReadOnlyDictionary<string, object?> FromStatus(CarStatusData car) => new DetailBag()
+    /// <summary>
+    /// Car Status(7)의 나머지 — 보조 장치·한계값·출력·깃발(연료·ERS·타이어는 <c>car</c> 본체에 있다).
+    /// 랩당 ERS 회수 한도(J)는 2026 형식에만 있어 그때만 싣는다.
+    /// </summary>
+    public static IReadOnlyDictionary<string, object?> FromStatus(CarStatusData car, float? ersHarvestLimitPerLap)
+    {
+        var bag = StatusBag(car);
+        if (ersHarvestLimitPerLap is { } limit)
+        {
+            bag.Add("ersHarvestLimitPerLap", limit);
+        }
+
+        return bag.Build();
+    }
+
+    private static DetailBag StatusBag(CarStatusData car) => new DetailBag()
         .Add("tractionControl", (int)car.TractionControl)
         .Add("antiLockBrakes", (int)car.AntiLockBrakes)
         .Add("fuelMix", (int)car.FuelMix)
@@ -78,8 +92,7 @@ internal static class F1DetailSections
         .Add("enginePowerIce", car.EnginePowerICE)
         .Add("enginePowerMguk", car.EnginePowerMGUK)
         .Add("ersDeployMode", (int)car.ErsDeployMode)
-        .Add("networkPaused", car.NetworkPaused)
-        .Build();
+        .Add("networkPaused", car.NetworkPaused);
 
     /// <summary>Tyre Sets(12) — 플레이어 차의 세트 20개와 지금 낀 세트 번호.</summary>
     public static IReadOnlyDictionary<string, object?> FromTyreSets(TyreSetsDataPacket packet)
@@ -95,31 +108,31 @@ internal static class F1DetailSections
     }
 
     /// <summary>Time Trial(14) — 이 세션 베스트·개인 베스트·라이벌 데이터 세트.</summary>
-    public static IReadOnlyDictionary<string, object?> FromTimeTrial(TimeTrialDataPacket packet) => new DetailBag()
-        .Add("playerSessionBest", FromTimeTrialSet(packet.PlayerSessionBestDataSet))
-        .Add("personalBest", FromTimeTrialSet(packet.PersonalBestDataSet))
-        .Add("rival", FromTimeTrialSet(packet.RivalDataSet))
+    public static IReadOnlyDictionary<string, object?> FromTimeTrial(TimeTrialSet sessionBest, TimeTrialSet personalBest, TimeTrialSet rival) => new DetailBag()
+        .Add("playerSessionBest", FromTimeTrialSet(sessionBest))
+        .Add("personalBest", FromTimeTrialSet(personalBest))
+        .Add("rival", FromTimeTrialSet(rival))
         .Build();
 
-    /// <summary>Participants(4)의 플레이어 칸. 이름은 NUL을 자른 값을 받는다.</summary>
-    public static IReadOnlyDictionary<string, object?> FromParticipant(ParticipantData player, int carIndex, string name) => new DetailBag()
+    /// <summary>Participants(4)의 플레이어 칸. 이름은 NUL을 자른 값을 받는다. 드라이버·네트워크·팀 ID는 형식마다 폭이 달라 칸 밖 값을 쓴다.</summary>
+    public static IReadOnlyDictionary<string, object?> FromParticipant(ParticipantSlot player, int carIndex, string name) => new DetailBag()
         .Add("carIndex", carIndex)
-        .Add("aiControlled", player.IsAiControlled)
-        .Add("driverId", (int)player.Driver)
+        .Add("aiControlled", player.Data.IsAiControlled)
+        .Add("driverId", player.DriverId)
         .Add("networkId", player.NetworkId)
-        .Add("teamId", (int)player.Team)
-        .Add("myTeam", player.IsMyTeam)
-        .Add("raceNumber", player.RaceNumber)
-        .Add("nationality", (int)player.Nationality)
+        .Add("teamId", player.TeamId)
+        .Add("myTeam", player.Data.IsMyTeam)
+        .Add("raceNumber", player.Data.RaceNumber)
+        .Add("nationality", (int)player.Data.Nationality)
         .Add("name", name)
-        .Add("telemetryPublic", player.IsTelemetryPublic)
-        .Add("showOnlineNames", player.ShowOnlineNames)
-        .Add("techLevel", player.TechLevel)
-        .Add("platform", (int)player.Platform)
+        .Add("telemetryPublic", player.Data.IsTelemetryPublic)
+        .Add("showOnlineNames", player.Data.ShowOnlineNames)
+        .Add("techLevel", player.Data.TechLevel)
+        .Add("platform", (int)player.Data.Platform)
         .Build();
 
     /// <summary>Lap Data(2)의 플레이어 칸 나머지(순위·패널티·경고·피트·스피드 트랩) + 패킷의 타임 트라이얼 고스트 번호.</summary>
-    public static IReadOnlyDictionary<string, object?> FromLapData(LapData lap, int carIndex, LapDataPacket packet) => new DetailBag()
+    public static IReadOnlyDictionary<string, object?> FromLapData(LapData lap, int carIndex, byte timeTrialPbCarIndex, byte timeTrialRivalCarIndex) => new DetailBag()
         .Add("carIndex", carIndex)
         .Add("lapDistance", lap.LapDistance)
         .Add("totalDistance", lap.TotalDistance)
@@ -143,8 +156,8 @@ internal static class F1DetailSections
         .Add("pitStopShouldServePen", lap.PitStopShouldServePen)
         .Add("speedTrapFastestSpeedKph", lap.SpeedTrapFastestSpeed)
         .Add("speedTrapFastestLap", lap.SpeedTrapFastestLap)
-        .Add("timeTrialPbCarIndex", packet.TimeTrialPBCarIdx)
-        .Add("timeTrialRivalCarIndex", packet.TimeTrialRivalCarIdx)
+        .Add("timeTrialPbCarIndex", timeTrialPbCarIndex)
+        .Add("timeTrialRivalCarIndex", timeTrialRivalCarIndex)
         .Build();
 
     private static IReadOnlyDictionary<string, object?> FromTyreSet(TyreSetData set) => new DetailBag()
@@ -159,19 +172,19 @@ internal static class F1DetailSections
         .Add("fitted", set.IsFitted)
         .Build();
 
-    private static IReadOnlyDictionary<string, object?> FromTimeTrialSet(TimeTrialDataSet set) => new DetailBag()
-        .Add("carIndex", set.CarIndex)
-        .Add("teamId", (int)set.Team)
-        .Add("lapTimeMs", set.LapTimeInMS)
-        .Add("sector1TimeMs", set.Sector1TimeInMS)
-        .Add("sector2TimeMs", set.Sector2TimeInMS)
-        .Add("sector3TimeMs", set.Sector3TimeInMS)
-        .Add("tractionControl", (int)set.TractionControl)
-        .Add("gearboxAssist", (int)set.GearboxAssist)
-        .Add("antiLockBrakes", (int)set.AntiLockBrakes)
-        .Add("equalCarPerformance", set.IsEqualCarPerformance)
-        .Add("customSetup", set.IsCustomSetupEnabled)
-        .Add("valid", set.IsValid)
+    private static IReadOnlyDictionary<string, object?> FromTimeTrialSet(TimeTrialSet set) => new DetailBag()
+        .Add("carIndex", set.Data.CarIndex)
+        .Add("teamId", set.TeamId)
+        .Add("lapTimeMs", set.Data.LapTimeInMS)
+        .Add("sector1TimeMs", set.Data.Sector1TimeInMS)
+        .Add("sector2TimeMs", set.Data.Sector2TimeInMS)
+        .Add("sector3TimeMs", set.Data.Sector3TimeInMS)
+        .Add("tractionControl", (int)set.Data.TractionControl)
+        .Add("gearboxAssist", (int)set.Data.GearboxAssist)
+        .Add("antiLockBrakes", (int)set.Data.AntiLockBrakes)
+        .Add("equalCarPerformance", set.Data.IsEqualCarPerformance)
+        .Add("customSetup", set.Data.IsCustomSetupEnabled)
+        .Add("valid", set.Data.IsValid)
         .Build();
 
     /// <summary>분 칸 + 밀리초 칸 → 밀리초.</summary>

@@ -1,5 +1,4 @@
 using F1Game.UDP.Data;
-using F1Game.UDP.Packets;
 using SimCenter.Agent.Core.Telemetry.Frames;
 using F1Enums = F1Game.UDP.Enums;
 
@@ -7,7 +6,7 @@ namespace SimCenter.Agent.Infrastructure.Mapping;
 
 /// <summary>
 /// 모든 차 프레임(트랙 형상·레이스 리플레이 표본의 원천, 헌장 Agent Rules 예외): Motion·Lap Data·Car Telemetry·Car Status·Car Damage의
-/// 22칸과 차 대 차 충돌·추월 이벤트를 옮긴다.
+/// 모든 칸(2025 = 22, 2026 = 24)과 차 대 차 충돌·추월 이벤트를 옮긴다.
 /// 플레이어 칸이 없어도(관전 중) 낸다. 서버로 가는 것은 수집기가 추린 표본뿐이다.
 /// </summary>
 public sealed partial class F1PacketMapper
@@ -29,9 +28,8 @@ public sealed partial class F1PacketMapper
     /// <summary>ERS 배터리 잔량 J → kJ.</summary>
     private const float JoulesPerKilojoule = 1000f;
 
-    private static FieldPositionsFrame MapFieldPositions(MotionDataPacket packet)
+    private static FieldPositionsFrame MapFieldPositions(PacketHeader header, ReadOnlySpan<CarMotionData> cars)
     {
-        var cars = packet.CarMotionData.AsReadOnlySpan();
         var positions = new FieldPosition[cars.Length];
         for (var i = 0; i < cars.Length; i++)
         {
@@ -40,15 +38,14 @@ public sealed partial class F1PacketMapper
         }
 
         return new FieldPositionsFrame(
-            packet.Header.SessionUID.ToString(),
-            packet.Header.FrameIdentifier,
-            (int)Math.Round(packet.Header.SessionTime * MillisecondsPerSecondF),
+            header.SessionUID.ToString(),
+            header.FrameIdentifier,
+            (int)Math.Round(header.SessionTime * MillisecondsPerSecondF),
             positions);
     }
 
-    private static FieldLapStatesFrame MapFieldLapStates(LapDataPacket packet)
+    private static FieldLapStatesFrame MapFieldLapStates(PacketHeader header, ReadOnlySpan<LapData> laps)
     {
-        var laps = packet.LapData.AsReadOnlySpan();
         var states = new FieldLapState[laps.Length];
         for (var i = 0; i < laps.Length; i++)
         {
@@ -60,12 +57,11 @@ public sealed partial class F1PacketMapper
             states[i] = new FieldLapState(lap.LapDistance, isOnTrack, status);
         }
 
-        return new FieldLapStatesFrame(packet.Header.SessionUID.ToString(), packet.Header.FrameIdentifier, states);
+        return new FieldLapStatesFrame(header.SessionUID.ToString(), header.FrameIdentifier, states);
     }
 
-    private static FieldSurfacesFrame MapFieldSurfaces(CarTelemetryDataPacket packet)
+    private static FieldSurfacesFrame MapFieldSurfaces(PacketHeader header, ReadOnlySpan<CarTelemetryData> cars)
     {
-        var cars = packet.CarTelemetryData.AsReadOnlySpan();
         var surfaces = new ushort[cars.Length];
         var speeds = new ushort[cars.Length];
         var gears = new sbyte[cars.Length];
@@ -88,8 +84,8 @@ public sealed partial class F1PacketMapper
         }
 
         return new FieldSurfacesFrame(
-            packet.Header.SessionUID.ToString(),
-            packet.Header.FrameIdentifier,
+            header.SessionUID.ToString(),
+            header.FrameIdentifier,
             surfaces,
             speeds,
             gears,
@@ -100,9 +96,8 @@ public sealed partial class F1PacketMapper
             rpms);
     }
 
-    private static FieldStatusFrame MapFieldStatus(CarStatusDataPacket packet)
+    private static FieldStatusFrame MapFieldStatus(PacketHeader header, ReadOnlySpan<CarStatusData> cars)
     {
-        var cars = packet.CarStatusData.AsReadOnlySpan();
         var compounds = new byte[cars.Length];
         var ages = new byte[cars.Length];
         var ers = new ushort[cars.Length];
@@ -114,7 +109,7 @@ public sealed partial class F1PacketMapper
             ers[i] = float.IsFinite(kj) ? (ushort)Math.Clamp(MathF.Round(kj), ushort.MinValue, ushort.MaxValue) : (ushort)0;
         }
 
-        return new FieldStatusFrame(packet.Header.SessionUID.ToString(), compounds, ages, ers);
+        return new FieldStatusFrame(header.SessionUID.ToString(), compounds, ages, ers);
     }
 
     private static byte ToPercent(float pedal)
@@ -124,9 +119,8 @@ public sealed partial class F1PacketMapper
         => float.IsFinite(steer) ? (sbyte)Math.Clamp(MathF.Round(steer * PercentScale), -PercentScale, PercentScale) : (sbyte)0;
 
     /// <summary>차체 손상: 날개(좌·우·뒤)·플로어·디퓨저·사이드포드 손상률(%) 가운데 가장 큰 값. 타이어·엔진 마모는 넣지 않는다(충격과 무관하게 늘어난다).</summary>
-    private static FieldDamageFrame MapFieldDamage(CarDamageDataPacket packet)
+    private static FieldDamageFrame MapFieldDamage(PacketHeader header, ReadOnlySpan<CarDamageData> cars)
     {
-        var cars = packet.CarDamageData.AsReadOnlySpan();
         var damage = new byte[cars.Length];
         for (var i = 0; i < cars.Length; i++)
         {
@@ -136,7 +130,7 @@ public sealed partial class F1PacketMapper
                 Math.Max(car.DiffuserDamage, car.SidepodDamage));
         }
 
-        return new FieldDamageFrame(packet.Header.SessionUID.ToString(), damage);
+        return new FieldDamageFrame(header.SessionUID.ToString(), damage);
     }
 
     /// <summary>바퀴 4개 노면을 4비트씩 묶는다(FL·FR·RL·RR 순, 하위 비트부터).</summary>
