@@ -20,6 +20,7 @@ import 'package:simcenter_app/features/live_laps/application/live_laps_controlle
 import 'package:simcenter_app/features/live_laps/presentation/new_lap_snack_bar.dart';
 import 'package:simcenter_app/features/ranking/data/ranking_repository.dart';
 import 'package:simcenter_app/features/seasons/data/seasons_repository.dart';
+import 'package:simcenter_app/features/sessions/data/sessions_repository.dart';
 
 import 'support/fakes.dart';
 
@@ -85,6 +86,7 @@ Future<({FakeRankingHub hub, FakeLapsRepository repo})> _pumpApp(
       rankingRepositoryProvider.overrideWithValue(FakeRankingRepository()),
       devicesRepositoryProvider.overrideWithValue(FakeDevicesRepository()),
       seasonsRepositoryProvider.overrideWithValue(FakeSeasonsRepository()),
+      sessionsRepositoryProvider.overrideWithValue(FakeSessionsRepository()),
       clockProvider.overrideWithValue(() => DateTime.utc(2026, 10, 18, 11)),
     ],
     child: MaterialApp.router(routerConfig: router),

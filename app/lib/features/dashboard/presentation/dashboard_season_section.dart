@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../core/util/hex_color.dart';
 import '../../../core/widgets/compact_table.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/page_loading_bar.dart';
@@ -66,6 +68,10 @@ const double _roundColumnWidth = 44;
 const double _positionColumnWidth = 56;
 const double _pointsColumnWidth = 52;
 const double _standingPositionWidth = 44;
+
+/// 드라이버 순위의 포인트 막대(선두 대비 비율): 두께, 표가 이보다 좁으면 숨긴다.
+const double _pointsBarHeight = 8;
+const double _pointsBarMinTableWidth = 360;
 
 /// 대시보드 시즌 영역: 진행 중인 시즌(없으면 가장 최근 시즌)의 순위·포인트 요약 + 최근 결과 + 드라이버 순위 미리보기.
 /// 시즌이 하나도 없으면 아무것도 그리지 않는다.
@@ -395,7 +401,7 @@ class _Position extends StatelessWidget {
 
 // -- 드라이버 순위 ----------------------------------------------------------------
 
-/// 위쪽 순위 + 내 앞뒤(내 줄은 강조). 1·2·3위 순위 숫자는 금·은·동.
+/// 위쪽 순위 + 내 앞뒤(내 줄은 강조). 1·2·3위 순위 숫자는 금·은·동, 이름 옆에 선두 대비 포인트 막대(팀 색, 내 막대는 강조색).
 class _StandingsCard extends StatelessWidget {
   const _StandingsCard({required this.drivers, this.fillerRows = 0});
 
@@ -407,6 +413,7 @@ class _StandingsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final leaderPoints = drivers.fold(0, (top, d) => math.max(top, d.points));
     return SessionCard(
       title: _standingsTitle,
       padded: drivers.isEmpty,
@@ -435,6 +442,15 @@ class _StandingsCard extends StatelessWidget {
                   cell: (d) => DriverNameCell(name: d.name, teamColor: d.teamColor, isPlayer: d.isPlayer),
                 ),
                 CompactColumn(
+                  label: '',
+                  hideBelowWidth: _pointsBarMinTableWidth,
+                  cell: (d) => _PointsBar(
+                    key: ValueKey('dashboard-standing-bar-${d.position}'),
+                    fraction: leaderPoints <= 0 ? 0 : d.points / leaderPoints,
+                    color: d.isPlayer ? AppColors.accent : parseHexColor(d.teamColor, fallback: palette.textMuted),
+                  ),
+                ),
+                CompactColumn(
                   label: 'Pts',
                   width: _pointsColumnWidth,
                   alignment: Alignment.centerRight,
@@ -442,6 +458,28 @@ class _StandingsCard extends StatelessWidget {
                 ),
               ],
             )),
+    );
+  }
+}
+
+/// 선두 대비 포인트 막대: 테두리 색 바탕 위에 [fraction](0~1)만큼 [color]로 채운다.
+class _PointsBar extends StatelessWidget {
+  const _PointsBar({super.key, required this.fraction, required this.color});
+
+  final double fraction;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: _pointsBarHeight,
+      color: context.palette.border,
+      alignment: Alignment.centerLeft,
+      child: FractionallySizedBox(
+        widthFactor: fraction.clamp(0, 1).toDouble(),
+        heightFactor: 1,
+        child: ColoredBox(color: color),
+      ),
     );
   }
 }
