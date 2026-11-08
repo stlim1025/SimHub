@@ -1,4 +1,16 @@
+import '../../seasons/domain/season_display.dart';
 import '../../seasons/domain/season_models.dart';
+
+/// 진행 중인 시즌들(최근 시즌 먼저). 대시보드 시즌 선택 상자의 선택지.
+List<SeasonSummary> activeSeasons(List<SeasonSummary> seasons) =>
+    [for (final season in sortSeasonsByRecent(seasons)) if (!season.isCompleted) season];
+
+/// 대시보드에 보여 줄 시즌: 고른 시즌([chosenId])이 아직 진행 중이면 그 시즌, 아니면 `/seasons`가 처음 여는 시즌
+/// (가장 최근의 진행 중인 시즌, 없으면 가장 최근 시즌). 시즌이 없으면 null(순수 함수).
+SeasonSummary? dashboardSeasonOf(List<SeasonSummary> seasons, String? chosenId) {
+  final chosen = activeSeasons(seasons).where((season) => season.seasonId == chosenId).firstOrNull;
+  return chosen ?? landingSeason(seasons);
+}
 
 /// 대시보드 "최근 결과"에 보여 줄 라운드 수.
 const int kDashboardRecentRoundCount = 5;

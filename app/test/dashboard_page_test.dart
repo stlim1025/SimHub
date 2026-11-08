@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:simcenter_app/core/time/clock_provider.dart';
+import 'package:simcenter_app/features/dashboard/data/dashboard_season_store.dart';
 import 'package:simcenter_app/features/dashboard/presentation/dashboard_page.dart';
 import 'package:simcenter_app/features/devices/application/devices_providers.dart';
 import 'package:simcenter_app/features/devices/data/devices_repository.dart';
@@ -10,6 +11,7 @@ import 'package:simcenter_app/features/devices/domain/device_models.dart';
 import 'package:simcenter_app/features/laps/data/laps_repository.dart';
 import 'package:simcenter_app/features/laps/domain/lap_models.dart';
 import 'package:simcenter_app/features/seasons/data/seasons_repository.dart';
+import 'package:simcenter_app/features/seasons/domain/season_models.dart';
 import 'package:simcenter_app/features/sessions/data/sessions_repository.dart';
 import 'package:simcenter_app/features/tracks/application/track_outlines_provider.dart';
 import 'package:simcenter_app/features/tracks/domain/track_outline.dart';
@@ -40,6 +42,7 @@ Future<FakeLapsRepository> _pumpDashboard(
   List<MyTrack> tracks = const [],
   Map<String, TrackOutline> outlines = const {},
   Size size = _stackedSize,
+  _MemorySeasonStore? seasonStore,
 }) async {
   setViewSize(tester, size);
   final repo = FakeLapsRepository(laps: laps, tracks: tracks);
@@ -69,11 +72,25 @@ Future<FakeLapsRepository> _pumpDashboard(
       sessionsRepositoryProvider.overrideWithValue(sessions ?? FakeSessionsRepository()),
       trackOutlinesProvider.overrideWith((ref) async => outlines),
       clockProvider.overrideWithValue(() => _now),
+      dashboardSeasonStoreProvider.overrideWithValue(seasonStore ?? _MemorySeasonStore()),
     ],
     child: MaterialApp.router(routerConfig: router),
   ));
   await tester.pumpAndSettle();
   return repo;
+}
+
+/// 대시보드 시즌 선택을 메모리에 기억하는 보관소(게임 코드 → 시즌 id).
+class _MemorySeasonStore implements DashboardSeasonStore {
+  _MemorySeasonStore([Map<String, String>? choices]) : choices = {...?choices};
+
+  final Map<String, String> choices;
+
+  @override
+  Future<String?> read(String gameCode) async => choices[gameCode];
+
+  @override
+  Future<void> write(String gameCode, String seasonId) async => choices[gameCode] = seasonId;
 }
 
 /// 마지막 주행 시각을 고를 수 있는 내 트랙.
@@ -301,6 +318,59 @@ void main() {
       await t.tap(find.byKey(const ValueKey('dashboard-season-link')));
       await t.pumpAndSettle();
       expect(find.text('body:season:s1'), findsOneWidget);
+    });
+
+    testWidgets('진행 중인 시즌이 하나면 시즌 선택 상자가 없다', (t) async {
+      await _pumpDashboard(t, const [], seasons: seasonRepo());
+
+      expect(find.byKey(const ValueKey('dashboard-season-picker')), findsNothing);
+    });
+
+    group('진행 중인 시즌이 여럿이면', () {
+      SeasonSummary career(int number, {required int points, required DateTime last, DateTime? completedAt}) => seasonOf(
+            's$number',
+            seasonNumber: number,
+            myPoints: points,
+            lastSessionAt: last,
+            completedAt: completedAt,
+          );
+      final older = career(1, points: 40, last: DateTime(2026, 10, 10));
+      final newer = career(2, points: 75, last: DateTime(2026, 10, 16));
+      final done = career(3, points: 99, last: DateTime(2026, 10, 17), completedAt: DateTime(2026, 10, 17));
+      FakeSeasonsRepository twoActive() => FakeSeasonsRepository(
+            seasons: [older, newer, done],
+            details: {for (final s in [older, newer, done]) s.seasonId: seasonDetailOf(s.seasonId, season: s)},
+          );
+
+      testWidgets('가장 최근 시즌을 먼저 보이고, 선택 상자에서 고른 시즌으로 바꾸고 이 기기에 기억한다', (t) async {
+        final store = _MemorySeasonStore();
+        await _pumpDashboard(t, const [], seasons: twoActive(), seasonStore: store);
+
+        expect(statText(t, 'dashboard-stat-points'), '포인트|75');
+        await t.tap(find.byKey(const ValueKey('dashboard-season-picker')));
+        await t.pumpAndSettle();
+        // 진행 중인 시즌만 고를 수 있다(완료된 시즌 3은 없다).
+        expect(find.byKey(const ValueKey('dashboard-season-option-s1')), findsOneWidget);
+        expect(find.byKey(const ValueKey('dashboard-season-option-s2')), findsOneWidget);
+        expect(find.byKey(const ValueKey('dashboard-season-option-s3')), findsNothing);
+
+        await t.tap(find.byKey(const ValueKey('dashboard-season-option-s1')));
+        await t.pumpAndSettle();
+        expect(statText(t, 'dashboard-stat-points'), '포인트|40');
+        expect(store.choices, {'F1_25': 's1'});
+
+        await t.tap(find.byKey(const ValueKey('dashboard-season-link')));
+        await t.pumpAndSettle();
+        expect(find.text('body:season:s1'), findsOneWidget);
+      });
+
+      testWidgets('기억한 시즌으로 열고, 그 시즌이 끝났으면 가장 최근 진행 중인 시즌', (t) async {
+        await _pumpDashboard(t, const [], seasons: twoActive(), seasonStore: _MemorySeasonStore({'F1_25': 's1'}));
+        expect(statText(t, 'dashboard-stat-points'), '포인트|40');
+
+        await _pumpDashboard(t, const [], seasons: twoActive(), seasonStore: _MemorySeasonStore({'F1_25': 's3'}));
+        expect(statText(t, 'dashboard-stat-points'), '포인트|75');
+      });
     });
 
     testWidgets('완료된 시즌만 있으면 최근 시즌으로 보여준다', (t) async {

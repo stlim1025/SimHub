@@ -11,8 +11,10 @@ import '../../../core/widgets/compact_table.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/page_loading_bar.dart';
 import '../../../core/widgets/section_card.dart';
+import '../../../core/widgets/select_box.dart';
 import '../../../core/widgets/team_color_bar.dart';
 import '../../../core/widgets/track_flag.dart';
+import '../../seasons/application/seasons_providers.dart';
 import '../../seasons/domain/season_display.dart';
 import '../../seasons/domain/season_models.dart';
 import '../../sessions/domain/session_display.dart';
@@ -44,6 +46,9 @@ const String _roundsLabel = '라운드';
 const double _sectionGap = 8;
 const double _cardGap = 16;
 const double _titleBarGap = 12;
+
+/// 시즌 선택 상자 최대 폭(좁으면 제목 옆 남는 폭까지 줄어든다).
+const double _seasonPickerMaxWidth = 280;
 const double _statSpacing = 40;
 const double _statRunSpacing = 16;
 const double _statLabelGap = 4;
@@ -74,6 +79,7 @@ const double _pointsBarHeight = 8;
 const double _pointsBarMinTableWidth = 360;
 
 /// 대시보드 시즌 영역: 진행 중인 시즌(없으면 가장 최근 시즌)의 순위·포인트 요약 + 최근 결과 + 드라이버 순위 미리보기.
+/// 진행 중인 시즌이 여럿이면 제목 옆 선택 상자로 보여 줄 시즌을 고른다(이 기기에 기억).
 /// 시즌이 하나도 없으면 아무것도 그리지 않는다.
 class DashboardSeasonSection extends ConsumerWidget {
   const DashboardSeasonSection({super.key});
@@ -81,22 +87,35 @@ class DashboardSeasonSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final season = ref.watch(dashboardSeasonProvider);
+    final choices = activeSeasons(ref.watch(allSeasonsProvider).valueOrNull ?? const []);
+    // 다른 시즌을 고르면 새 시즌을 읽는 동안 지금 시즌을 그대로 둔다.
     return season.when(
+      skipLoadingOnReload: true,
       loading: () => const PageLoadingBar(),
       error: (e, _) => ErrorRetry(
         error: e,
         fallbackMessage: _loadFailedText,
         onRetry: () => ref.invalidate(dashboardSeasonProvider),
       ),
-      data: (detail) => detail == null ? const SizedBox.shrink() : _SeasonOverview(detail: detail),
+      data: (detail) => detail == null
+          ? const SizedBox.shrink()
+          : _SeasonOverview(
+              detail: detail,
+              choices: choices,
+              onChoose: (seasonId) => ref.read(dashboardSeasonChoiceProvider.notifier).select(seasonId),
+            ),
     );
   }
 }
 
 class _SeasonOverview extends StatelessWidget {
-  const _SeasonOverview({required this.detail});
+  const _SeasonOverview({required this.detail, required this.choices, required this.onChoose});
 
   final SeasonDetail detail;
+
+  /// 고를 수 있는 진행 중인 시즌들. 둘 이상일 때만 선택 상자를 보인다.
+  final List<SeasonSummary> choices;
+  final ValueChanged<String> onChoose;
 
   @override
   Widget build(BuildContext context) {
@@ -112,7 +131,26 @@ class _SeasonOverview extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: Text(season.isCompleted ? _latestTitle : _activeTitle, style: theme.textTheme.titleMedium),
+              child: Row(
+                children: [
+                  Text(season.isCompleted ? _latestTitle : _activeTitle, style: theme.textTheme.titleMedium),
+                  if (choices.length > 1) ...[
+                    const SizedBox(width: _titleBarGap),
+                    Flexible(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: _seasonPickerMaxWidth),
+                        child: SelectBox<String>(
+                          key: const ValueKey('dashboard-season-picker'),
+                          options: [for (final s in choices) (value: s.seasonId, label: seasonDisplayTitle(s))],
+                          selected: season.seasonId,
+                          onSelected: onChoose,
+                          optionKeyOf: (id) => ValueKey('dashboard-season-option-$id'),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
             TextButton(
               key: const ValueKey('dashboard-season-link'),

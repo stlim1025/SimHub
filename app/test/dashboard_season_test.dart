@@ -4,6 +4,25 @@ import 'package:simcenter_app/features/dashboard/domain/dashboard_season.dart';
 import 'support/fakes.dart';
 
 void main() {
+  group('dashboardSeasonOf', () {
+    final older = seasonOf('s1', lastSessionAt: DateTime(2026, 10, 10));
+    final newer = seasonOf('s2', lastSessionAt: DateTime(2026, 10, 16));
+    final done = seasonOf('s3', lastSessionAt: DateTime(2026, 10, 17), completedAt: DateTime(2026, 10, 17));
+    final seasons = [older, done, newer];
+
+    test('진행 중인 시즌은 최근 시즌 먼저, 완료된 시즌은 빼고', () {
+      expect(activeSeasons(seasons).map((s) => s.seasonId), ['s2', 's1']);
+    });
+
+    test('고른 진행 중인 시즌, 고르지 않았거나 끝났거나 모르는 시즌이면 가장 최근 진행 중인 시즌', () {
+      expect(dashboardSeasonOf(seasons, 's1')?.seasonId, 's1');
+      expect(dashboardSeasonOf(seasons, null)?.seasonId, 's2');
+      expect(dashboardSeasonOf(seasons, 's3')?.seasonId, 's2');
+      expect(dashboardSeasonOf(seasons, 'gone')?.seasonId, 's2');
+      expect(dashboardSeasonOf(const [], 's1'), isNull);
+    });
+  });
+
   group('nextCalendarRound', () {
     test('마지막으로 달린 라운드 다음의 달리지 않은 라운드', () {
       final calendar = [
