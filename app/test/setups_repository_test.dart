@@ -180,14 +180,26 @@ void main() {
       expect(normalizeSetupCondition('snow'), 'Dry');
     });
 
-    test('주소: Dry는 쿼리 없음, Wet은 ?condition=wet', () {
-      expect(setupsLocation(), '/setups');
-      expect(setupsLocation(condition: 'Wet'), '/setups?condition=wet');
-      expect(setupTrackLocation('au'), '/setups/au');
-      expect(setupTrackLocation('au', condition: 'Wet'), '/setups/au?condition=wet');
-      expect(setupTrackLocation('au', session: 'TimeTrial'), '/setups/au'); // Dry 기본
-      expect(setupTrackLocation('au', session: 'Race'), '/setups/au?session=race');
-      expect(setupTrackLocation('au', condition: 'Wet', session: 'Qualifying'), '/setups/au?condition=wet&session=qualifying');
+    test('normalizeTrackTab: setups만 셋업 탭, 나머지는 개요', () {
+      expect(normalizeTrackTab('setups'), kTrackTabSetups);
+      expect(normalizeTrackTab('SETUPS'), kTrackTabSetups);
+      expect(normalizeTrackTab(null), kTrackTabOverview);
+      expect(normalizeTrackTab('overview'), kTrackTabOverview);
+      expect(normalizeTrackTab('nope'), kTrackTabOverview);
+    });
+
+    test('주소: 셋업 목록은 Tracks로, 트랙별 셋업은 트랙 화면 셋업 탭으로. Dry는 쿼리 없음, Wet은 condition=wet', () {
+      expect(setupsLocation(), '/tracks');
+      expect(setupsLocation(condition: 'Wet'), '/tracks?condition=wet');
+      expect(setupTrackLocation('au'), '/tracks/au?tab=setups');
+      expect(setupTrackLocation('au', condition: 'Wet'), '/tracks/au?tab=setups&condition=wet');
+      expect(setupTrackLocation('au', session: 'TimeTrial'), '/tracks/au?tab=setups'); // Dry 기본
+      expect(setupTrackLocation('au', session: 'Race'), '/tracks/au?tab=setups&session=race');
+      expect(
+        setupTrackLocation('au', condition: 'Wet', session: 'Qualifying'),
+        '/tracks/au?tab=setups&condition=wet&session=qualifying',
+      );
+      expect(setupTrackLocation('red bull'), '/tracks/red%20bull?tab=setups');
       expect(setupDetailLocation('au', 's1'), '/setups/au/s1');
       expect(trackOverviewLocation('au'), '/tracks/au');
       expect(leaderboardLocation('au'), '/leaderboard?trackId=au');

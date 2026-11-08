@@ -33,13 +33,23 @@ import 'package:simcenter_app/features/sessions/presentation/sessions_page.dart'
 import 'package:simcenter_app/features/setups/data/setups_repository.dart';
 import 'package:simcenter_app/features/setups/presentation/setup_detail_page.dart';
 import 'package:simcenter_app/features/setups/presentation/setup_track_page.dart';
-import 'package:simcenter_app/features/setups/presentation/setups_page.dart';
 import 'package:simcenter_app/features/tracks/data/tracks_repository.dart';
 import 'package:simcenter_app/features/tracks/presentation/track_overview_page.dart';
 import 'package:simcenter_app/features/tracks/presentation/tracks_page.dart';
 
 import 'support/fakes.dart';
 import 'support/setups_fakes.dart';
+
+/// 위쪽 가로 메뉴(1100px 이상)가 모두 화면 안에 들어오는 넓은 화면(테스트 글꼴은 글자마다 폭이 넓다).
+const _wide = Size(1920, 1080);
+
+/// 셸의 위쪽 가로 메뉴 항목.
+Finder _menu(String path) => find.byKey(ValueKey('nav-$path'));
+
+/// 위쪽 가로 메뉴 항목의 선택 상태(접근성 `selected`).
+bool _isMenuSelected(WidgetTester tester, String path) =>
+    tester.widget<Semantics>(find.ancestor(of: _menu(path), matching: find.byType(Semantics)).first).properties.selected ??
+    false;
 
 Future<GoRouter> _pumpApp(
   WidgetTester tester, {
@@ -50,7 +60,7 @@ Future<GoRouter> _pumpApp(
   FakePublicLapRepository? publicLapRepo,
   FakeSetupsRepository? setupsRepo,
 }) async {
-  setViewSize(tester, const Size(1000, 800));
+  setViewSize(tester, _wide);
   final container = ProviderContainer(overrides: [
     fakeAuth(user),
     lapsRepositoryProvider.overrideWithValue(FakeLapsRepository()),
@@ -119,13 +129,13 @@ void main() {
     router.go('/leaderboard?trackId=t1');
     await t.pumpAndSettle();
     expect(_location(router), '/leaderboard?trackId=t1');
-    expect(find.text('Dashboard'), findsOneWidget); // 사이드바가 그대로 있다.
+    expect(_menu('/'), findsOneWidget); // 셸의 위쪽 메뉴가 그대로 있다.
     expect(find.text('Monaco'), findsOneWidget);
 
     router.go('/laps');
     await t.pumpAndSettle();
     expect(_location(router), '/laps');
-    expect(find.text('Dashboard'), findsOneWidget);
+    expect(_menu('/'), findsOneWidget);
   });
 
   testWidgets('예전 /rankings/:trackId는 /leaderboard?trackId=로 리다이렉트된다', (t) async {
@@ -135,7 +145,7 @@ void main() {
     await t.pumpAndSettle();
 
     expect(_location(router), '/leaderboard?trackId=t1');
-    expect(find.text('Dashboard'), findsOneWidget); // 셸 안의 Leaderboard로 열린다.
+    expect(_menu('/'), findsOneWidget); // 셸 안의 Leaderboard로 열린다.
     expect(find.text('Monaco'), findsOneWidget);
   });
 
@@ -147,13 +157,13 @@ void main() {
 
     expect(_location(router), '/telemetry-app');
     expect(find.byType(TelemetryAppPage), findsOneWidget);
-    expect(find.text('Dashboard'), findsOneWidget); // 사이드바가 그대로 있다.
+    expect(_menu('/'), findsOneWidget); // 셸의 위쪽 메뉴가 그대로 있다.
   });
 
-  testWidgets('사이드바의 Telemetry App 메뉴로 이동한다', (t) async {
+  testWidgets('위쪽 바의 Agent 칩으로 Telemetry App에 이동한다', (t) async {
     final router = await _pumpApp(t);
 
-    await t.tap(find.text('Telemetry App'));
+    await t.tap(find.byKey(const ValueKey('agent-status-chip')));
     await t.pumpAndSettle();
 
     expect(_location(router), '/telemetry-app');
@@ -169,7 +179,7 @@ void main() {
     expect(_location(router), '/sessions');
     expect(find.byType(SessionsPage), findsOneWidget);
     expect(find.text('Spa'), findsOneWidget);
-    expect(find.text('Dashboard'), findsOneWidget); // 사이드바가 그대로 있다.
+    expect(_menu('/'), findsOneWidget); // 셸의 위쪽 메뉴가 그대로 있다.
     expect(repo.requests.last.sessionType, isNull);
 
     router.go('/sessions?type=qualifying');
@@ -191,7 +201,7 @@ void main() {
     expect(repo.detailRequests, ['abc']);
     expect(find.text('Monza'), findsOneWidget);
     expect(find.text('NORRIS'), findsOneWidget);
-    expect(find.text('Dashboard'), findsOneWidget); // 사이드바가 그대로 있다.
+    expect(_menu('/'), findsOneWidget); // 셸의 위쪽 메뉴가 그대로 있다.
   });
 
   testWidgets('/sessions/:sessionId/setup은 셸 안에서 셋업 화면을 연다', (t) async {
@@ -207,7 +217,7 @@ void main() {
     expect(t.widget<SessionSetupPage>(find.byType(SessionSetupPage)).sessionId, 'abc');
     expect(find.text('Monza Setup (Clear)'), findsOneWidget);
     expect(find.text('Front Wing Aero'), findsOneWidget);
-    expect(find.text('Dashboard'), findsOneWidget); // 사이드바가 그대로 있다.
+    expect(_menu('/'), findsOneWidget); // 셸의 위쪽 메뉴가 그대로 있다.
   });
 
   testWidgets('/sessions/:sessionId?from=season은 세션 결과 화면을 열고 from을 넘긴다', (t) async {
@@ -227,16 +237,18 @@ void main() {
     expect(find.text('NORRIS'), findsOneWidget);
   });
 
-  testWidgets('사이드바 하단 프로필을 누르면 셸 안에서 계정 설정(/settings)이 열린다', (t) async {
+  testWidgets('계정 메뉴의 계정 설정을 누르면 셸 안에서 계정 설정(/settings)이 열린다', (t) async {
     final router = await _pumpApp(t, user: settingsUser);
 
+    await t.tap(find.byKey(const ValueKey('account-menu')));
+    await t.pumpAndSettle();
     await t.tap(find.byKey(const ValueKey('account-settings')));
     await t.pumpAndSettle();
 
     expect(_location(router), '/settings');
     expect(find.byType(SettingsPage), findsOneWidget);
     expect(find.text('Edit Profile'), findsOneWidget);
-    expect(find.text('Dashboard'), findsOneWidget); // 사이드바가 그대로 있다.
+    expect(_menu('/'), findsOneWidget); // 셸의 위쪽 메뉴가 그대로 있다.
   });
 
   testWidgets('로그아웃 상태에서 /settings는 돌아올 주소를 담아 /login으로 보낸다', (t) async {
@@ -248,10 +260,10 @@ void main() {
     expect(_location(router), '/login?from=%2Fsettings');
   });
 
-  testWidgets('사이드바의 Sessions 메뉴로 이동한다', (t) async {
+  testWidgets('위쪽 메뉴의 Sessions로 이동한다', (t) async {
     final router = await _pumpApp(t);
 
-    await t.tap(find.widgetWithText(ListTile, 'Sessions'));
+    await t.tap(_menu('/sessions'));
     await t.pumpAndSettle();
 
     expect(_location(router), '/sessions');
@@ -272,7 +284,7 @@ void main() {
     expect(find.byType(SeasonDetailPage), findsOneWidget);
     expect(repo.requests, [(page: 1, pageSize: 20)]);
     expect(find.text('Grand Prix Season 1'), findsOneWidget);
-    expect(find.text('Dashboard'), findsOneWidget); // 사이드바가 그대로 있다.
+    expect(_menu('/'), findsOneWidget); // 셸의 위쪽 메뉴가 그대로 있다.
   });
 
   testWidgets('/seasons/:seasonId?tab=standings는 셸 안에서 시즌 상세의 Standings 탭을 연다', (t) async {
@@ -289,13 +301,13 @@ void main() {
     expect(repo.detailRequests, ['abc']);
     expect(find.text('NORRIS'), findsOneWidget);
     expect(find.textContaining('기록된 세션 기준입니다.'), findsOneWidget);
-    expect(find.text('Dashboard'), findsOneWidget); // 사이드바가 그대로 있다.
+    expect(_menu('/'), findsOneWidget); // 셸의 위쪽 메뉴가 그대로 있다.
   });
 
-  testWidgets('사이드바의 Seasons 메뉴로 이동한다', (t) async {
+  testWidgets('위쪽 메뉴의 Seasons로 이동한다', (t) async {
     final router = await _pumpApp(t);
 
-    await t.tap(find.widgetWithText(ListTile, 'Seasons'));
+    await t.tap(_menu('/seasons'));
     await t.pumpAndSettle();
 
     expect(_location(router), '/seasons');
@@ -315,7 +327,7 @@ void main() {
     expect(page.tab, 'best');
     expect(repo.detailRequests, ['l1']);
     expect(find.text('Jeddah Lap 1:38.448'), findsOneWidget);
-    expect(t.widget<ListTile>(find.widgetWithText(ListTile, 'Laps')).selected, isTrue);
+    expect(_isMenuSelected(t, '/laps'), isTrue);
   });
 
   group('공유 링크 /share/laps/:lapId', () {
@@ -381,59 +393,90 @@ void main() {
     await t.pumpAndSettle();
 
     expect(_location(router), '/laps/tracks/t1');
-    expect(find.text('Dashboard'), findsOneWidget); // 사이드바가 그대로 있다.
+    expect(_menu('/'), findsOneWidget); // 셸의 위쪽 메뉴가 그대로 있다.
     expect(find.byType(TrackLapsPage), findsOneWidget);
   });
 
-  testWidgets('/setups · /setups/:trackId?condition=wet · /setups/:trackId/:setupId는 셸 안에서 열린다', (t) async {
-    final setupsRepo = FakeSetupsRepository(
-      tracks: [setupTrackOf('au', 'Australia')],
-      details: {'s1': setupDetailOf('s1')},
-    );
+  testWidgets('예전 /setups는 /tracks로(조건 유지), /setups/:trackId는 트랙 화면 셋업 탭으로 보낸다', (t) async {
+    final setupsRepo = FakeSetupsRepository(tracks: [setupTrackOf('au', 'Australia')]);
     final router = await _pumpApp(t, setupsRepo: setupsRepo);
+
+    router.go('/setups');
+    await t.pumpAndSettle();
+    expect(_location(router), '/tracks');
+    expect(t.widget<TracksPage>(find.byType(TracksPage)).condition, isNull);
 
     router.go('/setups?condition=wet');
     await t.pumpAndSettle();
-    expect(t.widget<SetupsPage>(find.byType(SetupsPage)).condition, 'wet');
-    expect(find.text('Dashboard'), findsOneWidget);
+    expect(_location(router), '/tracks?condition=wet');
+    expect(t.widget<TracksPage>(find.byType(TracksPage)).condition, 'wet');
+    expect(_menu('/'), findsOneWidget); // 셸 안에서 열린다.
+    expect(_isMenuSelected(t, '/tracks'), isTrue);
 
     router.go('/setups/au?condition=wet');
     await t.pumpAndSettle();
-    final trackPage = t.widget<SetupTrackPage>(find.byType(SetupTrackPage));
+    expect(_location(router), '/tracks/au?tab=setups&condition=wet');
+    final trackPage = t.widget<TrackOverviewPage>(find.byType(TrackOverviewPage));
     expect(trackPage.trackId, 'au');
+    expect(trackPage.tab, 'setups');
     expect(trackPage.condition, 'wet');
+    final setupTab = t.widget<SetupTrackPage>(find.byType(SetupTrackPage));
+    expect(setupTab.embedded, isTrue);
+    expect(setupTab.condition, 'wet');
     expect(setupsRepo.listRequests.last, (trackId: 'au', condition: 'Wet', session: 'Race'));
+    expect(_isMenuSelected(t, '/tracks'), isTrue);
+
+    router.go('/setups/au?session=race');
+    await t.pumpAndSettle();
+    expect(_location(router), '/tracks/au?tab=setups&session=race');
+    expect(t.widget<TrackOverviewPage>(find.byType(TrackOverviewPage)).session, 'race');
+  });
+
+  testWidgets('/setups/:trackId/:setupId(셋업 상세)는 그대로 셸 안에서 열리고 Tracks 메뉴가 선택된다', (t) async {
+    final router = await _pumpApp(t, setupsRepo: FakeSetupsRepository(details: {'s1': setupDetailOf('s1')}));
 
     router.go('/setups/au/s1');
     await t.pumpAndSettle();
+    expect(_location(router), '/setups/au/s1');
     final detailPage = t.widget<SetupDetailPage>(find.byType(SetupDetailPage));
     expect(detailPage.setupId, 's1');
     expect(detailPage.trackId, 'au');
+    expect(_isMenuSelected(t, '/tracks'), isTrue);
   });
 
-  testWidgets('/tracks · /tracks/:trackId는 셸 안에서 열린다', (t) async {
+  testWidgets('/tracks · /tracks/:trackId?tab=&condition=&session=은 셸 안에서 열리고 쿼리를 넘긴다', (t) async {
     final router = await _pumpApp(t);
 
     router.go('/tracks');
     await t.pumpAndSettle();
     expect(find.byType(TracksPage), findsOneWidget);
-    expect(find.text('Dashboard'), findsOneWidget);
+    expect(_menu('/'), findsOneWidget);
 
     router.go('/tracks/au');
     await t.pumpAndSettle();
-    expect(t.widget<TrackOverviewPage>(find.byType(TrackOverviewPage)).trackId, 'au');
+    final overview = t.widget<TrackOverviewPage>(find.byType(TrackOverviewPage));
+    expect(overview.trackId, 'au');
+    expect(overview.tab, isNull);
+    expect(find.byType(SetupTrackPage), findsNothing);
+
+    router.go('/tracks/au?tab=setups&condition=wet&session=qualifying');
+    await t.pumpAndSettle();
+    final setupsTab = t.widget<TrackOverviewPage>(find.byType(TrackOverviewPage));
+    expect(setupsTab.tab, 'setups');
+    expect(setupsTab.condition, 'wet');
+    expect(setupsTab.session, 'qualifying');
+    expect(find.byType(SetupTrackPage), findsOneWidget);
   });
 
-  testWidgets('사이드바의 Setups · Tracks 메뉴로 이동한다', (t) async {
+  testWidgets('위쪽 메뉴의 Tracks(셋업을 합쳤다)로 이동한다', (t) async {
     final router = await _pumpApp(t);
+    expect(_menu('/setups'), findsNothing); // Setups 메뉴는 따로 없다.
 
-    await t.tap(find.widgetWithText(ListTile, 'Setups'));
-    await t.pumpAndSettle();
-    expect(_location(router), '/setups');
-
-    await t.tap(find.widgetWithText(ListTile, 'Tracks'));
+    await t.tap(_menu('/tracks'));
     await t.pumpAndSettle();
     expect(_location(router), '/tracks');
+    expect(find.byType(TracksPage), findsOneWidget);
+    expect(_isMenuSelected(t, '/tracks'), isTrue);
   });
 
   group('화면 전환 애니메이션 없음', () {
@@ -471,11 +514,11 @@ void main() {
       expect(pagesOf(t).every((p) => p is NoTransitionPage), isTrue);
     });
 
-    testWidgets('사이드바 메뉴를 누르면 한 프레임 만에 새 화면으로 바뀐다', (t) async {
+    testWidgets('위쪽 메뉴를 누르면 한 프레임 만에 새 화면으로 바뀐다', (t) async {
       await _pumpApp(t);
       expect(find.byType(DashboardPage), findsOneWidget);
 
-      await t.tap(find.widgetWithText(ListTile, 'Sessions'));
+      await t.tap(_menu('/sessions'));
       await t.pump(); // 라우터 반영
       await t.pump(); // 새 페이지 빌드
 

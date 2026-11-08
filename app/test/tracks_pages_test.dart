@@ -2,11 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:simcenter_app/core/network/api_exception.dart';
+import 'package:simcenter_app/core/widgets/error_retry.dart';
 import 'package:simcenter_app/core/widgets/not_found_state.dart';
 import 'package:simcenter_app/features/lap_detail/data/lap_detail_repository.dart';
 import 'package:simcenter_app/features/lap_detail/domain/lap_detail_models.dart';
 import 'package:simcenter_app/features/profile/application/selected_game_provider.dart';
 import 'package:simcenter_app/features/setups/data/setups_repository.dart';
+import 'package:simcenter_app/features/setups/domain/setup_models.dart';
+import 'package:simcenter_app/features/setups/presentation/setup_track_page.dart';
 import 'package:simcenter_app/features/tracks/application/track_corners_provider.dart';
 import 'package:simcenter_app/features/tracks/application/track_outlines_provider.dart';
 import 'package:simcenter_app/features/tracks/data/tracks_repository.dart';
@@ -31,12 +35,25 @@ Future<GoRouter> _pump(
 }) async {
   setViewSize(tester, size);
   final router = GoRouter(initialLocation: location, routes: [
-    GoRoute(path: '/tracks', builder: (_, _) => const Scaffold(body: TracksPage())),
+    GoRoute(
+      path: '/tracks',
+      builder: (_, state) => Scaffold(body: TracksPage(condition: state.uri.queryParameters['condition'])),
+    ),
     GoRoute(
       path: '/tracks/:trackId',
-      builder: (_, state) => Scaffold(body: TrackOverviewPage(trackId: state.pathParameters['trackId']!)),
+      builder: (_, state) => Scaffold(
+        body: TrackOverviewPage(
+          trackId: state.pathParameters['trackId']!,
+          tab: state.uri.queryParameters['tab'],
+          condition: state.uri.queryParameters['condition'],
+          session: state.uri.queryParameters['session'],
+        ),
+      ),
     ),
-    GoRoute(path: '/setups/:trackId', builder: (_, state) => Text('setups:${state.pathParameters['trackId']}')),
+    GoRoute(
+      path: '/setups/:trackId/:setupId',
+      builder: (_, state) => Text('setup:${state.pathParameters['trackId']}/${state.pathParameters['setupId']}'),
+    ),
     GoRoute(path: '/leaderboard', builder: (_, state) => Text('leaderboard:${state.uri.queryParameters['trackId']}')),
     GoRoute(path: '/laps/:lapId', builder: (_, state) => Text('lap:${state.pathParameters['lapId']}')),
   ]);
@@ -56,6 +73,32 @@ Future<GoRouter> _pump(
 }
 
 String _location(GoRouter router) => router.routeInformationProvider.value.uri.toString();
+
+/// 버튼 묶음 칸([key])의 선택 상태(접근성 `selected`).
+bool _isSegmentSelected(WidgetTester tester, String key) =>
+    tester
+        .widget<Semantics>(find.descendant(of: find.byKey(ValueKey(key)), matching: find.byType(Semantics)).first)
+        .properties
+        .selected ??
+    false;
+
+/// 트랙 칸([trackId]) 안 글자.
+Finder _inTile(String trackId, String text) =>
+    find.descendant(of: find.byKey(ValueKey('track-tile-$trackId')), matching: find.text(text));
+
+/// 트랙 칸([trackId])에 셋업 수 글자가 있는지.
+Finder _setupCountIn(String trackId) =>
+    find.descendant(of: find.byKey(ValueKey('track-tile-$trackId')), matching: find.textContaining('셋업'));
+
+/// Dry 셋업 10 · Wet 셋업 4(Australia), Dry 10 · Wet 0(China), 셋업 없는 역방향(Austria Reverse).
+final _setupTracks = [
+  setupTrackOf('au', 'Australia', displayOrder: 1, circuitName: 'Melbourne Grand Prix Circuit', wetCount: 4),
+  setupTrackOf('cn', 'China', displayOrder: 2, countryCode: 'CN', circuitName: 'Shanghai International Circuit'),
+  setupTrackOf('at-r', 'Austria Reverse', displayOrder: 25, countryCode: 'AT', dryCount: 0),
+];
+
+SetupList _setupListOf(String condition, List<SetupListItem> items) =>
+    SetupList(track: australiaRef, condition: condition, items: items, fetchedAt: DateTime.utc(2026, 10, 22, 9));
 
 /// 위치가 있는 트레이스(지도를 그릴 수 있다).
 final LapTrace _positionedTrace = LapTrace(
@@ -164,6 +207,51 @@ void main() {
       await _pump(t, '/tracks');
 
       expect(find.text('아직 등록된 트랙이 없다.'), findsOneWidget);
+    });
+
+    testWidgets('트랙 칸: 라운드 번호(역방향은 번호 없이 뒤)·서킷 이름·Dry 셋업 수(없으면 비움), Dry가 기본', (t) async {
+      await _pump(t, '/tracks', setupsRepo: FakeSetupsRepository(tracks: _setupTracks));
+
+      expect(find.text('Australia'), findsOneWidget);
+      expect(find.text('Melbourne Grand Prix Circuit'), findsOneWidget);
+      expect(_inTile('au', '1'), findsOneWidget);
+      expect(_inTile('cn', '2'), findsOneWidget);
+      expect(_inTile('at-r', '3'), findsNothing);
+      expect(_inTile('au', '셋업 10'), findsOneWidget);
+      expect(_inTile('cn', '셋업 10'), findsOneWidget);
+      expect(_setupCountIn('at-r'), findsNothing);
+      expect(_isSegmentSelected(t, 'setup-condition-Dry'), isTrue);
+      expect(_isSegmentSelected(t, 'setup-condition-Wet'), isFalse);
+    });
+
+    testWidgets('Wet을 누르면 ?condition=wet로 Wet 셋업 수를 보이고, Dry를 누르면 쿼리 없이 돌아온다', (t) async {
+      final router = await _pump(t, '/tracks', setupsRepo: FakeSetupsRepository(tracks: _setupTracks));
+
+      await t.tap(find.byKey(const ValueKey('setup-condition-Wet')));
+      await t.pumpAndSettle();
+      expect(_location(router), '/tracks?condition=wet');
+      expect(_isSegmentSelected(t, 'setup-condition-Wet'), isTrue);
+      expect(_inTile('au', '셋업 4'), findsOneWidget);
+      expect(_setupCountIn('cn'), findsNothing);
+
+      await t.tap(find.byKey(const ValueKey('setup-condition-Dry')));
+      await t.pumpAndSettle();
+      expect(_location(router), '/tracks');
+      expect(_inTile('au', '셋업 10'), findsOneWidget);
+    });
+
+    testWidgets('Wet 조건에서도 트랙 칸을 누르면 트랙 개요로', (t) async {
+      final router = await _pump(t, '/tracks?condition=wet', setupsRepo: FakeSetupsRepository(tracks: _setupTracks));
+
+      await t.tap(find.byKey(const ValueKey('track-tile-au')));
+      await t.pumpAndSettle();
+      expect(_location(router), '/tracks/au');
+    });
+
+    testWidgets('오류면 다시 시도', (t) async {
+      await _pump(t, '/tracks', setupsRepo: FakeSetupsRepository(error: ApiException('서버 오류', statusCode: 500)));
+
+      expect(find.byType(ErrorRetry), findsOneWidget);
     });
   });
 
@@ -284,13 +372,77 @@ void main() {
       );
     });
 
-    testWidgets('Top Setups 바로가기는 그 트랙 셋업으로', (t) async {
+    testWidgets('Top Setups 바로가기는 그 트랙 화면의 셋업 탭으로', (t) async {
       final router = await _pump(t, '/tracks/au', tracksRepo: FakeTracksRepository(overviews: {'au': trackOverviewOf()}));
 
       await t.tap(find.byKey(const ValueKey('track-link-setups')));
       await t.pumpAndSettle();
 
-      expect(_location(router), '/setups/au');
+      expect(_location(router), '/tracks/au?tab=setups');
+      expect(_isSegmentSelected(t, 'track-tab-setups'), isTrue);
+      expect(find.byType(SetupTrackPage), findsOneWidget);
+    });
+
+    testWidgets('셋업 탭: 머리는 트랙 화면 그대로, 개요 대신 상위 셋업 표, 조건·세션·줄·Overview가 주소를 바꾼다', (t) async {
+      final setupsRepo = FakeSetupsRepository(lists: {
+        'au|Dry': _setupListOf('Dry', [setupItemOf('s1', 1), setupItemOf('s2', 2, team: 'Red Bull Racing')]),
+        'au|Wet': _setupListOf('Wet', [setupItemOf('w1', 1, team: 'Ferrari')]),
+      });
+      final router = await _pump(
+        t,
+        '/tracks/au',
+        setupsRepo: setupsRepo,
+        tracksRepo: FakeTracksRepository(overviews: {'au': trackOverviewOf()}),
+      );
+      // 개요 탭이 기본: 셋업 표는 없고 기록 요약이 있다.
+      expect(_isSegmentSelected(t, 'track-tab-overview'), isTrue);
+      expect(find.byType(SetupTrackPage), findsNothing);
+      expect(find.text('Australia stats'), findsOneWidget);
+
+      await t.tap(find.byKey(const ValueKey('track-tab-setups')));
+      await t.pumpAndSettle();
+      expect(_location(router), '/tracks/au?tab=setups');
+      expect(_isSegmentSelected(t, 'track-tab-setups'), isTrue);
+      expect(find.text('F1 26 Australia'), findsOneWidget); // 트랙 화면 제목은 그대로.
+      expect(find.text('F1 26 Australia Setups'), findsNothing); // 셋업 화면 머리는 싣지 않는다.
+      expect(t.widget<SetupTrackPage>(find.byType(SetupTrackPage)).embedded, isTrue);
+      expect(find.text('Australia stats'), findsNothing);
+      expect(find.byKey(const ValueKey('track-link-setups')), findsNothing);
+      expect(find.byKey(const ValueKey('setup-row-s1')), findsOneWidget);
+      expect(find.text('Red Bull Racing'), findsOneWidget);
+      expect(setupsRepo.listRequests.last, (trackId: 'au', condition: 'Dry', session: 'TimeTrial'));
+
+      await t.tap(find.byKey(const ValueKey('setup-condition-Wet')));
+      await t.pumpAndSettle();
+      expect(_location(router), '/tracks/au?tab=setups&condition=wet');
+      expect(_isSegmentSelected(t, 'track-tab-setups'), isTrue);
+      expect(setupsRepo.listRequests.last, (trackId: 'au', condition: 'Wet', session: 'Race'));
+      expect(find.text('Ferrari'), findsOneWidget);
+
+      await t.tap(find.byKey(const ValueKey('setup-session-Qualifying')));
+      await t.pumpAndSettle();
+      expect(_location(router), '/tracks/au?tab=setups&condition=wet&session=qualifying');
+      expect(setupsRepo.listRequests.last, (trackId: 'au', condition: 'Wet', session: 'Qualifying'));
+
+      await t.tap(find.byKey(const ValueKey('setup-row-w1')));
+      await t.pumpAndSettle();
+      expect(_location(router), '/setups/au/w1');
+
+      router.go('/tracks/au?tab=setups');
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const ValueKey('track-tab-overview')));
+      await t.pumpAndSettle();
+      expect(_location(router), '/tracks/au');
+      expect(find.byType(SetupTrackPage), findsNothing);
+      expect(find.text('Australia stats'), findsOneWidget);
+    });
+
+    testWidgets('주소의 tab이 setups가 아니면 개요', (t) async {
+      await _pump(t, '/tracks/au?tab=nope', tracksRepo: FakeTracksRepository(overviews: {'au': trackOverviewOf()}));
+
+      expect(_isSegmentSelected(t, 'track-tab-overview'), isTrue);
+      expect(find.byType(SetupTrackPage), findsNothing);
+      expect(find.text('Australia stats'), findsOneWidget);
     });
 
     testWidgets('Leaderboard 바로가기는 그 트랙을 고른 리더보드로', (t) async {
