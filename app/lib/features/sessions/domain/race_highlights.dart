@@ -26,6 +26,7 @@ class HighlightCar {
     required this.teamColor,
     required this.isPlayer,
     required this.position,
+    this.teamName,
   });
 
   final int carIndex;
@@ -35,6 +36,9 @@ class HighlightCar {
   final String? teamColor;
   final bool isPlayer;
   final int position;
+
+  /// 서버 팀 이름(`Ferrari` 등, 팀 로고를 고르는 데 쓴다). 모르면 null.
+  final String? teamName;
 
   static HighlightCar? fromJsonOrNull(Map<String, dynamic> json) {
     final car = jsonInt(json['carIndex']);
@@ -47,6 +51,7 @@ class HighlightCar {
       teamColor: jsonString(json['teamColor']),
       isPlayer: jsonBool(json['isPlayer']),
       position: jsonInt(json['position']) ?? 0,
+      teamName: jsonString(json['teamName']),
     );
   }
 }

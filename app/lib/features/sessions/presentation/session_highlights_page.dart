@@ -23,6 +23,7 @@ import '../../lap_detail/presentation/replay_circuit.dart';
 import '../../lap_detail/presentation/replay_corner_badge.dart';
 import '../../lap_detail/presentation/replay_three_scene.dart';
 import '../../lap_detail/presentation/replay_three_view.dart';
+import '../../profile/application/team_logos_provider.dart';
 import '../../tracks/application/track_corners_provider.dart';
 import '../../tracks/application/track_widths_provider.dart';
 import '../../tracks/application/tracks_providers.dart';
@@ -266,6 +267,7 @@ class _Loaded extends ConsumerWidget {
       estimatedTrackWidthM: kEstimatedTrackWidthsM[trackName],
       streetCircuit: kStreetCircuits.contains(trackName),
       officialCorners: ref.watch(trackCornersProvider).valueOrNull?[trackName],
+      teamLogoUrl: ref.watch(teamLogoUrlProvider),
     );
   }
 }
@@ -296,6 +298,7 @@ class HighlightsPlayer extends StatefulWidget {
     this.estimatedTrackWidthM,
     this.streetCircuit = false,
     this.officialCorners,
+    this.teamLogoUrl,
   });
 
   final RaceHighlights highlights;
@@ -309,6 +312,9 @@ class HighlightsPlayer extends StatefulWidget {
 
   /// 이 트랙의 공식 코너(번호·위치). 없으면 주행선에서 코너를 찾는다.
   final List<OfficialCorner>? officialCorners;
+
+  /// 팀 로고 URL(순위표). null이면 로고 없이 팀 색 띠.
+  final TeamLogoUrlBuilder? teamLogoUrl;
 
   @override
   State<HighlightsPlayer> createState() => _HighlightsPlayerState();
@@ -398,6 +404,11 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
   }
 
   Color _colorOf(int carIndex) => parseHexColor(widget.highlights.car(carIndex)?.teamColor, fallback: AppColors.accent);
+
+  String? _logoOf(int carIndex) {
+    final code = teamLogoCodeOf(widget.highlights.car(carIndex)?.teamName);
+    return code == null ? null : widget.teamLogoUrl?.call(code);
+  }
 
   /// 클립 [index]를 준비하고 그 클립 처음으로 돌린다.
   void _load(int index) {
@@ -782,6 +793,7 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
                 totalLaps: highlights.totalLaps,
                 nameOf: highlights.nameOf,
                 colorOf: _colorOf,
+                logoUrlOf: _logoOf,
                 focusCar: clip.focusCar,
               ),
             ),

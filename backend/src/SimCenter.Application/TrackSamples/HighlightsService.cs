@@ -86,7 +86,7 @@ public sealed class HighlightsService : IHighlightsService
 
         var detail = await _sessionQuery.GetMySessionAsync(userId, sessionId, cancellationToken);
         var cars = detail.Results
-            .Select(r => new HighlightCarDto(r.CarIndex, r.Name, r.TeamColor, r.IsPlayer, r.Position))
+            .Select(r => new HighlightCarDto(r.CarIndex, r.Name, r.TeamColor, r.IsPlayer, r.Position, r.TeamName))
             .ToList();
         var player = cars.FirstOrDefault(c => c.IsPlayer)?.CarIndex;
 

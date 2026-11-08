@@ -334,7 +334,7 @@ void main() {
       await _pumpPlayer(t, _highlights());
 
       final tower = find.byKey(const ValueKey('highlights-standings'));
-      expect(t.widget<Text>(find.descendant(of: tower, matching: find.byKey(const ValueKey('highlights-standings-lap')))).textSpan!.toPlainText(), 'LAP  3 / 39');
+      expect(t.widget<Text>(find.descendant(of: tower, matching: find.byKey(const ValueKey('highlights-standings-lap')))).textSpan!.toPlainText(), 'LAP 3 /39');
       expect(find.descendant(of: find.byKey(const ValueKey('standing-row-4')), matching: find.text('Leader')), findsOneWidget);
       expect(find.descendant(of: find.byKey(const ValueKey('standing-row-21')), matching: find.text('+1.2')), findsOneWidget);
       expect(find.descendant(of: find.byKey(const ValueKey('standing-row-21')), matching: find.text('PIT')), findsOneWidget);

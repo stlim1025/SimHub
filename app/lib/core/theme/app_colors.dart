@@ -166,8 +166,16 @@ class AppColors {
   static const Color replayFlagYellowText = Color(0xFF1A1A1A);
   static const Color replayFlagRed = Color(0xFFDC2626);
 
-  /// 하이라이트 중계 그래픽: 판(검정에 가까운 남색)·줄 사이 판·포인트 빨강.
+  /// 하이라이트 중계 그래픽: 판(검정에 가까운 남색)·포인트 빨강.
   static const Color replayBroadcastPanel = Color(0xFF15151E);
-  static const Color replayBroadcastRow = Color(0xFF1E1E29);
   static const Color replayBroadcastRed = Color(0xFFE10600);
+
+  /// 하이라이트 순위표(방송 타워): 몸통·테두리, 랩 띠 위·아래(그러데이션), 순위 칸 구분선·순위 숫자, 피트 칸.
+  static const Color replayTowerBody = Color(0xFF121418);
+  static const Color replayTowerBorder = Color(0xFF4F4F4F);
+  static const Color replayTowerLapTop = Color(0xFF3A3C42);
+  static const Color replayTowerLapBottom = Color(0xFF1C1E23);
+  static const Color replayTowerDivider = Color(0xFF34363C);
+  static const Color replayTowerPosition = Color(0xFFC2C2C4);
+  static const Color replayTowerPitBadge = Color(0xFFC8C8CC);
 }

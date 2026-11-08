@@ -15,8 +15,8 @@ Color tyreColorOf(String compound) => switch (compound) {
       _ => AppColors.textMuted,
     };
 
-/// 색만으로 구분하지 않도록 원 안에 넣는 한 글자.
-String _compoundLetter(String compound) => switch (compound) {
+/// 색만으로 구분하지 않도록 원 안에 넣는 한 글자(하이라이트 순위표는 이 글자를 컴파운드 색으로 쓴다).
+String tyreLetterOf(String compound) => switch (compound) {
       'Soft' => 'S',
       'Medium' => 'M',
       'Hard' => 'H',
@@ -50,7 +50,7 @@ class TyreCompoundCircle extends StatelessWidget {
           border: Border.all(color: context.palette.border),
         ),
         child: Text(
-          _compoundLetter(compound),
+          tyreLetterOf(compound),
           style: TextStyle(
             fontSize: size * _letterScale,
             fontWeight: FontWeight.bold,

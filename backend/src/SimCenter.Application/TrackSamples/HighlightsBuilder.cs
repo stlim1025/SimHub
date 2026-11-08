@@ -14,8 +14,8 @@ public enum HighlightKind
     Finish,
 }
 
-/// <summary>차 한 대의 이름표 재료(순위표).</summary>
-public sealed record HighlightCarDto(int CarIndex, string Name, string TeamColor, bool IsPlayer, int Position);
+/// <summary>차 한 대의 이름표 재료(순위표). <see cref="TeamName"/>은 앱이 팀 로고를 고르는 데 쓴다.</summary>
+public sealed record HighlightCarDto(int CarIndex, string Name, string TeamColor, bool IsPlayer, int Position, string TeamName);
 
 /// <summary>깃발 구간(세션 시간 ms).</summary>
 public sealed record HighlightFlagDto(string Kind, int FromMs, int ToMs);

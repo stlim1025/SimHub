@@ -67,9 +67,9 @@ public sealed class HighlightsBuilderTests
 
     private static readonly IReadOnlyList<HighlightCarDto> Cars =
     [
-        new(1, "LEADER", "#fff", false, 1),
-        new(Player, "ME", "#fff", true, 2),
-        new(2, "THIRD", "#fff", false, 3),
+        new(1, "LEADER", "#fff", false, 1, "Ferrari"),
+        new(Player, "ME", "#fff", true, 2, "McLaren"),
+        new(2, "THIRD", "#fff", false, 3, "Mercedes"),
     ];
 
     private static HighlightsResponse Build(DecodedTrackSamples samples, IReadOnlyList<RaceFlagPeriod>? flags = null, int laps = 5)

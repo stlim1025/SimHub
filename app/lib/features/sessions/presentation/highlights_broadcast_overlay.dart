@@ -8,24 +8,37 @@ import 'tyre_stints_view.dart';
 const double _panelOpacity = 0.88;
 const List<FontFeature> _tabular = [FontFeature.tabularFigures()];
 
-/// 왼쪽 순위표 치수.
-const double kBroadcastTowerWidth = 172;
-const double kBroadcastCompactTowerWidth = 104;
+/// 왼쪽 순위표(방송 타워) 치수: 몸통(왼쪽 모서리는 크게 둥글게)·테두리, 위 빨간 띠, 랩 띠, 줄.
+const double kBroadcastTowerWidth = 184;
+const double kBroadcastCompactTowerWidth = 112;
+const double _towerOpacity = 0.92;
+const double _towerOuterRadius = 12;
+const double _towerInnerRadius = 4;
+const double _towerBorderWidth = 1.5;
 const double _towerAccentHeight = 3;
-const double _towerHeaderHeight = 24;
-const double _towerRowHeight = 19;
-const double _towerFontSize = 11.5;
-const double _towerPositionWidth = 22;
-const double _towerNameWidth = 36;
-const double _towerBarWidth = 4;
+const double _towerLapHeight = 28;
+const double _towerLapLabelSize = 11;
+const double _towerLapNumberSize = 17;
+const double _towerRowHeight = 20;
+const double _towerBottomPadding = 4;
+const double _towerFontSize = 12;
+const double _towerSmallFontSize = 9.5;
+const double _towerPositionWidth = 24;
+const double _towerCompactPositionWidth = 18;
+const double _towerDividerWidth = 1;
+const double _towerLogoSize = 17;
+const double _towerLogoPadding = 2.5;
+const double _towerBarWidth = 3;
 const double _towerBarHeight = 13;
 const double _towerGap = 5;
-const double _towerMarkWidth = 26;
-const double _towerMarkHeight = 13;
 const double _towerSidePadding = 6;
-const double _towerTyreSize = 13;
+const double _towerPitWidth = 24;
+const double _towerPitHeight = 13;
+const double _towerBadgeRadius = 3;
+const double _towerTyreWidth = 12;
+const double _towerTyreFocusSize = 14;
 
-/// 순위표 컴파운드 원에 넘길 이름(`tyreColorOf`·`TyreCompoundCircle` 기준). 모르면 원을 그리지 않는다.
+/// 순위표 컴파운드 글자에 넘길 이름(`tyreColorOf`·`tyreLetterOf` 기준). 모르면 글자를 그리지 않는다.
 const Map<HighlightTyre, String> kHighlightTyreNames = {
   HighlightTyre.soft: 'Soft',
   HighlightTyre.medium: 'Medium',
@@ -58,9 +71,30 @@ TextStyle _broadcastText(BuildContext context, {double size = _towerFontSize, Co
           decoration: TextDecoration.none,
         );
 
-/// 중계 화면 왼쪽 순위표: 빨간 띠 + `LAP 16 / 39` 머리, 줄마다 순위·팀 색 띠·세 글자 이름·간격,
-/// 피트면 `PIT` 칸, 피니시면 체커기, 리타이어면 `OUT`, 줄 끝에 끼고 있는 컴파운드 원(모르면 없음). 카메라가 따라가는 차의 줄은 흰 바탕에 검은 글자로 뒤집는다.
-/// [compact](좁은 화면)면 간격 칸을 뺀다. 높이가 모자라면 들어가는 줄까지만.
+/// 순위표 글자: 숫자는 기울인 고정폭 숫자(간격이 바뀌어도 칸이 흔들리지 않게), 이름은 바로 세운다.
+TextStyle _towerText(
+  BuildContext context, {
+  double size = _towerFontSize,
+  Color color = AppColors.replayHudText,
+  FontWeight weight = FontWeight.w700,
+  bool italic = true,
+}) =>
+    DefaultTextStyle.of(context).style.copyWith(
+          color: color,
+          fontSize: size,
+          fontWeight: weight,
+          fontStyle: italic ? FontStyle.italic : FontStyle.normal,
+          letterSpacing: _letterSpacing,
+          fontFeatures: _tabular,
+          decoration: TextDecoration.none,
+          height: 1,
+        );
+
+/// 중계 화면 왼쪽 순위표(방송 타워): 둥근 테두리 몸통, 위 빨간 띠 + 그러데이션 랩 띠(`LAP 16 /39`),
+/// 줄마다 기울인 순위 · 세로 구분선 · 팀 색 원 안의 팀 로고(로고가 없으면 팀 색 띠) · 세 글자 이름 · 기울인 간격(리더는 작게 `Leader`) ·
+/// 컴파운드 색 글자(S·M·H·I·W, 모르면 없음). 피트면 `PIT` 칸, 피니시면 체커기, 리타이어면 `OUT`.
+/// 카메라가 따라가는 차의 줄은 흰 바탕에 검은 글자로 뒤집고, 넓으면 이름을 다 쓴다(길면 줄여 맞춘다).
+/// [compact](좁은 화면)면 간격 칸을 빼고 로고 대신 팀 색 띠를 쓴다. 높이가 모자라면 들어가는 줄까지만.
 class BroadcastStandingsTower extends StatelessWidget {
   const BroadcastStandingsTower({
     super.key,
@@ -69,6 +103,7 @@ class BroadcastStandingsTower extends StatelessWidget {
     required this.nameOf,
     required this.colorOf,
     required this.focusCar,
+    this.logoUrlOf,
     this.compact = false,
   });
 
@@ -77,96 +112,202 @@ class BroadcastStandingsTower extends StatelessWidget {
   final String Function(int carIndex) nameOf;
   final Color Function(int carIndex) colorOf;
   final int focusCar;
+
+  /// 차의 팀 로고 URL. null이거나 null을 돌려주면 팀 색 띠를 그린다.
+  final String? Function(int carIndex)? logoUrlOf;
   final bool compact;
+
+  static const BorderRadius _outerRadius =
+      BorderRadius.horizontal(left: Radius.circular(_towerOuterRadius), right: Radius.circular(_towerInnerRadius));
+  static const BorderRadius _clipRadius = BorderRadius.horizontal(
+    left: Radius.circular(_towerOuterRadius - _towerBorderWidth),
+    right: Radius.circular(_towerInnerRadius - _towerBorderWidth),
+  );
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
         builder: (context, box) {
-          final fit = ((box.maxHeight - _towerAccentHeight - _towerHeaderHeight) / _towerRowHeight).floor();
+          const chrome = _towerBorderWidth * 2 + _towerAccentHeight + _towerLapHeight + _towerBottomPadding;
+          final fit = ((box.maxHeight - chrome) / _towerRowHeight).floor();
           final rows = standing.rows.take(fit.clamp(0, standing.rows.length)).toList();
-          final text = _broadcastText(context);
           return Align(
             alignment: Alignment.topLeft,
-            child: Column(
+            child: Container(
               key: const ValueKey('highlights-standings'),
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Container(height: _towerAccentHeight, color: AppColors.replayBroadcastRed),
-                Container(
-                  height: _towerHeaderHeight,
-                  color: AppColors.replayBroadcastPanel.withValues(alpha: _panelOpacity),
-                  padding: const EdgeInsets.symmetric(horizontal: _towerSidePadding),
-                  alignment: Alignment.centerLeft,
-                  child: Text.rich(
-                    TextSpan(children: [
-                      TextSpan(text: 'LAP  ', style: text.copyWith(color: AppColors.replayHudMuted)),
-                      TextSpan(text: '${standing.lap}'),
-                      if (totalLaps > 0) TextSpan(text: ' / $totalLaps', style: text.copyWith(color: AppColors.replayHudMuted)),
-                    ]),
-                    key: const ValueKey('highlights-standings-lap'),
-                    style: text,
-                  ),
+              decoration: BoxDecoration(
+                color: AppColors.replayTowerBody.withValues(alpha: _towerOpacity),
+                border: Border.all(color: AppColors.replayTowerBorder, width: _towerBorderWidth),
+                borderRadius: _outerRadius,
+              ),
+              child: ClipRRect(
+                borderRadius: _clipRadius,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(height: _towerAccentHeight, color: AppColors.replayBroadcastRed),
+                    _lapBar(context),
+                    for (var i = 0; i < rows.length; i++) _row(context, i, rows[i]),
+                    const SizedBox(height: _towerBottomPadding),
+                  ],
                 ),
-                for (var i = 0; i < rows.length; i++) _row(context, i, rows[i]),
-              ],
+              ),
             ),
           );
         },
       );
 
+  Widget _lapBar(BuildContext context) {
+    final label = _towerText(context, size: _towerLapLabelSize, color: AppColors.replayHudMuted, weight: FontWeight.w600);
+    return Container(
+      height: _towerLapHeight,
+      alignment: Alignment.center,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [AppColors.replayTowerLapTop, AppColors.replayTowerLapBottom],
+        ),
+        border: Border(bottom: BorderSide(color: AppColors.replayTowerDivider)),
+      ),
+      child: Text.rich(
+        TextSpan(children: [
+          TextSpan(text: 'LAP ', style: label),
+          TextSpan(text: '${standing.lap}', style: _towerText(context, size: _towerLapNumberSize, weight: FontWeight.w900)),
+          if (totalLaps > 0) TextSpan(text: ' /$totalLaps', style: label),
+        ]),
+        key: const ValueKey('highlights-standings-lap'),
+      ),
+    );
+  }
+
   Widget _row(BuildContext context, int index, HighlightStandingRow row) {
     final focused = row.carIndex == focusCar;
-    final ink = focused ? AppColors.replayBroadcastPanel : AppColors.replayHudText;
-    final text = _broadcastText(context, color: ink);
-    final muted = _broadcastText(context, color: focused ? AppColors.replayBroadcastPanel : AppColors.replayHudMuted)
-        .copyWith(fontWeight: FontWeight.w600);
-    final background = focused
-        ? AppColors.replayHudText
-        : (index.isEven ? AppColors.replayBroadcastPanel : AppColors.replayBroadcastRow).withValues(alpha: _panelOpacity);
-    final gap = row.state == StandingState.out
-        ? Text('OUT', style: muted)
-        : (compact ? const SizedBox.shrink() : Text(standingGapText(row, leader: index == 0), style: muted));
+    final ink = focused ? AppColors.replayTowerBody : AppColors.replayHudText;
+    final name = nameOf(row.carIndex);
+    final out = row.state == StandingState.out;
+    final leader = index == 0 && !out;
+    final gap = out ? 'OUT' : (compact ? '' : standingGapText(row, leader: index == 0));
+    final gapStyle = _towerText(
+      context,
+      size: leader ? _towerSmallFontSize : _towerFontSize - 1,
+      color: focused ? ink : (leader || out ? AppColors.replayHudMuted : AppColors.replayHudText),
+    );
     final mark = switch (row.state) {
       StandingState.pit => Container(
-          width: _towerMarkWidth,
-          height: _towerMarkHeight,
+          width: _towerPitWidth,
+          height: _towerPitHeight,
           alignment: Alignment.center,
-          color: focused ? AppColors.replayBroadcastPanel : AppColors.replayHudText,
+          decoration: BoxDecoration(
+            color: focused ? AppColors.replayTowerBody : AppColors.replayTowerPitBadge,
+            borderRadius: BorderRadius.circular(_towerBadgeRadius),
+          ),
           child: Text(
             'PIT',
-            style: _broadcastText(
+            style: _towerText(
               context,
-              size: _towerFontSize - 2,
-              color: focused ? AppColors.replayHudText : AppColors.replayBroadcastPanel,
+              size: _towerSmallFontSize,
+              color: focused ? AppColors.replayHudText : AppColors.replayTowerBody,
+              weight: FontWeight.w900,
+              italic: false,
             ),
           ),
         ),
-      StandingState.finished => Icon(Icons.sports_score, size: _towerMarkHeight + 2, color: ink),
+      StandingState.finished => Icon(Icons.sports_score, size: _towerPitHeight + 2, color: ink),
       _ => null,
     };
     final tyre = kHighlightTyreNames[row.tyre];
     return Container(
       key: ValueKey('standing-row-${row.carIndex}'),
       height: _towerRowHeight,
-      color: background,
+      color: focused ? AppColors.replayHudText : null,
       padding: const EdgeInsets.only(right: _towerSidePadding),
       child: Row(
         children: [
-          SizedBox(width: _towerPositionWidth, child: Text('${index + 1}', style: text, textAlign: TextAlign.center)),
-          Container(width: _towerBarWidth, height: _towerBarHeight, color: colorOf(row.carIndex)),
+          SizedBox(
+            width: compact ? _towerCompactPositionWidth : _towerPositionWidth,
+            child: Text(
+              '${index + 1}',
+              textAlign: TextAlign.center,
+              style: _towerText(context, color: focused ? ink : AppColors.replayTowerPosition, weight: FontWeight.w600),
+            ),
+          ),
+          Container(
+            width: _towerDividerWidth,
+            height: _towerRowHeight,
+            color: focused ? AppColors.replayTowerPitBadge : AppColors.replayTowerDivider,
+          ),
           const SizedBox(width: _towerGap),
-          SizedBox(width: _towerNameWidth, child: Text(standingAbbreviation(nameOf(row.carIndex)), style: text)),
-          Expanded(child: Align(alignment: Alignment.centerRight, child: gap)),
+          SizedBox(width: compact ? _towerBarWidth : _towerLogoSize, height: _towerLogoSize, child: _teamMark(row.carIndex)),
+          const SizedBox(width: _towerGap),
+          Expanded(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      focused && !compact ? name.toUpperCase() : standingAbbreviation(name),
+                      style: _towerText(context, color: ink, weight: FontWeight.w800, italic: false),
+                    ),
+                  ),
+                ),
+                if (gap.isNotEmpty)
+                  Padding(padding: const EdgeInsets.only(left: _towerGap), child: Text(gap, style: gapStyle)),
+              ],
+            ),
+          ),
           if (mark != null) ...[const SizedBox(width: _towerGap), mark],
-          if (tyre != null) ...[
-            const SizedBox(width: _towerGap),
-            TyreCompoundCircle(key: ValueKey('standing-tyre-${row.carIndex}'), compound: tyre, tooltip: tyre, size: _towerTyreSize),
-          ],
+          if (tyre != null) ...[const SizedBox(width: _towerGap), _tyre(context, row.carIndex, tyre, focused)],
         ],
       ),
     );
   }
+
+  /// 팀 표시: 로고가 있으면 팀 색 원 안의 로고(서버 로고는 팀 색 바탕에 맞춘 그림이라 프로필 사진처럼 원에 얹는다,
+  /// 읽는 중·못 읽으면 빈 원), 로고가 없거나 좁은 화면이면 팀 색 세로 띠.
+  Widget _teamMark(int carIndex) {
+    final color = colorOf(carIndex);
+    final url = compact ? null : logoUrlOf?.call(carIndex);
+    if (url == null) {
+      return Center(
+        child: Container(
+          width: _towerBarWidth,
+          height: _towerBarHeight,
+          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(_towerBarWidth / 2)),
+        ),
+      );
+    }
+    return Container(
+      decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+      padding: const EdgeInsets.all(_towerLogoPadding),
+      child: Image.network(
+        url,
+        key: ValueKey('standing-logo-$carIndex'),
+        fit: BoxFit.contain,
+        frameBuilder: (_, child, frame, wasSynchronouslyLoaded) =>
+            frame == null && !wasSynchronouslyLoaded ? const SizedBox.shrink() : child,
+        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+      ),
+    );
+  }
+
+  /// 컴파운드 색 글자. 흰 바탕(따라가는 차) 줄에서는 색이 묻히지 않게 어두운 칸 위에 쓴다.
+  Widget _tyre(BuildContext context, int carIndex, String compound, bool focused) => Tooltip(
+        message: compound,
+        child: Container(
+          key: ValueKey('standing-tyre-$carIndex'),
+          width: focused ? _towerTyreFocusSize : _towerTyreWidth,
+          height: focused ? _towerTyreFocusSize : null,
+          alignment: Alignment.center,
+          decoration: focused
+              ? BoxDecoration(color: AppColors.replayTowerBody, borderRadius: BorderRadius.circular(_towerBadgeRadius))
+              : null,
+          child: Text(tyreLetterOf(compound), style: _towerText(context, color: tyreColorOf(compound), weight: FontWeight.w900)),
+        ),
+      );
 }
 
 /// 하단 자막: 빨간 머리 칸(`LAP 16 · 추월`) 아래 중심 차 팀 색 띠 + 본문(`RUSSELL → NORRIS`). 본문이 없으면 머리 칸만.
