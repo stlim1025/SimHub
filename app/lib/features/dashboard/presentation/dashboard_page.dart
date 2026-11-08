@@ -30,18 +30,9 @@ class DashboardPage extends ConsumerWidget {
     final recent = ref.watch(recentLapsProvider);
     final theme = Theme.of(context);
 
-    return ListView(
-      padding: pagePadding(context),
+    final recentLaps = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'Welcome $displayName!',
-          style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 24),
-        const ConnectionStatusCard(),
-        const SizedBox(height: 24),
-        const DashboardSeasonSection(),
-        const SizedBox(height: 24),
         Row(
           children: [
             Expanded(child: Text('최근 랩', style: theme.textTheme.titleMedium)),
@@ -63,8 +54,53 @@ class DashboardPage extends ConsumerWidget {
         ),
       ],
     );
+
+    return ListView(
+      padding: pagePadding(context),
+      children: [
+        Text(
+          'Welcome $displayName!',
+          style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: _gap),
+        // 넓은 화면(B안 보드): 왼쪽 7칸 시즌 영역, 오른쪽 5칸 연결 상태 + 최근 랩. 좁으면 위에서 아래로.
+        LayoutBuilder(
+          builder: (context, box) => box.maxWidth >= kDashboardBoardMinWidth
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Expanded(flex: _seasonFlex, child: DashboardSeasonSection()),
+                    const SizedBox(width: _gap),
+                    Expanded(
+                      flex: _sideFlex,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [const ConnectionStatusCard(), const SizedBox(height: _gap), recentLaps],
+                      ),
+                    ),
+                  ],
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const ConnectionStatusCard(),
+                    const SizedBox(height: _gap),
+                    const DashboardSeasonSection(),
+                    const SizedBox(height: _gap),
+                    recentLaps,
+                  ],
+                ),
+        ),
+      ],
+    );
   }
 }
+
+/// 본문 폭이 이 값 이상이면 홈을 두 칸 보드(시즌 7 : 연결 상태·최근 랩 5)로 나눈다.
+const double kDashboardBoardMinWidth = 1200;
+const int _seasonFlex = 7;
+const int _sideFlex = 5;
+const double _gap = 24;
 
 class _EmptyLaps extends StatelessWidget {
   const _EmptyLaps();
