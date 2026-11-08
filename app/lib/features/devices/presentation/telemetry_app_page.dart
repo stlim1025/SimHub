@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/config/app_config.dart';
+import '../../../core/layout/layout_constants.dart';
 import '../../../core/layout/page_padding.dart';
 import '../../../core/platform/download_launcher.dart';
 import '../../../core/theme/app_palette.dart';
@@ -51,7 +52,7 @@ class TelemetryAppPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: pagePadding(context),
+      padding: pagePadding(context, maxWidth: kReadableContentMaxWidth),
       children: [
         Text(
           'Telemetry App',
