@@ -99,7 +99,10 @@ internal static class F1ExtraChannels
         .Add("chassisPitchDeg", motion.ChassisPitch * DegreesPerRadian)
         .Build();
 
-    /// <summary>Car Telemetry 2(16, 2026 형식 전용) — 액티브 에어로(0 코너 · 1 직선 모드)·오버테이크 모드, 쓸 수 있게 되기까지 거리(m).</summary>
+    /// <summary>
+    /// Car Telemetry 2(16, 2026 형식 전용) — 액티브 에어로(0 코너 · 1 직선 모드)·오버테이크 모드, 쓸 수 있게 되기까지 거리(m),
+    /// 2026 규정 차인지(0 이전 규정 · 1 2026 규정)·역주행 중인지.
+    /// </summary>
     public static IReadOnlyDictionary<string, double> FromCarTelemetry2(Season2026CarTelemetry2 car) => new ChannelBag()
         .Add("activeAeroMode", car.ActiveAeroMode, Integer)
         .Add("activeAeroAvailable", car.ActiveAeroAvailable)
@@ -107,6 +110,8 @@ internal static class F1ExtraChannels
         .Add("overtakeAvailable", car.OvertakeAvailable)
         .Add("overtakeActive", car.OvertakeActive)
         .Add("overtakeActivationDistance", car.OvertakeActivationDistance, Integer)
+        .Add("regulations2026", car.Regulations2026Applicable)
+        .Add("drivingWrongWay", car.IsDrivingWrongWay)
         .Build();
 
     /// <summary>Lap Data(2)의 플레이어 칸 — 순위·간격·세이프티카 델타.</summary>

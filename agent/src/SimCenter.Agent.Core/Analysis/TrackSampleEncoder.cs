@@ -15,7 +15,7 @@ namespace SimCenter.Agent.Core.Analysis;
 /// <param name="Steer">조향(−100~100, 왼쪽 −).</param>
 /// <param name="Rpm">엔진 RPM.</param>
 /// <param name="ErsStoreKj">ERS 배터리 잔량(kJ).</param>
-/// <param name="Flags2">표시 비트 2(<see cref="TrackSampleEncoder.DrsFlag"/>·<see cref="TrackSampleEncoder.OvertookFlag"/>·<see cref="TrackSampleEncoder.OvertakenFlag"/>).</param>
+/// <param name="Flags2">표시 비트 2(<see cref="TrackSampleEncoder.DrsFlag"/>·<see cref="TrackSampleEncoder.OvertookFlag"/>·<see cref="TrackSampleEncoder.OvertakenFlag"/>, 2026 형식은 <see cref="TrackSampleEncoder.ActiveAeroStraightFlag"/> 등 bit3~7).</param>
 public readonly record struct TrackSample(
     byte CarIndex,
     float LapDistanceM,
@@ -62,6 +62,16 @@ public static class TrackSampleEncoder
     public const byte DrsFlag = 0x01;
     public const byte OvertookFlag = 0x02;
     public const byte OvertakenFlag = 0x04;
+
+    /// <summary>
+    /// 표시 비트 2의 UDP 형식 2026 값(Car Telemetry 2, 2025 세션은 0): 액티브 에어로 직선 모드(bit3)·액티브 에어로 쓸 수 있는 구간(bit4)·
+    /// 오버테이크 모드 쓸 수 있음(bit5)·쓰는 중(bit6)·역주행 중(bit7). 남는 비트에 넣어 배치 버전은 그대로다.
+    /// </summary>
+    public const byte ActiveAeroStraightFlag = 0x08;
+    public const byte ActiveAeroAvailableFlag = 0x10;
+    public const byte OvertakeModeAvailableFlag = 0x20;
+    public const byte OvertakeModeActiveFlag = 0x40;
+    public const byte WrongWayFlag = 0x80;
 
     /// <summary>랩 거리 단위(m)·좌표 단위(m)·G-force 단위(g).</summary>
     public const float LapDistanceUnitM = 0.25f;

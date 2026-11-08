@@ -15,14 +15,17 @@ internal static class F1GameEvents
     private const int MillisecondsPerSecond = 1000;
     private const int CodeLength = 4;
 
-    /// <summary>싣지 않는 이벤트면 null. 충돌 강도(0 낮음 · 1 중간 · 2 높음)는 2026 형식에만 있어 그때만 충돌 상세에 싣는다.</summary>
-    public static (string Code, IReadOnlyDictionary<string, object?> Details)? Map(EventDataPacket packet, byte? collisionSeverity)
+    /// <summary>
+    /// 싣지 않는 이벤트면 null. 2026 형식에만 있는 값(<paramref name="extras"/>, 2025는 기본값)은 그때만 싣는다:
+    /// 충돌 강도(0 낮음 · 1 중간 · 2 높음)는 충돌 상세에, 부분 모드 켜짐(PMEN)의 이유(0 젖은 노면 · 1 세이프티카 · 2 적기)는 <c>reason</c>으로.
+    /// </summary>
+    public static (string Code, IReadOnlyDictionary<string, object?> Details)? Map(EventDataPacket packet, Season2026EventExtras extras)
     {
         var details = packet.EventDetails;
         return details.EventType switch
         {
             F1Events.EventType.SessionStarted or F1Events.EventType.SessionEnded or F1Events.EventType.ButtonStatus => null,
-            _ => (CodeOf(details.EventType), DetailsOf(details, collisionSeverity)),
+            _ => (CodeOf(details.EventType), DetailsOf(details, extras)),
         };
     }
 
@@ -34,7 +37,7 @@ internal static class F1GameEvents
         return Encoding.ASCII.GetString(bytes);
     }
 
-    private static IReadOnlyDictionary<string, object?> DetailsOf(F1Events.EventDetails details, byte? collisionSeverity)
+    private static IReadOnlyDictionary<string, object?> DetailsOf(F1Events.EventDetails details, Season2026EventExtras extras)
     {
         var bag = new DetailBag();
         if (details.TryGetPenaltyEvent(out var penalty))
@@ -78,13 +81,13 @@ internal static class F1GameEvents
         }
         else
         {
-            AddOtherDetails(bag, details, collisionSeverity);
+            AddOtherDetails(bag, details, extras);
         }
 
         return bag.Build();
     }
 
-    private static void AddOtherDetails(DetailBag bag, F1Events.EventDetails details, byte? collisionSeverity)
+    private static void AddOtherDetails(DetailBag bag, F1Events.EventDetails details, Season2026EventExtras extras)
     {
         if (details.TryGetStartLightsEvent(out var lights))
         {
@@ -115,10 +118,15 @@ internal static class F1GameEvents
         else if (details.TryGetCollisionEvent(out var collision))
         {
             bag.Add("vehicle1Index", collision.Vehicle1Index).Add("vehicle2Index", collision.Vehicle2Index);
-            if (collisionSeverity is { } severity)
+            if (extras.CollisionSeverity is { } severity)
             {
                 bag.Add("severity", severity);
             }
+        }
+        else if (extras.PartialModeReason is { } reason)
+        {
+            // PMEN — F1Game.UDP가 모르는 2026 코드라 위 어느 형식에도 맞지 않는다.
+            bag.Add("reason", reason);
         }
     }
 

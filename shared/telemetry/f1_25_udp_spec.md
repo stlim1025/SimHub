@@ -363,7 +363,7 @@ Session History의 타이어 스틴트 칸은 Final Classification의 `tyreStint
 ## 9. UDP 형식 2026 (F1 25 2026 시즌팩)
 
 게임 텔레메트리 설정의 UDP 형식을 2026으로 두면 `m_packetFormat` = 2026으로 온다(기존 저장 데이터는 2025, 새로 깐 게임은 2026이 기본). Agent는 2025·2026을 모두 읽는다.
-배치의 출처는 EA 2026 시즌팩 UDP 스펙을 옮긴 F1Game.UDP 26.0.0(MIT) — 25.1.1과 어셈블리 이름이 같아 함께 쓸 수 없으므로 Agent의 `Season2026Wire`가 2026 바이트를 25.1.1 구조체로 옮겨 같은 매핑을 탄다.
+배치의 출처는 EA 공식 구조체(F1 25 2026 Season Pack Telemetry Output Structures)와 그것을 옮긴 F1Game.UDP 26.0.0(MIT) — 25.1.1과 어셈블리 이름이 같아 함께 쓸 수 없으므로 Agent의 `Season2026Wire`가 2026 바이트를 25.1.1 구조체로 옮겨 같은 매핑을 탄다.
 
 | 2025와 다른 점 | 2026 |
 |---|---|
@@ -373,15 +373,20 @@ Session History의 타이어 스틴트 칸은 Final Classification의 `tyreStint
 | Car Status(7) | MGU-H 회수량 뒤 `m_ersHarvestLimitPerLap`(float, J) 추가. ERS 모드 3 = Boost |
 | Participants(4) | 드라이버·네트워크·팀 ID uint8 → uint16(2026 팀 476~486, 사람 드라이버 65535) |
 | Time Trial(14) | 팀 ID uint8 → uint16 |
-| Session(1) | 끝에 173바이트: 액티브 에어로 상태·구역(전체·부분 각 8칸), DRS 구역(4칸, 랩 비율 시작·끝), 출발 반응 시간, ABS·TC 보조 등 |
+| Session(1) | 끝에 173바이트: 액티브 에어로 상태·구역(전체·부분 각 8칸), DRS 구역(4칸, 랩 비율 시작·끝), 출발 반응 시간, ABS·TC 보조, 레이싱 라인 고대비·색각 보정, 되감기 반복 안내. `m_formula` 13 = F1 26 |
 | Event(3) `COLL` | 차 두 대 뒤 강도 1바이트(0 낮음 · 1 중간 · 2 높음) |
+| Event(3) 새 코드 | `PMEN` 부분 모드 켜짐(이유 1바이트: 0 젖은 노면 · 1 세이프티카 출동 · 2 적기), `PMDI` 부분 모드 꺼짐, `OVEN`·`OVDI` 오버테이크 모드 허용·해제(상세 없음) |
 | Car Telemetry 2(**16**, 새 패킷) | 차마다 액티브 에어로 모드(0 코너 · 1 직선)·사용 가능·가능 지점까지 거리, 오버테이크 모드 사용 가능·사용 중·가능 지점까지 거리, 2026 규정 여부, 역주행 |
 
 2026에서만 싣는 값(2025 형식이면 키가 없다):
 
 | 위치 | 키 |
 |---|---|
-| 트레이스 extra(§6) | `activeAeroMode` `activeAeroAvailable` `activeAeroActivationDistance`(m) `overtakeAvailable` `overtakeActive` `overtakeActivationDistance`(m) — Car Telemetry 2의 플레이어 칸 |
+| 트레이스 extra(§6) | `activeAeroMode` `activeAeroAvailable` `activeAeroActivationDistance`(m) `overtakeAvailable` `overtakeActive` `overtakeActivationDistance`(m) `regulations2026` `drivingWrongWay` — Car Telemetry 2의 플레이어 칸 |
 | `car.details.status`(§7) | `ersHarvestLimitPerLap`(J) |
-| `car.details.session`(§7) | `activeAeroTrackStatus` `activeAeroZonesFull[]` `activeAeroZonesPartial[]` `drsZones[]`(각 { `zoneStart` `zoneEnd` } 랩 비율) `startReactionTimeS` `antiLockBrakesAssist` `tractionControlAssist` |
+| `car.details.session`(§7) | `activeAeroTrackStatus` `activeAeroZonesFull[]` `activeAeroZonesPartial[]` `drsZones[]`(각 { `zoneStart` `zoneEnd` } 랩 비율) `startReactionTimeS` `antiLockBrakesAssist` `tractionControlAssist` `dynamicRacingLineHiVis` `dynamicRacingLineColourBlind` `recurringRewindPrompt` |
 | `car.details.events[]` `COLL`(§7) | `severity` |
+| `car.details.events[]` `PMEN`(§7) | `reason`. `PMDI`·`OVEN`·`OVDI`는 코드만 |
+| `TrackSamplesChunk` 표시 비트 2 | 모든 차의 Car Telemetry 2: bit3 액티브 에어로 직선 모드 · bit4 액티브 에어로 쓸 수 있음 · bit5 오버테이크 모드 쓸 수 있음 · bit6 쓰는 중 · bit7 역주행(배치 버전 5 그대로) |
+
+다른 차의 "쓸 수 있게 되기까지 거리"·2026 규정 여부와 랩당 ERS 회수 한도는 표본에 싣지 않는다(표본은 주행 상태만 — 헌장 Agent Rules 예외). Lobby Info(9)는 2025처럼 읽지 않는다.

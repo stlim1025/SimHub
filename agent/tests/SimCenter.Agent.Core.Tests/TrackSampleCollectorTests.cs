@@ -151,6 +151,29 @@ public class TrackSampleCollectorTests
     }
 
     [Fact]
+    public void ActiveAero_2026StatesGoIntoFlags2HighBits()
+    {
+        _sut.Process(Session());
+        _sut.Process(new FieldActiveAeroFrame(SessionRef,
+        [
+            new FieldActiveAero(StraightMode: true, ActiveAeroAvailable: true, OvertakeModeAvailable: false, OvertakeModeActive: false, DrivingWrongWay: false),
+            new FieldActiveAero(StraightMode: false, ActiveAeroAvailable: false, OvertakeModeAvailable: true, OvertakeModeActive: true, DrivingWrongWay: false),
+            new FieldActiveAero(StraightMode: false, ActiveAeroAvailable: false, OvertakeModeAvailable: false, OvertakeModeActive: false, DrivingWrongWay: true),
+        ]));
+        Tick(0, 0);
+
+        var samples = Decode(End(_sut).Data).Samples;
+
+        // 차 0은 DRS도 열려 있다(Tick) — 낮은 비트와 함께 실린다.
+        Assert.Equal(
+        [
+            TrackSampleEncoder.DrsFlag | TrackSampleEncoder.ActiveAeroStraightFlag | TrackSampleEncoder.ActiveAeroAvailableFlag,
+            TrackSampleEncoder.OvertakeModeAvailableFlag | TrackSampleEncoder.OvertakeModeActiveFlag,
+            TrackSampleEncoder.WrongWayFlag,
+        ], samples.Select(x => (int)x.Flags2));
+    }
+
+    [Fact]
     public void Overtake_FlagsOvertakerAndOvertaken_WithAnExtraSample()
     {
         _sut.Process(Session());

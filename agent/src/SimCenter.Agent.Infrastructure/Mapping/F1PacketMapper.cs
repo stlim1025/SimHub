@@ -140,7 +140,7 @@ public sealed partial class F1PacketMapper
                 return MapCarDamagePacket(damage.Header, damage.CarDamageData.AsReadOnlySpan());
 
             case F1Enums.PacketType.Event when packet.TryGetEventDataPacket(out var eventPacket):
-                return MapEventFrames(eventPacket, collisionSeverity: null);
+                return MapEventFrames(eventPacket, extras: default);
 
             case F1Enums.PacketType.Participants when packet.TryGetParticipantsDataPacket(out var participants):
                 return MapParticipantsFrames(participants.Header, ParticipantSlot.From(participants.Participants.AsReadOnlySpan()));

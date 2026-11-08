@@ -144,15 +144,15 @@ public sealed partial class F1PacketMapper
         return [frame, DetailsFrame(header, F1DetailSections.Participant, details)];
     }
 
-    /// <summary>Event: 세션 경계는 마커로, 그 밖의 코드는 게임 이벤트로(버튼 상태는 버린다). 충돌 강도는 2026 형식에만 있다(2025는 null).</summary>
-    private IReadOnlyList<ITelemetryFrame> MapEventFrames(EventDataPacket packet, byte? collisionSeverity)
+    /// <summary>Event: 세션 경계는 마커로, 그 밖의 코드는 게임 이벤트로(버튼 상태는 버린다). 충돌 강도·부분 모드 이유는 2026 형식에만 있다(2025는 기본값).</summary>
+    private IReadOnlyList<ITelemetryFrame> MapEventFrames(EventDataPacket packet, Season2026EventExtras extras)
     {
         if (MapEvent(packet) is { } marker)
         {
             return [marker];
         }
 
-        if (F1GameEvents.Map(packet, collisionSeverity) is not { } gameEvent)
+        if (F1GameEvents.Map(packet, extras) is not { } gameEvent)
         {
             return Empty;
         }

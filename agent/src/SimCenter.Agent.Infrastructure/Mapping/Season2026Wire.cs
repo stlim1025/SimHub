@@ -7,11 +7,11 @@ using F1Game.UDP.Data;
 namespace SimCenter.Agent.Infrastructure.Mapping;
 
 /// <summary>
-/// UDP 형식 2026(F1 25 2026 시즌팩) 바이트 → F1Game.UDP 25.1.1 구조체. 배치의 출처는 EA 2026 시즌팩 UDP 스펙을 옮긴 F1Game.UDP 26.0.0(MIT)의 구조체 정의다
-/// (두 버전은 어셈블리 이름이 같아 한 프로세스에 함께 올릴 수 없다). 2025와 다른 곳:
+/// UDP 형식 2026(F1 25 2026 시즌팩) 바이트 → F1Game.UDP 25.1.1 구조체. 배치는 EA 공식 구조체(F1 25 2026 Season Pack Telemetry Output Structures)와
+/// 그것을 옮긴 F1Game.UDP 26.0.0(MIT)에 맞췄다(두 라이브러리 버전은 어셈블리 이름이 같아 한 프로세스에 함께 올릴 수 없다). 2025와 다른 곳:
 /// 차 칸 22 → 24, Motion G-force float → int16(1/1000 g), Car Telemetry 엔진 온도 uint16 → uint8, Car Status에 랩당 ERS 회수 한도(float) 추가,
 /// Participants의 드라이버·네트워크·팀 ID uint8 → uint16, Time Trial 팀 ID uint8 → uint16, Session 끝에 액티브 에어로·DRS 구역·출발 반응 시간(173바이트),
-/// 충돌 이벤트에 강도 1바이트(공용체 안), 새 패킷 Car Telemetry 2(16).
+/// 충돌 이벤트에 강도 1바이트(공용체 안), 새 이벤트 PMEN(이유 1바이트)·PMDI·OVEN·OVDI(상세 없음), 새 패킷 Car Telemetry 2(16).
 /// 배치가 같은 칸(Lap Data·Car Damage·Car Setups·Final Classification)은 25.1.1 구조체로 바로 읽고(라이브러리도 바이트를 구조체에 그대로 복사한다),
 /// 바뀐 칸은 2025 배치로 다시 써서 읽는다 — 매핑 코드는 형식과 무관하게 같은 구조체를 받는다. 팀·드라이버 ID는 1바이트에 담기지 않아 따로 돌려준다.
 /// </summary>
@@ -97,8 +97,14 @@ internal static class Season2026Wire
     private const int MaxDrsZones = 4;
     private const int ZoneBytes = 2 * sizeof(float);
 
-    /// <summary>Event: 헤더 + 4글자 코드 뒤 충돌 상세(차 1 · 차 2 · 강도).</summary>
-    private const int CollisionSeverityOffset = HeaderSize + 4 + 2;
+    /// <summary>부분 모드 켜짐 이벤트 코드(2026 전용, F1Game.UDP는 모른다). 상세는 이유 1바이트다.</summary>
+    public const string PartialModeEnabledCode = "PMEN";
+
+    /// <summary>Event: 헤더 + 4글자 코드 뒤가 공용체 상세다.</summary>
+    private const int EventDetailsOffset = HeaderSize + 4;
+
+    /// <summary>충돌 상세(차 1 · 차 2 · 강도)의 강도.</summary>
+    private const int CollisionSeverityOffset = EventDetailsOffset + 2;
 
     static Season2026Wire()
     {
@@ -250,7 +256,10 @@ internal static class Season2026Wire
             drs,
             startReactionTime,
             AntiLockBrakesAssist: tail[offset],
-            TractionControlAssist: tail[offset + 1]);
+            TractionControlAssist: tail[offset + 1],
+            DynamicRacingLineHiVis: tail[offset + 2],
+            DynamicRacingLineColourBlind: tail[offset + 3],
+            RecurringRewindPrompt: tail[offset + 4]);
     }
 
     public static Season2026CarTelemetry2 CarTelemetry2(ReadOnlySpan<byte> datagram, int carIndex)
@@ -267,8 +276,23 @@ internal static class Season2026Wire
             IsDrivingWrongWay: car[9] != 0);
     }
 
+    /// <summary>Car Telemetry 2의 모든 차 칸(24칸).</summary>
+    public static Season2026CarTelemetry2[] CarTelemetry2All(ReadOnlySpan<byte> datagram)
+    {
+        var cars = new Season2026CarTelemetry2[MaxCars];
+        for (var i = 0; i < cars.Length; i++)
+        {
+            cars[i] = CarTelemetry2(datagram, i);
+        }
+
+        return cars;
+    }
+
     /// <summary>충돌(COLL) 이벤트의 강도(0 낮음 · 1 중간 · 2 높음).</summary>
     public static byte CollisionSeverity(ReadOnlySpan<byte> datagram) => datagram[CollisionSeverityOffset];
+
+    /// <summary>부분 모드 켜짐(PMEN) 이벤트의 이유(0 젖은 노면 · 1 세이프티카 출동 · 2 적기).</summary>
+    public static byte PartialModeReason(ReadOnlySpan<byte> datagram) => datagram[EventDetailsOffset];
 
     private static TimeTrialSet TimeTrialSetAt(ReadOnlySpan<byte> datagram, int index)
     {
@@ -311,7 +335,7 @@ internal static class Season2026Wire
     }
 }
 
-/// <summary>Session(2026) 끝에 붙은 값 — 액티브 에어로 구역(전체·부분)·DRS 구역(랩 비율), 출발 반응 시간(초), 보조 장치 설정(게임 원시 값).</summary>
+/// <summary>Session(2026) 끝에 붙은 값 — 액티브 에어로 구역(전체·부분)·DRS 구역(랩 비율), 출발 반응 시간(초), 보조 장치·레이싱 라인 표시·되감기 안내 설정(게임 원시 값).</summary>
 internal sealed record Season2026SessionTail(
     byte ActiveAeroTrackStatus,
     IReadOnlyList<(float Start, float End)> ActiveAeroZonesFull,
@@ -319,7 +343,15 @@ internal sealed record Season2026SessionTail(
     IReadOnlyList<(float Start, float End)> DrsZones,
     float StartReactionTime,
     byte AntiLockBrakesAssist,
-    byte TractionControlAssist);
+    byte TractionControlAssist,
+    byte DynamicRacingLineHiVis,
+    byte DynamicRacingLineColourBlind,
+    byte RecurringRewindPrompt);
+
+/// <summary>
+/// Event에 2026 형식만 더하는 값 — 충돌 강도(COLL), 부분 모드 켜짐 이유(PMEN). 해당 이벤트가 아니거나 2025 형식이면 null(기본값 = 둘 다 null).
+/// </summary>
+internal readonly record struct Season2026EventExtras(byte? CollisionSeverity, byte? PartialModeReason);
 
 /// <summary>Car Telemetry 2(16, 2026 전용) 한 차 — 액티브 에어로(0 코너 · 1 직선)·오버테이크 모드. 거리는 m.</summary>
 internal readonly record struct Season2026CarTelemetry2(

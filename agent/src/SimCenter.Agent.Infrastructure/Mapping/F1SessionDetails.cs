@@ -84,7 +84,7 @@ internal static class F1SessionDetails
 
     /// <summary>
     /// 2026 형식: 2025 묶음 + Session 꼬리 — 액티브 에어로 상태(0 전체 · 1 부분)와 구역(전체·부분), DRS 구역(랩 비율 시작·끝),
-    /// 출발 반응 시간(초), 세션 ABS·TC 보조 설정(게임 원시 값).
+    /// 출발 반응 시간(초), 세션 ABS·TC 보조 설정, 레이싱 라인 고대비(0 끔 · 1 켬)·색각 보정(0 끔 · 1 적색맹 · 2 녹색맹 · 3 청색맹)·되감기 반복 안내(0 끔 · 1 켬)(게임 원시 값).
     /// </summary>
     public static IReadOnlyDictionary<string, object?> From(SessionDataPacket packet, Season2026SessionTail tail) =>
         new Dictionary<string, object?>(From(packet), StringComparer.Ordinal)
@@ -96,6 +96,9 @@ internal static class F1SessionDetails
             ["startReactionTimeS"] = tail.StartReactionTime,
             ["antiLockBrakesAssist"] = (int)tail.AntiLockBrakesAssist,
             ["tractionControlAssist"] = (int)tail.TractionControlAssist,
+            ["dynamicRacingLineHiVis"] = (int)tail.DynamicRacingLineHiVis,
+            ["dynamicRacingLineColourBlind"] = (int)tail.DynamicRacingLineColourBlind,
+            ["recurringRewindPrompt"] = (int)tail.RecurringRewindPrompt,
         };
 
     private static object?[] Zones(IReadOnlyList<(float Start, float End)> zones)

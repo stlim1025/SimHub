@@ -59,6 +59,21 @@ public sealed record FieldStatusFrame(
     IReadOnlyList<byte> TyreAgeLaps,
     IReadOnlyList<ushort>? ErsStoreKj = null) : ITelemetryFrame;
 
+/// <summary>
+/// 모든 차의 액티브 에어로·오버테이크 모드(F1 Car Telemetry 2, UDP 형식 2026 전용). 칸 번호 = 차 번호, 다른 패킷과 짝짓지 않고 최신 값을 쓴다.
+/// </summary>
+public sealed record FieldActiveAeroFrame(string SessionRef, IReadOnlyList<FieldActiveAero> Cars) : ITelemetryFrame;
+
+/// <summary>
+/// 차 한 대의 2026 주행 상태: 액티브 에어로가 직선 모드인지·쓸 수 있는 구간인지, 오버테이크 모드를 쓸 수 있는지·쓰는 중인지, 역주행 중인지.
+/// </summary>
+public readonly record struct FieldActiveAero(
+    bool StraightMode,
+    bool ActiveAeroAvailable,
+    bool OvertakeModeAvailable,
+    bool OvertakeModeActive,
+    bool DrivingWrongWay);
+
 /// <summary>추월(F1 Event OVTK): 추월한 차와 당한 차 번호.</summary>
 public sealed record FieldOvertakeFrame(string SessionRef, int Overtaker, int Overtaken) : ITelemetryFrame;
 

@@ -201,20 +201,47 @@ public class F1Season2026WireTests
         Assert.Empty(Assert.IsType<object?[]>(details["drsZones"]));
         Assert.Equal(0.234, Math.Round(Num(details, "startReactionTimeS"), 3));
         Assert.Equal((0d, 1d), (Num(details, "antiLockBrakesAssist"), Num(details, "tractionControlAssist")));
+        Assert.Equal(
+            (1d, 2d, 1d),
+            (Num(details, "dynamicRacingLineHiVis"), Num(details, "dynamicRacingLineColourBlind"), Num(details, "recurringRewindPrompt")));
     }
 
     [Fact]
-    public void CarTelemetry2_PlayerActiveAeroAndOvertakeModeBecomeExtraChannels()
+    public void CarTelemetry2_PlayerValuesBecomeExtraChannels()
     {
-        var extra = Assert.IsType<ExtraChannelsFrame>(Assert.Single(MapFixture("cartelemetry2.bin"))).Channels;
+        var extra = Assert.Single(MapFixture("cartelemetry2.bin").OfType<ExtraChannelsFrame>()).Channels;
 
-        // 차 i: 에어로 모드 i % 2, 에어로 거리 100 + i, 오버테이크 거리 50 + i, 오버테이크 사용 중 = 플레이어만
+        // 차 i: 에어로 모드 i % 2, 에어로 거리 100 + i, 오버테이크 거리 50 + i, 오버테이크 사용 중 = 플레이어만, 이전 규정 = 차 7, 역주행 = 차 5
         Assert.Equal(1, extra["activeAeroMode"]);
         Assert.Equal(1, extra["activeAeroAvailable"]);
         Assert.Equal(123, extra["activeAeroActivationDistance"]);
         Assert.Equal(1, extra["overtakeAvailable"]);
         Assert.Equal(1, extra["overtakeActive"]);
         Assert.Equal(73, extra["overtakeActivationDistance"]);
+        Assert.Equal(1, extra["regulations2026"]);
+        Assert.Equal(0, extra["drivingWrongWay"]);
+    }
+
+    [Fact]
+    public void CarTelemetry2_AllCarsActiveAeroAndOvertakeModeBecomeFieldFrame()
+    {
+        var field = Assert.Single(MapFixture("cartelemetry2.bin").OfType<FieldActiveAeroFrame>());
+
+        // 에어로 사용 가능 = i % 3 != 0, 오버테이크 사용 가능 = i % 4 != 0
+        Assert.Equal(SessionRef, field.SessionRef);
+        Assert.Equal(24, field.Cars.Count);
+        Assert.Equal(new FieldActiveAero(false, false, false, false, false), field.Cars[0]);
+        Assert.Equal(new FieldActiveAero(true, true, true, false, true), field.Cars[5]);
+        Assert.Equal(new FieldActiveAero(true, true, true, true, false), field.Cars[PlayerIndex]);
+    }
+
+    [Fact]
+    public void PartialModeEnabledEvent_AddsReason()
+    {
+        var gameEvent = Assert.IsType<GameEventFrame>(Assert.Single(MapFixture("pmen.bin")));
+
+        Assert.Equal("PMEN", gameEvent.Code);
+        Assert.Equal(1d, Num(gameEvent.Details, "reason"));
     }
 
     [Fact]

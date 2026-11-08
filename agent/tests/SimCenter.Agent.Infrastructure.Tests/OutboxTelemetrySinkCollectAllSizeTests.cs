@@ -20,7 +20,7 @@ namespace SimCenter.Agent.Infrastructure.Tests;
 
 /// <summary>
 /// "전부 수집"(D-49, docs/15 §8)의 실제 크기: Spa(7,004m) 1랩을 5m 칸마다 게임에서 나올 법한 패킷 값으로 만들어 <b>실제 매퍼·기록기</b>를 거친
-/// 트레이스(기본 7채널 + extra 118채널)와 상세(셋업·세션·타이어 세트 20·이벤트 40 …)를 싣고 싱크가 Outbox에 넣은 바이트를 잰다.
+/// 트레이스(기본 7채널 + extra 126채널 — 2026 형식이 가장 크다)와 상세(셋업·세션·타이어 세트 20·이벤트 40 …)를 싣고 싱크가 Outbox에 넣은 바이트를 잰다.
 /// </summary>
 public sealed class OutboxTelemetrySinkCollectAllSizeTests : IAsyncLifetime
 {
@@ -62,7 +62,7 @@ public sealed class OutboxTelemetrySinkCollectAllSizeTests : IAsyncLifetime
         _output.WriteLine(
             $"Spa 7,004m: {trace.TimeMs.Count} samples @5m, extra {trace.Extra!.Count} channels — payload @5m {fullBytes} bytes; " +
             $"enqueued envelope {Utf8Bytes(json)} bytes @{resolution}m (limit {OutboxTelemetrySink.MaxEnvelopeBytes})");
-        Assert.Equal(124, trace.Extra.Count);   // 2025 118 + 2026 Car Telemetry 2 여섯
+        Assert.Equal(126, trace.Extra.Count);   // 2025 118 + 2026 Car Telemetry 2 여덟
         Assert.True(Utf8Bytes(json) <= OutboxTelemetrySink.MaxEnvelopeBytes);
         Assert.Equal(trace.Extra.Count, wireTrace.GetProperty("extra").EnumerateObject().Count());   // 해상도는 낮아져도 채널은 다 간다
         Assert.Equal(JsonValueKind.Object, payload.GetProperty("car").GetProperty("details").ValueKind);
@@ -237,7 +237,7 @@ public sealed class OutboxTelemetrySinkCollectAllSizeTests : IAsyncLifetime
     {
         var aero = Enumerable.Range(0, 8).Select(i => (Start: (i * 0.1f) + 0.012f, End: (i * 0.1f) + 0.058f)).ToArray();
         var drs = Enumerable.Range(0, 4).Select(i => (Start: (i * 0.2f) + 0.013f, End: (i * 0.2f) + 0.091f)).ToArray();
-        return new Season2026SessionTail(1, aero, aero, drs, 0.234f, 1, 2);
+        return new Season2026SessionTail(1, aero, aero, drs, 0.234f, 1, 2, 1, 3, 1);
     }
 
     private static LapFinished Lap(LapTrace trace, IReadOnlyDictionary<string, object?> details) => new(

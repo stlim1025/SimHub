@@ -7,13 +7,16 @@ namespace SimCenter.Agent.Infrastructure.Mapping;
 /// <summary>
 /// UDP 형식 2026(F1 25 2026 시즌팩) 매핑. 차 칸 패킷은 <see cref="Season2026Wire"/>가 25.1.1 구조체 칸 배열(24칸)로 옮겨 2025와 같은 매핑을 타고,
 /// 배치가 2025와 같은 패킷(Session 앞부분·Event·Session History·Tyre Sets·Motion Ex)은 25.1.1로 그대로 해석한다.
-/// 2026에만 있는 값: Car Telemetry 2(액티브 에어로·오버테이크 모드 → 트레이스 extra), Session 꼬리(→ session 상세),
-/// 랩당 ERS 회수 한도(→ status 상세), 충돌 강도(→ 이벤트 상세). Lobby Info(9)는 2025처럼 읽지 않는다.
+/// 2026에만 있는 값: Car Telemetry 2(플레이어 → 트레이스 extra, 모든 차의 액티브 에어로·오버테이크 모드·역주행 → 리플레이 표본), Session 꼬리(→ session 상세),
+/// 랩당 ERS 회수 한도(→ status 상세), 충돌 강도·부분 모드 이유(→ 이벤트 상세). Lobby Info(9)는 2025처럼 읽지 않는다.
 /// 크기가 모자란 패킷은 종류마다 한 번 경고하고 버린다.
 /// </summary>
 public sealed partial class F1PacketMapper
 {
     private static readonly F1Enums.PacketType CarTelemetry2 = (F1Enums.PacketType)Season2026Wire.CarTelemetry2PacketId;
+
+    /// <summary>Car Telemetry 2의 액티브 에어로 모드 값(0 코너 · 1 직선).</summary>
+    private const byte ActiveAeroStraightMode = 1;
 
     private IReadOnlyList<ITelemetryFrame> MapSeason2026(ReadOnlySpan<byte> datagram)
     {
@@ -95,7 +98,7 @@ public sealed partial class F1PacketMapper
         return MapLapDataPacket(header, Season2026Wire.LapData(datagram), personalBest, rival);
     }
 
-    /// <summary>Event: 배치는 2025와 같고, 충돌이면 공용체 안의 강도 바이트를 더한다.</summary>
+    /// <summary>Event: 배치는 2025와 같고, 충돌이면 공용체 안의 강도 바이트를, 부분 모드 켜짐(PMEN)이면 이유 바이트를 더한다.</summary>
     private IReadOnlyList<ITelemetryFrame> MapEvent2026(ReadOnlySpan<byte> datagram)
     {
         if (!TryParse(datagram, out var packet) || !packet.TryGetEventDataPacket(out var eventPacket))
@@ -103,8 +106,13 @@ public sealed partial class F1PacketMapper
             return Empty;
         }
 
-        byte? severity = eventPacket.EventDetails.TryGetCollisionEvent(out _) ? Season2026Wire.CollisionSeverity(datagram) : null;
-        return MapEventFrames(eventPacket, severity);
+        var details = eventPacket.EventDetails;
+        var extras = new Season2026EventExtras(
+            CollisionSeverity: details.TryGetCollisionEvent(out _) ? Season2026Wire.CollisionSeverity(datagram) : null,
+            PartialModeReason: F1GameEvents.CodeOf(details.EventType) == Season2026Wire.PartialModeEnabledCode
+                ? Season2026Wire.PartialModeReason(datagram)
+                : null);
+        return MapEventFrames(eventPacket, extras);
     }
 
     private static float? PlayerErsHarvestLimit(ReadOnlySpan<byte> datagram, PacketHeader header) =>
@@ -116,15 +124,33 @@ public sealed partial class F1PacketMapper
         return F1DetailSections.FromTimeTrial(sessionBest, personalBest, rival);
     }
 
-    /// <summary>Car Telemetry 2: 플레이어 칸의 액티브 에어로·오버테이크 모드를 트레이스 extra로(다음 Car Telemetry 프레임의 칸에 찍힌다).</summary>
+    /// <summary>
+    /// Car Telemetry 2: 플레이어 칸의 모든 값은 트레이스 extra로(다음 Car Telemetry 프레임의 칸에 찍힌다),
+    /// 모든 차의 액티브 에어로·오버테이크 모드·역주행은 리플레이 표본으로(<see cref="FieldActiveAeroFrame"/>).
+    /// </summary>
     private IReadOnlyList<ITelemetryFrame> MapCarTelemetry2(ReadOnlySpan<byte> datagram, PacketHeader header)
     {
-        if (!IsPlayerSlot(CarTelemetry2, header, Season2026Wire.MaxCars))
+        var cars = Season2026Wire.CarTelemetry2All(datagram);
+        var field = MapFieldActiveAero(header, cars);
+        return IsPlayerSlot(CarTelemetry2, header, cars.Length)
+            ? [ExtraFrame(header, F1ExtraChannels.FromCarTelemetry2(cars[header.PlayerCarIndex])), field]
+            : [field];
+    }
+
+    private static FieldActiveAeroFrame MapFieldActiveAero(PacketHeader header, IReadOnlyList<Season2026CarTelemetry2> cars)
+    {
+        var states = new FieldActiveAero[cars.Count];
+        for (var i = 0; i < states.Length; i++)
         {
-            return Empty;
+            var car = cars[i];
+            states[i] = new FieldActiveAero(
+                StraightMode: car.ActiveAeroMode == ActiveAeroStraightMode,
+                car.ActiveAeroAvailable,
+                car.OvertakeAvailable,
+                car.OvertakeActive,
+                car.IsDrivingWrongWay);
         }
 
-        var car = Season2026Wire.CarTelemetry2(datagram, header.PlayerCarIndex);
-        return [ExtraFrame(header, F1ExtraChannels.FromCarTelemetry2(car))];
+        return new FieldActiveAeroFrame(header.SessionUID.ToString(), states);
     }
 }
