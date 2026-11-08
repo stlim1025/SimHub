@@ -400,13 +400,14 @@ void main() {
       expect(find.byKey(const ValueKey('standing-tyre-2')), findsNothing);
     });
 
-    testWidgets('넓으면 재생기 폭은 그대로 두고 오른쪽에 장면 목록표, 줄을 누르면 그 장면으로', (t) async {
+    testWidgets('넓으면 오른쪽에 장면 목록표, 재생기는 나머지 폭을 다 쓰고, 줄을 누르면 그 장면으로', (t) async {
       await _pumpPlayer(t, _highlights(), width: 1600);
 
       final player = t.getRect(find.byKey(const ValueKey('highlights-player')));
       final list = t.getRect(find.byKey(const ValueKey('highlights-list')));
-      expect(player.width, lessThanOrEqualTo(1100));
-      expect(player.width, greaterThan(1050));
+      expect(player.width, greaterThan(1100));
+      expect(list.width, inInclusiveRange(300, 480));
+      expect(list.right, closeTo(1600, 1));
       expect(list.left, greaterThan(player.right));
       expect(list.height, closeTo(player.height, 1));
       final row1 = find.byKey(const ValueKey('highlights-list-row-1'));
@@ -442,8 +443,8 @@ void main() {
       expect(find.descendant(of: find.byKey(const ValueKey('highlights-list-row-1')), matching: find.text('충돌')), findsOneWidget);
     });
 
-    testWidgets('목록표 폭이 안 남으면 재생기 아래에 둔다', (t) async {
-      await _pumpPlayer(t, _highlights());
+    testWidgets('본문이 1100px보다 좁으면 목록표를 재생기 아래에 둔다', (t) async {
+      await _pumpPlayer(t, _highlights(), width: 1000);
 
       final player = t.getRect(find.byKey(const ValueKey('highlights-player')));
       final list = t.getRect(find.byKey(const ValueKey('highlights-list')));

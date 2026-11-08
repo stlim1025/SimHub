@@ -95,6 +95,10 @@ const double _wideViewMinWidth = 700;
 const double _listGap = 12;
 const double _listMinWidth = 300;
 const double _listMaxWidth = 480;
+
+/// 장면 목록표를 재생기 오른쪽에 둘 최소 본문 폭, 그때 목록표 폭 비율.
+const double _sideListMinWidth = 1100;
+const double _listWidthFraction = 0.26;
 const double _belowListMaxHeight = 360;
 
 /// 장면 목록표 열: 번호·랩 칸 폭, 장면 칸 최대 폭(그 안에서 이 세션의 가장 긴 태그에 맞춘다). 남는 폭은 드라이버 칸.
@@ -511,8 +515,8 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
     });
   }
 
-  /// 재생기 + 장면 목록표. 재생기는 원래 본문 폭([kContentMaxWidth])을 그대로 쓰고, 오른쪽에 목록표 폭이 남으면
-  /// 오른쪽(재생기와 같은 높이), 아니면 재생기 아래에 둔다.
+  /// 재생기 + 장면 목록표. 화면이 넓으면([_sideListMinWidth] 이상) 목록표를 오른쪽(화면 폭의 [_listWidthFraction],
+  /// [_listMinWidth]~[_listMaxWidth])에 재생기와 같은 높이로 두고 재생기가 나머지 폭을 다 쓴다. 좁으면 재생기 아래.
   @override
   Widget build(BuildContext context) {
     final player = _player(context);
@@ -521,8 +525,7 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
     }
     return LayoutBuilder(
       builder: (context, box) {
-        final spare = box.maxWidth - kContentMaxWidth - _listGap;
-        if (spare < _listMinWidth) {
+        if (box.maxWidth < _sideListMinWidth) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -535,15 +538,16 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
             ],
           );
         }
-        final listWidth = spare.clamp(_listMinWidth, _listMaxWidth).toDouble();
+        final listWidth = (box.maxWidth * _listWidthFraction).clamp(_listMinWidth, _listMaxWidth).toDouble();
+        final playerWidth = box.maxWidth - _listGap - listWidth;
         // 목록표는 재생기 높이에 맞춰 채우고, 넘치는 줄은 안에서 스크롤한다.
         return SizedBox(
-          width: kContentMaxWidth + _listGap + listWidth,
+          width: box.maxWidth,
           child: Stack(
             children: [
-              SizedBox(width: kContentMaxWidth, child: player),
+              SizedBox(width: playerWidth, child: player),
               Positioned(
-                left: kContentMaxWidth + _listGap,
+                left: playerWidth + _listGap,
                 top: 0,
                 bottom: 0,
                 width: listWidth,

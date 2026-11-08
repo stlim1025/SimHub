@@ -7,6 +7,7 @@ import '../../../core/layout/page_padding.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/util/lap_time.dart';
+import '../../../core/widgets/button_group.dart';
 import '../../../core/widgets/compact_table.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/not_found_state.dart';
@@ -25,6 +26,7 @@ import '../../profile/application/selected_game_provider.dart';
 import '../../sessions/presentation/session_widgets.dart';
 import '../../setups/domain/setups_display.dart';
 import '../../setups/presentation/page_heading.dart';
+import '../../setups/presentation/setup_track_page.dart';
 import '../application/track_corners_provider.dart';
 import '../application/track_outlines_provider.dart';
 import '../application/tracks_providers.dart';
@@ -88,10 +90,23 @@ const double kTrackStatsRowWidth = 900;
 /// 트랙 개요(`/tracks/:trackId`, F1Laps `F1 26 Australia` 모양): 이동 경로 + 국기·제목·서킷 이름,
 /// 바로가기(Top Setups · Leaderboard), `{트랙} stats`(내 기록 요약 + Fastest Time Trial laps), Theoretical Best(이론상 최고 랩), Best Lap Times(내 빠른 랩 10개),
 /// Track Details(+ [TrackOverview.mapLapId] 랩의 트랙 지도).
+/// 트랙 화면 탭: 개요 | 셋업(Setups 메뉴를 Tracks에 합쳤다).
+const List<ButtonGroupOption<String>> kTrackTabOptions = [
+  (value: kTrackTabOverview, label: 'Overview'),
+  (value: kTrackTabSetups, label: 'Setups'),
+];
+
 class TrackOverviewPage extends ConsumerWidget {
-  const TrackOverviewPage({super.key, required this.trackId});
+  const TrackOverviewPage({super.key, required this.trackId, this.tab, this.condition, this.session});
 
   final String trackId;
+
+  /// 주소의 `tab` 쿼리(`setups`면 셋업 탭, 나머지는 개요 — Setups 메뉴를 Tracks에 합쳤다).
+  final String? tab;
+
+  /// 셋업 탭의 `condition`·`session` 쿼리(셋업 화면과 같은 규칙).
+  final String? condition;
+  final String? session;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -99,6 +114,7 @@ class TrackOverviewPage extends ConsumerWidget {
     final track = overview.valueOrNull?.track;
     final String selectedGame = ref.watch(selectedGameProvider);
     final gameCode = track?.gameCode ?? selectedGame;
+    final selectedTab = normalizeTrackTab(tab);
     return ListView(
       padding: pagePadding(context),
       children: [
@@ -114,7 +130,22 @@ class TrackOverviewPage extends ConsumerWidget {
           showFlag: track != null,
         ),
         const SizedBox(height: _blockGap),
-        overview.when(
+        Align(
+          alignment: Alignment.centerLeft,
+          child: ButtonGroup<String>(
+            options: kTrackTabOptions,
+            selected: selectedTab,
+            segmentKeyOf: (value) => ValueKey('track-tab-$value'),
+            onSelected: (value) => context.go(
+              value == kTrackTabSetups ? setupTrackLocation(trackId) : trackOverviewLocation(trackId),
+            ),
+          ),
+        ),
+        const SizedBox(height: _blockGap),
+        if (selectedTab == kTrackTabSetups)
+          SetupTrackPage(trackId: trackId, condition: condition, session: session, embedded: true)
+        else
+          overview.when(
           loading: () => const PageLoadingBar(),
           error: (e, _) => e is ApiException && e.statusCode == _httpNotFound
               ? const NotFoundState(message: _notFoundMessage, backLabel: _tracksLabel, backPath: kTracksPath)

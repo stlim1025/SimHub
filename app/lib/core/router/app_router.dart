@@ -21,10 +21,9 @@ import '../../features/sessions/presentation/session_detail_page.dart';
 import '../../features/sessions/presentation/session_highlights_page.dart';
 import '../../features/sessions/presentation/session_setup_page.dart';
 import '../../features/sessions/presentation/sessions_page.dart';
+import '../../features/setups/domain/setup_models.dart';
 import '../../features/setups/domain/setups_display.dart';
 import '../../features/setups/presentation/setup_detail_page.dart';
-import '../../features/setups/presentation/setup_track_page.dart';
-import '../../features/setups/presentation/setups_page.dart';
 import '../../features/tracks/presentation/track_overview_page.dart';
 import '../../features/tracks/presentation/tracks_page.dart';
 import '../shell/app_shell.dart';
@@ -149,15 +148,18 @@ final routerProvider = Provider<GoRouter>((ref) {
             (state) => LeaderboardPage(trackId: state.uri.queryParameters['trackId']),
           ),
           // 셋업 모음(F1Laps 상위 셋업). 조건은 `?condition=wet`(그 밖은 Dry).
-          _screen(
-            kSetupsPath,
-            (state) => SetupsPage(condition: state.uri.queryParameters[kSetupConditionQuery]),
+          // Setups 메뉴는 Tracks에 합쳤다(B안 개편): 예전 셋업 목록·트랙별 셋업 주소는 트랙 목록·트랙 화면의 셋업 탭으로 보낸다.
+          GoRoute(
+            path: kSetupsPath,
+            redirect: (_, state) => setupsLocation(
+              condition: normalizeSetupCondition(state.uri.queryParameters[kSetupConditionQuery]),
+            ),
           ),
-          _screen(
-            '$kSetupsPath/:trackId',
-            (state) => SetupTrackPage(
-              trackId: state.pathParameters['trackId']!,
-              condition: state.uri.queryParameters[kSetupConditionQuery],
+          GoRoute(
+            path: '$kSetupsPath/:trackId',
+            redirect: (_, state) => setupTrackLocation(
+              state.pathParameters['trackId']!,
+              condition: normalizeSetupCondition(state.uri.queryParameters[kSetupConditionQuery]),
               session: state.uri.queryParameters[kSetupSessionQuery],
             ),
           ),
@@ -169,10 +171,16 @@ final routerProvider = Provider<GoRouter>((ref) {
             ),
           ),
           // 트랙 목록·트랙 개요(F1Laps Tracks 모양).
-          _screen(kTracksPath, (_) => const TracksPage()),
+          _screen(kTracksPath, (state) => TracksPage(condition: state.uri.queryParameters[kSetupConditionQuery])),
+          // 트랙 화면 탭은 `?tab=overview|setups`, 셋업 탭의 조건·세션은 `?condition=wet&session=race`.
           _screen(
             '$kTracksPath/:trackId',
-            (state) => TrackOverviewPage(trackId: state.pathParameters['trackId']!),
+            (state) => TrackOverviewPage(
+              trackId: state.pathParameters['trackId']!,
+              tab: state.uri.queryParameters[kTrackTabQuery],
+              condition: state.uri.queryParameters[kSetupConditionQuery],
+              session: state.uri.queryParameters[kSetupSessionQuery],
+            ),
           ),
           _screen('/telemetry-app', (_) => const TelemetryAppPage()),
           // 계정 설정(사이드바 하단 프로필에서 연다, docs/14 §8).

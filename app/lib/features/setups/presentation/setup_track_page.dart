@@ -38,9 +38,12 @@ const int _sessionFlex = 2;
 /// 이동 경로 + 제목 + Dry | Wet · Time Trial | Race | Qualifying(Wet은 타임 트라이얼 없음) + `# | TEAM | SESSION | LAP TIME` 표
 /// (작성자 닉네임은 개인정보라 싣지 않는다). 조건 × 세션 종류마다 출처 순위표가 따로다. 줄을 누르면 셋업 상세로 간다.
 class SetupTrackPage extends ConsumerWidget {
-  const SetupTrackPage({super.key, required this.trackId, this.condition, this.session});
+  const SetupTrackPage({super.key, required this.trackId, this.condition, this.session, this.embedded = false});
 
   final String trackId;
+
+  /// 트랙 화면의 셋업 탭 안에 들어가는지 — 참이면 머리(이동 경로·제목)와 바깥 스크롤 없이 토글과 표만 그린다.
+  final bool embedded;
 
   /// 주소의 `condition` 쿼리(`wet`이면 Wet, 나머지는 Dry).
   final String? condition;
@@ -57,20 +60,7 @@ class SetupTrackPage extends ConsumerWidget {
     final list = ref.watch(setupListProvider(query));
     final trackName = list.valueOrNull?.track.name;
     final gameTitle = gameTitleOf(gameCode);
-    return ListView(
-      padding: pagePadding(context),
-      children: [
-        PageHeading(
-          crumbs: [
-            (label: gameYearLabelOf(gameCode), path: null),
-            (label: _setupsLabel, path: setupsLocation(condition: selected)),
-            if (trackName != null) (label: trackName, path: null),
-          ],
-          title: trackName == null ? '$gameTitle $_setupsLabel' : '$gameTitle $trackName $_setupsLabel',
-          countryCode: list.valueOrNull?.track.countryCode,
-          showFlag: trackName != null,
-        ),
-        const SizedBox(height: _headingGap),
+    final body = [
         Wrap(
           spacing: _toggleGap,
           runSpacing: _toggleGap / 2,
@@ -102,6 +92,25 @@ class SetupTrackPage extends ConsumerWidget {
                 ),
           data: (data) => _SetupListBody(list: data, trackId: trackId),
         ),
+    ];
+    if (embedded) {
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: body);
+    }
+    return ListView(
+      padding: pagePadding(context),
+      children: [
+        PageHeading(
+          crumbs: [
+            (label: gameYearLabelOf(gameCode), path: null),
+            (label: _setupsLabel, path: setupsLocation(condition: selected)),
+            if (trackName != null) (label: trackName, path: null),
+          ],
+          title: trackName == null ? '$gameTitle $_setupsLabel' : '$gameTitle $trackName $_setupsLabel',
+          countryCode: list.valueOrNull?.track.countryCode,
+          showFlag: trackName != null,
+        ),
+        const SizedBox(height: _headingGap),
+        ...body,
       ],
     );
   }

@@ -26,18 +26,27 @@ const Map<String, String> kSetupSessionLabels = {
   kSetupSessionQualifying: 'Qualifying',
 };
 
-/// 셋업 모음 목록 주소. Wet이면 `?condition=wet`(Dry는 쿼리 없음).
-String setupsLocation({String condition = kSetupConditionDry}) =>
-    Uri(path: kSetupsPath, queryParameters: _conditionQuery(condition)).toString();
+/// 트랙 화면 탭 쿼리(`/tracks/:trackId?tab=setups`)와 그 값. Setups 메뉴를 Tracks에 합치며 트랙 화면에 셋업 탭을 뒀다.
+const String kTrackTabQuery = 'tab';
+const String kTrackTabOverview = 'overview';
+const String kTrackTabSetups = 'setups';
 
-/// 한 트랙의 상위 셋업 주소(`/setups/:trackId`, Wet이면 `?condition=wet`, 조건의 기본이 아닌 세션 종류면 `session=race` 등).
+/// 주소의 `tab` 쿼리 → 트랙 화면 탭(`setups`가 아니면 개요, 순수 함수).
+String normalizeTrackTab(String? tab) => tab?.toLowerCase() == kTrackTabSetups ? kTrackTabSetups : kTrackTabOverview;
+
+/// 트랙 목록 주소(Setups를 합친 Tracks, `/tracks`). Wet이면 `?condition=wet`(Dry는 쿼리 없음) — 트랙마다 그 조건의 셋업 수를 보인다.
+String setupsLocation({String condition = kSetupConditionDry}) =>
+    Uri(path: kTracksPath, queryParameters: _conditionQuery(condition)).toString();
+
+/// 한 트랙의 상위 셋업 주소(트랙 화면의 셋업 탭 `/tracks/:trackId?tab=setups`, Wet이면 `condition=wet`,
+/// 조건의 기본이 아닌 세션 종류면 `session=race` 등).
 String setupTrackLocation(String trackId, {String condition = kSetupConditionDry, String? session}) {
   final query = {
+    kTrackTabQuery: kTrackTabSetups,
     ...?_conditionQuery(condition),
     if (session != null && session != defaultSetupSession(condition)) kSetupSessionQuery: session.toLowerCase(),
   };
-  return Uri(path: '$kSetupsPath/${Uri.encodeComponent(trackId)}', queryParameters: query.isEmpty ? null : query)
-      .toString();
+  return Uri(path: '$kTracksPath/${Uri.encodeComponent(trackId)}', queryParameters: query).toString();
 }
 
 /// 셋업 하나의 주소(`/setups/:trackId/:setupId`).
