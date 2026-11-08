@@ -6,6 +6,9 @@ import 'session_models.dart';
 /// 세션 상세 카드가 2열이 되는 콘텐츠 폭(docs/15 §11.3 "900px 미만 1열").
 const double kSessionDetailTwoColumnWidth = 900;
 
+/// 콘텐츠 폭이 이 값 이상이면 결과 카드를 3단 보드로 둔다(B안 개편: [Details | Engine | Penalties] · [Classification | Laps] · [Tyre Life | Lap Times]).
+const double kSessionDetailThreeColumnWidth = 1500;
+
 const int _msPerSecond = 1000;
 const int _secondsPerMinute = 60;
 const int _msPerMinute = _msPerSecond * _secondsPerMinute;

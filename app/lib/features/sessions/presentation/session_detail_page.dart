@@ -360,7 +360,14 @@ class _ResultCards extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final rows = constraints.maxWidth >= kSessionDetailTwoColumnWidth
+        // 아주 넓으면(B안 보드) 3단: [Details | Engine | Penalties] · [Classification | Laps] · [Tyre Life | Lap Times].
+        final rows = constraints.maxWidth >= kSessionDetailThreeColumnWidth
+            ? <Widget>[
+                EqualHeightRow(gap: _cardGap, children: [details, engine, penalties]),
+                _Pair(classification, laps),
+                _Pair(tyreLife, lapTimes),
+              ]
+            : constraints.maxWidth >= kSessionDetailTwoColumnWidth
             ? <Widget>[
                 _Pair(details, classification),
                 laps,
