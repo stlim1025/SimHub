@@ -33,10 +33,6 @@ const String kComparisonNotFoundText = '비교할 수 없는 랩이에요(없거
 
 const _tabular = TextStyle(fontFeatures: [FontFeature.tabularFigures()]);
 
-/// 섹터 [number]의 시간(ms). 없으면 null.
-int? sectorTimeOf(List<LapSector> sectors, int number) =>
-    sectors.where((s) => s.sectorNumber == number).firstOrNull?.sectorTimeMs;
-
 String _timeText(int? ms) => ms == null ? kDetailNoValueText : formatLapTime(ms);
 
 /// Lap Time 카드: Total(크게, 링크 색) + Sector 1·2·3.

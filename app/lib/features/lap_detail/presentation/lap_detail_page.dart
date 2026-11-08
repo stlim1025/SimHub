@@ -21,6 +21,7 @@ import 'analysis_tab.dart';
 import 'best_laps_tab.dart';
 import 'compare_controls.dart';
 import 'lap_details_tab.dart';
+import 'lap_kpi_strip.dart';
 import 'telemetry_tab.dart';
 
 const String _lapsPath = '/laps';
@@ -52,7 +53,7 @@ const Map<String, String> _tabLabels = {
   kLapTabBest: 'Your Best Laps',
 };
 
-/// 랩 상세(D-46, docs/15 §2.3·§10): 머리줄(← 트랙 표 · 국기 + `{트랙} Lap {랩타임}` · [Share]) + 탭 4개
+/// 랩 상세(D-46, docs/15 §2.3·§10): 머리줄(← 트랙 표 · 국기 + `{트랙} Lap {랩타임}` · [Share]) + KPI 띠([LapKpiStrip]) + 탭 4개
 /// + "Compare with ▾"·"Filter by ▾"(D-51). 탭·비교 선택은 주소 쿼리와 동기화된다(모르는 값은 기본).
 /// 남의 것이거나 없는 랩이면 404 상태.
 class LapDetailPage extends ConsumerStatefulWidget {
@@ -174,15 +175,16 @@ class _LapDetailPageState extends ConsumerState<LapDetailPage> with SingleTicker
     return ListView(
       padding: pagePadding(context, maxWidth: kWideContentMaxWidth),
       children: [
-        _MainColumn(
-          child: _Header(
-            detail: shown,
-            onBack: () => context.go(shown == null ? _lapsPath : trackLapsLocation(shown.trackId)),
-            onShare: _share,
-          ),
+        _Header(
+          detail: shown,
+          onBack: () => context.go(shown == null ? _lapsPath : trackLapsLocation(shown.trackId)),
+          onShare: _share,
         ),
         const SizedBox(height: _sectionGap),
-        if (shown != null)
+        if (shown != null) ...[
+          // 모든 탭 공통 KPI 띠(머리줄·탭 막대와 같은 전체 폭).
+          LapKpiStrip(detail: shown, compare: widget.compare),
+          const SizedBox(height: _sectionGap),
           _DetailBody(
             detail: shown,
             reloading: fresh == null,
@@ -191,20 +193,18 @@ class _LapDetailPageState extends ConsumerState<LapDetailPage> with SingleTicker
             tabController: _tabController,
             onTab: _selectTab,
             onCompare: _selectCompare,
-          )
-        else
-          _MainColumn(
-            child: detail.when(
-              loading: () => const PageLoadingBar(),
-              error: (e, _) => _isNotFound(e)
-                  ? const NotFoundState(message: _notFoundMessage, backLabel: _notFoundBackLabel, backPath: _lapsPath)
-                  : ErrorRetry(
-                      error: e,
-                      fallbackMessage: '랩 상세를 불러오지 못했어요.',
-                      onRetry: () => ref.invalidate(lapDetailProvider(key)),
-                    ),
-              data: (_) => const SizedBox.shrink(),
-            ),
+          ),
+        ] else
+          detail.when(
+            loading: () => const PageLoadingBar(),
+            error: (e, _) => _isNotFound(e)
+                ? const NotFoundState(message: _notFoundMessage, backLabel: _notFoundBackLabel, backPath: _lapsPath)
+                : ErrorRetry(
+                    error: e,
+                    fallbackMessage: '랩 상세를 불러오지 못했어요.',
+                    onRetry: () => ref.invalidate(lapDetailProvider(key)),
+                  ),
+            data: (_) => const SizedBox.shrink(),
           ),
       ],
     );
@@ -254,53 +254,23 @@ class _DetailBody extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _MainColumn(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              TabBar(
-                controller: tabController,
-                onTap: onTab,
-                labelPadding: _tabLabelPadding,
-                tabs: [for (final tab in kLapTabs) Tab(text: _tabLabels[tab])],
-              ),
-              const SizedBox(height: _sectionGap),
-              CompareControls(selection: compare, onChanged: onCompare),
-              SizedBox(
-                height: _sectionGap,
-                child: reloading
-                    ? const Center(child: LinearProgressIndicator(minHeight: _reloadBarHeight))
-                    : null,
-              ),
-            ],
-          ),
+        TabBar(
+          controller: tabController,
+          onTap: onTab,
+          labelPadding: _tabLabelPadding,
+          tabs: [for (final tab in kLapTabs) Tab(text: _tabLabels[tab])],
         ),
-        // 지도 칸이 붙는 Telemetry·Analysis만 오른쪽으로 넓게 쓰고, 나머지 탭(과 트레이스 없는 랩)은 같은 그래프 칸 폭이다.
-        if ((tab == kLapTabTelemetry || tab == kLapTabAnalysis) && detail.lap.hasTrace)
-          _TabContent(tab: tab, detail: detail, compare: compare)
-        else
-          _MainColumn(child: _TabContent(tab: tab, detail: detail, compare: compare)),
+        const SizedBox(height: _sectionGap),
+        CompareControls(selection: compare, onChanged: onCompare),
+        SizedBox(
+          height: _sectionGap,
+          child: reloading
+              ? const Center(child: LinearProgressIndicator(minHeight: _reloadBarHeight))
+              : null,
+        ),
+        // 모든 탭이 전체 폭을 쓴다. Telemetry·Analysis는 넓으면 그 안에서 오른쪽에 지도 칸을 붙인다.
+        _TabContent(tab: tab, detail: detail, compare: compare),
       ],
-    );
-  }
-}
-
-/// 화면이 Telemetry·Analysis 탭의 지도 칸을 옆에 둘 만큼 넓으면([lapPanelMainWidth]) 자식을 왼쪽 그래프 칸 폭으로 줄인다 —
-/// 페이지는 모든 탭에서 이 폭이고, Telemetry·Analysis만 그 오른쪽에 지도 칸이 붙는다. 좁으면 전체 폭 그대로.
-class _MainColumn extends StatelessWidget {
-  const _MainColumn({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, box) {
-        final width = lapPanelMainWidth(box.maxWidth);
-        return width == null
-            ? child
-            : Align(alignment: Alignment.topLeft, child: SizedBox(width: width, child: child));
-      },
     );
   }
 }

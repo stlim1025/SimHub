@@ -58,10 +58,6 @@ const double _minChartsWidthBesideMap = 1000;
 /// 탭 폭이 이 이상이면 그래프 옆에 지도·통계 칸을 두고 스크롤해도 붙여 둔다(그 아래면 위아래 + 떠 있는 작은 지도).
 const double kTelemetrySideBySideMinWidth = _minChartsWidthBesideMap + _panelGap + kTelemetryAsideWidth;
 
-/// [LapPanelLayout]이 [width] 폭에서 지도 칸을 옆에 두면 왼쪽(그래프) 칸 폭, 위아래 배치면 null.
-double? lapPanelMainWidth(double width) =>
-    width >= kTelemetrySideBySideMinWidth ? width - kTelemetryAsideWidth - _panelGap : null;
-
 /// 좁은 화면에서 떠 있는 작은 트랙 지도의 한 변.
 const double kMiniTrackMapSize = 170;
 

@@ -1,3 +1,4 @@
+import '../../laps/domain/lap_models.dart';
 import 'lap_compare.dart';
 import 'lap_detail_models.dart';
 
@@ -66,6 +67,10 @@ String sharedLapLocation(String lapId, {String? tab, String? compareLapId}) {
 
 // -- 비교 Delta -------------------------------------------------------------------
 
+/// 섹터 [number]의 시간(ms). 없으면 null.
+int? sectorTimeOf(List<LapSector> sectors, int number) =>
+    sectors.where((s) => s.sectorNumber == number).firstOrNull?.sectorTimeMs;
+
 /// Delta 색 구분: 빠름(초록) · 느림(빨강) · 같음.
 enum DeltaTone { faster, slower, even }
 
@@ -116,6 +121,15 @@ TyreWearLevel tyreWearLevelOf(double? percent) {
     return TyreWearLevel.medium;
   }
   return percent < kWearCriticalFrom ? TyreWearLevel.high : TyreWearLevel.critical;
+}
+
+/// 네 바퀴 평균 마모(%). 하나라도 모르면 null.
+double? averageWear(WheelValues? wear) {
+  final values = [wear?.frontLeft, wear?.frontRight, wear?.rearLeft, wear?.rearRight];
+  if (values.any((v) => v == null)) {
+    return null;
+  }
+  return values.fold<double>(0, (sum, v) => sum + v!) / values.length;
 }
 
 /// 반올림한 정수 `31%`. null이면 `-`.

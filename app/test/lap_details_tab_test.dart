@@ -61,7 +61,9 @@ void main() {
       expect(find.text('Delta'), findsOneWidget);
       expect(find.text('1:38.000'), findsWidgets);
       final context = t.element(find.text('Delta'));
-      Color? colorOf(String text) => t.widget<Text>(find.text(text)).style?.color;
+      // 같은 차이 글자가 위 KPI 띠에도 있어 Comparison 카드 안에서만 찾는다.
+      Color? colorOf(String text) =>
+          t.widget<Text>(find.descendant(of: find.byType(ComparisonCard), matching: find.text(text))).style?.color;
       expect(colorOf('+0.448'), context.palette.danger);
       expect(colorOf('+0.500'), context.palette.danger);
       expect(colorOf('+0.148'), context.palette.danger);
@@ -208,7 +210,7 @@ void main() {
       await _pump(t, sampleDetail());
 
       expect(find.byType(TyreCompoundCircle), findsOneWidget);
-      expect(find.text('S'), findsOneWidget);
+      expect(find.descendant(of: find.byType(TyreCompoundCircle), matching: find.text('S')), findsOneWidget);
       expect(find.text('Soft (C3) · 3랩째'), findsOneWidget);
     });
 
@@ -220,7 +222,8 @@ void main() {
         ),
       );
 
-      expect(find.text('10%'), findsNWidgets(4));
+      // 위 KPI 띠 타이어 칸의 평균 마모(10%)는 빼고 Car & Tyres 카드 안에서만 센다.
+      expect(find.descendant(of: find.byType(CarTyresCard), matching: find.text('10%')), findsNWidgets(4));
       final wearDeltas = find.descendant(
         of: find.byType(CarTyresCard),
         matching: find.byWidgetPredicate(

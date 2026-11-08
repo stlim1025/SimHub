@@ -31,15 +31,6 @@ const String _thisLapLabel = '이 랩';
 /// 코너를 눌러 리플레이로 올라갈 때 스크롤 시간.
 const Duration _scrollToReplay = Duration(milliseconds: 350);
 
-/// 네 바퀴 평균 마모(%). 하나라도 모르면 null.
-double? averageWear(WheelValues? wear) {
-  final values = [wear?.frontLeft, wear?.frontRight, wear?.rearLeft, wear?.rearRight];
-  if (values.any((v) => v == null)) {
-    return null;
-  }
-  return values.fold<double>(0, (sum, v) => sum + v!) / values.length;
-}
-
 /// 분석 기준 선택지.
 const List<({AnalysisFocus value, String label})> kAnalysisFocusOptions = [
   (value: AnalysisFocus.pace, label: '최대 속도'),

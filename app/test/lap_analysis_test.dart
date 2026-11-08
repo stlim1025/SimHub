@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:simcenter_app/features/auth/domain/user_preferences.dart';
 import 'package:simcenter_app/features/lap_detail/domain/lap_analysis.dart';
 import 'package:simcenter_app/features/lap_detail/domain/lap_corners.dart';
+import 'package:simcenter_app/features/lap_detail/domain/lap_detail_display.dart';
 import 'package:simcenter_app/features/lap_detail/domain/lap_detail_models.dart';
 import 'package:simcenter_app/features/lap_detail/presentation/analysis_tab.dart';
 import 'package:simcenter_app/features/lap_detail/presentation/lap_analysis_card.dart';
