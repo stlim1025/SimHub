@@ -447,7 +447,7 @@ const double _telemetryBarHeight = 14;
 const double _telemetryNameGap = 6;
 
 /// 하단 오른쪽 텔레메트리: 카메라가 따라가는 차의 팀 색 띠·이름 아래, 텔레메트리 고스트 재생과 같은 다이얼
-/// (바깥 고리 속도, 안쪽 고리 스로틀·브레이크, 가운데 속도, 아래 기어 — 하이라이트 표본에는 RPM이 없어 뺀다).
+/// (바깥 고리 속도, 안쪽 고리 스로틀·브레이크, 가운데 속도, 아래 기어와 그 위 ERS 배터리 게이지 — 하이라이트 표본에는 RPM이 없어 뺀다).
 class BroadcastTelemetry extends StatelessWidget {
   const BroadcastTelemetry({super.key, required this.name, required this.color, required this.frame, required this.units});
 
@@ -484,7 +484,7 @@ class BroadcastTelemetry extends StatelessWidget {
                 ),
               ],
             ),
-            ReplayDial(keyName: 'highlights-telemetry', frame: frame, units: units, showRpm: false),
+            ReplayDial(keyName: 'highlights-telemetry', frame: frame, units: units, showRpm: false, showBattery: true),
           ],
         ),
       );

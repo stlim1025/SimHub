@@ -2,8 +2,10 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:simcenter_app/features/auth/domain/user_preferences.dart';
 import 'package:simcenter_app/features/lap_detail/domain/lap_detail_models.dart';
 import 'package:simcenter_app/features/sessions/domain/race_highlights.dart';
+import 'package:simcenter_app/features/sessions/presentation/highlights_broadcast_overlay.dart';
 import 'package:simcenter_app/features/sessions/presentation/session_highlights_page.dart';
 
 /// 원 서킷(반지름 100m) 위를 50m/s로 도는 차의 클립 움직임: [fromMs]~[toMs], 200ms 간격, 출발 각도 [startRad].
@@ -234,6 +236,15 @@ void main() {
       expect(highlightCarLabel('NORRIS', path, 20500), 'NORRIS · PIT OUT');
     });
 
+    test('ERS 잔량(kJ)은 4 MJ 기준 백분율로 보간하고, 열이 없으면 모름', () {
+      final json = _trackJson(1, fromMs: 0, toMs: 1000)
+        ..['ersStoreKj'] = [for (var i = 0; i < 6; i++) 2000 + i * 400]; // 0ms 2000kJ → 1000ms 4000kJ
+      final withErs = TimedCarPath(HighlightCarTrack.fromJsonOrNull(json)!);
+
+      expect(withErs.frameAt(500).batteryPercent, closeTo(75, 0.001));
+      expect(TimedCarPath(HighlightCarTrack.fromJsonOrNull(_trackJson(1, fromMs: 0, toMs: 1000))!).frameAt(500).batteryPercent, isNull);
+    });
+
     test('컴파운드는 그 순간 바로 앞 표본 값(피트에서 바뀐다), 열이 없으면 모름', () {
       expect(path.tyreAt(500), HighlightTyre.medium);
       expect(path.tyreAt(20500), HighlightTyre.soft);
@@ -337,6 +348,8 @@ void main() {
       expect(find.byKey(const ValueKey('highlights-telemetry-speed')), findsOneWidget);
       expect(find.byKey(const ValueKey('highlights-telemetry-gear')), findsOneWidget);
       expect(find.byKey(const ValueKey('highlights-telemetry-rpm')), findsNothing);
+      // 고정 데이터에 ERS 잔량이 없으면 배터리 게이지도 없다.
+      expect(find.byKey(const ValueKey('highlights-telemetry-battery')), findsNothing);
 
       await _pumpPlayer(t, _highlights(), width: 400);
       expect(panel, findsNothing);
@@ -453,5 +466,21 @@ void main() {
 
       expect(find.text('장면이 없어요.'), findsOneWidget);
     });
+  });
+
+  testWidgets('텔레메트리 판: 잔량을 알면 기어 위에 배터리 게이지와 %', (t) async {
+    final track = HighlightCarTrack.fromJsonOrNull(
+      _trackJson(1, fromMs: 0, toMs: 1000)..['ersStoreKj'] = [for (var i = 0; i < 6; i++) 2480],
+    )!;
+    await t.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: BroadcastTelemetry(name: 'NORRIS', color: Colors.orange, frame: TimedCarPath(track).frameAt(0), units: UnitSystem.metric),
+      ),
+    ));
+
+    final battery = find.byKey(const ValueKey('highlights-telemetry-battery'));
+    expect(battery, findsOneWidget);
+    expect(find.descendant(of: battery, matching: find.text('62%')), findsOneWidget); // 2480kJ / 4MJ
+    expect(t.getBottomLeft(battery).dy, lessThan(t.getTopLeft(find.byKey(const ValueKey('highlights-telemetry-gear'))).dy));
   });
 }

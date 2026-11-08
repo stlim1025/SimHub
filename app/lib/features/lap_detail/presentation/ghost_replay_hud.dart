@@ -61,6 +61,19 @@ const double _sectorBarHeight = 3;
 const double _barHeight = 4;
 const double _flowBarWidth = 70;
 
+/// 다이얼 배터리 게이지(기어 위): 몸통 폭·높이·모서리·테두리 굵기·안쪽 여백, 오른쪽 단자 폭·높이,
+/// 몸통과 % 글자 사이·% 글자 칸 폭(자릿수가 바뀌어도 게이지가 흔들리지 않게), 기어와의 간격.
+const double _batteryBodyWidth = 30;
+const double _batteryBodyHeight = 13;
+const double _batteryRadius = 2.5;
+const double _batteryBorder = 1.5;
+const double _batteryInset = 1.5;
+const double _batteryCapWidth = 2.5;
+const double _batteryCapHeight = 6;
+const double _batteryTextGap = 4;
+const double _batteryPercentWidth = 28;
+const double _batteryGap = 4;
+
 /// ERS 줄의 글자 칸 폭(값 자릿수가 바뀌어도 막대 길이·자리가 흔들리지 않게 고정).
 const double _batteryTextWidth = 36;
 const double _flowTextWidth = 58;
@@ -276,10 +289,17 @@ class GhostReplayHud extends StatelessWidget {
 }
 
 /// 계기판 다이얼(고스트 재생·하이라이트 공용): 바깥 고리 속도(파랑, 눈금), 안쪽 고리 스로틀(초록, 넓게)·브레이크(빨강),
-/// 가운데 속도(와 [showRpm]이면 RPM), 아래 기어. 키는 `[keyName]-dial`·`-speed`·`-rpm`·`-gear`.
-/// 다이얼 글자(눈금·THROTTLE·BRAKE)는 앱 글꼴을 따른다.
+/// 가운데 속도(와 [showRpm]이면 RPM), 아래 기어. [showBattery]이고 잔량을 알면 기어 바로 위에 파란 배터리 모양 게이지와 %.
+/// 키는 `[keyName]-dial`·`-speed`·`-rpm`·`-gear`·`-battery`. 다이얼 글자(눈금·THROTTLE·BRAKE)는 앱 글꼴을 따른다.
 class ReplayDial extends StatelessWidget {
-  const ReplayDial({super.key, required this.keyName, required this.frame, required this.units, this.showRpm = true});
+  const ReplayDial({
+    super.key,
+    required this.keyName,
+    required this.frame,
+    required this.units,
+    this.showRpm = true,
+    this.showBattery = false,
+  });
 
   final String keyName;
   final ReplayFrame frame;
@@ -287,6 +307,9 @@ class ReplayDial extends StatelessWidget {
 
   /// RPM을 보일지(하이라이트 표본에는 RPM이 없다).
   final bool showRpm;
+
+  /// 기어 위에 ERS 배터리 게이지를 둘지(고스트 재생은 계기판 아래 ERS 줄에 따로 보인다).
+  final bool showBattery;
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -340,20 +363,29 @@ class ReplayDial extends StatelessWidget {
                 ],
               ),
             ),
-            // 기어: 다이얼 아래 열린 자리.
+            // 기어(다이얼 아래 열린 자리)와 그 바로 위 배터리 게이지.
             Align(
               alignment: Alignment.bottomCenter,
-              child: Row(
+              child: Column(
                 mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
                 children: [
-                  _unit(_gearLabel),
-                  const SizedBox(width: 6),
-                  Text(
-                    gearLabel(frame.gear),
-                    key: ValueKey('$keyName-gear'),
-                    style: const TextStyle(color: AppColors.replayHudText, fontSize: _gearFontSize, fontWeight: FontWeight.w700),
+                  if (showBattery && frame.batteryPercent != null) ...[
+                    _BatteryGauge(key: ValueKey('$keyName-battery'), percent: frame.batteryPercent!),
+                    const SizedBox(height: _batteryGap),
+                  ],
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      _unit(_gearLabel),
+                      const SizedBox(width: 6),
+                      Text(
+                        gearLabel(frame.gear),
+                        key: ValueKey('$keyName-gear'),
+                        style: const TextStyle(color: AppColors.replayHudText, fontSize: _gearFontSize, fontWeight: FontWeight.w700),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -483,6 +515,58 @@ class _ErsFlowText extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 다이얼 ERS 배터리 게이지: 파란 테두리 배터리 모양(오른쪽 단자) 안을 잔량만큼 왼쪽부터 채우고, 옆에 %.
+class _BatteryGauge extends StatelessWidget {
+  const _BatteryGauge({super.key, required this.percent});
+
+  final double percent;
+
+  @override
+  Widget build(BuildContext context) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // % 글자 칸만큼 왼쪽을 비워 배터리 몸통이 다이얼 가운데에 오게 한다.
+          const SizedBox(width: _batteryPercentWidth + _batteryTextGap - _batteryCapWidth),
+          Container(
+            width: _batteryBodyWidth,
+            height: _batteryBodyHeight,
+            padding: const EdgeInsets.all(_batteryInset),
+            alignment: Alignment.centerLeft,
+            decoration: BoxDecoration(
+              border: Border.all(color: AppColors.replayDeploy, width: _batteryBorder),
+              borderRadius: BorderRadius.circular(_batteryRadius),
+            ),
+            child: FractionallySizedBox(
+              widthFactor: (percent / _percentMax).clamp(0.0, 1.0),
+              heightFactor: 1,
+              child: const ColoredBox(color: AppColors.replayDeploy),
+            ),
+          ),
+          Container(
+            width: _batteryCapWidth,
+            height: _batteryCapHeight,
+            decoration: const BoxDecoration(
+              color: AppColors.replayDeploy,
+              borderRadius: BorderRadius.horizontal(right: Radius.circular(_batteryCapWidth / 2)),
+            ),
+          ),
+          const SizedBox(width: _batteryTextGap),
+          SizedBox(
+            width: _batteryPercentWidth,
+            child: Text(
+              '${percent.round()}%',
+              style: const TextStyle(
+                color: AppColors.replayDeploy,
+                fontSize: _labelFontSize,
+                fontWeight: FontWeight.w700,
+                fontFeatures: _tabular,
+              ),
+            ),
+          ),
+        ],
+      );
 }
 
 /// 배터리 잔량 막대(노랑, 0~1 채움).

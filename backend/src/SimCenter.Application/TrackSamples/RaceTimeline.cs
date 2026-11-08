@@ -2,7 +2,10 @@ using SimCenter.Domain.Enums;
 
 namespace SimCenter.Application.TrackSamples;
 
-/// <summary>레이스 한 순간 차 한 대(표본 열을 한데 모은 값). 상태·표시 비트는 계약(<c>shared/schema/track_samples_chunk.json</c>) 그대로.</summary>
+/// <summary>
+/// 레이스 한 순간 차 한 대(표본 열을 한데 모은 값). 상태·표시 비트는 계약(<c>shared/schema/track_samples_chunk.json</c>) 그대로.
+/// <see cref="ErsStoreKj"/> = ERS 배터리 잔량(kJ, format 5부터, 모르면 null).
+/// </summary>
 public readonly record struct RaceSample(
     int TimeMs,
     float LapDistanceM,
@@ -18,7 +21,8 @@ public readonly record struct RaceSample(
     byte Damage,
     float GLateral,
     float GLongitudinal,
-    byte TyreVisualRaw = 0)
+    byte TyreVisualRaw = 0,
+    ushort? ErsStoreKj = null)
 {
     /// <summary>F1 게임 보이는 컴파운드 원시 값(소프트·미디엄·하드·인터·웻).</summary>
     private const byte RawSoft = 16;
@@ -121,7 +125,8 @@ public sealed class RaceTimeline
                     chunk.Damage?[i] ?? 0,
                     chunk.GLateral?[i] ?? 0,
                     chunk.GLongitudinal?[i] ?? 0,
-                    chunk.TyreCompound?[i] ?? 0)));
+                    chunk.TyreCompound?[i] ?? 0,
+                    chunk.ErsStoreKj?[i])));
             }
         }
 

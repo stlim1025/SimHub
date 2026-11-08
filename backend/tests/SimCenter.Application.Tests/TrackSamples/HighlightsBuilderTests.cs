@@ -193,6 +193,21 @@ public sealed class HighlightsBuilderTests
     }
 
     [Fact]
+    public void ClipCars_CarryErsStore_OnlyWhenTheSamplesHaveIt()
+    {
+        var samples = Race(new Dictionary<byte, double> { [1] = 30, [Player] = 20, [2] = 10 });
+        var withErs = samples with { ErsStoreKj = Enumerable.Repeat((ushort)3_000, samples.Count).ToArray() };
+
+        var cars = Build(withErs).Race.SelectMany(c => c.Cars).ToList();
+        var oldCars = Build(samples with { ErsStoreKj = null }).Race.SelectMany(c => c.Cars).ToList();
+
+        Assert.NotEmpty(cars);
+        Assert.All(cars, car => Assert.All(car.ErsStoreKj!, kj => Assert.Equal(3_000, kj)));
+        Assert.All(cars, car => Assert.Equal(car.TimeMs.Count, car.ErsStoreKj!.Count));
+        Assert.All(oldCars, car => Assert.Null(car.ErsStoreKj));
+    }
+
+    [Fact]
     public void YellowFlag_IsSentWithSectors_ButIsNoSceneAndKeepsOvertakes()
     {
         var samples = Race(

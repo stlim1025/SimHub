@@ -86,6 +86,10 @@ enum HighlightPit { none, pitIn, pitOut }
 /// 표본 사이가 이보다(ms) 비면 그 사이 차는 기록이 없는 곳(피트 레인 — 옛 에이전트)에 있었다고 보고 숨긴다.
 const int kHighlightHiddenGapMs = 1500;
 
+/// ERS 잔량 단위 바꾸기(kJ → J)와 백분율 최대값.
+const double _jPerKj = 1000;
+const double _percentMax = 100;
+
 /// 끼고 있는 보이는 컴파운드(서버 `TyreCompound` 값 순서, 모르면 unknown).
 enum HighlightTyre { unknown, soft, medium, hard, intermediate, wet }
 
@@ -109,6 +113,7 @@ class HighlightCarTrack {
     required this.lap,
     this.pit = const [],
     this.tyre = const [],
+    this.ersStoreKj = const [],
   });
 
   final int carIndex;
@@ -122,6 +127,9 @@ class HighlightCarTrack {
   final List<int> lap;
   final List<HighlightPit> pit;
   final List<HighlightTyre> tyre;
+
+  /// 표본마다 ERS 배터리 잔량(kJ). 옛 표본이라 없으면 비어 있다.
+  final List<int> ersStoreKj;
 
   int get length => timeMs.length;
 
@@ -140,6 +148,7 @@ class HighlightCarTrack {
     final lap = ints('lap');
     final pit = ints('pit');
     final tyre = json['tyre'] as List<dynamic>? ?? const [];
+    final ers = ints('ersStoreKj');
     final n = time.length;
     if (car == null || n == 0 || [x, z, speed, gear, throttle, brake, lap].any((c) => c.length != n)) {
       return null;
@@ -157,6 +166,7 @@ class HighlightCarTrack {
       lap: lap,
       pit: pit.length == n ? [for (final p in pit) pitOf(p)] : const [],
       tyre: tyre.length == n ? [for (final t in tyre) _tyreOf(t)] : const [],
+      ersStoreKj: ers.length == n ? ers : const [],
     );
   }
 }
@@ -566,7 +576,9 @@ class TimedCarPath implements ReplayCar {
       throttle: _lerp(track.throttle, position).round(),
       brake: _lerp(track.brake, position).round(),
       finished: false,
-      batteryPercent: null,
+      batteryPercent: track.ersStoreKj.isEmpty
+          ? null
+          : (_lerp(track.ersStoreKj, position) * _jPerKj / kErsStoreMaxJ * _percentMax).clamp(0.0, _percentMax),
       ersFlowKw: null,
     );
   }
