@@ -343,6 +343,7 @@
 | `SCAR` | 세이프티카 | `safetyCarType` `eventType` |
 | `COLL` | 충돌 | `vehicle1Index` `vehicle2Index` |
 | `CHQF` · `RDFL` | 체커기 · 적기 | (없음) |
+| `YELLOW` | 옐로 플래그 섹터가 바뀜(에이전트가 Session(1) 마셜 구역 깃발에서 만든다 — 게임 코드는 4글자라 겹치지 않는다) | `sectors` = 그때부터 옐로 플래그가 나온 섹터 번호(1~3, 오름차순, 빈 목록이면 모두 풀림). 구역 시작 거리를 `sector2LapDistanceStart`·`sector3LapDistanceStart`와 견주고, 모르면 랩을 셋으로 나눈다 |
 
 `SSTA`·`SEND`는 세션 경계 마커로 쓰고 목록에 넣지 않는다. `BUTN`(버튼 상태)은 입력 장치 상태라 버린다. 라이브러리가 모르는 코드는 상세 없이 코드만 싣는다.
 

@@ -178,4 +178,11 @@ class AppColors {
   static const Color replayTowerDivider = Color(0xFF34363C);
   static const Color replayTowerPosition = Color(0xFFC2C2C4);
   static const Color replayTowerPitBadge = Color(0xFFC8C8CC);
+
+  /// 순위표 깃발 배너: 노랑(세이프티카·버추얼·옐로 플래그)·초록(그린 플래그) 바탕과 그 위 어두운 사선 줄무늬, 섹터 글자(금색).
+  static const Color replayTowerFlagYellow = Color(0xFFFFD400);
+  static const Color replayTowerFlagYellowStripe = Color(0xFF8A7400);
+  static const Color replayTowerFlagGreen = Color(0xFF2BD15F);
+  static const Color replayTowerFlagGreenStripe = Color(0xFF13752F);
+  static const Color replayTowerSectorText = Color(0xFFFFD400);
 }

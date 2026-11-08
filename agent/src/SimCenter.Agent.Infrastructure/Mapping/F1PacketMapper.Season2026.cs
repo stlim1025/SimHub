@@ -89,7 +89,7 @@ public sealed partial class F1PacketMapper
         }
 
         var details = F1SessionDetails.From(session, Season2026Wire.SessionTail(datagram));
-        return [MapSession(session), DetailsFrame(session.Header, F1DetailSections.Session, details)];
+        return [MapSession(session), DetailsFrame(session.Header, F1DetailSections.Session, details), F1TrackFlags.From(session)];
     }
 
     private IReadOnlyList<ITelemetryFrame> MapLapData2026(ReadOnlySpan<byte> datagram, PacketHeader header)

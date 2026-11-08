@@ -125,7 +125,7 @@ public sealed partial class F1PacketMapper
         switch (packet.PacketType)
         {
             case F1Enums.PacketType.Session when packet.TryGetSessionDataPacket(out var session):
-                return [MapSession(session), DetailsFrame(session.Header, F1DetailSections.Session, F1SessionDetails.From(session))];
+                return [MapSession(session), DetailsFrame(session.Header, F1DetailSections.Session, F1SessionDetails.From(session)), F1TrackFlags.From(session)];
 
             case F1Enums.PacketType.LapData when packet.TryGetLapDataPacket(out var lapPacket):
                 return MapLapDataPacket(lapPacket.Header, lapPacket.LapData.AsReadOnlySpan(), lapPacket.TimeTrialPBCarIdx, lapPacket.TimeTrialRivalCarIdx);

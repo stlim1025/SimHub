@@ -39,6 +39,47 @@ public class F1PacketMapperTests
         Assert.Equal(Format, frame.PacketFormat);
     }
 
+    /// <summary>마셜 구역 깃발 원시 값(초록·옐로).</summary>
+    private const int GreenZoneFlag = 1;
+    private const int YellowZoneFlag = 3;
+
+    private static MarshalZone Zone(float start, int flag) => new() { ZoneStart = start, ZoneFlag = (F1Enums.FiaFlag)flag };
+
+    [Fact]
+    public void TrackFlags_YellowZonesBecomeSectorsBySectorStartDistance()
+    {
+        var zones = new MarshalZone[21];
+        zones[0] = Zone(0.05f, YellowZoneFlag);
+        zones[1] = Zone(0.30f, GreenZoneFlag);
+        zones[2] = Zone(0.80f, YellowZoneFlag);
+        zones[3] = Zone(0.81f, YellowZoneFlag);
+        zones[4] = Zone(0.50f, YellowZoneFlag); // 구역 개수(4) 밖 칸은 쓰레기
+        var packet = new SessionDataPacket
+        {
+            Header = Header(),
+            NumMarshalZones = 4,
+            MarshalZones = zones,
+            TrackLength = 5_000,
+            Sector2LapDistanceStart = 1_500f,
+            Sector3LapDistanceStart = 3_500f,
+        };
+
+        var frame = F1TrackFlags.From(packet);
+
+        Assert.Equal("1001", frame.SessionRef);
+        Assert.Equal([1, 3], frame.YellowSectors);
+    }
+
+    [Fact]
+    public void TrackFlags_UnknownSectorStarts_SplitTheLapInThirds()
+    {
+        var zones = new MarshalZone[21];
+        zones[0] = Zone(0.5f, YellowZoneFlag);
+        var packet = new SessionDataPacket { Header = Header(), NumMarshalZones = 1, MarshalZones = zones, TrackLength = 5_000 };
+
+        Assert.Equal([2], F1TrackFlags.From(packet).YellowSectors);
+    }
+
     [Theory]
     [InlineData(F1Enums.SessionType.TimeTrial, CoreSessionType.TimeTrial)]
     [InlineData(F1Enums.SessionType.Practice1, CoreSessionType.Practice)]

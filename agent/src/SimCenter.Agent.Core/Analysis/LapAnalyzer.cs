@@ -83,6 +83,9 @@ public sealed class LapAnalyzer : ITelemetryAnalyzer
             case GameEventFrame gameEvent:
                 _details.OnEvent(gameEvent, _currentLapTimeMs);
                 break;
+            case TrackFlagsFrame trackFlags:
+                _details.OnTrackFlags(trackFlags, _currentLapTimeMs);
+                break;
             case SessionHistoryFrame history:
                 _details.OnSessionHistory(history);
                 break;

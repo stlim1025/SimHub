@@ -192,6 +192,22 @@ public sealed class HighlightsBuilderTests
         Assert.Equal(nameof(RaceFlagKind.SafetyCar), Assert.Single(result.Flags).Kind);
     }
 
+    [Fact]
+    public void YellowFlag_IsSentWithSectors_ButIsNoSceneAndKeepsOvertakes()
+    {
+        var samples = Race(
+            new Dictionary<byte, double> { [1] = 30, [2] = 20 },
+            marks: [new Mark(30_000, 2, Flags2: RaceSample.OvertookFlag), new Mark(30_000, 1, Flags2: RaceSample.OvertakenFlag)]);
+
+        var result = Build(samples, [new RaceFlagPeriod(RaceFlagKind.YellowFlag, 25_000, 40_000, [2])]);
+
+        var flag = Assert.Single(result.Flags);
+        Assert.Equal((nameof(RaceFlagKind.YellowFlag), 25_000, 40_000), (flag.Kind, flag.FromMs, flag.ToMs));
+        Assert.Equal([2], flag.Sectors!);
+        Assert.Contains(result.Race, c => c.Kind == nameof(HighlightKind.Overtake));
+        Assert.DoesNotContain(result.Race, c => c.Kind is nameof(HighlightKind.SafetyCar) or nameof(HighlightKind.VirtualSafetyCar) or nameof(HighlightKind.RedFlag));
+    }
+
     [Theory]
     [InlineData(16, 1)]   // 소프트
     [InlineData(17, 2)]   // 미디엄

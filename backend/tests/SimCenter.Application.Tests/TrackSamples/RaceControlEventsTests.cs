@@ -16,6 +16,40 @@ public sealed class RaceControlEventsTests
     private static string Event(string code, int lapTimeMs, string details = "{}")
         => $$"""{"code": "{{code}}", "lapTimeMs": {{lapTimeMs}}, "details": {{details}}}""";
 
+    /// <summary>랩 끝 세션 상태(세이프티카 상태·지금까지 세이프티카·버추얼 횟수)를 함께 실은 랩.</summary>
+    private static PlayerLapEvents LapEnding(int number, int status, int safetyCars, int virtualSafetyCars, params string[] events)
+        => new(number, 80_000,
+            $$$"""{"events": [{{{string.Join(",", events)}}}], "session": {"safetyCarStatus": {{{status}}}, "numSafetyCarPeriods": {{{safetyCars}}}, "numVirtualSafetyCarPeriods": {{{virtualSafetyCars}}}}}""");
+
+    [Fact]
+    public void VirtualSafetyCar_ClearAtLapEndAndNeverCounted_IsDropped()
+    {
+        // 1랩 추월 이벤트가 몰려 종료(또는 되감기) 이벤트가 버려진 경우: 출동 뒤 랩 끝 상태는 0, 버추얼 횟수도 그대로 0.
+        var (flags, _) = RaceControlEvents.Build(
+            [
+                LapEnding(1, status: 0, safetyCars: 0, virtualSafetyCars: 0, Event("SCAR", 13_933, """{"safetyCarType": 2, "eventType": 0}""")),
+                LapEnding(2, status: 0, safetyCars: 0, virtualSafetyCars: 0),
+            ],
+            Crossings,
+            RaceEndMs);
+
+        Assert.Empty(flags);
+    }
+
+    [Fact]
+    public void SafetyCar_EndEventLost_EndsAtTheFirstClearLapEnd()
+    {
+        var (flags, _) = RaceControlEvents.Build(
+            [
+                LapEnding(2, status: 1, safetyCars: 1, virtualSafetyCars: 0, Event("SCAR", 10_000, """{"safetyCarType": 1, "eventType": 0}""")),
+                LapEnding(3, status: 0, safetyCars: 1, virtualSafetyCars: 0),
+            ],
+            Crossings,
+            RaceEndMs);
+
+        Assert.Equal(new RaceFlagPeriod(RaceFlagKind.SafetyCar, 90_000, 240_000), Assert.Single(flags));
+    }
+
     [Fact]
     public void VirtualSafetyCar_DeployedAndEnded_IsOnePeriodInSessionTime()
     {
@@ -57,6 +91,41 @@ public sealed class RaceControlEventsTests
             RaceEndMs);
 
         Assert.Equal(new RaceFlagPeriod(RaceFlagKind.SafetyCar, 161_000, RaceEndMs), Assert.Single(flags));
+    }
+
+    [Fact]
+    public void YellowFlag_SectorChanges_BecomePeriodsWithTheirSectors()
+    {
+        var (flags, _) = RaceControlEvents.Build(
+            [
+                Lap(2,
+                    Event("YELLOW", 10_000, """{"sectors": [2]}"""),
+                    Event("YELLOW", 20_000, """{"sectors": [2, 3]}"""),
+                    Event("YELLOW", 30_000, """{"sectors": []}""")),
+            ],
+            Crossings,
+            RaceEndMs);
+
+        Assert.Equal(2, flags.Count);
+        Assert.Equal((RaceFlagKind.YellowFlag, 90_000, 100_000), (flags[0].Kind, flags[0].FromMs, flags[0].ToMs));
+        Assert.Equal([2], flags[0].Sectors!);
+        Assert.Equal((RaceFlagKind.YellowFlag, 100_000, 110_000), (flags[1].Kind, flags[1].FromMs, flags[1].ToMs));
+        Assert.Equal([2, 3], flags[1].Sectors!);
+    }
+
+    [Fact]
+    public void YellowFlag_UndoneByFlashback_IsDropped()
+    {
+        var (flags, _) = RaceControlEvents.Build(
+            [
+                Lap(2,
+                    Event("YELLOW", 10_000, """{"sectors": [1]}"""),
+                    Event("FLBK", 12_000, """{"flashbackSessionTimeMs": 85000}""")),
+            ],
+            Crossings,
+            RaceEndMs);
+
+        Assert.Empty(flags);
     }
 
     [Fact]

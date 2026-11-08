@@ -87,6 +87,47 @@ public class LapDetailsTrackerTests
     }
 
     [Fact]
+    public void OnTrackFlags_RecordsOnlyYellowSectorChanges_AcrossLaps()
+    {
+        _sut.OnTrackFlags(new TrackFlagsFrame("s", []), lapTimeMs: 1_000);
+        _sut.OnTrackFlags(new TrackFlagsFrame("s", [2]), lapTimeMs: 5_000);
+        _sut.OnTrackFlags(new TrackFlagsFrame("s", [2]), lapTimeMs: 5_500);
+        var firstLap = (LapEventEntry[])_sut.Build(lapNumber: 1)![LapDetailsTracker.EventsKey]!;
+
+        _sut.StartLap();
+        _sut.OnTrackFlags(new TrackFlagsFrame("s", [2]), lapTimeMs: 300);
+        _sut.OnTrackFlags(new TrackFlagsFrame("s", []), lapTimeMs: 9_000);
+        var secondLap = (LapEventEntry[])_sut.Build(lapNumber: 2)![LapDetailsTracker.EventsKey]!;
+
+        var raised = Assert.Single(firstLap);
+        Assert.Equal((LapDetailsTracker.YellowFlagCode, 5_000), (raised.Code, raised.LapTimeMs));
+        Assert.Equal(new object?[] { 2 }, (object?[])raised.Details[LapDetailsTracker.YellowSectorsKey]!);
+        var cleared = Assert.Single(secondLap);
+        Assert.Equal((LapDetailsTracker.YellowFlagCode, 9_000), (cleared.Code, cleared.LapTimeMs));
+        Assert.Empty((object?[])cleared.Details[LapDetailsTracker.YellowSectorsKey]!);
+    }
+
+    [Fact]
+    public void OnEvent_RaceControlAfterBulkLimit_IsStillKept()
+    {
+        for (var i = 0; i < LapDetailsTracker.MaxEventsPerLap; i++)
+        {
+            _sut.OnEvent(Event(i % 2 == 0 ? "OVTK" : "SPTP"), lapTimeMs: i);
+        }
+
+        _sut.OnEvent(Event("SCAR", ("safetyCarType", 2), ("eventType", 0)), lapTimeMs: 13_933);
+        _sut.OnEvent(Event("OVTK"), lapTimeMs: 14_000);
+        _sut.OnEvent(Event("FLBK", ("flashbackSessionTimeMs", 10_438)), lapTimeMs: 14_940);
+
+        var details = _sut.Build(lapNumber: 1)!;
+        var events = (LapEventEntry[])details[LapDetailsTracker.EventsKey]!;
+
+        Assert.Equal(LapDetailsTracker.MaxEventsPerLap + 2, events.Length);
+        Assert.Equal(["SCAR", "FLBK"], events.Skip(LapDetailsTracker.MaxEventsPerLap).Select(e => e.Code));
+        Assert.Equal(1, details[LapDetailsTracker.DroppedEventsKey]);
+    }
+
+    [Fact]
     public void Build_PlayerSessionHistory_AddsThatLapOnly()
     {
         _sut.OnSessionHistory(new SessionHistoryFrame("s", 0, IsPlayer: true, [History(1, 90_000), History(2, 89_000)]));

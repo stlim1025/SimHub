@@ -7,7 +7,7 @@ import 'session_detail_models.dart';
 enum HighlightKind { start, overtake, collision, crash, retirement, safetyCar, virtualSafetyCar, redFlag, finish, unknown }
 
 /// 깃발 구간 종류(서버 `RaceFlagKind` 이름 그대로).
-enum RaceFlagKind { safetyCar, virtualSafetyCar, redFlag, unknown }
+enum RaceFlagKind { safetyCar, virtualSafetyCar, redFlag, yellowFlag, unknown }
 
 /// 서버 enum 이름(`SafetyCar`) → Dart enum(`safetyCar`). 모르는 이름은 [fallback].
 T _enumByName<T extends Enum>(List<T> values, Object? name, T fallback) {
@@ -56,13 +56,14 @@ class HighlightCar {
   }
 }
 
-/// 깃발 구간(세션 시간 ms).
+/// 깃발 구간(세션 시간 ms). [sectors] = 옐로 플래그가 나온 섹터 번호(1~3, 옐로 플래그만, 그 밖은 빈 목록).
 class HighlightFlag {
-  const HighlightFlag({required this.kind, required this.fromMs, required this.toMs});
+  const HighlightFlag({required this.kind, required this.fromMs, required this.toMs, this.sectors = const []});
 
   final RaceFlagKind kind;
   final int fromMs;
   final int toMs;
+  final List<int> sectors;
 
   static HighlightFlag? fromJsonOrNull(Map<String, dynamic> json) {
     final from = jsonInt(json['fromMs']);
@@ -70,7 +71,12 @@ class HighlightFlag {
     if (from == null || to == null) {
       return null;
     }
-    return HighlightFlag(kind: _enumByName(RaceFlagKind.values, json['kind'], RaceFlagKind.unknown), fromMs: from, toMs: to);
+    return HighlightFlag(
+      kind: _enumByName(RaceFlagKind.values, json['kind'], RaceFlagKind.unknown),
+      fromMs: from,
+      toMs: to,
+      sectors: (json['sectors'] as List<dynamic>? ?? const []).map(jsonInt).nonNulls.toList(),
+    );
   }
 }
 
@@ -329,16 +335,21 @@ const Map<RaceFlagKind, String> kRaceFlagLabels = {
   RaceFlagKind.safetyCar: '세이프티카',
   RaceFlagKind.virtualSafetyCar: '버추얼 세이프티카',
   RaceFlagKind.redFlag: '적기',
+  RaceFlagKind.yellowFlag: '옐로 플래그',
   RaceFlagKind.unknown: '깃발',
 };
 
-/// 깃발이 겹칠 때 앞서는 순서(클수록 앞선다): 적기 > 세이프티카 > 버추얼.
+/// 깃발이 겹칠 때 앞서는 순서(클수록 앞선다): 적기 > 세이프티카 > 버추얼 > 옐로 플래그.
 const Map<RaceFlagKind, int> _flagPriority = {
   RaceFlagKind.unknown: 0,
-  RaceFlagKind.virtualSafetyCar: 1,
-  RaceFlagKind.safetyCar: 2,
-  RaceFlagKind.redFlag: 3,
+  RaceFlagKind.yellowFlag: 1,
+  RaceFlagKind.virtualSafetyCar: 2,
+  RaceFlagKind.safetyCar: 3,
+  RaceFlagKind.redFlag: 4,
 };
+
+/// 깃발이 끝난 뒤 순위표에 그린 플래그(트랙 클리어)를 띄워 두는 시간(ms).
+const int kTrackClearMs = 5000;
 
 /// 순위표 이름: 글자만 남긴 앞 세 글자(대문자, `VERSTAPPEN` → `VER`, 순수 함수).
 String standingAbbreviation(String name) {
@@ -412,18 +423,26 @@ const String kHighlightFinishLabel = '피니시';
 /// 결승 클립에서 결승선을 지난 뒤인지(피니시 배너, 순수 함수).
 bool highlightFinished(HighlightClip clip, double timeMs) => clip.kind == HighlightKind.finish && timeMs >= clip.eventMs;
 
-/// 세션 시간 [timeMs]에 걸린 깃발(겹치면 적기 > 세이프티카 > 버추얼). 없으면 null(순수 함수).
-RaceFlagKind? activeRaceFlag(List<HighlightFlag> flags, double timeMs) {
-  RaceFlagKind? active;
+/// 세션 시간 [timeMs]에 걸린 깃발 종류(겹치면 적기 > 세이프티카 > 버추얼 > 옐로 플래그). 없으면 null(순수 함수).
+RaceFlagKind? activeRaceFlag(List<HighlightFlag> flags, double timeMs) => activeHighlightFlag(flags, timeMs)?.kind;
+
+/// 세션 시간 [timeMs]에 걸린 깃발 구간(겹치면 앞서는 쪽, 옐로 플래그면 섹터도 함께). 없으면 null(순수 함수).
+HighlightFlag? activeHighlightFlag(List<HighlightFlag> flags, double timeMs) {
+  HighlightFlag? active;
   for (final flag in flags) {
     if (timeMs >= flag.fromMs &&
         timeMs <= flag.toMs &&
-        (active == null || _flagPriority[flag.kind]! > _flagPriority[active]!)) {
-      active = flag.kind;
+        (active == null || _flagPriority[flag.kind]! > _flagPriority[active.kind]!)) {
+      active = flag;
     }
   }
   return active;
 }
+
+/// 깃발이 모두 걷힌 직후인지(마지막 깃발이 끝나고 [kTrackClearMs] 안, 순위표 그린 플래그, 순수 함수).
+bool trackClearAt(List<HighlightFlag> flags, double timeMs) =>
+    activeHighlightFlag(flags, timeMs) == null &&
+    flags.any((flag) => timeMs > flag.toMs && timeMs - flag.toMs <= kTrackClearMs);
 
 /// 클립 차 한 대를 세션 시간으로 따라가는 경로(순수 계산, [ReplayCar]). 표본 사이는 선형 보간하고,
 /// 첫 표본 전·마지막 표본 뒤에는 그 자리에 멈춰 있다(리타이어한 차는 선 자리에 남는다).

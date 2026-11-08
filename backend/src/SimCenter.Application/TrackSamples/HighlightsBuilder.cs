@@ -17,8 +17,8 @@ public enum HighlightKind
 /// <summary>차 한 대의 이름표 재료(순위표). <see cref="TeamName"/>은 앱이 팀 로고를 고르는 데 쓴다.</summary>
 public sealed record HighlightCarDto(int CarIndex, string Name, string TeamColor, bool IsPlayer, int Position, string TeamName);
 
-/// <summary>깃발 구간(세션 시간 ms).</summary>
-public sealed record HighlightFlagDto(string Kind, int FromMs, int ToMs);
+/// <summary>깃발 구간(세션 시간 ms). <see cref="Sectors"/> = 옐로 플래그가 나온 섹터 번호(옐로 플래그만, 그 밖은 null).</summary>
+public sealed record HighlightFlagDto(string Kind, int FromMs, int ToMs, IReadOnlyList<int>? Sectors = null);
 
 /// <summary>
 /// 클립 안 차 한 대의 움직임(같은 칸 = 같은 순간, 시간은 세션 ms). <c>Pit</c>은 피트 인(1, 박스에 서기 전)·피트 아웃(2, 박스를 떠난 뒤)·아님(0).
@@ -192,7 +192,10 @@ public static class HighlightsBuilder
         IReadOnlyList<RaceRetirement> retirements,
         int? lightsOutMs = null)
     {
-        var flagDtos = flags.Select(f => new HighlightFlagDto(f.Kind.ToString(), f.FromMs, f.ToMs)).ToList();
+        var flagDtos = flags.Select(f => new HighlightFlagDto(f.Kind.ToString(), f.FromMs, f.ToMs, f.Sectors)).ToList();
+
+        // 장면(깃발 장면·깃발 중 추월 빼기)은 레이스를 멈추는 깃발만 본다 — 옐로 플래그는 순위표 표시용이다.
+        flags = flags.Where(f => f.Kind != RaceFlagKind.YellowFlag).ToList();
         if (timeline.Cars.Count == 0)
         {
             return new HighlightsResponse(sessionId, trackId, gameCode, totalLaps, cars, flagDtos, [], []);

@@ -160,6 +160,23 @@ void main() {
       expect(activeRaceFlag(flags, 7500), RaceFlagKind.redFlag);
       expect(activeRaceFlag(flags, 9500), isNull);
     });
+
+    test('옐로 플래그는 섹터와 함께 읽고, 세이프티카와 겹치면 세이프티카가 앞선다', () {
+      final yellow = HighlightFlag.fromJsonOrNull({'kind': 'YellowFlag', 'fromMs': 0, 'toMs': 4000, 'sectors': [2]})!;
+      const safetyCar = HighlightFlag(kind: RaceFlagKind.safetyCar, fromMs: 3000, toMs: 6000);
+
+      expect(yellow.kind, RaceFlagKind.yellowFlag);
+      expect(yellow.sectors, [2]);
+      expect(activeHighlightFlag([yellow, safetyCar], 1000), same(yellow));
+      expect(activeHighlightFlag([yellow, safetyCar], 3500), same(safetyCar));
+    });
+
+    test('깃발이 모두 걷힌 뒤 잠깐만 트랙 클리어', () {
+      expect(trackClearAt(flags, 8500), isFalse);                       // 적기 중
+      expect(trackClearAt(flags, 9000 + kTrackClearMs - 1), isTrue);    // 적기 끝 직후
+      expect(trackClearAt(flags, 9000 + kTrackClearMs + 1), isFalse);   // 한참 뒤
+      expect(trackClearAt(flags, 500), isFalse);                        // 깃발 전
+    });
   });
 
   group('TimedCarPath', () {
@@ -295,19 +312,30 @@ void main() {
       await t.pump();
     });
 
-    testWidgets('깃발 구간이면 배너를 띄운다', (t) async {
+    testWidgets('깃발 구간이면 순위표 위쪽에 배너를 띄운다(가운데 띠 없이)', (t) async {
       await _pumpPlayer(t, _highlights(flags: [
         {'kind': 'SafetyCar', 'fromMs': 0, 'toMs': 3000},
       ]));
 
-      expect(
-        find.descendant(of: find.byKey(const ValueKey('highlights-flag')), matching: find.text('세이프티카')),
-        findsOneWidget,
-      );
+      final banner = find.byKey(const ValueKey('highlights-standings-flag'));
+      expect(find.descendant(of: find.byKey(const ValueKey('highlights-standings')), matching: banner), findsOneWidget);
+      expect(find.descendant(of: banner, matching: find.text('SAFETY')), findsOneWidget);
+      expect(find.descendant(of: banner, matching: find.text('CAR')), findsOneWidget);
+      expect(find.byKey(const ValueKey('highlights-flag')), findsNothing);
 
       await t.tap(find.byKey(const ValueKey('highlights-next')));
       await t.pump();
-      expect(find.byKey(const ValueKey('highlights-flag')), findsNothing);
+      expect(banner, findsNothing);
+    });
+
+    testWidgets('옐로 플래그면 순위표 배너에 섹터를 쓴다', (t) async {
+      await _pumpPlayer(t, _highlights(flags: [
+        {'kind': 'YellowFlag', 'fromMs': 0, 'toMs': 3000, 'sectors': [1, 3]},
+      ]));
+
+      final banner = find.byKey(const ValueKey('highlights-standings-flag'));
+      expect(find.descendant(of: banner, matching: find.text('YELLOW FLAG')), findsOneWidget);
+      expect(find.descendant(of: banner, matching: find.text('SECTORS 1 · 3')), findsOneWidget);
     });
 
     testWidgets('결승 클립에서 결승선을 지나면 피니시 배너', (t) async {

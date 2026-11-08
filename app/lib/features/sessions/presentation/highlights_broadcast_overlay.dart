@@ -38,6 +38,27 @@ const double _towerBadgeRadius = 3;
 const double _towerTyreWidth = 12;
 const double _towerTyreFocusSize = 14;
 
+/// 순위표 깃발 배너(랩 띠 바로 아래): 높이, 옐로 플래그 섹터 띠 높이, 글자 크기, 사선 줄무늬 간격·굵기.
+const double _flagBannerHeight = 36;
+const double _flagSectorHeight = 15;
+const double _flagTitleSize = 15;
+const double _flagSubtitleSize = 10.5;
+const double _flagSectorSize = 11;
+const double _flagStripeGap = 7;
+const double _flagStripeWidth = 2;
+
+/// 순위표 깃발 배너 글자(중계 그래픽이라 영어).
+const String _safetyLabel = 'SAFETY';
+const String _carLabel = 'CAR';
+const String _virtualLabel = 'VIRTUAL';
+const String _safetyCarLabel = 'SAFETY CAR';
+const String _yellowFlagLabel = 'YELLOW FLAG';
+const String _redFlagLabel = 'RED FLAG';
+const String _greenFlagLabel = 'GREEN FLAG';
+const String _sectorLabel = 'SECTOR';
+const String _sectorsLabel = 'SECTORS';
+const String _sectorSeparator = ' · ';
+
 /// 순위표 컴파운드 글자에 넘길 이름(`tyreColorOf`·`tyreLetterOf` 기준). 모르면 글자를 그리지 않는다.
 const Map<HighlightTyre, String> kHighlightTyreNames = {
   HighlightTyre.soft: 'Soft',
@@ -95,6 +116,8 @@ TextStyle _towerText(
 /// 컴파운드 색 글자(S·M·H·I·W, 모르면 없음). 피트면 `PIT` 칸, 피니시면 체커기, 리타이어면 `OUT`.
 /// 카메라가 따라가는 차의 줄은 흰 바탕에 검은 글자로 뒤집고, 넓으면 이름을 다 쓴다(길면 줄여 맞춘다).
 /// [compact](좁은 화면)면 간격 칸을 빼고 로고 대신 팀 색 띠를 쓴다. 높이가 모자라면 들어가는 줄까지만.
+/// 깃발이 걸리면([flag]) 실제 중계처럼 랩 띠 바로 아래에 배너를 띄우고 테두리를 깃발 색으로 바꾼다 — 세이프티카·버추얼은 노랑 사선 줄무늬,
+/// 옐로 플래그는 노랑 줄무늬 + 섹터 띠, 적기는 빨강. 깃발이 걷힌 직후([trackClear])는 초록 그린 플래그.
 class BroadcastStandingsTower extends StatelessWidget {
   const BroadcastStandingsTower({
     super.key,
@@ -104,8 +127,16 @@ class BroadcastStandingsTower extends StatelessWidget {
     required this.colorOf,
     required this.focusCar,
     this.logoUrlOf,
+    this.flag,
+    this.trackClear = false,
     this.compact = false,
   });
+
+  /// 지금 걸린 깃발(없으면 null).
+  final HighlightFlag? flag;
+
+  /// 깃발이 걷힌 직후(그린 플래그).
+  final bool trackClear;
 
   final HighlightStanding standing;
   final int totalLaps;
@@ -127,7 +158,12 @@ class BroadcastStandingsTower extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
         builder: (context, box) {
-          const chrome = _towerBorderWidth * 2 + _towerAccentHeight + _towerLapHeight + _towerBottomPadding;
+          final banner = _flagBanner(context);
+          final chrome = _towerBorderWidth * 2 +
+              _towerAccentHeight +
+              _towerLapHeight +
+              _towerBottomPadding +
+              (banner == null ? 0 : _flagBannerHeight);
           final fit = ((box.maxHeight - chrome) / _towerRowHeight).floor();
           final rows = standing.rows.take(fit.clamp(0, standing.rows.length)).toList();
           return Align(
@@ -136,7 +172,7 @@ class BroadcastStandingsTower extends StatelessWidget {
               key: const ValueKey('highlights-standings'),
               decoration: BoxDecoration(
                 color: AppColors.replayTowerBody.withValues(alpha: _towerOpacity),
-                border: Border.all(color: AppColors.replayTowerBorder, width: _towerBorderWidth),
+                border: Border.all(color: _borderColor, width: _towerBorderWidth),
                 borderRadius: _outerRadius,
               ),
               child: ClipRRect(
@@ -147,6 +183,7 @@ class BroadcastStandingsTower extends StatelessWidget {
                   children: [
                     Container(height: _towerAccentHeight, color: AppColors.replayBroadcastRed),
                     _lapBar(context),
+                    ?banner,
                     for (var i = 0; i < rows.length; i++) _row(context, i, rows[i]),
                     const SizedBox(height: _towerBottomPadding),
                   ],
@@ -155,6 +192,93 @@ class BroadcastStandingsTower extends StatelessWidget {
             ),
           );
         },
+      );
+
+  /// 테두리: 깃발이 걸리면 그 색(노랑·빨강), 걷힌 직후는 초록, 평소는 회색.
+  Color get _borderColor => switch (flag?.kind) {
+        RaceFlagKind.safetyCar || RaceFlagKind.virtualSafetyCar || RaceFlagKind.yellowFlag => AppColors.replayTowerFlagYellow,
+        RaceFlagKind.redFlag => AppColors.replayFlagRed,
+        _ => trackClear && flag == null ? AppColors.replayTowerFlagGreen : AppColors.replayTowerBorder,
+      };
+
+  /// 랩 띠 아래 깃발 배너. 띄울 것이 없으면 null.
+  Widget? _flagBanner(BuildContext context) {
+    final flag = this.flag;
+    if (flag == null) {
+      return trackClear
+          ? _stripedBanner(
+              AppColors.replayTowerFlagGreen,
+              AppColors.replayTowerFlagGreenStripe,
+              _flagBannerHeight,
+              [_flagText(context, _greenFlagLabel, _flagTitleSize)],
+            )
+          : null;
+    }
+    return switch (flag.kind) {
+      RaceFlagKind.safetyCar => _stripedBanner(
+          AppColors.replayTowerFlagYellow,
+          AppColors.replayTowerFlagYellowStripe,
+          _flagBannerHeight,
+          [_flagText(context, _safetyLabel, _flagTitleSize), _flagText(context, _carLabel, _flagSubtitleSize)],
+        ),
+      RaceFlagKind.virtualSafetyCar => _stripedBanner(
+          AppColors.replayTowerFlagYellow,
+          AppColors.replayTowerFlagYellowStripe,
+          _flagBannerHeight,
+          [_flagText(context, _virtualLabel, _flagTitleSize), _flagText(context, _safetyCarLabel, _flagSubtitleSize)],
+        ),
+      RaceFlagKind.yellowFlag => Column(
+          key: const ValueKey('highlights-standings-flag'),
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _stripedBanner(
+              AppColors.replayTowerFlagYellow,
+              AppColors.replayTowerFlagYellowStripe,
+              _flagBannerHeight - _flagSectorHeight,
+              [_flagText(context, _yellowFlagLabel, _flagTitleSize)],
+              keyed: false,
+            ),
+            Container(
+              height: _flagSectorHeight,
+              alignment: Alignment.center,
+              color: AppColors.replayTowerBody,
+              child: Text(
+                _sectorText(flag.sectors),
+                style: _towerText(context, size: _flagSectorSize, color: AppColors.replayTowerSectorText, weight: FontWeight.w800),
+              ),
+            ),
+          ],
+        ),
+      RaceFlagKind.redFlag => Container(
+          key: const ValueKey('highlights-standings-flag'),
+          height: _flagBannerHeight,
+          alignment: Alignment.center,
+          color: AppColors.replayFlagRed,
+          child: _flagText(context, _redFlagLabel, _flagTitleSize, color: AppColors.replayHudText),
+        ),
+      RaceFlagKind.unknown => null,
+    };
+  }
+
+  /// 옐로 플래그 섹터 글자: `SECTOR 2`, 여럿이면 `SECTORS 1 · 3`, 모르면 빈 글자.
+  static String _sectorText(List<int> sectors) => switch (sectors.length) {
+        0 => '',
+        1 => '$_sectorLabel ${sectors.single}',
+        _ => '$_sectorsLabel ${sectors.join(_sectorSeparator)}',
+      };
+
+  Widget _flagText(BuildContext context, String text, double size, {Color color = AppColors.replayFlagYellowText}) =>
+      Text(text, maxLines: 1, style: _towerText(context, size: size, color: color, weight: FontWeight.w900));
+
+  /// 사선 줄무늬 바탕 위에 가운데 정렬한 글자 줄들.
+  Widget _stripedBanner(Color base, Color stripe, double height, List<Widget> lines, {bool keyed = true}) => SizedBox(
+        key: keyed ? const ValueKey('highlights-standings-flag') : null,
+        height: height,
+        child: CustomPaint(
+          painter: _StripePainter(base, stripe),
+          child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: lines)),
+        ),
       );
 
   Widget _lapBar(BuildContext context) {
@@ -405,6 +529,28 @@ class BroadcastFinishStrip extends StatelessWidget {
           ),
         ),
       );
+}
+
+/// 깃발 배너 바탕: [base] 색 위에 왼쪽 아래에서 오른쪽 위로 가는 [stripe] 색 사선 줄무늬.
+class _StripePainter extends CustomPainter {
+  const _StripePainter(this.base, this.stripe);
+
+  final Color base;
+  final Color stripe;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRect(Offset.zero & size, Paint()..color = base);
+    final paint = Paint()
+      ..color = stripe
+      ..strokeWidth = _flagStripeWidth;
+    for (var x = -size.height; x < size.width; x += _flagStripeGap) {
+      canvas.drawLine(Offset(x, size.height), Offset(x + size.height, 0), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_StripePainter oldDelegate) => oldDelegate.base != base || oldDelegate.stripe != stripe;
 }
 
 /// 체커 무늬 칸(세로는 부모 높이를 채운다).

@@ -769,7 +769,8 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
 
   Widget _view(BuildContext context, HighlightClip clip) => LayoutBuilder(builder: (context, box) => _viewSized(context, clip, box));
 
-  /// 재생 화면(중계 그래픽: 왼쪽 순위표, 아래 자막, 위 깃발·피니시 띠). 좁으면(폰) 순위표는 간격 칸 없이 좁게.
+  /// 재생 화면(중계 그래픽: 왼쪽 순위표 — 깃발은 순위표 위쪽 배너, 아래 자막, 위 피니시 띠·순위표가 없을 때의 깃발 띠).
+  /// 좁으면(폰) 순위표는 간격 칸 없이 좁게.
   Widget _viewSized(BuildContext context, HighlightClip clip, BoxConstraints box) {
     final highlights = widget.highlights;
     final compact = box.maxWidth < _compactTowerMaxViewWidth;
@@ -794,6 +795,8 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
                 nameOf: highlights.nameOf,
                 colorOf: _colorOf,
                 logoUrlOf: _logoOf,
+                flag: activeHighlightFlag(highlights.flags, time),
+                trackClear: trackClearAt(highlights.flags, time),
                 focusCar: clip.focusCar,
               ),
             ),
@@ -818,7 +821,8 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
           child: ValueListenableBuilder<double>(
             valueListenable: _time,
             builder: (context, time, _) {
-              final flag = activeRaceFlag(highlights.flags, time);
+              // 순위표가 있으면 깃발은 순위표 위쪽 배너로 띄운다(실제 중계처럼) — 가운데 띠는 순위표가 없을 때만.
+              final flag = clip.standings.isEmpty ? activeRaceFlag(highlights.flags, time) : null;
               final finished = highlightFinished(clip, time);
               return Column(
                 children: [
