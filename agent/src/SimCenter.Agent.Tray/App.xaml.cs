@@ -7,6 +7,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Serilog;
 using SimCenter.Agent.Core.Analysis;
@@ -46,6 +47,7 @@ public partial class App : Application
     private static readonly Color StatusRingColor = Color.FromArgb(18, 20, 28);
 
     private IHost? _host;
+    private AgentInstanceHandoff? _instanceHandoff;
     private GameConnectionMonitor? _monitor;
     private System.Windows.Forms.NotifyIcon? _notifyIcon;
     private DispatcherTimer? _trayTimer;
@@ -80,6 +82,12 @@ public partial class App : Application
         builder.Services.AddHostedService<TelemetryHostedService>();
 
         _host = builder.Build();
+
+        // 트레이에 남은 예전 Agent가 UDP 포트를 쥐고 있으면 바인딩이 실패하므로, 호스트를 켜기 전에 끈다.
+        _instanceHandoff = new AgentInstanceHandoff();
+        _instanceHandoff.CloseOtherAgents(_host.Services.GetRequiredService<ILogger<App>>());
+        _instanceHandoff.ListenForExitSignal(() => Dispatcher.InvokeAsync(ExitApp));
+
         _host.Start();
 
         _monitor = _host.Services.GetRequiredService<GameConnectionMonitor>();
@@ -107,6 +115,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _instanceHandoff?.Dispose();
         _trayTimer?.Stop();
 
         if (_notifyIcon is not null)
