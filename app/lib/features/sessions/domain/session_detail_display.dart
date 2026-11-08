@@ -6,7 +6,8 @@ import 'session_models.dart';
 /// 세션 상세 카드가 2열이 되는 콘텐츠 폭(docs/15 §11.3 "900px 미만 1열").
 const double kSessionDetailTwoColumnWidth = 900;
 
-/// 콘텐츠 폭이 이 값 이상이면 결과 카드를 3단 보드로 둔다(B안 개편: [Details | Engine | Penalties] · [Classification | Laps] · [Tyre Life | Lap Times]).
+/// 콘텐츠 폭이 이 값 이상이면 결과 카드를 B안 12칸 보드로 둔다(레이스: [Classification | 순위 그래프 / 스틴트 · 핵심 장면] 아래
+/// [Details | Engine | Penalties] · [Tyre Life | Lap Times] · [Laps], 그 밖: [Details | Engine | Penalties] · [Classification | Laps] · …).
 const double kSessionDetailThreeColumnWidth = 1500;
 
 const int _msPerSecond = 1000;
@@ -97,6 +98,10 @@ String classificationGapText(SessionResult row, SessionResult? reference, {requi
   }
   return formatClassificationGap(gap);
 }
+
+/// 기준 행(1위) 대비 차(ms): 서버 `gapMs`, 없으면 [classificationGapText]와 같은 기준으로 계산한다. 모르면 null(순수 함수).
+int? gapToReferenceMs(SessionResult row, SessionResult reference, {required bool isRace}) =>
+    row.gapMs ?? _computedGapMs(row, reference, isRace: isRace);
 
 int? _computedGapMs(SessionResult row, SessionResult reference, {required bool isRace}) {
   if (isRace) {

@@ -25,6 +25,7 @@ const TextStyle kTabularStyle = TextStyle(fontFeatures: [FontFeature.tabularFigu
 
 /// 세션 상세 카드: 제목 + 본문. [padded]가 false면 본문을 가장자리까지(표).
 /// [onTitleTap]이 있으면 제목 줄 전체를 누를 수 있고, [trailing]은 제목 오른쪽, [collapsed]면 본문을 숨긴다(접는 카드).
+/// [fill]이면 본문이 카드의 남는 높이를 모두 쓴다(높이가 정해진 칸에서만 — 보드에서 늘어나는 그래프 카드).
 class SessionCard extends StatelessWidget {
   const SessionCard({
     super.key,
@@ -34,6 +35,7 @@ class SessionCard extends StatelessWidget {
     this.trailing,
     this.onTitleTap,
     this.collapsed = false,
+    this.fill = false,
   });
 
   final String title;
@@ -42,6 +44,7 @@ class SessionCard extends StatelessWidget {
   final Widget? trailing;
   final VoidCallback? onTitleTap;
   final bool collapsed;
+  final bool fill;
 
   @override
   Widget build(BuildContext context) {
@@ -64,17 +67,21 @@ class SessionCard extends StatelessWidget {
           if (onTitleTap == null) header else InkWell(onTap: onTitleTap, child: header),
           if (collapsed)
             const SizedBox.shrink()
-          else if (padded)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(_cardTitlePadding, 0, _cardTitlePadding, _cardTitlePadding),
-              child: child,
-            )
+          else if (fill)
+            Expanded(child: _body)
           else
-            child,
+            _body,
         ],
       ),
     );
   }
+
+  Widget get _body => padded
+      ? Padding(
+          padding: const EdgeInsets.fromLTRB(_cardTitlePadding, 0, _cardTitlePadding, _cardTitlePadding),
+          child: child,
+        )
+      : child;
 }
 
 /// 카드에 데이터가 없을 때의 안내(카드는 숨기지 않는다, docs/15 §11.3).

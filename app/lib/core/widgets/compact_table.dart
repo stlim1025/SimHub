@@ -62,6 +62,7 @@ class CompactTable<T> extends StatelessWidget {
     this.footer,
     this.compactWidth = kCompactTableDefaultWidth,
     this.framed = true,
+    this.rowHeight = kCompactRowHeight,
   });
 
   final List<CompactColumn<T>> columns;
@@ -81,6 +82,9 @@ class CompactTable<T> extends StatelessWidget {
 
   /// false면 카드 테두리 없이 표만 그린다(제목 있는 카드 안에 넣을 때, docs/15 §11.3).
   final bool framed;
+
+  /// 본문 행 높이. 기본은 [kCompactRowHeight], 한 화면에 많은 행을 담는 보드(세션 상세 B안)는 더 낮게 준다.
+  final double rowHeight;
 
   @override
   Widget build(BuildContext context) {
@@ -105,6 +109,7 @@ class CompactTable<T> extends StatelessWidget {
                 highlighted: isHighlighted?.call(row) ?? false,
                 fresh: isFresh?.call(row) ?? false,
                 onTap: onRowTap == null ? null : () => onRowTap!(row),
+                height: rowHeight,
               ),
             ],
             if (footer != null) ...[
@@ -172,6 +177,7 @@ class _BodyRow<T> extends StatelessWidget {
     required this.highlighted,
     required this.fresh,
     required this.onTap,
+    required this.height,
   });
 
   final T row;
@@ -179,6 +185,7 @@ class _BodyRow<T> extends StatelessWidget {
   final bool highlighted;
   final bool fresh;
   final VoidCallback? onTap;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
@@ -200,7 +207,7 @@ class _BodyRow<T> extends StatelessWidget {
         onTap: onTap,
         hoverColor: AppColors.rowHover,
         child: Container(
-          height: kCompactRowHeight,
+          height: height,
           // 강조 행은 왼쪽에 앰버 막대를 두고, 칸 위치가 머리줄과 어긋나지 않게 그만큼 안쪽 여백을 줄인다.
           decoration: highlighted
               ? const BoxDecoration(border: Border(left: BorderSide(color: AppColors.accent, width: _highlightBarWidth)))

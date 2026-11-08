@@ -14,6 +14,7 @@ import 'package:simcenter_app/features/lap_detail/domain/lap_detail_models.dart'
 import 'package:simcenter_app/features/laps/domain/lap_models.dart';
 import 'package:simcenter_app/features/sessions/data/sessions_repository.dart';
 import 'package:simcenter_app/features/sessions/domain/race_analysis.dart';
+import 'package:simcenter_app/features/sessions/domain/race_highlights.dart';
 import 'package:simcenter_app/features/sessions/domain/race_review.dart';
 import 'package:simcenter_app/features/sessions/domain/session_models.dart';
 import 'package:simcenter_app/features/sessions/presentation/engine_painter.dart';
@@ -226,6 +227,103 @@ final RaceReview _review = RaceReview.fromJsonOrNull({
 
 Finder _tab(String label) => find.widgetWithText(Tab, label);
 
+/// KPI 띠 한 칸(`SessionKpiId` 이름).
+Finder _kpi(String id) => find.byKey(ValueKey('session-kpi-$id'));
+
+/// 칸 안의 글자가 보이는지.
+void _expectIn(Finder scope, String text) =>
+    expect(find.descendant(of: scope, matching: find.text(text)), findsOneWidget, reason: text);
+
+/// 스틴트가 있는 레이스 결과(보드 카드용): 나는 P3, 1위 RUSSELL.
+List<SessionResult> _stintResults() => [
+      resultOf(1, name: 'RUSSELL', numLaps: 6, bestLapTimeMs: 72506, totalRaceTimeMs: 440000, points: 25, tyreStints: const [
+        TyreStintView(endLap: 3, visualCompound: 'Soft', actualCompound: 'C4'),
+        TyreStintView(endLap: 255, visualCompound: 'Hard', actualCompound: 'C2'),
+      ]),
+      resultOf(2, name: 'NORRIS', numLaps: 6, bestLapTimeMs: 72611, gapMs: 1904, tyreStints: const [
+        TyreStintView(endLap: 255, visualCompound: 'Medium', actualCompound: 'C3'),
+      ]),
+      resultOf(
+        3,
+        name: 'ME',
+        isPlayer: true,
+        isAiControlled: false,
+        numLaps: 6,
+        gridPosition: 7,
+        positionChange: 4,
+        bestLapTimeMs: 72384,
+        gapMs: 4218,
+        penaltiesTimeMs: 5000,
+        numPenalties: 1,
+        points: 15,
+        tyreStints: const [
+          TyreStintView(endLap: 4, visualCompound: 'Medium', actualCompound: 'C3'),
+          TyreStintView(endLap: 255, visualCompound: 'Hard', actualCompound: 'C2'),
+        ],
+      ),
+      for (var p = 4; p <= 8; p++)
+        resultOf(p, numLaps: 6, bestLapTimeMs: 73000 + p, gapMs: p * 1000, tyreStints: const [
+          TyreStintView(endLap: 255, visualCompound: 'Medium', actualCompound: 'C3'),
+        ]),
+    ];
+
+/// B안 보드 카드가 모두 있는 6랩 레이스(P7 출발 → P3, 4랩 피트 M→H, 5초 패널티).
+SessionDetail _boardDetail({bool hasFieldSamples = false}) => detailOf(
+      'd1',
+      results: _stintResults(),
+      totalLaps: 6,
+      hasFieldSamples: hasFieldSamples,
+      myBestLap: const SessionBestLap(lapId: 'lap-5', lapTimeMs: 72384),
+      laps: [
+        for (final (i, position) in [5, 5, 4, 8, 4, 3].indexed)
+          SessionLap(
+            lapNumber: i + 1,
+            position: position,
+            inPit: i + 1 == 4,
+            visualCompound: i < 4 ? 'Medium' : 'Hard',
+            lapTimeMs: 73000 + i,
+            lapId: 'lap-${i + 1}',
+          ),
+      ],
+      penalties: const [
+        SessionPenalty(
+          lap: 5,
+          carIndex: 2,
+          driverName: 'ME',
+          isPlayer: true,
+          infringement: 'Corner cutting gained time',
+          penalty: 'Time penalty',
+          timeS: 5,
+        ),
+      ],
+    );
+
+/// [_boardDetail]의 하이라이트: 2랩에 RUSSELL(차 0)을 추월.
+RaceHighlights _boardHighlights() => const RaceHighlights(
+      sessionId: 'd1',
+      trackId: 'Spa',
+      gameCode: 'F1_25',
+      totalLaps: 6,
+      cars: [
+        HighlightCar(carIndex: 0, name: 'RUSSELL', teamColor: null, isPlayer: false, position: 1),
+        HighlightCar(carIndex: 2, name: 'ME', teamColor: null, isPlayer: true, position: 3),
+      ],
+      flags: [],
+      mine: [
+        HighlightClip(
+          kind: HighlightKind.overtake,
+          startMs: 1000,
+          endMs: 2000,
+          eventMs: 1500,
+          focusCar: 2,
+          otherCar: 0,
+          lap: 2,
+          cars: [],
+        ),
+      ],
+      race: [],
+    );
+
 /// 원 서킷 한 바퀴(반지름 100m, 5m 간격) 랩: 트랙 지도 모양을 잡는 데만 쓴다.
 LapTrace _circleLap(String lapId) {
   const count = 126;
@@ -395,6 +493,116 @@ void main() {
     }
   });
 
+  group('KPI 띠·보드 카드(B안)', () {
+    testWidgets('레이스 KPI 띠: Finish · Gap to P1 · Best Lap · Pit · Penalty · Points', (t) async {
+      await _pumpPage(t, _repo(_boardDetail()));
+
+      expect(find.byKey(const ValueKey('session-kpi-strip')), findsOneWidget);
+      _expectIn(_kpi('finish'), 'P3');
+      _expectIn(_kpi('finish'), '+4 (P7 출발)');
+      _expectIn(_kpi('gap'), '+4.218');
+      _expectIn(_kpi('gap'), '6 Laps');
+      _expectIn(_kpi('bestLap'), '1:12.384');
+      _expectIn(_kpi('bestLap'), '전체 1위');
+      _expectIn(_kpi('pit'), 'L4 M→H');
+      _expectIn(_kpi('penalty'), '+5s');
+      _expectIn(_kpi('points'), '15');
+      // 최고 랩이 세션 1위면 보라.
+      expect(
+        t.widget<Text>(find.descendant(of: _kpi('bestLap'), matching: find.text('1:12.384'))).style?.color,
+        AppColors.fastestLap,
+      );
+      // KPI 띠가 헤더를 대신한다(뒤로·국기·트랙·세션 종류).
+      expect(find.byTooltip('세션 목록'), findsOneWidget);
+      expect(find.text('Sessions ›'), findsOneWidget);
+    });
+
+    testWidgets('예선 KPI 띠는 Position · Best Lap · Gap만, 레이스 보드 카드는 없다', (t) async {
+      final detail = detailOf(
+        'd1',
+        sessionType: 'Qualifying',
+        sessionKind: 'Qualifying3',
+        results: [
+          resultOf(1, name: 'POLE', bestLapTimeMs: 71591),
+          resultOf(2, isPlayer: true, bestLapTimeMs: 71902),
+        ],
+        laps: const [SessionLap(lapNumber: 1, position: 2), SessionLap(lapNumber: 2, position: 2)],
+      );
+      await _pumpPage(t, _repo(detail));
+
+      _expectIn(_kpi('finish'), 'P2');
+      _expectIn(_kpi('bestLap'), '1:11.902');
+      _expectIn(_kpi('gap'), '+0.311');
+      for (final id in ['pit', 'penalty', 'points']) {
+        expect(_kpi(id), findsNothing, reason: id);
+      }
+      expect(find.byKey(const ValueKey('position-chart')), findsNothing);
+      expect(find.text('Tyre Stints'), findsNothing);
+    });
+
+    testWidgets('레이스 카드: 내 순위 그래프 · 모든 차 스틴트(내 줄 YOU) · 핵심 장면(출발·피트·패널티)', (t) async {
+      await _pumpPage(t, _repo(_boardDetail()));
+
+      expect(find.byKey(const ValueKey('position-chart')), findsOneWidget);
+      expect(find.text('Tyre Stints'), findsOneWidget);
+      expect(find.byKey(const ValueKey('field-stints-2')), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const ValueKey('field-stints-2')), matching: find.text('YOU')), findsOneWidget);
+      expect(find.text('출발 P7 → P5'), findsOneWidget);
+      expect(find.text('피트 M → H'), findsOneWidget);
+      expect(find.text('패널티 · Corner cutting gained time'), findsOneWidget);
+      expect(find.text('+5s'), findsNWidgets(2)); // KPI 띠 + 핵심 장면
+    });
+
+    testWidgets('모든 차 표본이 있으면 하이라이트의 내 추월도 핵심 장면에 담는다', (t) async {
+      await _pumpPage(
+        t,
+        FakeSessionsRepository(
+          details: {'d1': _boardDetail(hasFieldSamples: true)},
+          highlights: {'d1': _boardHighlights()},
+          analyses: {'d1': RaceAnalysis.fromJson(const {})},
+        ),
+      );
+
+      expect(find.text('추월 RUSSELL'), findsOneWidget);
+    });
+
+    testWidgets('하이라이트를 못 받아도 출발·피트·패널티 장면은 보인다', (t) async {
+      await _pumpPage(t, _repo(_boardDetail(hasFieldSamples: true)));
+
+      expect(find.text('추월 RUSSELL'), findsNothing);
+      expect(find.text('출발 P7 → P5'), findsOneWidget);
+    });
+
+    testWidgets('1500px 이상 보드: [순위표 | 그래프 / (스틴트 | 핵심 장면)] 아래 Details 줄, 순위표에 BEST·TYRES', (t) async {
+      await _pumpPage(t, _repo(_boardDetail()), size: const Size(1920, 3000));
+
+      expect(find.byKey(const ValueKey('session-board')), findsOneWidget);
+      final classification = _topLeft(t, 'Final Classification');
+      final chart = t.getTopLeft(find.byKey(const ValueKey('position-chart')));
+      expect(chart.dx, greaterThan(classification.dx));
+      expect(_topLeft(t, 'Tyre Stints').dy, greaterThan(chart.dy));
+      expect(_topLeft(t, 'Race Review').dy, _topLeft(t, 'Tyre Stints').dy);
+      expect(_topLeft(t, 'Race Review').dx, greaterThan(_topLeft(t, 'Tyre Stints').dx));
+      expect(_topLeft(t, 'Details').dy, greaterThan(_topLeft(t, 'Tyre Stints').dy));
+      expect(find.text('BEST'), findsOneWidget);
+      expect(find.text('TYRES'), findsOneWidget);
+      // 보드 첫 줄 두 칸은 바닥이 같다.
+      final board = t.getRect(find.byKey(const ValueKey('session-board')));
+      final card = find.ancestor(of: find.text('Final Classification'), matching: find.byType(Card)).first;
+      expect(t.getRect(card).bottom, board.bottom);
+      expect(t.takeException(), isNull);
+    });
+
+    testWidgets('2열에서는 순위표에 BEST·TYRES가 없고 그래프는 한 줄 전체', (t) async {
+      await _pumpPage(t, _repo(_boardDetail()), size: const Size(1200, 4000));
+
+      expect(find.byKey(const ValueKey('session-board')), findsNothing);
+      expect(find.text('BEST'), findsNothing);
+      expect(t.getTopLeft(find.byKey(const ValueKey('position-chart'))).dy, greaterThan(_topLeft(t, 'Details').dy));
+      expect(t.takeException(), isNull);
+    });
+  });
+
   group('Details 카드', () {
     testWidgets('값: 난이도·날씨·팀·세션 종류·모드+시즌·날짜·라운드', (t) async {
       await _pumpPage(t, _repo(_fullDetail()));
@@ -454,7 +662,9 @@ void main() {
       await _pumpPage(t, _repo(detailOf('d1', aiDifficulty: 0, myBestLapTimeMs: 91234)));
 
       expect(find.text('View Setup'), findsNothing);
-      expect(find.text('1:31.234'), findsOneWidget);
+      // 헤더 값은 Details와 KPI 띠(Best Lap) 두 곳에 보인다.
+      expect(find.descendant(of: _rowOf('detail-row-Best Lap Time'), matching: find.text('1:31.234')), findsOneWidget);
+      expect(find.descendant(of: _kpi('bestLap'), matching: find.text('1:31.234')), findsOneWidget);
       for (final label in ['Setup', 'Difficulty', 'Conditions', 'Team']) {
         expect(find.descendant(of: _rowOf('detail-row-$label'), matching: find.text('-')), findsOneWidget, reason: label);
       }
