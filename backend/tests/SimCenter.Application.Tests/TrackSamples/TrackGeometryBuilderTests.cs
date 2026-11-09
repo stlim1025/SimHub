@@ -279,9 +279,52 @@ public sealed class TrackGeometryBuilderTests
 
         Assert.NotNull(geometry.PitX);
         double LapDistanceOf(int index) => (Math.Atan2(geometry.PitZ![index], geometry.PitX![index]) + 2 * Math.PI) % (2 * Math.PI) * Radius;
-        // 레이싱 라인에서 8m 넘게 벗어난 길(입구 280m~·출구 ~420m)까지 이어진다.
-        Assert.InRange(LapDistanceOf(0), 270, 292);
-        Assert.InRange(LapDistanceOf(geometry.PitX!.Length - 1), 408, 430);
+        // 레이싱 라인에서 4.5m 넘게 벗어난 길(입구 263m~·출구 ~437m)까지 이어진다.
+        Assert.InRange(LapDistanceOf(0), 252, 275);
+        Assert.InRange(LapDistanceOf(geometry.PitX!.Length - 1), 425, 448);
+    }
+
+    [Fact]
+    public void Build_PitExitRoadBeyondAKerb_IsPartOfThePitLane_EvenWhereOtherCarsWidenedTheTarmac()
+    {
+        // 0·6·7번은 레이싱 라인. 2~4번 차가 300~400m에서 피트 레인(안쪽 12m, pitStatus)을 달리고, 400~460m는 도로로 돌아오는 출구 길이다. 그 칸에서
+        // 5번은 안쪽 연석(라인에서 1.5m)을 밟고, 1번(피트에 들르지 않는다)은 안쪽 포장 구역 10m까지 지나 아스팔트 가장자리를 11m로 넓힌다
+        // (Zandvoort 1번 코너 안쪽 피트 출구 길을 출발 직후 넓게 지난 차). 연석 쪽 도로 끝은 연석 바깥 끝이므로 출구 길을 그대로 잇는다.
+        const byte pitting = 1 << 3;
+        var frames = new List<Sample[]>();
+        for (var d = 0.0; d < LapLength; d += 2)
+        {
+            var angle = d / Radius;
+            Sample At(byte car, double radius, byte status = 0, ushort surface = 0)
+                => new(car, d, radius * Math.Cos(angle), radius * Math.Sin(angle), surface, SpeedKph: 80, Status: status);
+            var cars = new List<Sample>
+            {
+                At(0, Radius),
+                At(6, Radius),
+                At(7, Radius),
+                At(1, d is >= 400 and < 450 ? Radius - 10 : Radius),
+                d is >= 380 and < 450 ? At(5, Radius - 1.5, surface: Rumble) : At(5, Radius),
+            };
+            for (byte car = 2; car <= 4; car++)
+            {
+                cars.Add(d switch
+                {
+                    >= 300 and < 400 => At(car, Radius - 12, pitting),
+                    >= 400 and < 460 => At(car, Radius - 12 * (460 - d) / 60),
+                    _ => At(car, Radius),
+                });
+            }
+
+            frames.Add([.. cars]);
+        }
+
+        var geometry = TrackGeometryBuilder.Build([TrackSampleDecoder.Decode(Encode(frames), format: 5)])!;
+
+        Assert.True(geometry.KerbLeft[85]);
+        Assert.InRange(geometry.EdgeLeftM[85], 9, 12);
+        double LapDistanceOf(int index) => (Math.Atan2(geometry.PitZ![index], geometry.PitX![index]) + 2 * Math.PI) % (2 * Math.PI) * Radius;
+        // 출구 길이 라인에서 4.5m 안으로 들어오는 437m 둘레까지 이어진다(아스팔트 가장자리로 막으면 400m에서 끊긴다).
+        Assert.InRange(LapDistanceOf(geometry.PitX!.Length - 1), 425, 448);
     }
 
     [Fact]

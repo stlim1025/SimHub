@@ -93,8 +93,9 @@ public static class TrackGeometryBuilder
     /// 피트 입구·출구 길: 게임은 피트 입구선부터 출구선까지만 피트 레인(pitStatus)으로 알려 주므로, 그 앞뒤로 도로에서 갈라져 나가는 길은
     /// 피트 레인을 드나드는 차([PitMarginMs] 안) 표본 가운데 레이싱 라인에서 그 쪽 가장자리·연석 바깥과 이 거리(m) 중 먼 쪽보다 더 떨어진 것으로 잡는다
     /// (도로 위를 넓게 달린 차는 빼고, 도로에서 벗어난 길만). 피트 레인 칸 앞뒤로 이 칸 수 이하로 끊긴 칸까지 이어 붙인다.
+    /// 거리는 출구 길이 도로 바로 옆을 지나는 서킷(Zandvoort 1번 코너 안쪽 출구 길은 라인에서 5.4~7m)도 잡을 만큼 짧게 둔다.
     /// </summary>
-    private const double PitRoadMinOffsetM = 8;
+    private const double PitRoadMinOffsetM = 4.5;
     private const int MaxPitRoadGapBins = 4;
 
     /// <summary>
@@ -304,9 +305,10 @@ public static class TrackGeometryBuilder
             kerbOuterLeft[k] = FarEnd(kerbWheels.Left);
             kerbOuterRight[k] = FarEnd(kerbWheels.Right);
 
-            // 피트를 드나드는 차가 도로 밖으로 벗어난 자리 = 피트 입구·출구 길.
-            var leftLimit = Math.Max(PitRoadMinOffsetM, Math.Max(edgeLeft[k], kerbOuterLeft[k]));
-            var rightLimit = Math.Max(PitRoadMinOffsetM, Math.Max(edgeRight[k], kerbOuterRight[k]));
+            // 피트를 드나드는 차가 도로 밖으로 벗어난 자리 = 피트 입구·출구 길. 연석을 밟은 쪽은 연석 바깥 끝이 도로 끝이다(앱 도로 그림과 같다) —
+            // 그 너머 포장 구역(Zandvoort 1번 코너 안쪽 피트 출구 길)을 출발 직후 넓게 지난 차가 아스팔트 가장자리를 부풀려도 출구 길을 놓치지 않게.
+            var leftLimit = Math.Max(PitRoadMinOffsetM, RoadEnd(edgeLeft[k], kerbOuterLeft[k], kerbLeft[k]));
+            var rightLimit = Math.Max(PitRoadMinOffsetM, RoadEnd(edgeRight[k], kerbOuterRight[k], kerbRight[k]));
             foreach (var (p, offset) in pitRoad)
             {
                 if ((offset > leftLimit || -offset > rightLimit) && Math.Abs(offset) <= MaxLateralM)
@@ -348,6 +350,9 @@ public static class TrackGeometryBuilder
     }
 
     private static bool InPit(DecodedTrackSamples chunk, int i) => ((chunk.Status[i] >> PitStatusShift) & PitStatusMask) != 0;
+
+    /// <summary>한쪽 도로 끝(레이싱 라인에서 m): 연석을 밟은 쪽은 연석 바깥 끝, 아니면 아스팔트 가장자리와 연석 바깥 끝 중 먼 쪽.</summary>
+    private static double RoadEnd(double edge, double kerbOuter, bool kerb) => kerb && kerbOuter > 0 ? kerbOuter : Math.Max(edge, kerbOuter);
 
     /// <summary>조각마다 세션 시간 줄기 번호: 앞 조각보다 시간이 뒤로 가면(다른 세션·되돌리기) 새 줄기로 본다.</summary>
     private static int[] Timelines(IReadOnlyList<DecodedTrackSamples> chunks)
