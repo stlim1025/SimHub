@@ -81,6 +81,18 @@ void main() {
     expect((theme.cardTheme.shape! as BeveledRectangleBorder).side.color, AppColors.lightBorder);
   });
 
+  test('툴팁은 두 테마 모두 표면 색 바탕 + 테두리 + 본문 글자색이다(Material 기본 흰·검은 바탕이 아니다)', () async {
+    for (final (theme, palette) in [
+      (await _build(() => AppTheme.dark), AppPalette.dark),
+      (await _build(() => AppTheme.light), AppPalette.light),
+    ]) {
+      final decoration = theme.tooltipTheme.decoration! as ShapeDecoration;
+      expect(decoration.color, palette.surface);
+      expect((decoration.shape as BeveledRectangleBorder).side.color, palette.border);
+      expect(theme.tooltipTheme.textStyle?.color, palette.textPrimary);
+    }
+  });
+
   test('링크 글자(랩타임)는 두 테마의 표면·배경·표 머리줄 위에서 4.5:1 이상이다', () {
     for (final palette in [AppPalette.dark, AppPalette.light]) {
       for (final background in [palette.surface, palette.background, palette.tableHeader]) {

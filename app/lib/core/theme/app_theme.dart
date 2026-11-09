@@ -19,6 +19,9 @@ class AppTheme {
   // 웹 대시보드 느낌(F1Laps 참고)의 촘촘한 컨트롤 치수 — Material 3 기본(알약·48px·가로 꽉 채움)을 쓰지 않는다.
   static const double _controlRadius = 2;
   static const double _menuChamfer = 10;
+
+  /// 툴팁(마우스를 올렸을 때 뜨는 설명) 오른쪽 위를 깎는 크기.
+  static const double _tooltipChamfer = 6;
   static const double _buttonHeight = 36;
   static const double _buttonMinWidth = 64;
   static const double _buttonPaddingX = 14;
@@ -66,13 +69,26 @@ class AppTheme {
       ),
     );
 
+    // 글자 크기를 키우려면 크기가 있어야 해서, 기본 글자 모양(크기 포함)에 테마 글자색 설정을 덮어 시작한다.
+    final textTheme = GoogleFonts.barlowCondensedTextTheme(base.typography.englishLike.merge(base.textTheme)).apply(
+      bodyColor: palette.textPrimary,
+      displayColor: palette.textPrimary,
+      fontSizeDelta: _fontSizeDelta,
+    );
+
     return base.copyWith(
       extensions: [palette],
-      // 글자 크기를 키우려면 크기가 있어야 해서, 기본 글자 모양(크기 포함)에 테마 글자색 설정을 덮어 시작한다.
-      textTheme: GoogleFonts.barlowCondensedTextTheme(base.typography.englishLike.merge(base.textTheme)).apply(
-        bodyColor: palette.textPrimary,
-        displayColor: palette.textPrimary,
-        fontSizeDelta: _fontSizeDelta,
+      textTheme: textTheme,
+      // 툴팁: Material 3 기본(어두운 테마에서 흰 바탕)을 쓰지 않고 메뉴처럼 표면 색 + 테두리 + 본문 글자색.
+      tooltipTheme: TooltipThemeData(
+        decoration: ShapeDecoration(
+          color: palette.surface,
+          shape: BeveledRectangleBorder(
+            borderRadius: const BorderRadius.only(topRight: Radius.circular(_tooltipChamfer)),
+            side: BorderSide(color: palette.border),
+          ),
+        ),
+        textStyle: textTheme.bodySmall?.copyWith(color: palette.textPrimary),
       ),
       tabBarTheme: TabBarThemeData(
         indicator: const ShapeDecoration(color: AppColors.accent, shape: controlShape),
