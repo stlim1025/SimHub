@@ -192,6 +192,32 @@ void main() {
       expect(find.descendant(of: quali, matching: find.text('-')), findsNWidgets(3)); // 출발 · 변동 · 포인트
     });
 
+    testWidgets('SessionsPage_WideScreen_ShowsRecentRacesBesideTheTable', (t) async {
+      final repo = FakeSessionsRepository(sessions: [
+        sessionOf('r1', trackName: 'Spa', myPosition: 1, myPoints: 25, countryCode: 'BE'),
+        sessionOf('r2', trackName: 'Monza', myPosition: 3, myPoints: 15),
+        sessionOf('r3', trackName: 'Spa', myPosition: 8, myPoints: 4, countryCode: 'BE'),
+        sessionOf('q1', sessionType: 'Qualifying', sessionKind: 'Qualifying3', myPosition: 2),
+      ]);
+
+      await _pump(t, repo);
+      expect(find.byKey(const ValueKey('recent-races')), findsNothing);
+
+      await _pump(t, repo, size: const Size(1600, 1200));
+      final recent = find.byKey(const ValueKey('recent-races'));
+      expect(recent, findsOneWidget);
+      // 레이스 3경기(예선 제외): 우승 1 · 포디움 2 · 평균 P4.0 · 포인트 44.
+      expect(find.descendant(of: recent, matching: find.text('3경기')), findsOneWidget);
+      expect(find.descendant(of: recent, matching: find.text('P4.0')), findsOneWidget);
+      expect(find.descendant(of: recent, matching: find.text('44')), findsOneWidget);
+      expect(find.byKey(const ValueKey('recent-race-bars')), findsOneWidget);
+      // 트랙별 최고 순위: Spa P1(2경기)이 Monza P3보다 위.
+      final spa = find.byKey(const ValueKey('recent-race-track-Spa'));
+      expect(find.descendant(of: spa, matching: find.text('P1')), findsOneWidget);
+      expect(find.descendant(of: spa, matching: find.text('2경기')), findsOneWidget);
+      expect(t.getTopLeft(spa).dy, lessThan(t.getTopLeft(find.byKey(const ValueKey('recent-race-track-Monza'))).dy));
+    });
+
     testWidgets('SessionsPage_RaceBadgeIsEmphasized_QualifyingIsNot', (t) async {
       final repo = FakeSessionsRepository(sessions: [
         sessionOf('r', myPosition: 22),

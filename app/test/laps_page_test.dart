@@ -12,8 +12,10 @@ import 'package:simcenter_app/features/laps/presentation/laps_page.dart';
 import 'package:simcenter_app/features/laps/presentation/track_laps_page.dart';
 import 'package:simcenter_app/features/ranking/data/ranking_repository.dart';
 import 'package:simcenter_app/features/ranking/domain/ranking_models.dart';
+import 'package:simcenter_app/features/tracks/data/tracks_repository.dart';
 
 import 'support/fakes.dart';
+import 'support/setups_fakes.dart';
 
 const _emptyText = '아직 기록된 랩이 없습니다';
 const _trackPageSize = 15;
@@ -82,6 +84,8 @@ Future<GoRouter> _pump(
     overrides: [
       lapsRepositoryProvider.overrideWithValue(repo),
       rankingRepositoryProvider.overrideWithValue(FakeRankingRepository(tracks: masterTracks)),
+      // 넓은 화면의 오른쪽 카드 열(트랙 정보·내 기록)이 읽는 트랙 개요.
+      tracksRepositoryProvider.overrideWithValue(FakeTracksRepository(overviews: {'t1': trackOverviewOf()})),
     ],
     child: MaterialApp.router(theme: theme, routerConfig: router),
   ));
@@ -196,6 +200,28 @@ void main() {
       ]);
     });
 
+    testWidgets('넓은 화면이면 왼쪽 내 트랙 목록(최고 랩, 누르면 그 트랙으로)과 오른쪽 트랙 정보·내 기록 카드 열을 둔다', (t) async {
+      final repo = FakeLapsRepository(
+        tracks: [trackOf('t1', 'Jeddah', bestMs: 83452), trackOf('t2', 'Monaco', bestMs: null)],
+        laps: [lapOf('l1', 'Jeddah', 98448)],
+      );
+
+      await _pump(t, repo, initialLocation: trackPath);
+      expect(find.byKey(const ValueKey('track-rail')), findsNothing);
+      expect(find.byKey(const ValueKey('track-side-stats')), findsNothing);
+
+      final router = await _pump(t, repo, initialLocation: trackPath, size: const Size(1920, 1200));
+      final jeddah = find.byKey(const ValueKey('track-rail-t1'));
+      expect(find.descendant(of: jeddah, matching: find.text('1:23.452')), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const ValueKey('track-rail-t2')), matching: find.text('-')), findsOneWidget);
+      expect(find.byKey(const ValueKey('track-side-stats')), findsOneWidget);
+
+      await t.tap(find.byKey(const ValueKey('track-rail-t2')));
+      await t.pumpAndSettle();
+
+      expect(_location(router), '/laps/tracks/t2');
+    });
+
     testWidgets('넓은 화면 전체 폭이면 LAP(랩 번호)과 S1~S3(섹터 시간) 열을 더 보인다', (t) async {
       final repo = FakeLapsRepository(laps: [
         lapOf('l1', 'Jeddah', 98448, lapNumber: 7, sectors: const [
@@ -209,7 +235,8 @@ void main() {
         expect(find.text(header), findsNothing, reason: header);
       }
 
-      await _pump(t, repo, initialLocation: trackPath, size: const Size(1600, 1200));
+      // 1920 화면: 왼쪽 트랙 목록·오른쪽 카드 열을 빼고도 표 폭이 넓은 기준 이상이다.
+      await _pump(t, repo, initialLocation: trackPath, size: const Size(1920, 1200));
       for (final header in ['TEAM', 'LAP', 'TIME', 'S1', 'S2', 'S3', 'MODE', 'DATE']) {
         expect(find.text(header), findsOneWidget, reason: header);
       }

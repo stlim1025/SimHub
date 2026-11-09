@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/widgets/menu_items.dart';
+import '../../../core/layout/list_board.dart';
 import '../../../core/layout/page_padding.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/empty_state_card.dart';
@@ -11,6 +12,7 @@ import '../../../core/widgets/page_loading_bar.dart';
 import '../../../core/widgets/pagination_bar.dart';
 import '../application/sessions_providers.dart';
 import '../domain/session_display.dart';
+import 'recent_races_panel.dart';
 import 'sessions_table.dart';
 
 const String _sessionsPath = '/sessions';
@@ -94,24 +96,28 @@ class _SessionsPageState extends ConsumerState<SessionsPage> {
           ],
         ),
         const SizedBox(height: 16),
-        sessions.when(
-          loading: () => const PageLoadingBar(),
-          error: (e, _) => ErrorRetry(
-            error: e,
-            fallbackMessage: '세션 목록을 불러오지 못했어요.',
-            onRetry: () => ref.invalidate(sessionsProvider(_query)),
-          ),
-          data: (data) => data.total == 0
-              ? _EmptySessions(filtered: _filter != kSessionFilterAll)
-              : SessionsTable(
-                  items: data.items,
-                  footer: PaginationBar(
-                    page: data.page,
-                    pageSize: data.pageSize,
-                    total: data.total,
-                    onPageChanged: _changePage,
+        // 넓은 화면: 표 오른쪽에 최근 레이스 요약 카드 열(목록만 가운데 덩그러니 놓이지 않게).
+        ListBoard(
+          aside: const RecentRacesPanel(),
+          main: sessions.when(
+            loading: () => const PageLoadingBar(),
+            error: (e, _) => ErrorRetry(
+              error: e,
+              fallbackMessage: '세션 목록을 불러오지 못했어요.',
+              onRetry: () => ref.invalidate(sessionsProvider(_query)),
+            ),
+            data: (data) => data.total == 0
+                ? _EmptySessions(filtered: _filter != kSessionFilterAll)
+                : SessionsTable(
+                    items: data.items,
+                    footer: PaginationBar(
+                      page: data.page,
+                      pageSize: data.pageSize,
+                      total: data.total,
+                      onPageChanged: _changePage,
+                    ),
                   ),
-                ),
+          ),
         ),
       ],
     );

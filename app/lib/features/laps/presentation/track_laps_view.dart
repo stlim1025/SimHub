@@ -1,18 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../core/layout/list_board.dart';
 import '../../../core/layout/page_padding.dart';
+import '../../../core/util/lap_time.dart';
 import '../../../core/widgets/button_group.dart';
 import '../../../core/widgets/check_toggle.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/page_loading_bar.dart';
 import '../../../core/widgets/pagination_bar.dart';
+import '../../tracks/presentation/track_rail.dart';
+import '../../tracks/presentation/track_side_panel.dart';
 import '../application/laps_providers.dart';
+import '../domain/lap_display.dart';
 import '../domain/lap_models.dart';
 import 'empty_laps_card.dart';
 import 'laps_table.dart';
 import 'laps_track_picker.dart';
 
+const String _tracksTitle = 'Tracks';
 const String _validOnlyLabel = '유효 랩만';
 const String _noValidLapsText = '유효 랩이 없습니다';
 const double _sectionGap = 16;
@@ -92,30 +99,40 @@ class _TrackLapsViewState extends ConsumerState<TrackLapsView> {
           ),
         ),
         const SizedBox(height: _sectionGap),
-        Wrap(
-          spacing: _controlSpacing,
-          runSpacing: _controlRunSpacing,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            ButtonGroup<String>(options: _sortOptions, selected: _sort, onSelected: _changeSort),
-            CheckToggle(label: _validOnlyLabel, value: _validOnly, onChanged: _changeValidOnly),
-          ],
-        ),
-        // 정렬·필터·페이지를 바꾸는 동안에는 직전 표를 그대로 두고 얇은 진행 막대만 보인다(표가 비어 튀지 않게, 막대는 본문 맨 위).
-        SizedBox(height: _progressHeight, child: shown != null && laps.isLoading ? const PageLoadingBar() : null),
-        const SizedBox(height: _sectionGap - _progressHeight),
-        if (shown != null)
-          _lapsBody(shown)
-        else
-          laps.when(
-            loading: () => const PageLoadingBar(),
-            error: (e, _) => ErrorRetry(
-              error: e,
-              fallbackMessage: '랩 기록을 불러오지 못했어요.',
-              onRetry: () => ref.invalidate(trackLapsProvider(_query)),
-            ),
-            data: _lapsBody,
+        // 넓은 화면: 왼쪽에 내 트랙 목록(바로 옮겨 가기), 오른쪽에 트랙 정보·내 기록 카드 열.
+        ListBoard(
+          rail: _MyTracksRail(trackId: widget.trackId),
+          aside: TrackSidePanel(trackId: widget.trackId),
+          main: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Wrap(
+                spacing: _controlSpacing,
+                runSpacing: _controlRunSpacing,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  ButtonGroup<String>(options: _sortOptions, selected: _sort, onSelected: _changeSort),
+                  CheckToggle(label: _validOnlyLabel, value: _validOnly, onChanged: _changeValidOnly),
+                ],
+              ),
+              // 정렬·필터·페이지를 바꾸는 동안에는 직전 표를 그대로 두고 얇은 진행 막대만 보인다(표가 비어 튀지 않게, 막대는 본문 맨 위).
+              SizedBox(height: _progressHeight, child: shown != null && laps.isLoading ? const PageLoadingBar() : null),
+              const SizedBox(height: _sectionGap - _progressHeight),
+              if (shown != null)
+                _lapsBody(shown)
+              else
+                laps.when(
+                  loading: () => const PageLoadingBar(),
+                  error: (e, _) => ErrorRetry(
+                    error: e,
+                    fallbackMessage: '랩 기록을 불러오지 못했어요.',
+                    onRetry: () => ref.invalidate(trackLapsProvider(_query)),
+                  ),
+                  data: _lapsBody,
+                ),
+            ],
           ),
+        ),
       ],
     );
   }
@@ -131,4 +148,33 @@ class _TrackLapsViewState extends ConsumerState<TrackLapsView> {
             onPageChanged: _changePage,
           ),
         );
+}
+
+/// 랩 목록 보드 왼쪽: 내가 달린 트랙(마지막으로 달린 순) — 국기 · 이름 · 유효 최고 랩. 누르면 그 트랙 랩 목록으로.
+class _MyTracksRail extends ConsumerWidget {
+  const _MyTracksRail({required this.trackId});
+
+  final String trackId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tracks = ref.watch(myTracksProvider).valueOrNull;
+    if (tracks == null || tracks.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return TrackRail(
+      title: _tracksTitle,
+      selectedId: trackId,
+      onSelected: (id) => context.go(trackLapsLocation(id)),
+      items: [
+        for (final t in tracks)
+          (
+            id: t.trackId,
+            name: t.trackName,
+            countryCode: t.countryCode,
+            detail: t.bestValidLapTimeMs == null ? kLapNoValueText : formatLapTime(t.bestValidLapTimeMs!),
+          ),
+      ],
+    );
+  }
 }

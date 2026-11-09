@@ -8,8 +8,10 @@ import 'package:simcenter_app/core/widgets/track_picker.dart';
 import 'package:simcenter_app/features/ranking/data/ranking_repository.dart';
 import 'package:simcenter_app/features/ranking/domain/ranking_models.dart';
 import 'package:simcenter_app/features/ranking/presentation/leaderboard_page.dart';
+import 'package:simcenter_app/features/tracks/data/tracks_repository.dart';
 
 import 'support/fakes.dart';
+import 'support/setups_fakes.dart';
 
 const _monaco = Track(trackId: 't1', gameCode: 'F1_25', name: 'Monaco', countryCode: 'MC', displayOrder: 8);
 const _silverstone = Track(trackId: 't2', gameCode: 'F1_25', name: 'Silverstone', countryCode: 'GB', displayOrder: 12);
@@ -51,6 +53,8 @@ Future<_Harness> _pumpLeaderboard(
     overrides: [
       rankingRepositoryProvider.overrideWithValue(repo),
       rankingHubClientProvider.overrideWithValue(hub),
+      // 넓은 화면의 오른쪽 카드 열(트랙 정보·내 기록)이 읽는 트랙 개요.
+      tracksRepositoryProvider.overrideWithValue(FakeTracksRepository(overviews: {'t1': trackOverviewOf()})),
     ],
     child: MaterialApp.router(theme: ThemeData(platform: platform), routerConfig: router),
   ));
@@ -130,6 +134,33 @@ void main() {
     expect(find.text('실시간 주인공'), findsOneWidget);
     expect(find.text('1:19.000'), findsOneWidget);
     expect(h.repo.requests, hasLength(1));
+  });
+
+  testWidgets('TOP10 표: 1위와의 차이와 기록한 날을 보인다', (t) async {
+    await _pumpLeaderboard(
+      t,
+      entriesFor: (trackId, period, _) => [entryOf(1, '선두', 80000), entryOf(2, '추격자', 80456)],
+    );
+
+    for (final header in ['#', 'DRIVER', 'LAP TIME', 'GAP', 'DATE']) {
+      expect(find.text(header), findsOneWidget, reason: header);
+    }
+    expect(find.descendant(of: find.byKey(const ValueKey('ranking-row-2')), matching: find.text('+0.456')), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const ValueKey('ranking-row-1')), matching: find.text('-')), findsOneWidget);
+  });
+
+  testWidgets('넓은 화면이면 왼쪽 트랙 목록(누르면 그 트랙으로)과 오른쪽 트랙 정보·내 기록 카드 열을 둔다', (t) async {
+    final h = await _pumpLeaderboard(t, size: const Size(1920, 1200));
+
+    expect(find.byKey(const ValueKey('track-rail')), findsOneWidget);
+    expect(find.byKey(const ValueKey('track-side-stats')), findsOneWidget);
+    expect(find.text('My stats'), findsOneWidget);
+
+    await t.tap(find.byKey(const ValueKey('track-rail-t2')));
+    await t.pumpAndSettle();
+
+    expect(h.location, '/leaderboard?trackId=t2');
+    expect(find.text('t2-monthly-1위'), findsOneWidget);
   });
 
   testWidgets('기록이 없으면 안내 문구를 보여준다', (t) async {

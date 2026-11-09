@@ -23,6 +23,7 @@ import 'package:simcenter_app/features/profile/data/profile_repository.dart';
 import 'package:simcenter_app/features/profile/presentation/settings_page.dart';
 import 'package:simcenter_app/features/ranking/data/ranking_repository.dart';
 import 'package:simcenter_app/features/ranking/domain/ranking_models.dart';
+import 'package:simcenter_app/features/ranking/presentation/leaderboard_page.dart';
 import 'package:simcenter_app/features/seasons/data/seasons_repository.dart';
 import 'package:simcenter_app/features/seasons/presentation/season_detail_page.dart';
 import 'package:simcenter_app/features/seasons/presentation/seasons_page.dart';
@@ -130,7 +131,8 @@ void main() {
     await t.pumpAndSettle();
     expect(_location(router), '/leaderboard?trackId=t1');
     expect(_menu('/'), findsOneWidget); // 셸의 위쪽 메뉴가 그대로 있다.
-    expect(find.text('Monaco'), findsOneWidget);
+    expect(find.byType(LeaderboardPage), findsOneWidget);
+    expect(find.text('Monaco'), findsWidgets); // 트랙 메뉴 + 넓은 화면의 트랙 목록
 
     router.go('/laps');
     await t.pumpAndSettle();
@@ -146,7 +148,8 @@ void main() {
 
     expect(_location(router), '/leaderboard?trackId=t1');
     expect(_menu('/'), findsOneWidget); // 셸 안의 Leaderboard로 열린다.
-    expect(find.text('Monaco'), findsOneWidget);
+    expect(find.byType(LeaderboardPage), findsOneWidget);
+    expect(find.text('Monaco'), findsWidgets); // 트랙 메뉴 + 넓은 화면의 트랙 목록
   });
 
   testWidgets('/telemetry-app은 셸 안에서 Telemetry App 화면을 연다', (t) async {
@@ -178,13 +181,14 @@ void main() {
     await t.pumpAndSettle();
     expect(_location(router), '/sessions');
     expect(find.byType(SessionsPage), findsOneWidget);
-    expect(find.text('Spa'), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const ValueKey('session-row-s1')), matching: find.text('Spa')), findsOneWidget);
     expect(_menu('/'), findsOneWidget); // 셸의 위쪽 메뉴가 그대로 있다.
-    expect(repo.requests.last.sessionType, isNull);
+    // 표는 전체 세션을 읽는다(넓은 화면의 최근 레이스 카드는 레이스만 따로 읽는다).
+    expect(repo.requests.map((r) => r.sessionType), contains(isNull));
 
     router.go('/sessions?type=qualifying');
     await t.pumpAndSettle();
-    expect(repo.requests.last.sessionType, 'Qualifying');
+    expect(repo.requests.map((r) => r.sessionType), contains('Qualifying'));
   });
 
   testWidgets('/sessions/:sessionId는 셸 안에서 세션 결과 화면을 연다', (t) async {
