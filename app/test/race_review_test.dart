@@ -263,6 +263,34 @@ void main() {
     expect(axisTicks(1, 5), [1, 2, 3, 4, 5]);
   });
 
+  testWidgets('카드: 넓으면 항목 탭 대신 항목마다 카드(제목 + 평가 + 그림)를 두 열 보드로 모두 펼친다', (tester) async {
+    tester.view.physicalSize = const Size(1400, 3200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: SingleChildScrollView(child: RaceReviewCard(review: review, analysis: RaceAnalysis.fromJson(const {}))))));
+
+    expect(tester.takeException(), isNull);
+    Finder card(String title) => find.byKey(ValueKey('race-review-card-$title'));
+    for (final title in [kPaceSectionTitle, kStrategySectionTitle, kTyreSectionTitle, kBatterySectionTitle]) {
+      expect(card(title), findsOneWidget, reason: title);
+      expect(find.byKey(ValueKey('race-review-tab-$title')), findsNothing, reason: title);
+      expect(find.descendant(of: card(title), matching: find.byKey(ValueKey('race-review-grade-$title'))), findsOneWidget);
+    }
+    // 두 열: 페이스 · 전략이 한 줄, 타이어 · 배터리가 다음 줄(왼쪽 끝을 맞춘다).
+    final pace = tester.getTopLeft(card(kPaceSectionTitle));
+    final strategy = tester.getTopLeft(card(kStrategySectionTitle));
+    final tyre = tester.getTopLeft(card(kTyreSectionTitle));
+    expect(strategy.dy, pace.dy);
+    expect(strategy.dx, greaterThan(pace.dx));
+    expect(tyre.dy, greaterThan(pace.dy));
+    expect(tyre.dx, pace.dx);
+    // 모든 항목의 그림이 한 번에 보이고, 접는 단추는 없다.
+    expect(find.textContaining('2위 /', findRichText: true), findsOneWidget);
+    expect(find.text(_gridLabelText), findsOneWidget);
+    expect(find.byKey(const ValueKey('race-review-toggle')), findsNothing);
+    expect(find.byKey(const ValueKey('race-review')), findsOneWidget);
+  });
+
   for (final width in [1100.0, 360.0]) {
     testWidgets('카드: 항목 탭마다 평가, 고른 항목의 그림을 넘침 없이 그린다 (폭 $width)', (tester) async {
       tester.view.physicalSize = Size(width, 2400);

@@ -196,6 +196,29 @@ void main() {
       ]);
     });
 
+    testWidgets('넓은 화면 전체 폭이면 LAP(랩 번호)과 S1~S3(섹터 시간) 열을 더 보인다', (t) async {
+      final repo = FakeLapsRepository(laps: [
+        lapOf('l1', 'Jeddah', 98448, lapNumber: 7, sectors: const [
+          LapSector(sectorNumber: 1, sectorTimeMs: 30123),
+          LapSector(sectorNumber: 2, sectorTimeMs: 35456),
+        ]),
+      ]);
+
+      await _pump(t, repo, initialLocation: trackPath);
+      for (final header in ['LAP', 'S1', 'S2', 'S3']) {
+        expect(find.text(header), findsNothing, reason: header);
+      }
+
+      await _pump(t, repo, initialLocation: trackPath, size: const Size(1600, 1200));
+      for (final header in ['TEAM', 'LAP', 'TIME', 'S1', 'S2', 'S3', 'MODE', 'DATE']) {
+        expect(find.text(header), findsOneWidget, reason: header);
+      }
+      final row = find.byKey(const ValueKey('lap-row-l1'));
+      for (final text in ['7', '30.123', '35.456']) {
+        expect(find.descendant(of: row, matching: find.text(text)), findsOneWidget, reason: text);
+      }
+    });
+
     testWidgets('표 열은 TEAM · TIME · MODE · 날씨 · DATE이고 행은 팀 점·이름, 랩타임, 모드, 날씨 아이콘, 날짜다', (t) async {
       final repo = FakeLapsRepository(laps: [
         lapOf('l1', 'Jeddah', 98448, team: _ferrari, gameMode: 'DriverCareer', weather: 'Clear'),

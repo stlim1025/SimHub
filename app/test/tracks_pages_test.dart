@@ -289,6 +289,18 @@ void main() {
       expect(find.text('1:19.813'), findsOneWidget);
     });
 
+    testWidgets('넓은 화면이면 Best Lap Times와 Track Details를 나란히 둔다(보통 폭에서는 위아래)', (t) async {
+      final tracksRepo = FakeTracksRepository(overviews: {'au': trackOverviewOf()});
+      Offset topLeftOf(String title) => t.getTopLeft(find.text(title));
+
+      await _pump(t, '/tracks/au', tracksRepo: tracksRepo);
+      expect(topLeftOf('Track Details').dy, greaterThan(topLeftOf('Best Lap Times').dy));
+
+      await _pump(t, '/tracks/au', tracksRepo: tracksRepo, size: const Size(1600, 2400));
+      expect(topLeftOf('Track Details').dy, topLeftOf('Best Lap Times').dy);
+      expect(topLeftOf('Track Details').dx, greaterThan(topLeftOf('Best Lap Times').dx));
+    });
+
     testWidgets('mapLapId가 없으면 지도를 그리지 않는다', (t) async {
       final lapRepo = FakeLapDetailRepository(traces: {'l1': _positionedTrace});
       await _pump(

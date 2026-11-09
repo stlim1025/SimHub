@@ -707,6 +707,26 @@ void main() {
       }
     });
 
+    testWidgets('SeasonDetail_WideScreen_PutsStandingsSideBySide_AndDriversBesideTheCalendar', (t) async {
+      final repo = FakeSeasonsRepository(details: {'se1': _detail()});
+
+      // Standings: 넓으면 Drivers · Constructors 표를 나란히(같은 높이에서 시작, Constructors가 오른쪽).
+      await _pumpPage(t, repo, initialLocation: '/seasons/se1?tab=standings', size: const Size(1600, 2400));
+      final drivers = t.getTopLeft(find.text('Drivers'));
+      final constructors = t.getTopLeft(find.text('Constructors'));
+      expect(constructors.dy, drivers.dy);
+      expect(constructors.dx, greaterThan(drivers.dx));
+
+      // Season: 넓으면 캘린더 오른쪽에 드라이버 순위 표(Podiums 머리글은 순위 표에만 있다).
+      await _pumpPage(t, repo, size: const Size(1600, 2400));
+      expect(find.text('Podiums'), findsOneWidget);
+      expect(t.getTopLeft(find.text('Podiums')).dx, greaterThan(t.getTopLeft(find.text('GRAND PRIX')).dx));
+
+      // 보통 폭에서는 캘린더만.
+      await _pumpPage(t, repo, size: const Size(1280, 2400));
+      expect(find.text('Podiums'), findsNothing);
+    });
+
     testWidgets('SeasonDetail_StandingsTab_ShowsDriversConstructorsAndNote', (t) async {
       final repo = FakeSeasonsRepository(details: {'se1': _detail()});
       await _pumpPage(t, repo, initialLocation: '/seasons/se1?tab=standings');

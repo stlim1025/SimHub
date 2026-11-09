@@ -11,8 +11,14 @@ const String _note = '기록된 세션 기준입니다. 라운드 번호는 기�
 const double _rowHeight = 44;
 const double _driverMaxWidth = 220;
 
+/// 이 폭 이상이면(넓은 화면) Drivers · Constructors 표를 나란히 둔다. 두 열의 폭 비율·간격.
+const double _sideBySideWidth = 1100;
+const int _driversFlex = 7;
+const int _constructorsFlex = 5;
+const double _columnGap = 20;
+
 /// Standings 탭(docs/12 §8.3): Drivers 표와 Constructors 표 + 집계 기준 안내.
-/// 좁은 화면에서는 표를 가로로 스크롤한다.
+/// 넓으면([_sideBySideWidth] 이상) 두 표를 나란히, 좁으면 위아래로. 좁은 화면에서는 표를 가로로 스크롤한다.
 class SeasonStandingsTab extends StatelessWidget {
   const SeasonStandingsTab({super.key, required this.standings});
 
@@ -21,17 +27,41 @@ class SeasonStandingsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
-    return Column(
+    final drivers = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const _SectionTitle('Drivers'),
         const SizedBox(height: 8),
-        _DriversTable(drivers: standings.drivers),
-        const SizedBox(height: 24),
+        SeasonDriversTable(drivers: standings.drivers),
+      ],
+    );
+    final constructors = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
         const _SectionTitle('Constructors'),
         const SizedBox(height: 8),
         _ConstructorsTable(constructors: standings.constructors),
+      ],
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        LayoutBuilder(
+          builder: (context, constraints) => constraints.maxWidth >= _sideBySideWidth
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(flex: _driversFlex, child: drivers),
+                    const SizedBox(width: _columnGap),
+                    Expanded(flex: _constructorsFlex, child: constructors),
+                  ],
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [drivers, const SizedBox(height: 24), constructors],
+                ),
+        ),
         const SizedBox(height: 16),
         Text(_note, style: theme.textTheme.bodySmall?.copyWith(color: context.palette.textMuted)),
       ],
@@ -82,8 +112,9 @@ class _StandingsTable extends StatelessWidget {
   }
 }
 
-class _DriversTable extends StatelessWidget {
-  const _DriversTable({required this.drivers});
+/// 드라이버 순위 표(Pos · Driver · Team · Wins · Podiums · Pts, 내 차 줄 강조). Standings 탭과 넓은 화면 Season 탭에서 쓴다.
+class SeasonDriversTable extends StatelessWidget {
+  const SeasonDriversTable({super.key, required this.drivers});
 
   final List<DriverStanding> drivers;
 

@@ -158,6 +158,40 @@ void main() {
       expect(_button(t, '다음').onPressed, isNull);
     });
 
+    testWidgets('SessionsPage_WideTable_AddsGridChangeBestLapAndPoints', (t) async {
+      final repo = FakeSessionsRepository(sessions: [
+        sessionOf('r', myPosition: 4, myGridPosition: 9, myBestLapTimeMs: 105321, myPoints: 12, myTeam: _ferrari),
+        sessionOf(
+          'q',
+          sessionType: 'Qualifying',
+          sessionKind: 'Qualifying3',
+          myPosition: 8,
+          myGridPosition: null,
+          myPoints: 0,
+          myTeam: _ferrari,
+        ),
+      ]);
+
+      // 보통 폭(표 1000 미만)에서는 네 열만.
+      await _pump(t, repo);
+      for (final header in ['GRID', 'CHANGE', 'BEST LAP', 'PTS']) {
+        expect(find.text(header), findsNothing, reason: header);
+      }
+
+      // 넓은 화면 전체 폭이면 출발 순위 · 순위 변동(레이스만) · 최고 랩 · 포인트(레이스만)를 더 보인다.
+      await _pump(t, repo, size: const Size(1600, 1200));
+      for (final header in ['TRACK', 'TEAM', 'GRID', 'RESULT', 'CHANGE', 'BEST LAP', 'PTS', 'TIME']) {
+        expect(find.text(header), findsOneWidget, reason: header);
+      }
+      final race = find.byKey(const ValueKey('session-row-r'));
+      expect(find.descendant(of: race, matching: find.text('P9')), findsOneWidget);
+      expect(find.descendant(of: race, matching: find.text('5')), findsOneWidget); // P9 → P4
+      expect(find.descendant(of: race, matching: find.text('1:45.321')), findsOneWidget);
+      expect(find.descendant(of: race, matching: find.text('12')), findsOneWidget);
+      final quali = find.byKey(const ValueKey('session-row-q'));
+      expect(find.descendant(of: quali, matching: find.text('-')), findsNWidgets(3)); // 출발 · 변동 · 포인트
+    });
+
     testWidgets('SessionsPage_RaceBadgeIsEmphasized_QualifyingIsNot', (t) async {
       final repo = FakeSessionsRepository(sessions: [
         sessionOf('r', myPosition: 22),

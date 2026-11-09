@@ -87,6 +87,9 @@ const double kTrackLinksRowWidth = 560;
 /// 콘텐츠 폭이 이 값 이상이면 기록 요약과 Time Trial 상위 카드를 나란히.
 const double kTrackStatsRowWidth = 900;
 
+/// 콘텐츠 폭이 이 값 이상이면(넓은 화면) Best Lap Times와 Track Details(트랙 지도)를 나란히.
+const double kTrackDetailsRowWidth = 1400;
+
 /// 트랙 개요(`/tracks/:trackId`, F1Laps `F1 26 Australia` 모양): 이동 경로 + 국기·제목·서킷 이름,
 /// 바로가기(Top Setups · Leaderboard), `{트랙} stats`(내 기록 요약 + Fastest Time Trial laps), Theoretical Best(이론상 최고 랩), Best Lap Times(내 빠른 랩 10개),
 /// Track Details(+ [TrackOverview.mapLapId] 랩의 트랙 지도).
@@ -196,9 +199,13 @@ class _OverviewBody extends StatelessWidget {
         const SizedBox(height: _sectionGap),
         TheoreticalBestCard(trackId: track.trackId, trackName: track.name),
         const SizedBox(height: _sectionGap),
-        _BestLapsCard(laps: overview.myBestLaps),
-        const SizedBox(height: _sectionGap),
-        _TrackDetailsCard(track: track, mapLapId: overview.mapLapId),
+        _Responsive(
+          minRowWidth: kTrackDetailsRowWidth,
+          children: [
+            _BestLapsCard(laps: overview.myBestLaps),
+            _TrackDetailsCard(track: track, mapLapId: overview.mapLapId),
+          ],
+        ),
       ],
     );
   }

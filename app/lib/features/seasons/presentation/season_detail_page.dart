@@ -21,6 +21,12 @@ const String _notFoundBackLabel = 'Seasons';
 
 const int _httpNotFound = 404;
 
+/// Season 탭에서 캘린더 옆에 드라이버 순위 표를 둘 최소 폭, 두 열의 폭 비율·간격.
+const double _calendarSideWidth = 1400;
+const int _calendarFlex = 3;
+const int _standingsFlex = 2;
+const double _sideGap = 20;
+
 /// 탭 값 → 탭 글자(`kSeasonTabs`와 같은 순서로 그린다).
 const Map<String, String> _tabLabels = {
   kSeasonTabSeason: 'Season',
@@ -126,6 +132,8 @@ class _SeasonDetailPageState extends ConsumerState<SeasonDetailPage> with Single
 }
 
 /// 선택된 탭의 내용. 세 탭이 같은 [detail] 스냅샷을 쓴다.
+/// Season 탭은 넓으면([_calendarSideWidth] 이상) 캘린더 오른쪽에 드라이버 순위 표를 함께 둔다(넓은 화면에서 캘린더 표만
+/// 전체 폭으로 늘어나 칸 사이가 비지 않게).
 class _TabContent extends StatelessWidget {
   const _TabContent({required this.tab, required this.detail});
 
@@ -137,7 +145,23 @@ class _TabContent extends StatelessWidget {
     return switch (tab) {
       kSeasonTabResults => SeasonResultsTab(rounds: detail.rounds, drivers: detail.standings.drivers),
       kSeasonTabStandings => SeasonStandingsTab(standings: detail.standings),
-      _ => SeasonCalendarTab(calendar: detail.calendar, totalPoints: detail.season.myPoints),
+      _ => LayoutBuilder(
+          builder: (context, constraints) {
+            final calendar = SeasonCalendarTab(calendar: detail.calendar, totalPoints: detail.season.myPoints);
+            final drivers = detail.standings.drivers;
+            if (constraints.maxWidth < _calendarSideWidth || drivers.isEmpty) {
+              return calendar;
+            }
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(flex: _calendarFlex, child: calendar),
+                const SizedBox(width: _sideGap),
+                Expanded(flex: _standingsFlex, child: SeasonDriversTable(drivers: drivers)),
+              ],
+            );
+          },
+        ),
     };
   }
 }

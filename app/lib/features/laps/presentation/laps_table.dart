@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/compact_table.dart';
 import '../../lap_detail/domain/lap_detail_display.dart';
+import '../../sessions/domain/session_detail_display.dart' show formatSectorTime;
 import '../application/fresh_laps.dart';
 import '../domain/lap_display.dart';
 import '../domain/lap_models.dart';
@@ -13,10 +14,35 @@ import 'lap_cells.dart';
 const double _weatherColumnWidth = 40;
 const String _weatherHeaderTooltip = '날씨';
 
+/// 넓은 표에만 보이는 열 폭: 랩 번호, 섹터 시간.
+const double _lapNumberColumnWidth = 64;
+const double _sectorColumnWidth = 96;
+
+/// 섹터 열 수(S1~S3).
+const int _sectorCount = 3;
+
+/// [lap]의 [number]번 섹터 시간(없으면 `-`).
+String _sectorText(Lap lap, int number) =>
+    formatSectorTime(lap.sectors.where((s) => s.sectorNumber == number).firstOrNull?.sectorTimeMs);
+
 /// Laps 표의 열(docs/15 §2.1): TEAM · TIME · MODE · 날씨 · DATE. 600px 미만이면 MODE·날씨를 숨긴다.
+/// 표 폭이 [kLapTableWideWidth] 이상이면(넓은 화면 전체 폭) LAP(랩 번호)과 S1~S3(섹터 시간) 열을 더 보인다.
 final List<CompactColumn<Lap>> _columns = [
   CompactColumn(label: 'Team', flex: 3, cell: (lap) => LapTeamCell(lap: lap)),
+  CompactColumn(
+    label: 'Lap',
+    width: _lapNumberColumnWidth,
+    hideBelowWidth: kLapTableWideWidth,
+    cell: (lap) => LapTextCell(lap.lapNumber == null ? kLapNoValueText : '${lap.lapNumber}'),
+  ),
   CompactColumn(label: 'Time', flex: 3, cell: (lap) => LapTimeCell(lapTimeMs: lap.lapTimeMs, isValid: lap.isValid)),
+  for (var number = 1; number <= _sectorCount; number++)
+    CompactColumn(
+      label: 'S$number',
+      width: _sectorColumnWidth,
+      hideBelowWidth: kLapTableWideWidth,
+      cell: (lap) => LapTextCell(_sectorText(lap, number)),
+    ),
   CompactColumn(
     label: 'Mode',
     flex: 3,

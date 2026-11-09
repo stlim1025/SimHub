@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/layout/layout_constants.dart';
 import '../../../core/layout/page_padding.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/util/lap_time.dart';
@@ -131,10 +132,12 @@ class _SetupListBody extends StatelessWidget {
         actionPath: setupsLocation(condition: list.condition),
       );
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        CompactTable<SetupListItem>(
+    // 열이 넷뿐이라 넓은 화면 전체 폭으로 늘리면 칸 사이가 비므로, 리더보드처럼 읽기 좋은 폭까지만 쓴다(위 토글과 같이 왼쪽 정렬).
+    return Align(
+      alignment: Alignment.topLeft,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: kReadableContentMaxWidth),
+        child: CompactTable<SetupListItem>(
           rows: list.items,
           rowKey: (item) => ValueKey('setup-row-${item.id}'),
           onRowTap: (item) => context.go(setupDetailLocation(trackId, item.id)),
@@ -154,7 +157,7 @@ class _SetupListBody extends StatelessWidget {
             ),
           ],
         ),
-      ],
+      ),
     );
   }
 }

@@ -8,6 +8,9 @@ const int kSessionsPageSize = 15;
 /// 세션 결과 표가 Grid·Tyres·Pits·Pen 열을 숨기는 콘텐츠 폭(논리 px, docs/12 §8.4).
 const double kSessionTableCompactWidth = 600;
 
+/// 세션 목록 표가 이 폭 이상이면(넓은 화면 전체 폭) 출발 순위·순위 변동·최고 랩·포인트 열을 더 보인다.
+const double kSessionTableWideWidth = 1000;
+
 /// 값이 없는 칸의 자리표시.
 const String kNoValueText = '-';
 

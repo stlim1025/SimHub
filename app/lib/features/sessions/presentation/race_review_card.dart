@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../core/layout/equal_height.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/util/lap_time.dart';
@@ -52,6 +53,11 @@ const Map<ReviewGrade, String> _gradeText = {
 /// 넓으면 고른 항목의 그림과 짚을 것을 나란히(그림 쪽을 더 넓게 — 표·그래프 칸이 눌리지 않게).
 const double _twoColumnWidth = 760;
 const double _sideBySideGap = 24;
+
+/// 카드가 받은 폭이 이 이상이면(넓은 화면) 항목 탭 대신 항목마다 카드를 두 열 보드로 모두 펼친다. 카드 사이 간격.
+const double _boardMinWidth = 1200;
+const double _boardGap = 20;
+const int _boardColumns = 2;
 const int _visualFlex = 3;
 const int _notesFlex = 2;
 const double _blockGap = 16;
@@ -191,7 +197,8 @@ Color _gradeColor(ReviewGrade grade, AppPalette palette) => switch (grade) {
 
 /// 레이스 총평 카드: 한 줄 총평, 항목 탭(페이스·전략·타이어·배터리 — 탭마다 평가), 고른 항목의 그림 + 짚을 것.
 /// 항목마다 심층 분석([analysis])의 줄과 그림(코너별 타이어 부담·구간별 배터리·대안 전략·랩별 페이스 기준)을 함께 그린다.
-/// 제목 줄을 누르면 접고 편다(처음엔 펼침).
+/// 제목 줄을 누르면 접고 편다(처음엔 펼침). 받은 폭이 [_boardMinWidth] 이상이면 탭 없이 총평 카드 아래에 항목 카드(제목 + 평가 +
+/// 그림 + 짚을 것)를 두 열 보드로 모두 펼친다(결과 탭 보드와 같은 카드 격자).
 class RaceReviewCard extends StatefulWidget {
   const RaceReviewCard({super.key, required this.review, required this.analysis, this.officialCorners, this.setup});
 
@@ -224,6 +231,26 @@ class _RaceReviewCardState extends State<RaceReviewCard> {
     final sections = raceReviewSectionsWithAnalysis(review, analysis, widget.officialCorners, widget.setup);
     final summary = raceReviewSummary(sections);
     final current = sections.where((s) => s.title == _selected).firstOrNull ?? sections.firstOrNull;
+    return LayoutBuilder(
+      builder: (context, constraints) => constraints.maxWidth >= _boardMinWidth && sections.isNotEmpty
+          ? _ReviewBoard(
+              summary: summary,
+              cards: [
+                for (final s in sections) (title: s.title, section: s.section, visual: _visualFor(s.title, analysis, labels)),
+              ],
+            )
+          : _tabbed(theme, sections, summary, current, analysis, labels),
+    );
+  }
+
+  Widget _tabbed(
+    ThemeData theme,
+    List<({String title, ReviewSection section})> sections,
+    String? summary,
+    ({String title, ReviewSection section})? current,
+    RaceAnalysis analysis,
+    List<String> labels,
+  ) {
     return SessionCard(
       key: const ValueKey('race-review'),
       title: _title,
@@ -347,7 +374,6 @@ class _SectionTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final color = _gradeColor(grade, palette);
     return Semantics(
       button: true,
       selected: selected,
@@ -376,23 +402,79 @@ class _SectionTab extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: _tabGap),
-                Container(
-                  padding: _pillPadding,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: _pillAlpha),
-                    borderRadius: BorderRadius.circular(_pillRadius),
-                  ),
-                  child: Text(
-                    _gradeText[grade]!,
-                    key: ValueKey('race-review-grade-$title'),
-                    style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: _pillFontSize),
-                  ),
-                ),
+                _GradePill(title: title, grade: grade),
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// 평가 알약(좋음·보통·아쉬움, 평가 색 바탕).
+class _GradePill extends StatelessWidget {
+  const _GradePill({required this.title, required this.grade});
+
+  final String title;
+  final ReviewGrade grade;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _gradeColor(grade, context.palette);
+    return Container(
+      padding: _pillPadding,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: _pillAlpha),
+        borderRadius: BorderRadius.circular(_pillRadius),
+      ),
+      child: Text(
+        _gradeText[grade]!,
+        key: ValueKey('race-review-grade-$title'),
+        style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: _pillFontSize),
+      ),
+    );
+  }
+}
+
+/// 넓은 화면의 레이스 리뷰 보드: 총평 카드(있으면) 아래에 항목 카드를 [_boardColumns]열 줄마다 같은 높이로.
+/// 항목 수가 홀수면 마지막 카드가 한 줄을 다 쓴다.
+class _ReviewBoard extends StatelessWidget {
+  const _ReviewBoard({required this.summary, required this.cards});
+
+  final String? summary;
+  final List<({String title, ReviewSection section, Widget? visual})> cards;
+
+  @override
+  Widget build(BuildContext context) {
+    final summary = this.summary;
+    return Column(
+      key: const ValueKey('race-review'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (summary != null) ...[
+          SessionCard(
+            title: _title,
+            child: Text(summary, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+          ),
+          const SizedBox(height: _boardGap),
+        ],
+        for (var i = 0; i < cards.length; i += _boardColumns) ...[
+          if (i > 0) const SizedBox(height: _boardGap),
+          EqualHeightRow(
+            gap: _boardGap,
+            children: [
+              for (final card in cards.skip(i).take(_boardColumns))
+                SessionCard(
+                  key: ValueKey('race-review-card-${card.title}'),
+                  title: card.title,
+                  trailing: _GradePill(title: card.title, grade: card.section.grade),
+                  child: _SectionBody(section: card.section, visual: card.visual),
+                ),
+            ],
+          ),
+        ],
+      ],
     );
   }
 }

@@ -3,6 +3,9 @@ import 'package:intl/intl.dart';
 /// Laps 표가 MODE·날씨 열을 숨기는 콘텐츠 폭(논리 px, docs/15 §2.1). 세션 결과 표와 같은 기준이다.
 const double kLapTableCompactWidth = 600;
 
+/// Laps 표가 이 폭 이상이면(넓은 화면 전체 폭) 랩 번호·섹터 1~3 열을 더 보인다.
+const double kLapTableWideWidth = 1000;
+
 /// 값이 없는 칸의 자리표시.
 const String kLapNoValueText = '-';
 
