@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:flutter/services.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/button_group.dart';
+import '../../../core/widgets/space_play_pause.dart';
 import '../../auth/domain/user_preferences.dart';
 import '../../laps/domain/lap_models.dart';
 import '../../tracks/domain/track_sample_geometry.dart';
@@ -161,9 +161,6 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
   /// 재생 경과 시간(ms).
   final ValueNotifier<double> _time = ValueNotifier<double>(0);
   late final Ticker _ticker = createTicker(_onTick);
-
-  /// 스페이스로 재생·일시정지하려고 리플레이(버튼·막대 포함)가 받는 키보드 포커스.
-  final FocusNode _focusNode = FocusNode(debugLabel: 'ghost-replay');
   Duration _lastTick = Duration.zero;
   double _speed = _defaultSpeed;
 
@@ -224,7 +221,6 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
     widget.seek?.removeListener(_onExternalSeek);
     _ticker.dispose();
     _time.dispose();
-    _focusNode.dispose();
     super.dispose();
   }
 
@@ -299,30 +295,14 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
 
   void _restart() => _scrub(0);
 
-  /// 스페이스 = 재생·일시정지(리플레이 안 버튼·막대에 포커스가 있어도).
-  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent || event.logicalKey != LogicalKeyboardKey.space) {
-      return KeyEventResult.ignored;
-    }
-    _togglePlay();
-    return KeyEventResult.handled;
-  }
-
-  /// 화면을 누르면 재생·일시정지하고, 이후 스페이스가 먹도록 포커스를 가져온다.
-  void _onViewTap() {
-    _focusNode.requestFocus();
-    _togglePlay();
-  }
-
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
     final playerColor = replayCarColor(widget.playerTeam, fallback: AppColors.accent);
     final ghostColor = replayCarColor(widget.referenceTeam, fallback: palette.comparison);
-    return Focus(
-      focusNode: _focusNode,
-      autofocus: true,
-      onKeyEvent: _onKey,
+    // 스페이스 = 재생·일시정지(포커스가 리플레이 밖에 있어도, 이 탭이 보이는 동안).
+    return SpacePlayPause(
+      onToggle: _togglePlay,
       child: Card(
         key: const ValueKey('ghost-replay'),
         child: Padding(
@@ -337,7 +317,7 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
                   child: GestureDetector(
                     key: const ValueKey('ghost-replay-tap'),
                     behavior: HitTestBehavior.opaque,
-                    onTap: _onViewTap,
+                    onTap: _togglePlay,
                     child: Stack(
                       fit: StackFit.expand,
                       children: [

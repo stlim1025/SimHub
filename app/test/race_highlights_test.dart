@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:simcenter_app/features/auth/domain/user_preferences.dart';
 import 'package:simcenter_app/features/lap_detail/domain/lap_detail_models.dart';
@@ -321,6 +322,29 @@ void main() {
       expect(_caption(t), 'LAP 12 · 추월 | ME → RUSSELL');
       await t.tap(find.byKey(const ValueKey('highlights-play')));
       await t.pump();
+    });
+
+    testWidgets('스페이스로 재생·일시정지한다(재생 버튼을 누른 뒤에도 한 번씩만 바뀐다)', (t) async {
+      await _pumpPlayer(t, _highlights());
+      IconData? playIcon() => t
+          .widget<Icon>(find.descendant(of: find.byKey(const ValueKey('highlights-play')), matching: find.byType(Icon)))
+          .icon;
+
+      await t.sendKeyEvent(LogicalKeyboardKey.space);
+      await t.pump();
+      expect(playIcon(), Icons.pause);
+
+      await t.tap(find.byKey(const ValueKey('highlights-play')));
+      await t.pump();
+      expect(playIcon(), Icons.play_arrow);
+
+      await t.sendKeyEvent(LogicalKeyboardKey.space);
+      await t.pump();
+      expect(playIcon(), Icons.pause);
+
+      await t.sendKeyEvent(LogicalKeyboardKey.space);
+      await t.pump();
+      expect(playIcon(), Icons.play_arrow);
     });
 
     testWidgets('깃발 구간이면 순위표 위쪽에 배너를 띄운다(가운데 띠 없이)', (t) async {

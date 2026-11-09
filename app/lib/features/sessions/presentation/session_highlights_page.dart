@@ -15,6 +15,7 @@ import '../../../core/widgets/button_group.dart';
 import '../../../core/widgets/compact_table.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/page_loading_bar.dart';
+import '../../../core/widgets/space_play_pause.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../auth/domain/user_preferences.dart';
 import '../../lap_detail/application/lap_detail_providers.dart';
@@ -527,10 +528,13 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
     });
   }
 
+  /// 스페이스 = 재생·일시정지(포커스가 재생기 밖에 있어도, 이 화면이 보이는 동안).
+  @override
+  Widget build(BuildContext context) => SpacePlayPause(onToggle: _togglePlay, child: _content(context));
+
   /// 재생기 + 장면 목록표. 화면이 넓으면([_sideListMinWidth] 이상) 목록표를 오른쪽(화면 폭의 [_listWidthFraction],
   /// [_listMinWidth]~[_listMaxWidth])에 재생기와 같은 높이로 두고 재생기가 나머지 폭을 다 쓴다. 좁으면 재생기 아래.
-  @override
-  Widget build(BuildContext context) {
+  Widget _content(BuildContext context) {
     final player = _player(context);
     if (_clips.isEmpty) {
       return player;
