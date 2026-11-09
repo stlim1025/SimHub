@@ -71,3 +71,6 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          # 기본 10분(600000ms)은 GitHub Pages가 배포 처리를 늦게 끝낼 때 모자라 "Timeout reached"로 끊긴다(2026-11-09 연속 실패).
+          timeout: 1800000
