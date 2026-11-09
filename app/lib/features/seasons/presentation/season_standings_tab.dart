@@ -32,7 +32,7 @@ class SeasonStandingsTab extends StatelessWidget {
       children: [
         const _SectionTitle('Drivers'),
         const SizedBox(height: 8),
-        SeasonDriversTable(drivers: standings.drivers),
+        _DriversTable(drivers: standings.drivers),
       ],
     );
     final constructors = Column(
@@ -112,9 +112,8 @@ class _StandingsTable extends StatelessWidget {
   }
 }
 
-/// 드라이버 순위 표(Pos · Driver · Team · Wins · Podiums · Pts, 내 차 줄 강조). Standings 탭과 넓은 화면 Season 탭에서 쓴다.
-class SeasonDriversTable extends StatelessWidget {
-  const SeasonDriversTable({super.key, required this.drivers});
+class _DriversTable extends StatelessWidget {
+  const _DriversTable({required this.drivers});
 
   final List<DriverStanding> drivers;
 

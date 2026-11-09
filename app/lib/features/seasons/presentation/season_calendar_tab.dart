@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
@@ -25,6 +26,13 @@ const double _narrowPointsColumnWidth = 72;
 /// DIFF 열을 숨기는 표 폭(이보다 좁으면 이름 칸이 너무 좁아진다). 보통 데스크톱 폭(표 약 1000)에서는 보인다.
 const double _diffHideBelowWidth = 880;
 
+/// 표 폭이 이 이상이면(넓은 화면 전체 폭) DATE(주말 첫 세션 날짜)·WINNER(우승자) 열을 더 보인다. DATE 열 폭·WINNER 칸 비율.
+const double _wideTableWidth = 1000;
+const double _dateColumnWidth = 120;
+const int _winnerFlex = 2;
+
+final DateFormat _dateFormat = DateFormat('yyyy-MM-dd');
+
 /// 그랑프리 세션 메뉴 폭·항목 사이 간격.
 const double _sessionMenuWidth = 240;
 const double _sessionMenuGap = 16;
@@ -43,13 +51,18 @@ const double _menuHintIconSize = 18;
 /// [_diffHideBelowWidth] 미만이면 DIFF를 숨겨 카드 폭을 넘지 않는다. SPRINT는 스프린트 주말이 하나라도 있을 때만.
 /// RACE = 본 레이스(스프린트 주말이면 Race2). 이름을 누르면 그 주말 세션 메뉴(연습 … 레이스, 내 순위)가 열리고,
 /// 고르면 그 세션으로 간다. 옛 서버(세션 목록 없음)면 본 레이스(없으면 첫 세션)로 바로 간다.
+/// 표 폭이 [_wideTableWidth] 이상이면 기록된 주말([rounds], 주말 Id로 잇는다)의 DATE(첫 세션 날짜)와 WINNER(우승자) 열을
+/// 더 보여 넓은 폭을 채운다(달리지 않은 라운드는 비운다).
 class SeasonCalendarTab extends StatelessWidget {
-  const SeasonCalendarTab({super.key, required this.calendar, required this.totalPoints});
+  const SeasonCalendarTab({super.key, required this.calendar, required this.totalPoints, this.rounds = const []});
 
   final List<SeasonCalendarRound> calendar;
 
   /// PTS 머리글 괄호 안 시즌 내 합계(Standings 기준).
   final int? totalPoints;
+
+  /// 기록된 주말(날짜·우승자). 캘린더 라운드와 주말 Id로 잇는다.
+  final List<SeasonRound> rounds;
 
   @override
   Widget build(BuildContext context) {
@@ -61,11 +74,25 @@ class SeasonCalendarTab extends StatelessWidget {
     final hasSprint = calendar.any((r) => r.isSprintWeekend);
     final positionWidth = roomy ? _positionColumnWidth : _narrowPositionColumnWidth;
     final pointsWidth = roomy ? _pointsColumnWidth : _narrowPointsColumnWidth;
+    final weekends = {for (final r in rounds) r.weekendId: r};
+    SeasonRound? weekendOf(SeasonCalendarRound r) => weekends[r.weekendId];
     return CompactTable<SeasonCalendarRound>(
       rows: calendar,
       rowKey: (r) => ValueKey('season-calendar-${r.round}'),
       columns: [
         CompactColumn(label: 'Grand Prix', flex: 3, cell: (r) => _GrandPrixCell(round: r)),
+        CompactColumn(
+          label: 'Date',
+          width: _dateColumnWidth,
+          hideBelowWidth: _wideTableWidth,
+          cell: (r) => Text(
+            switch (weekendOf(r)) {
+              final w? => _dateFormat.format(w.firstSessionAt.toLocal()),
+              null => '',
+            },
+            style: kTabularStyle,
+          ),
+        ),
         CompactColumn(label: 'Team', flex: 2, compactHidden: true, cell: (r) => _TeamCell(round: r)),
         if (hasSprint)
           CompactColumn(
@@ -86,6 +113,12 @@ class SeasonCalendarTab extends StatelessWidget {
           width: _diffColumnWidth,
           hideBelowWidth: _diffHideBelowWidth,
           cell: (r) => _DiffCell(race: r.raceAiDifficulty, quali: r.qualiAiDifficulty),
+        ),
+        CompactColumn(
+          label: 'Winner',
+          flex: _winnerFlex,
+          hideBelowWidth: _wideTableWidth,
+          cell: (r) => Text(weekendOf(r)?.winnerName ?? '', maxLines: 1, overflow: TextOverflow.ellipsis),
         ),
       ],
     );

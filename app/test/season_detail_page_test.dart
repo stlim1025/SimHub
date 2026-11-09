@@ -707,7 +707,7 @@ void main() {
       }
     });
 
-    testWidgets('SeasonDetail_WideScreen_PutsStandingsSideBySide_AndDriversBesideTheCalendar', (t) async {
+    testWidgets('SeasonDetail_WideScreen_PutsStandingsSideBySide_AndAddsDateWinnerToTheCalendar', (t) async {
       final repo = FakeSeasonsRepository(details: {'se1': _detail()});
 
       // Standings: 넓으면 Drivers · Constructors 표를 나란히(같은 높이에서 시작, Constructors가 오른쪽).
@@ -717,14 +717,21 @@ void main() {
       expect(constructors.dy, drivers.dy);
       expect(constructors.dx, greaterThan(drivers.dx));
 
-      // Season: 넓으면 캘린더 오른쪽에 드라이버 순위 표(Podiums 머리글은 순위 표에만 있다).
+      // Season: 순위 표(Standings 탭과 겹친다)는 두지 않고, 넓으면 캘린더에 DATE · WINNER 열을 더한다(기록된 주말만 채운다).
       await _pumpPage(t, repo, size: const Size(1600, 2400));
-      expect(find.text('Podiums'), findsOneWidget);
-      expect(t.getTopLeft(find.text('Podiums')).dx, greaterThan(t.getTopLeft(find.text('GRAND PRIX')).dx));
-
-      // 보통 폭에서는 캘린더만.
-      await _pumpPage(t, repo, size: const Size(1280, 2400));
       expect(find.text('Podiums'), findsNothing);
+      expect(find.text('DATE'), findsOneWidget);
+      expect(find.text('WINNER'), findsOneWidget);
+      final bahrain = find.byKey(const ValueKey('season-calendar-1'));
+      expect(find.descendant(of: bahrain, matching: find.text('2026-10-17')), findsOneWidget);
+      expect(find.descendant(of: bahrain, matching: find.text('NORRIS')), findsOneWidget);
+      final suzuka = find.byKey(const ValueKey('season-calendar-3'));
+      expect(find.descendant(of: suzuka, matching: find.textContaining('2026')), findsNothing); // 달리지 않은 라운드
+
+      // 보통 폭(표 1000 미만)에서는 두 열이 없다.
+      await _pumpPage(t, repo);
+      expect(find.text('DATE'), findsNothing);
+      expect(find.text('WINNER'), findsNothing);
     });
 
     testWidgets('SeasonDetail_StandingsTab_ShowsDriversConstructorsAndNote', (t) async {
