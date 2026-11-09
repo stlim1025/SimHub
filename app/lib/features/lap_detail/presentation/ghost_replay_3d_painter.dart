@@ -513,6 +513,8 @@ class ReplayTrack3d {
 
     // 차 몸체가 닿은 자리([reach], 중심선에서 m)보다 안쪽에는 벽을 세우지 않는다. 그 자리가 다른 구간 도로에 걸리면 벽을 빼고,
     // 그 밖에는 런오프 끝까지 두되 다른 구간 도로와 겹치면 차가 닿은 자리까지만 줄인다.
+    // 피트 월은 피트를 드나들지 않는 차가 포장 노면으로 달린 자리([paved], 중심선에서 m)보다 바깥에 둔다 — [reach]에는
+    // 피트 입구·출구 길을 달린 차도 들어 있어 피트 월 자리를 정하는 데 쓸 수 없다.
     ({List<double> offsets, List<bool> standing}) wall(
       List<Offset> edges,
       List<Offset> outward,
@@ -520,10 +522,14 @@ class ReplayTrack3d {
       int side,
       List<double> widths,
       List<double> reach,
+      List<double> paved,
     ) {
       final smooth = smoothWall(kerbs, side);
       final need = widenThenAverage([
         for (var i = 0; i < n; i++) math.max(0.0, reach[i] - widths[i] + _wallCarClearanceM),
+      ]);
+      final drove = widenThenAverage([
+        for (var i = 0; i < n; i++) math.max(0.0, paved[i] - widths[i] + _wallCarClearanceM),
       ]);
       final offsets = <double>[];
       final standing = <bool>[];
@@ -540,21 +546,23 @@ class ReplayTrack3d {
           clear = !onOtherRoad(edges[i] + outward[i] * offset, i);
         }
         // 이 쪽에 피트 레인이 나란히 있으면(벽을 세울 자리보다 안쪽에 있는 것까지) 벽은 도로와 피트 레인 사이 가운데(피트 월)에 세운다
-        // — 피트 레인을 가로지르지 않게. 사이가 거의 없는 피트 입구·출구는 벽을 뺀다(차가 드나드는 길이다).
+        // — 피트 레인을 가로지르지 않게. 차들이 포장 노면으로 달린 자리가 가운데보다 바깥이면 그 바깥에 세우고, 그 자리에서 피트 레인까지
+        // 거의 남지 않으면(피트 입구·출구, Zandvoort 1번 코너 안쪽처럼 도로와 피트 출구 길이 한 노면인 곳) 벽을 뺀다.
         final searchOut = math.max(_pitWallSearchOutM, offset + kCircuitPitLaneWidthM / 2);
         if (pitGapAt(edges[i], outward[i], searchOut) case final gap?) {
           pitWall[i] = true;
-          if (gap < _pitWallMinGapM) {
+          if (drove[i] + _pitWallMinGapM > gap) {
             clear = false;
           } else {
-            offset = math.min(offset, gap / 2);
+            offset = math.min(offset, math.max(gap / 2, drove[i]));
           }
         }
         offsets.add(offset);
         standing.add(clear);
       }
       // 피트 월은 앞뒤 피트 월 점끼리만 가장 가까운 값으로 좁힌 뒤 평균해 피트 레인 표본 간격으로 들쭉날쭉하지 않게 한다
-      // (같은 범위로 좁히고 평균하므로 점마다 원래 값 이하 — 피트 레인 쪽으로 나가지 않는다).
+      // (같은 범위로 좁히고 평균하므로 점마다 원래 값 이하 — 피트 레인 쪽으로 나가지 않는다). 좁혀도 차들이 포장 노면으로 달린 자리
+      // 안으로는 들이지 않는다(세운 점은 그 자리에서 피트 레인까지 [_pitWallMinGapM] 이상 남아 있다).
       const span = _wallSmoothSamples * 2;
       List<double> pitNeighbours(int i, List<double> values) => [
             for (var k = i - span; k <= i + span; k++)
@@ -568,7 +576,7 @@ class ReplayTrack3d {
           if (pitWall[i])
             () {
               final near = pitNeighbours(i, narrowed);
-              return near.reduce((a, b) => a + b) / near.length;
+              return math.max(near.reduce((a, b) => a + b) / near.length, drove[i]);
             }()
           else
             offsets[i],
@@ -586,8 +594,24 @@ class ReplayTrack3d {
 
     final outwardLeft = [for (var i = 0; i < n; i++) outward(circuit.leftPoints[i], i)];
     final outwardRight = [for (var i = 0; i < n; i++) outward(circuit.rightPoints[i], i)];
-    final left = wall(circuit.leftPoints, outwardLeft, circuit.kerbLeft, 1, circuit.leftWidths, circuit.reachLeftM);
-    final right = wall(circuit.rightPoints, outwardRight, circuit.kerbRight, -1, circuit.rightWidths, circuit.reachRightM);
+    final left = wall(
+      circuit.leftPoints,
+      outwardLeft,
+      circuit.kerbLeft,
+      1,
+      circuit.leftWidths,
+      circuit.reachLeftM,
+      circuit.pavedLeftM,
+    );
+    final right = wall(
+      circuit.rightPoints,
+      outwardRight,
+      circuit.kerbRight,
+      -1,
+      circuit.rightWidths,
+      circuit.reachRightM,
+      circuit.pavedRightM,
+    );
 
     // 중계 카메라 자리: 간격마다 그 둘레(앞뒤 1/3)에서 곡률이 가장 큰 점의 코너 바깥, 방호벽 밖 높은 곳.
     final step = math.max(1, (_stationSpacingM / spacing).round());
@@ -690,10 +714,13 @@ class ReplayTrack3d {
 
   int wrap(int i) => circuit.closed ? (i % length + length) % length : i.clamp(0, length - 1);
 
-  /// 수평 위치 [p]의 노면 높이(m)와 진행 방향 경사(높이 변화 ÷ 거리), 가장 가까운 중심선 점: 가장 가까운 구간에 투영해 보간한다.
-  ({double elevation, double slope, int index}) locate(Offset p) {
+  /// 수평 위치 [p]의 노면 높이(m, 뱅크 포함)와 진행 방향 경사(높이 변화 ÷ 거리), 가장 가까운 중심선 점,
+  /// 그 자리 왼쪽 단위 법선과 뱅크(법선 쪽으로 1m 갈 때 높아지는 높이 m): 가장 가까운 구간에 투영해 보간한다.
+  ({double elevation, double slope, int index, Offset normal, double bank}) locate(Offset p) {
     final center = circuit.center;
     final elevations = circuit.elevations;
+    final banks = circuit.banks;
+    final normals = circuit.normals;
     var nearest = 0;
     var best = double.infinity;
     for (var i = 0; i < length; i++) {
@@ -704,6 +731,9 @@ class ReplayTrack3d {
       }
     }
     var elevation = elevations[nearest];
+    var bank = banks[nearest];
+    var normal = normals[nearest];
+    var foot = center[nearest];
     for (final (a, b) in [(wrap(nearest - 1), nearest), (nearest, wrap(nearest + 1))]) {
       final ab = center[b] - center[a];
       final lengthSquared = ab.distanceSquared;
@@ -714,16 +744,25 @@ class ReplayTrack3d {
       final t = (ap.dx * ab.dx + ap.dy * ab.dy) / lengthSquared;
       if (t >= 0 && t <= 1) {
         elevation = elevations[a] + (elevations[b] - elevations[a]) * t;
+        bank = banks[a] + (banks[b] - banks[a]) * t;
+        normal = Offset.lerp(normals[a], normals[b], t)!;
+        foot = center[a] + ab * t;
         break;
       }
     }
+    if (normal.distance > 0) {
+      normal = normal / normal.distance;
+    }
+    final side = p - foot;
     final ahead = wrap(nearest + _slopeSamples);
     final behind = wrap(nearest - _slopeSamples);
     final run = (center[ahead] - center[behind]).distance;
     return (
-      elevation: elevation,
+      elevation: elevation + bank * (side.dx * normal.dx + side.dy * normal.dy),
       slope: run == 0 ? 0 : (elevations[ahead] - elevations[behind]) / run,
       index: nearest,
+      normal: normal,
+      bank: bank,
     );
   }
 }
@@ -762,13 +801,22 @@ ReplayCameraPose replayCameraPose(ReplayTrack3d track, ReplayCar player, ReplayC
   );
 }
 
-/// 차 한 대의 자세: 노면 위 기준점, 진행 방향(라디안, 월드 X에서 Z 쪽으로), 앞뒤 기울기(라디안, 오르막이 +).
-typedef ReplayCarPose = ({ReplayPoint3 origin, double heading, double pitch});
+/// 차 한 대의 자세: 노면 위 기준점, 진행 방향(라디안, 월드 X에서 Z 쪽으로), 앞뒤 기울기(라디안, 오르막이 +),
+/// 옆 기울기(라디안, 차의 왼쪽 — 진행 방향에서 +90° — 이 높으면 +).
+typedef ReplayCarPose = ({ReplayPoint3 origin, double heading, double pitch, double roll});
 
 /// [frame]의 차를 [track] 노면에 올린 자세(순수 계산): 높이·기울기는 가장 가까운 중심선 구간에서 보간한다.
+/// 옆 기울기는 그 자리 뱅크를 차가 향한 방향으로 옮긴 값(트랙을 거슬러 서면 반대로 기운다).
 ReplayCarPose replayCarPose(ReplayTrack3d track, ReplayFrame frame) {
   final spot = track.locate(Offset(frame.x, frame.z));
-  return (origin: (x: frame.x, y: spot.elevation, z: frame.z), heading: frame.heading, pitch: math.atan(spot.slope));
+  final left = Offset(-math.sin(frame.heading), math.cos(frame.heading));
+  final across = spot.bank * (left.dx * spot.normal.dx + left.dy * spot.normal.dy);
+  return (
+    origin: (x: frame.x, y: spot.elevation, z: frame.z),
+    heading: frame.heading,
+    pitch: math.atan(spot.slope),
+    roll: math.atan(across),
+  );
 }
 
 /// 3D 재생에 함께 그리는 둘레 차 한 대: 움직임·몸체 색·이름표(경과 시간마다 — 피트 인·아웃을 붙이게).
@@ -968,7 +1016,7 @@ class GhostReplay3dPainter extends CustomPainter {
   /// 도로 밖 바닥: 시가지 서킷은 회색(보도·건물 바닥), 그 밖은 잔디.
   Color get _groundColor => track.circuit.street ? AppColors.replayStreetGround : AppColors.replayGrass3d;
 
-  _V3 _point(int i, Offset p, [double lift = 0]) => _V3(p.dx, track.circuit.elevations[i] + lift, p.dy);
+  _V3 _point(int i, Offset p, [double lift = 0]) => _V3(p.dx, track.circuit.heightAt(i, p) + lift, p.dy);
 
   /// 구간 하나. 바닥 묶음의 깊이는 중심선 양 끝 가운데 먼 쪽(차 밑 바닥이 차보다 먼저 칠해지게), 방호벽은 벽 가운데.
   void _addSegment(
@@ -1103,15 +1151,19 @@ class GhostReplay3dPainter extends CustomPainter {
     }
   }
 
-  /// 로우폴리 차 한 대: [_carMesh]를 차 방향·노면 경사대로 세우고, 카메라 쪽 면만 먼 것부터 모은다.
+  /// 로우폴리 차 한 대: [_carMesh]를 차 방향·노면 경사·뱅크대로 세우고, 카메라 쪽 면만 먼 것부터 모은다.
   /// 깊이는 차에서 카메라와 가장 가까운 점(차 밑 바닥보다 늦게 칠한다). [tyreMark]는 타이어 옆 띠 색(컴파운드).
   _Item _car(_View view, ReplayFrame frame, Color body, {Color? tyreMark, double opacity = 1}) {
     final pose = replayCarPose(track, frame);
     final (sh, ch) = (math.sin(pose.heading), math.cos(pose.heading));
     final (sp, cp) = (math.sin(pose.pitch), math.cos(pose.pitch));
+    final (sr, cr) = (math.sin(pose.roll), math.cos(pose.roll));
     final forward = _V3(ch * cp, sp, sh * cp);
-    final side = _V3(-sh, 0, ch);
-    final up = _V3(-ch * sp, cp, -sh * sp);
+    final level = _V3(-sh, 0, ch);
+    final raised = _V3(-ch * sp, cp, -sh * sp);
+    // 옆 기울기만큼 진행 방향 축으로 돌린다(왼쪽이 높으면 왼쪽 옆축이 위로).
+    final side = level * cr + raised * sr;
+    final up = raised * cr - level * sr;
     final origin = _V3.of(pose.origin);
     _V3 place(_V3 local) => origin + forward * local.x + side * local.y + up * local.z;
     final distance = (origin - view.eye).length;

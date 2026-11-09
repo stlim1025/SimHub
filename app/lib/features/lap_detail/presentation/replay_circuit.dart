@@ -112,6 +112,8 @@ class ReplayCircuit {
     required this.kerbRight,
     required this.gravelAt,
     required this.elevations,
+    required this.normals,
+    required this.banks,
     required this.asphalt,
     required this.leftEdge,
     required this.rightEdge,
@@ -124,6 +126,8 @@ class ReplayCircuit {
     required this.startRightM,
     required this.reachLeftM,
     required this.reachRightM,
+    required this.pavedLeftM,
+    required this.pavedRightM,
     this.pitLane = const [],
     this.pitElevations = const [],
     this.pitNormals = const [],
@@ -155,8 +159,19 @@ class ReplayCircuit {
   final List<bool> kerbRight;
   final List<bool> gravelAt;
 
-  /// 점마다 노면 높이(m, 월드 Y). 내 랩에 높이 채널이 없으면 모두 0.
+  /// 점마다 중심선 위 노면 높이(m, 월드 Y). 내 랩에 높이 채널이 없으면 모두 0.
   final List<double> elevations;
+
+  /// 점마다 왼쪽 단위 법선(진행 방향에서 +90°)과 노면 옆 기울기(뱅크: 그 법선 쪽으로 1m 갈 때 높아지는 높이 m).
+  /// 표본 형상에 뱅크가 없으면 기울기는 모두 0(좌우로 평평한 노면).
+  final List<Offset> normals;
+  final List<double> banks;
+
+  /// 점 [i] 둘레 수평 위치 [p]의 노면 높이(m): 중심선 높이 + 뱅크 × 중심선에서 법선 쪽으로 잰 옆 거리.
+  double heightAt(int i, Offset p) {
+    final d = p - center[i];
+    return elevations[i] + banks[i] * (d.dx * normals[i].dx + d.dy * normals[i].dy);
+  }
 
   /// 칠할 모양들(채움: 아스팔트·연석·그래블, 선: 가장자리).
   final Path asphalt;
@@ -176,6 +191,12 @@ class ReplayCircuit {
   /// 방호벽은 이보다 바깥에 세운다(차가 벽을 뚫고 지나가 보이지 않게). 아무 차도 닿지 않은 쪽은 0.
   final List<double> reachLeftM;
   final List<double> reachRightM;
+
+  /// 점마다 중심선에서 피트를 드나들지 않는 차의 바퀴가 포장 노면에 닿은 가장 먼 자리(m, 왼쪽·오른쪽 — 표본 형상의 모든 차).
+  /// 도로와 피트 레인 사이 피트 월은 이보다 바깥에 세운다(출발 직후 넓게 퍼진 차들이 피트 출구 쪽 포장 구역을 지나도 벽을 뚫지 않게).
+  /// 표본 형상이 없으면 0.
+  final List<double> pavedLeftM;
+  final List<double> pavedRightM;
 
   /// 피트 레인 선(입구 → 출구, 월드 X·Z)·점마다 노면 높이·왼쪽 법선, 그리고 2D로 칠할 피트 레인 면. 표본 형상에 피트 레인이 없으면 비어 있다.
   final List<Offset> pitLane;
@@ -319,7 +340,8 @@ class ReplayCircuit {
     }
 
     final start = _nearestIndex(center, playerLine.first);
-    final elevations = _elevations(player.trace, playerLine, center, at, samples);
+    final elevations = _elevations(player.trace, playerLine, center, normals, at, samples);
+    final banks = _banks(samples, center, at);
     final joined = _joinedPitLane(
       samples?.pitLine ?? const <Offset>[],
       samples?.pitY,
@@ -365,6 +387,8 @@ class ReplayCircuit {
       kerbRight: kerbs.right,
       gravelAt: gravelAt,
       elevations: elevations,
+      normals: normals,
+      banks: banks,
       asphalt: asphalt,
       leftEdge: _polyline(left, closed: closed),
       rightEdge: _polyline(right, closed: closed),
@@ -377,6 +401,8 @@ class ReplayCircuit {
       startRightM: rightWidths[start],
       reachLeftM: reach.left,
       reachRightM: reach.right,
+      pavedLeftM: sampled?.pavedLeftM ?? List.filled(n, 0),
+      pavedRightM: sampled?.pavedRightM ?? List.filled(n, 0),
     );
   }
 
@@ -563,18 +589,32 @@ class ReplayCircuit {
   }
 
   /// 중심선 점마다 노면 높이를 앞뒤 몇 칸 평균한 값: 표본 형상에 높이가 있으면 가장 가까운 형상 칸, 없으면 가장 가까운 내 랩 표본.
-  /// 둘 다 없으면 모두 0.
+  /// 둘 다 없으면 모두 0. 형상 높이는 레이싱 라인 위 높이라, 뱅크가 있으면 중심선이 라인에서 비켜난 만큼([normals] 쪽 옆 거리 × 기울기) 더한다.
   static List<double> _elevations(
     LapTrace trace,
     List<Offset> line,
     List<Offset> center,
+    List<Offset> normals,
     int Function(int) at,
     TrackSampleGeometry? samples,
   ) {
     final heights = samples?.y;
     if (samples != null && heights != null) {
       final matcher = _SequentialMatcher(samples.line, closed: true);
-      return _movingAverage([for (final p in center) heights[matcher.match(p)]], _elevationSmoothSamples, at);
+      final sampleLine = samples.line;
+      final slopes = samples.bankSlope;
+      return _movingAverage(
+        [
+          for (var i = 0; i < center.length; i++)
+            () {
+              final m = matcher.match(center[i]);
+              final d = center[i] - sampleLine[m];
+              return heights[m] + (slopes?[m] ?? 0) * (d.dx * normals[i].dx + d.dy * normals[i].dy);
+            }(),
+        ],
+        _elevationSmoothSamples,
+        at,
+      );
     }
     if (!trace.hasElevation) {
       return List.filled(center.length, 0);
@@ -582,6 +622,16 @@ class ReplayCircuit {
     final matcher = _SequentialMatcher(line, closed: false);
     final raw = [for (final p in center) trace.worldPosY[matcher.match(p)]];
     return _movingAverage(raw, _elevationSmoothSamples, at);
+  }
+
+  /// 중심선 점마다 노면 옆 기울기(뱅크)를 앞뒤 몇 칸 평균한 값: 가장 가까운 표본 형상 칸의 값. 표본 형상에 높이·뱅크가 없으면 모두 0.
+  static List<double> _banks(TrackSampleGeometry? samples, List<Offset> center, int Function(int) at) {
+    final slopes = samples?.bankSlope;
+    if (samples == null || slopes == null || samples.y == null) {
+      return List.filled(center.length, 0);
+    }
+    final matcher = _SequentialMatcher(samples.line, closed: true);
+    return _movingAverage([for (final p in center) slopes[matcher.match(p)]], _elevationSmoothSamples, at);
   }
 
   /// 주행선이 (연석을 밟은 곳을 빼고) 도로 안에 들도록 중심선을 좌우로 조금씩 옮긴다.

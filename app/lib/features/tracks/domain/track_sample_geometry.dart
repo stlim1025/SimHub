@@ -6,6 +6,9 @@ import 'track_width_profile.dart';
 /// 바퀴 가장자리 열이 없는(예전 서버) 응답: 연석을 밟은 쪽 가장자리 = 차들이 달린 끝 + 이만큼(m, 바퀴가 연석에 올라탄 만큼).
 const double _kerbEdgeAllowanceM = 0.5;
 
+/// 차 몸체 반폭(m, 서버 형상의 BodyHalfWidthM·리플레이가 그리는 차와 같다).
+const double _carHalfWidthM = 1.0;
+
 /// 연석 단서가 없는 구간은 가장 가까운 단서에서 이 거리(m)에 걸쳐 레이싱 라인 = 도로 가운데로 돌아간다.
 const double _offsetFadeM = 100;
 
@@ -93,6 +96,7 @@ class TrackSampleGeometry {
     this.kerbOuterRightM,
     this.reachLeftM,
     this.reachRightM,
+    this.bankSlope,
   });
 
   final double resolutionM;
@@ -123,6 +127,9 @@ class TrackSampleGeometry {
   /// 차 몸체가 닿은 가장 먼 자리: 코스를 벗어난 차·멈춘 차까지 모두(방호벽은 이보다 바깥). 예전 서버 응답이면 null.
   final List<double>? reachLeftM;
   final List<double>? reachRightM;
+
+  /// 노면 옆 기울기(뱅크): 레이싱 라인에서 왼쪽(법선 (−sin, cos))으로 1m 갈 때 높아지는 높이(m). 예전 서버 응답이면 null.
+  final List<double>? bankSlope;
 
   int get length => x.length;
 
@@ -193,6 +200,7 @@ class TrackSampleGeometry {
       kerbOuterRightM: hasWheels ? kerbOuterRight : null,
       reachLeftM: hasReach ? reachLeft : null,
       reachRightM: hasReach ? reachRight : null,
+      bankSlope: column('bankSlope'),
     );
   }
 }
@@ -456,11 +464,16 @@ TrackWidthProfile trackProfileFromSamples(TrackSampleGeometry geometry, {require
 
   final reachLeft = geometry.reachLeftM;
   final reachRight = geometry.reachRightM;
+  // 피트를 드나들지 않는 차가 포장 노면으로 달린 자리: 띠 끝(차 가운데) + 차 반폭. 바퀴 끝(가장 먼 1% 제외)은 표본이 적은 칸에서
+  // 피트 상태 없이 피트 레인을 지난 차 하나로 30m 넘게 튀므로(Austria·Catalunya 결승선 앞) 쓰지 않는다.
+  List<double> paved(List<double> band, int sign) => [for (var k = 0; k < n; k++) band[k] + _carHalfWidthM - sign * shift[k]];
   return TrackWidthProfile(
     center: [for (var k = 0; k < n; k++) line[k] + normals[k] * shift[k]],
     leftM: [for (var k = 0; k < n; k++) leftEnd[k] - shift[k]],
     rightM: [for (var k = 0; k < n; k++) rightEnd[k] + shift[k]],
     reachLeftM: reachLeft == null ? null : [for (var k = 0; k < n; k++) reachLeft[k] - shift[k]],
     reachRightM: reachRight == null ? null : [for (var k = 0; k < n; k++) reachRight[k] + shift[k]],
+    pavedLeftM: paved(geometry.bandLeftM, 1),
+    pavedRightM: paved(geometry.bandRightM, -1),
   );
 }

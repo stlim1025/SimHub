@@ -1,13 +1,13 @@
 // 다시보기 3D 화면(three.js). 무엇을 그릴지는 앱(Dart)이 정하고, 이 모듈은 받은 트랙 메시와 매 프레임 상태를 그리기만 한다.
 // 프레임 상태(Float32Array): [눈 XYZ, 목표 XYZ, 세로 화각(rad), 차 수, 차마다 (X, Y, Z, 진행 방향, 기울기, R, G, B, 불투명도,
-// 스티어 −1~1, 달린 거리(m), 타이어 띠 R, G, B(모르면 R = −1))].
+// 스티어 −1~1, 달린 거리(m), 타이어 띠 R, G, B(모르면 R = −1), 옆 기울기(rad, 차 +Z 쪽이 높으면 +))].
 import * as THREE from '../vendor/three/three.module.js';
 import { buildCarAssets, buildEnvironment, makeCar } from './car.js';
 import { HORIZON_COLOR, Surface, buildGroundMaterial, buildSky, buildTrackMaterials } from './track.js';
 
 const CAMERA_FIELDS = 7;
 const HEADER_FIELDS = CAMERA_FIELDS + 1;
-const CAR_STRIDE = 14;
+const CAR_STRIDE = 15;
 
 const NEAR_M = 0.3;
 const FAR_M = 2500;
@@ -279,8 +279,9 @@ export function createReplayScene(container) {
       if (k >= count) continue;
       const o = HEADER_FIELDS + k * CAR_STRIDE;
       car.group.position.set(state[o], state[o + 1], state[o + 2]);
-      // 앞이 +X인 차: 진행 방향(X → Z)만큼 Y축으로, 오르막만큼 차 옆축(Z)으로 돌린다.
-      car.group.rotation.set(0, -state[o + 3], state[o + 4]);
+      // 앞이 +X인 차: 진행 방향(X → Z)만큼 Y축으로, 오르막만큼 차 옆축(Z)으로, 뱅크만큼 차 앞축(X)으로 돌린다
+      // (YZX 순서: 옆으로 기울인 뒤 앞뒤로 숙이고 방향을 돌린다. +X 축 둘레 양의 회전은 +Z 쪽을 내리므로 부호를 뒤집는다).
+      car.group.rotation.set(-state[o + 14], -state[o + 3], state[o + 4]);
       car.setColor(state[o + 5], state[o + 6], state[o + 7]);
       car.setOpacity(state[o + 8]);
       car.setWheels(state[o + 9], state[o + 10]);

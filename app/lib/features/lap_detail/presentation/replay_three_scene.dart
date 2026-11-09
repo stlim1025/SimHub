@@ -48,8 +48,9 @@ const double _pitLaneLighten = 0.08;
 const int _cameraFields = 7;
 const int _headerFields = _cameraFields + 1;
 
-/// 차 한 대 칸 수: 기준점 XYZ, 진행 방향, 기울기, 몸체 색 RGB, 불투명도, 스티어, 달린 거리(바퀴 회전), 타이어 띠 색 RGB.
-const int kReplayFrameCarStride = 14;
+/// 차 한 대 칸 수: 기준점 XYZ, 진행 방향, 기울기, 몸체 색 RGB, 불투명도, 스티어, 달린 거리(바퀴 회전), 타이어 띠 색 RGB,
+/// 옆 기울기(뱅크, 차의 왼쪽이 높으면 +).
+const int kReplayFrameCarStride = 15;
 
 /// 타이어 띠 색을 모를 때 R 칸에 넣는 값(띠를 숨긴다).
 const double kReplayFrameNoTyre = -1;
@@ -162,10 +163,10 @@ ReplayTrackMesh buildReplayTrackMesh(ReplayTrack3d track, {List<ReplayGridSlot>?
     along[i] = along[i - 1] + (center[i] - center[i - 1]).distance;
   }
 
-  // 점 [i]에서 길이 방향 [u]인 꼭짓점: 수평 위치 [p], 노면 위 [lift]. 옆 거리는 중심선에서 잰다(왼쪽 +).
+  // 점 [i]에서 길이 방향 [u]인 꼭짓점: 수평 위치 [p], 노면(뱅크 포함) 위 [lift]. 옆 거리는 중심선에서 잰다(왼쪽 +).
   _Vertex vertex(int i, double u, Offset p, double lift, {required bool left}) {
     final side = (p - center[i]).distance;
-    return (x: p.dx, y: circuit.elevations[i] + lift, z: p.dy, u: u, v: left ? side : -side);
+    return (x: p.dx, y: circuit.heightAt(i, p) + lift, z: p.dy, u: u, v: left ? side : -side);
   }
 
   final segments = circuit.closed ? n : n - 1;
@@ -257,7 +258,7 @@ ReplayTrackMesh buildReplayTrackMesh(ReplayTrack3d track, {List<ReplayGridSlot>?
       // 벽의 무늬 좌표 V는 노면에서 잰 높이, 펜스는 벽 위에서 잰 높이.
       final top = track.wallHeightM;
       _Vertex wall(int k, double u, Offset p, double height, [double base = 0]) =>
-          (x: p.dx, y: circuit.elevations[k] + base + height, z: p.dy, u: u, v: height);
+          (x: p.dx, y: circuit.heightAt(k, p) + base + height, z: p.dy, u: u, v: height);
       layers[ReplaySurface.barrier]!.quad(wall(i, ui, bi, 0), wall(j, uj, bj, 0), wall(j, uj, bj, top), wall(i, ui, bi, top), AppColors.replayWall);
       layers[ReplaySurface.fence]!.quad(
         wall(i, ui, bi, 0, top),
@@ -347,13 +348,20 @@ ReplayTrackMesh buildReplayTrackMesh(ReplayTrack3d track, {List<ReplayGridSlot>?
     laneU += step;
   }
 
+  // 넓은 바닥은 가장 낮은 꼭짓점 아래에 깐다 — 뱅크 안쪽 끝은 중심선보다 몇 m 낮을 수 있다(Zandvoort 마지막 코너).
+  var lowest = double.infinity;
+  for (final b in layers.values) {
+    for (var k = 1; k < b.positions.length; k += 3) {
+      lowest = math.min(lowest, b.positions[k]);
+    }
+  }
   return ReplayTrackMesh(
     layers: [
       for (final b in layers.values)
         if (b.positions.isNotEmpty) b.build(),
     ],
     groundColor: ground,
-    minElevationM: circuit.elevations.isEmpty ? 0 : circuit.elevations.reduce(math.min),
+    minElevationM: lowest.isFinite ? lowest : 0,
     street: circuit.street,
   );
 }
@@ -392,7 +400,8 @@ Float32List packReplayFrame(ReplayTrack3d track, List<ReplaySceneCar> cars, Repl
       ..[o + 10] = frame.distanceM
       ..[o + 11] = tyre?.r ?? kReplayFrameNoTyre
       ..[o + 12] = tyre?.g ?? 0
-      ..[o + 13] = tyre?.b ?? 0;
+      ..[o + 13] = tyre?.b ?? 0
+      ..[o + 14] = p.roll;
   }
   return out;
 }

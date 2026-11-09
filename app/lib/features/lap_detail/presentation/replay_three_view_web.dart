@@ -11,8 +11,9 @@ import 'replay_three_scene.dart';
 const String _flagParameter = 'replay3d';
 const String _canvasValue = 'canvas';
 
-/// three.js 그림 모듈(앱 web 폴더, main.dart.js 기준 상대 경로).
-const String _modulePath = './replay3d/replay3d.js';
+/// three.js 그림 모듈(앱 web 폴더, main.dart.js 기준 상대 경로). 프레임 상태 칸 수를 주소에 붙여, 칸 배치가 바뀌면
+/// 브라우저에 남은 예전 모듈 대신 새 모듈을 받는다(예전 모듈이 새 프레임을 다른 칸 수로 읽으면 차가 엉뚱한 곳에 그려진다).
+const String _modulePath = './replay3d/replay3d.js?stride=$kReplayFrameCarStride';
 const String _containerTag = 'div';
 const String _fill = '100%';
 

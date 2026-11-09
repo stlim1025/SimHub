@@ -16,6 +16,7 @@ namespace SimCenter.Application.TrackSamples;
 /// </param>
 /// <param name="KerbOuterLeftM">연석을 밟은 차의 바깥 바퀴가 닿은 먼 자리(m, 같은 규칙) = 연석 바깥 끝. 없으면 0.</param>
 /// <param name="ReachLeftM">차 몸체가 닿은 가장 먼 자리(m): 코스를 벗어난 차, 멈춘 차까지 모두. 방호벽은 이보다 바깥이다.</param>
+/// <param name="BankSlope">노면 옆 기울기(뱅크): 레이싱 라인에서 왼쪽으로 1m 갈 때 높아지는 높이(m). 높이를 모으지 못했으면 null.</param>
 public sealed record TrackGeometryResponse(
     Guid TrackId,
     string GameCode,
@@ -37,7 +38,8 @@ public sealed record TrackGeometryResponse(
     IReadOnlyList<double>? KerbOuterLeftM = null,
     IReadOnlyList<double>? KerbOuterRightM = null,
     IReadOnlyList<double>? ReachLeftM = null,
-    IReadOnlyList<double>? ReachRightM = null);
+    IReadOnlyList<double>? ReachRightM = null,
+    IReadOnlyList<double>? BankSlope = null);
 
 /// <summary>모든 오프라인 세션의 전체 차 표본으로 트랙 형상을 만든다.</summary>
 public interface ITrackGeometryService
@@ -54,8 +56,9 @@ public sealed class TrackGeometryService : ITrackGeometryService
 {
     private const string NoSamplesMessage = "이 트랙의 표본이 아직 없습니다.";
 
-    /// <summary>응답 소수 자리(1cm).</summary>
+    /// <summary>응답 소수 자리(1cm). 기울기(높이 ÷ 옆 거리)는 0.001까지.</summary>
     private const int Digits = 2;
+    private const int SlopeDigits = 3;
 
     private readonly ITrackSampleChunkRepository _chunks;
     private readonly TrackGeometryCache _cache;
@@ -112,7 +115,8 @@ public sealed class TrackGeometryService : ITrackGeometryService
             Round(geometry.KerbOuterLeftM),
             Round(geometry.KerbOuterRightM),
             Round(geometry.ReachLeftM),
-            Round(geometry.ReachRightM));
+            Round(geometry.ReachRightM),
+            geometry.BankSlope is null ? null : Round(geometry.BankSlope, SlopeDigits));
         if (version is not null)
         {
             _cache.Set(trackId, gameCode, version, response);
@@ -123,5 +127,5 @@ public sealed class TrackGeometryService : ITrackGeometryService
         return response;
     }
 
-    private static double[] Round(double[] values) => Array.ConvertAll(values, v => Math.Round(v, Digits));
+    private static double[] Round(double[] values, int digits = Digits) => Array.ConvertAll(values, v => Math.Round(v, digits));
 }

@@ -16,6 +16,9 @@ namespace SimCenter.Application.TrackSamples;
 /// <param name="KerbOuterLeftM">연석을 밟은 차(네 바퀴 모두 포장 노면)의 바깥 바퀴가 닿은 먼 자리(같은 규칙) = 왼쪽 연석 바깥 끝.</param>
 /// <param name="ReachLeftM">차 몸체가 닿은 가장 먼 자리: 잔디·그래블로 나간 차, 느리거나 멈춘 차까지 모두. 방호벽은 이보다 바깥에 있다.</param>
 /// <param name="PitX">피트 레인 선(피트 입구 → 출구 순, 피트 레인 표본의 칸별 중앙값). 피트 레인 표본이 모자라면 null.</param>
+/// <param name="BankSlope">
+/// 노면 옆 기울기(뱅크): 레이싱 라인에서 왼쪽으로 1m 갈 때 높아지는 높이(m, 왼쪽이 높으면 +). 높이 열이 있는 표본이 없으면 null.
+/// </param>
 public sealed record TrackGeometry(
     double ResolutionM,
     int SampleCount,
@@ -34,7 +37,8 @@ public sealed record TrackGeometry(
     double[] ReachRightM,
     double[]? PitX = null,
     double[]? PitZ = null,
-    double[]? PitY = null);
+    double[]? PitY = null,
+    double[]? BankSlope = null);
 
 /// <summary>
 /// 모든 차 표본 → 트랙 형상(순수 계산). 서킷은 닫혀 있다고 본다(마지막 칸 다음 = 첫 칸).
@@ -124,6 +128,17 @@ public static class TrackGeometryBuilder
 
     /// <summary>레이싱 라인에서 이보다 먼(m) 표본은 그 칸 자리가 아니라고 보고(랩 거리와 위치가 어긋난 표본) 가장자리·도달 폭에서 뺀다.</summary>
     private const double MaxLateralM = 100;
+
+    /// <summary>
+    /// 뱅크: 칸마다 도로 모양 표본(포장 노면) 가운데 레이싱 라인에서 이 거리(m) 안의 것만으로 높이를 옆 거리에 최소제곱 회귀한다
+    /// (더 먼 표본은 피트 출구 길·런오프처럼 다른 노면일 수 있다). 표본이 이보다 적거나 옆으로 퍼진 정도(표준편차 m)가 이보다
+    /// 작으면 그 칸은 재지 않고 앞뒤 칸으로 메운다. 기울기는 이 값을 넘지 않게 자르고(약 27°), 앞뒤 이 칸 수로 고른다.
+    /// </summary>
+    private const double MaxBankOffsetM = 12;
+    private const int MinBankSamples = 20;
+    private const double MinBankSpreadM = 0.1;
+    private const double MaxBankSlope = 0.5;
+    private const int BankSmoothBins = 3;
 
     /// <param name="Fast">[MinSpeedKph] 이상(선·띠·가장자리에 쓴다).</param>
     /// <param name="NearPit">피트 레인을 드나드는 길 위([PitMarginMs] 안) — 도로 모양에는 쓰지 않는다.</param>
@@ -227,6 +242,7 @@ public static class TrackGeometryBuilder
         var kerbWheels = (Left: new List<double>(), Right: new List<double>());
         var reachLeft = new double[n];
         var reachRight = new double[n];
+        var bank = new double?[n];
         var curvatures = Curvatures(lineX, lineZ);
         for (var k = 0; k < n; k++)
         {
@@ -250,9 +266,15 @@ public static class TrackGeometryBuilder
             kerbWheels.Left.Clear();
             kerbWheels.Right.Clear();
             var pitRoad = new List<(Point Point, double Offset)>();
+            var banked = new List<(double Offset, double Y)>();
             foreach (var p in bins[k])
             {
                 var offset = (p.X - lineX[k]) * nx + (p.Z - lineZ[k]) * nz;
+                if (p.Shapes && p.Paved && p.Y is { } height && Math.Abs(offset) <= MaxBankOffsetM)
+                {
+                    banked.Add((offset, height));
+                }
+
                 if (p.NearPit && p.Fast)
                 {
                     pitRoad.Add((p, offset));
@@ -300,6 +322,7 @@ public static class TrackGeometryBuilder
                 }
             }
 
+            bank[k] = BankSlopeOf(banked);
             edgeLeft[k] = FarEnd(tarmacWheels.Left);
             edgeRight[k] = FarEnd(tarmacWheels.Right);
             kerbOuterLeft[k] = FarEnd(kerbWheels.Left);
@@ -328,9 +351,32 @@ public static class TrackGeometryBuilder
         }
 
         var pit = PitLane(pitBins, pitRoadBins);
+        var bankSlope = bank.Any(v => v.HasValue) ? Smooth(FillGaps(bank), bins: BankSmoothBins) : null;
         return new TrackGeometry(
             ResolutionM, sampleCount, lineX, lineZ, heightsOut, bandLeft, bandRight, kerbLeft, kerbRight,
-            edgeLeft, edgeRight, kerbOuterLeft, kerbOuterRight, reachLeft, reachRight, pit?.X, pit?.Z, pit?.Y);
+            edgeLeft, edgeRight, kerbOuterLeft, kerbOuterRight, reachLeft, reachRight, pit?.X, pit?.Z, pit?.Y, bankSlope);
+    }
+
+    /// <summary>
+    /// 칸 표본의 (옆 거리, 높이)를 최소제곱 직선으로 맞춘 기울기([MaxBankSlope]로 자른다). 표본이 모자라거나 옆으로 거의 퍼지지 않았으면 null.
+    /// </summary>
+    private static double? BankSlopeOf(List<(double Offset, double Y)> samples)
+    {
+        if (samples.Count < MinBankSamples)
+        {
+            return null;
+        }
+
+        var meanOffset = samples.Average(s => s.Offset);
+        var meanY = samples.Average(s => s.Y);
+        var spread = samples.Sum(s => (s.Offset - meanOffset) * (s.Offset - meanOffset));
+        if (spread < MinBankSpreadM * MinBankSpreadM * samples.Count)
+        {
+            return null;
+        }
+
+        var slope = samples.Sum(s => (s.Offset - meanOffset) * (s.Y - meanY)) / spread;
+        return Math.Clamp(slope, -MaxBankSlope, MaxBankSlope);
     }
 
     /// <summary>칸마다 선의 곡률(1/m, + = 왼쪽으로 굽는다): 앞뒤 [CurvatureBins]칸 진행 방향 차이 / 거리.</summary>
@@ -603,14 +649,16 @@ public static class TrackGeometryBuilder
         return filled;
     }
 
-    /// <summary>이동 평균. 닫힌 선은 끝과 처음이 이어지고, 열린 선(피트 레인)은 끝에 가까울수록 반폭을 줄여 양 끝 점은 그대로 둔다.</summary>
-    private static double[] Smooth(double[] values, bool closed = true)
+    /// <summary>
+    /// 이동 평균(반폭 [bins]칸). 닫힌 선은 끝과 처음이 이어지고, 열린 선(피트 레인)은 끝에 가까울수록 반폭을 줄여 양 끝 점은 그대로 둔다.
+    /// </summary>
+    private static double[] Smooth(double[] values, bool closed = true, int bins = LineSmoothBins)
     {
         var n = values.Length;
         var smoothed = new double[n];
         for (var k = 0; k < n; k++)
         {
-            var half = closed ? LineSmoothBins : Math.Min(LineSmoothBins, Math.Min(k, n - 1 - k));
+            var half = closed ? bins : Math.Min(bins, Math.Min(k, n - 1 - k));
             var sum = 0.0;
             for (var j = -half; j <= half; j++)
             {

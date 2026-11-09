@@ -131,6 +131,32 @@ public sealed class TrackGeometryBuilderTests
     }
 
     [Fact]
+    public void Build_BankSlope_IsTheSidewaysHeightGradientAcrossTheCars()
+    {
+        // 차 7대가 레이싱 라인에서 왼쪽(안쪽) −3~+3m를 1m마다 달린다. 200~300m 구간은 왼쪽이 1m에 0.3m씩 높고(뱅크), 그 밖은 평평하다.
+        var frames = new List<Sample[]>();
+        for (var d = 0.0; d < LapLength; d += 1)
+        {
+            var angle = d / Radius;
+            var banked = d is >= 200 and < 300;
+            frames.Add([
+                .. Enumerable.Range(-3, 7).Select(left => new Sample(
+                    (byte)(left + 3),
+                    d,
+                    (Radius - left) * Math.Cos(angle),
+                    (Radius - left) * Math.Sin(angle),
+                    Y: 5 + (banked ? 0.3 * left : 0))),
+            ]);
+        }
+
+        var geometry = TrackGeometryBuilder.Build([TrackSampleDecoder.Decode(Encode(frames), format: 5)])!;
+
+        Assert.NotNull(geometry.BankSlope);
+        Assert.InRange(geometry.BankSlope![50], 0.27, 0.33);   // 250m
+        Assert.InRange(geometry.BankSlope[100], -0.02, 0.02);  // 500m: 평평하다
+    }
+
+    [Fact]
     public void Build_SlowAndOffTrackSamples_DoNotWidenTheBand()
     {
         var frames = new List<Sample[]>();

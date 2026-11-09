@@ -10,6 +10,8 @@ class TrackWidthProfile {
     required this.leftM,
     this.reachLeftM,
     this.reachRightM,
+    this.pavedLeftM,
+    this.pavedRightM,
   });
 
   final List<Offset> center;
@@ -19,6 +21,11 @@ class TrackWidthProfile {
   /// 점마다 [center]에서 차 몸체가 닿은 가장 먼 자리(m, 왼쪽·오른쪽 — 방호벽은 이보다 바깥). 표본으로 만든 도로에만 있다.
   final List<double>? reachLeftM;
   final List<double>? reachRightM;
+
+  /// 점마다 [center]에서 피트를 드나들지 않는 차의 바퀴가 포장 노면(아스팔트·연석)에 닿은 가장 먼 자리(m, 왼쪽·오른쪽).
+  /// 도로와 피트 레인 사이 피트 월은 이보다 바깥에 선다. 바퀴 표본이 있는 표본 형상에만 있다.
+  final List<double>? pavedLeftM;
+  final List<double>? pavedRightM;
 
   int get length => center.length;
 }

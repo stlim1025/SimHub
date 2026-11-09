@@ -329,4 +329,76 @@ void main() {
     // 피트 레인과 먼 곳은 차가 닿은 자리 바깥에 그대로 선다.
     expect(circuit.rightWidths[n ~/ 2] + track.wallRightM[n ~/ 2], greaterThanOrEqualTo(45.3 - 1e-9));
   });
+
+  test('뱅크가 있으면 노면은 옆으로 기울고, 차는 그 높이에 올라 진행 방향에 맞춰 옆으로 기운다', () {
+    // 원을 반시계로 돈다(왼쪽 = 안쪽). 모든 칸에서 안쪽(왼쪽)이 1m에 0.3m 높다.
+    final json = _geometryJson(pit: false, columns: {'bankSlope': 0.3});
+    final circuit = ReplayCircuit.build(LapReplay(_circleLap()), samples: TrackSampleGeometry.fromJsonOrNull(json)!, baseWidthM: 10);
+    final flat = ReplayCircuit.build(LapReplay(_circleLap()), samples: TrackSampleGeometry.fromJsonOrNull(_geometryJson(pit: false))!, baseWidthM: 10);
+    final track = ReplayTrack3d.build(circuit);
+    const i = 20;
+    final center = circuit.center[i];
+    final normal = circuit.normals[i];
+
+    expect(circuit.banks[i], closeTo(0.3, 1e-9));
+    expect(flat.banks.every((b) => b == 0), isTrue);
+    expect(circuit.heightAt(i, center + normal * 3) - circuit.heightAt(i, center), closeTo(0.9, 1e-9));
+    expect(circuit.heightAt(i, circuit.leftPoints[i]), greaterThan(circuit.heightAt(i, circuit.rightPoints[i])));
+    // 차 높이는 그 자리 노면 높이(뱅크 포함)다.
+    final inside = center + normal * 2;
+    expect(track.locate(inside).elevation, closeTo(circuit.heightAt(i, inside), 0.05));
+
+    ReplayFrame frame(double heading) => (
+          x: inside.dx,
+          z: inside.dy,
+          heading: heading,
+          distanceM: 0,
+          speedKph: 200,
+          steer: 0,
+          gear: 6,
+          rpm: 11000,
+          throttle: 100,
+          brake: 0,
+          finished: false,
+          batteryPercent: null,
+          ersFlowKw: null,
+        );
+    final along = math.atan2(-normal.dx, normal.dy); // 왼쪽 법선 (−sin, cos)의 진행 방향
+    expect(replayCarPose(track, frame(along)).roll, closeTo(math.atan(0.3), 0.01));
+    expect(replayCarPose(track, frame(along + math.pi)).roll, closeTo(-math.atan(0.3), 0.01)); // 거슬러 서면 반대로 기운다
+    expect(replayCarPose(ReplayTrack3d.build(flat), frame(along)).roll, 0);
+  });
+
+  test('피트 월은 피트를 드나들지 않는 차가 연석 너머 포장 노면으로 달린 자리보다 바깥에 서고, 그 자리가 피트 레인에 닿으면 세우지 않는다', () {
+    // 원을 반시계로 돈다(오른쪽 = 바깥). 오른쪽 연석 바깥 끝 8m → 도로 끝 106.5m, 피트 레인(반지름 118m) 안쪽 끝 114.5m.
+    // 띠 끝 [band]m의 차 몸체는 100 + band + 1m까지 닿는다 — 가운데(110.5m)에 세우면 그 차들이 벽을 뚫고 지나간다(Zandvoort 1번 코너 안쪽).
+    ReplayTrack3d build(double band, void Function(ReplayCircuit) check) {
+      final json = _geometryJson(
+        pitRadius: 118,
+        columns: {'edgeLeftM': 3.5, 'edgeRightM': 20, 'kerbOuterLeftM': 0, 'kerbOuterRightM': 8, 'bandRightM': band},
+      );
+      json['kerbRight'] = [for (var i = 0; i < (json['x'] as List).length; i++) true];
+      final circuit = ReplayCircuit.build(
+        LapReplay(_circleLap()),
+        samples: TrackSampleGeometry.fromJsonOrNull(json)!,
+        baseWidthM: 10,
+      );
+      check(circuit);
+      return ReplayTrack3d.build(circuit);
+    }
+
+    late ReplayCircuit wide;
+    final passing = build(10, (c) => wide = c);
+    for (var i = 2; i <= 7; i++) {
+      final wallRadius = wide.center[i].distance + wide.rightWidths[i] + passing.wallRightM[i];
+      expect(passing.hasWallRight[i], isTrue);
+      expect(wallRadius, greaterThanOrEqualTo(111));
+      expect(wallRadius, lessThan(118 - kCircuitPitLaneWidthM / 2));
+    }
+
+    final merged = build(13, (_) {});
+    for (var i = 2; i <= 7; i++) {
+      expect(merged.hasWallRight[i], isFalse);
+    }
+  });
 }
