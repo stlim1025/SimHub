@@ -202,4 +202,29 @@ class AppColors {
   static const Color replayTowerFocusInk = Color(0xFF000000);
   static const Color replayTowerBadgeTop = Color(0x00FFFFFF);
   static const Color replayTowerBadgeBottom = Color(0x73FFFFFF);
+
+  /// 하이라이트 중계 속도계(F1TV 모양): 검은 원판, 빈 고리, 속도 고리(파랑), 스로틀(라임), 브레이크(빨강),
+  /// DRS·오버테이크 표시 칸(꺼짐 바탕·글자, DRS 초록, 오버테이크 청록), 배터리 게이지(파랑).
+  static const Color replayF1tvDisc = Color(0xFF060609);
+  static const Color replayF1tvRing = Color(0xFF000000);
+  static const Color replayF1tvSpeed = Color(0xFF0D48BE);
+  static const Color replayF1tvThrottle = Color(0xFF00FF00);
+  static const Color replayF1tvBrake = Color(0xFFED1B24);
+  static const Color replayF1tvIndicator = Color(0xFF18191D);
+  static const Color replayF1tvIndicatorOff = Color(0xFF808080);
+  static const Color replayF1tvDrs = Color(0xFF00C800);
+  static const Color replayF1tvOvertake = Color(0xFF0EACE6);
+  static const Color replayF1tvBattery = Color(0xFF3B9BFF);
+
+  /// 중계 드라이버 이름 자막(F1TV 모양): 판, 칸 구분선, 순위·라벨(은색), 이름(밝은 회색), 팀 이름(회색), 레이스 스토리 제목(빨강).
+  static const Color replayF1tvPanel = Color(0xFF12141A);
+  static const Color replayF1tvDivider = Color(0xFF242326);
+  static const Color replayF1tvSilver = Color(0xFFC0C0C0);
+  static const Color replayF1tvName = Color(0xFFF5F5F5);
+  static const Color replayF1tvTeam = Color(0xFFCCCCCC);
+  static const Color replayF1tvStory = Color(0xFFFF0000);
+
+  /// 레이스 컨트롤 메시지 상자(F1TV 스튜어드 메시지 모양): 남색 판, 흰 이름판과 그 위 글자(남색).
+  static const Color replayF1tvNavy = Color(0xFF082343);
+  static const Color replayF1tvPlate = Color(0xFFFFFFFF);
 }

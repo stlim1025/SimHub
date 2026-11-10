@@ -4,9 +4,6 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
-import '../../auth/domain/user_preferences.dart';
-import '../../lap_detail/domain/ghost_replay.dart';
-import '../../lap_detail/presentation/ghost_replay_hud.dart';
 import '../domain/race_highlights.dart';
 import 'tyre_stints_view.dart';
 
@@ -188,12 +185,9 @@ const Map<HighlightTyre, String> kHighlightTyreNames = {
   HighlightTyre.wet: 'Wet',
 };
 
-/// 하단 자막·위 띠 치수.
+/// 장면 태그·위 띠 치수.
 const EdgeInsets _tagPadding = EdgeInsets.symmetric(horizontal: 10, vertical: 5);
-const EdgeInsets _titlePadding = EdgeInsets.symmetric(horizontal: 12, vertical: 6);
-const double _titleFontSize = 15;
 const double _tagFontSize = 11;
-const double _captionBarWidth = 4;
 const EdgeInsets _stripPadding = EdgeInsets.symmetric(horizontal: 22, vertical: 6);
 const double _stripFontSize = 15;
 const double _stripIconSize = 18;
@@ -765,28 +759,28 @@ class BroadcastStandingsTower extends StatelessWidget {
     final url = logoUrlOf?.call(carIndex);
     return url == null
         ? bar
-        : _TowerLogo(key: ValueKey('standing-logo-$carIndex'), url: url, tint: onTeamColor ? null : _tintOf(color), fallback: bar);
+        : BroadcastTeamLogo(key: ValueKey('standing-logo-$carIndex'), url: url, tint: onTeamColor ? null : _tintOf(color), fallback: bar);
   }
 
   /// 어두운 단색 로고를 칠할 색: 팀 색, 팀 색도 어두우면 흰색.
   static Color _tintOf(Color team) => team.computeLuminance() < _darkTintLuminance ? AppColors.replayHudText : team;
 }
 
-/// 순위표 팀 로고. [tint]가 있으면 로고 화소를 한 번 재서(주소별로 기억) 어두운 단색 로고(검정·남색 글자, 흰 바탕 포함)면
+/// 중계 그래픽 팀 로고(순위표 · 드라이버 이름 자막). [tint]가 있으면 로고 화소를 한 번 재서(주소별로 기억) 어두운 단색 로고(검정·남색 글자, 흰 바탕 포함)면
 /// 흰 바탕은 투명하게 빼고 글자를 그 색으로 칠한다 — 어두운 판 위에서 로고가 묻히거나 흰 네모로 보이지 않게.
 /// 읽는 중이면 빈 칸, 못 읽으면 [fallback].
-class _TowerLogo extends StatefulWidget {
-  const _TowerLogo({super.key, required this.url, required this.tint, required this.fallback});
+class BroadcastTeamLogo extends StatefulWidget {
+  const BroadcastTeamLogo({super.key, required this.url, required this.tint, required this.fallback});
 
   final String url;
   final Color? tint;
   final Widget fallback;
 
   @override
-  State<_TowerLogo> createState() => _TowerLogoState();
+  State<BroadcastTeamLogo> createState() => _BroadcastTeamLogoState();
 }
 
-class _TowerLogoState extends State<_TowerLogo> {
+class _BroadcastTeamLogoState extends State<BroadcastTeamLogo> {
   /// 로고 주소 → 어두운 단색인지(잰 결과).
   static final Map<String, bool> _darkLogos = {};
 
@@ -800,7 +794,7 @@ class _TowerLogoState extends State<_TowerLogo> {
   }
 
   @override
-  void didUpdateWidget(_TowerLogo oldWidget) {
+  void didUpdateWidget(BroadcastTeamLogo oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.url != widget.url || (oldWidget.tint == null) != (widget.tint == null)) {
       _stop();
@@ -1020,102 +1014,18 @@ class _BadgeCheckerPainter extends CustomPainter {
 }
 
 
-/// 하단 오른쪽 텔레메트리 판 치수(디자인 크기 — 재생 화면에 맞춰 줄어든다).
-const double kBroadcastTelemetryWidth = 230;
-const double _telemetryRadius = 8;
-const EdgeInsets _telemetryPadding = EdgeInsets.fromLTRB(12, 10, 12, 8);
-const double _telemetryNameSize = 13;
-const double _telemetryBarWidth = 3;
-const double _telemetryBarHeight = 14;
-const double _telemetryNameGap = 6;
+/// 하단 장면 태그: 빨간 칸(`LAP 16 · 추월`) — 드라이버 이름 자막 위에 얹는다.
+class BroadcastCaption extends StatelessWidget {
+  const BroadcastCaption({super.key, required this.tag});
 
-/// 하단 오른쪽 텔레메트리: 카메라가 따라가는 차의 팀 색 띠·이름 아래, 텔레메트리 고스트 재생과 같은 다이얼
-/// (바깥 고리 속도, 안쪽 고리 스로틀·브레이크, 가운데 속도, 아래 기어와 그 위 ERS 배터리 게이지 — 하이라이트 표본에는 RPM이 없어 뺀다).
-class BroadcastTelemetry extends StatelessWidget {
-  const BroadcastTelemetry({super.key, required this.name, required this.color, required this.frame, required this.units});
-
-  final String name;
-  final Color color;
-  final ReplayFrame frame;
-  final UnitSystem units;
+  final String tag;
 
   @override
   Widget build(BuildContext context) => Container(
-        key: const ValueKey('highlights-telemetry'),
-        width: kBroadcastTelemetryWidth,
-        padding: _telemetryPadding,
-        decoration: BoxDecoration(
-          color: AppColors.replayDashPanel.withValues(alpha: _panelOpacity),
-          borderRadius: BorderRadius.circular(_telemetryRadius),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Container(width: _telemetryBarWidth, height: _telemetryBarHeight, color: color),
-                const SizedBox(width: _telemetryNameGap),
-                Expanded(
-                  child: Text(
-                    name.toUpperCase(),
-                    key: const ValueKey('highlights-telemetry-name'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: _broadcastText(context, size: _telemetryNameSize),
-                  ),
-                ),
-              ],
-            ),
-            ReplayDial(keyName: 'highlights-telemetry', frame: frame, units: units, showRpm: false, showBattery: true),
-          ],
-        ),
-      );
-}
-
-/// 하단 자막: 빨간 머리 칸(`LAP 16 · 추월`) 아래 중심 차 팀 색 띠 + 본문(`RUSSELL → NORRIS`). 본문이 없으면 머리 칸만.
-class BroadcastCaption extends StatelessWidget {
-  const BroadcastCaption({super.key, required this.tag, required this.title, required this.accent});
-
-  final String tag;
-  final String title;
-  final Color accent;
-
-  @override
-  Widget build(BuildContext context) => Column(
         key: const ValueKey('highlights-caption'),
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            color: AppColors.replayBroadcastRed,
-            padding: _tagPadding,
-            child: Text(tag, key: const ValueKey('highlights-caption-tag'), style: _broadcastText(context, size: _tagFontSize)),
-          ),
-          if (title.isNotEmpty)
-            Container(
-              color: AppColors.replayBroadcastPanel.withValues(alpha: _panelOpacity),
-              child: IntrinsicHeight(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Container(width: _captionBarWidth, color: accent),
-                    Flexible(
-                      child: Padding(
-                        padding: _titlePadding,
-                        child: Text(
-                          title,
-                          key: const ValueKey('highlights-caption-title'),
-                          style: _broadcastText(context, size: _titleFontSize),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-        ],
+        color: AppColors.replayBroadcastRed,
+        padding: _tagPadding,
+        child: Text(tag, key: const ValueKey('highlights-caption-tag'), style: _broadcastText(context, size: _tagFontSize)),
       );
 }
 

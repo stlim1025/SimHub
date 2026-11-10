@@ -208,6 +208,38 @@ public sealed class HighlightsBuilderTests
     }
 
     [Fact]
+    public void ClipCars_CarryRpmAndBoost_OnlyWhenTheSamplesHaveThem()
+    {
+        var samples = Race(new Dictionary<byte, double> { [1] = 30, [Player] = 20, [2] = 10 });
+        var withRpm = samples with
+        {
+            Rpm = Enumerable.Repeat((ushort)11_500, samples.Count).ToArray(),
+            // 차 1은 내내 DRS를 열고, 나머지는 닫혀 있다.
+            Flags2 = samples.CarIndex.Select(car => car == 1 ? RaceSample.DrsFlag : (byte)0).ToArray(),
+        };
+
+        var cars = Build(withRpm).Race.SelectMany(c => c.Cars).ToList();
+        var oldCars = Build(samples with { Rpm = null, Flags2 = null }).Race.SelectMany(c => c.Cars).ToList();
+
+        Assert.NotEmpty(cars);
+        Assert.All(cars, car => Assert.All(car.Rpm!, rpm => Assert.Equal(11_500, rpm)));
+        Assert.All(cars, car => Assert.Equal(car.TimeMs.Count, car.Rpm!.Count));
+        Assert.All(cars.Where(c => c.CarIndex == 1), car => Assert.All(car.Boost!, b => Assert.Equal(RaceSample.BoostDrs, b)));
+        Assert.All(cars.Where(c => c.CarIndex != 1), car => Assert.Null(car.Boost));   // 구간 내내 0이면 싣지 않는다
+        Assert.All(oldCars, car => Assert.Null(car.Rpm));
+        Assert.All(oldCars, car => Assert.Null(car.Boost));
+    }
+
+    [Theory]
+    [InlineData(0x00, RaceSample.BoostNone)]
+    [InlineData(0x01, RaceSample.BoostDrs)]
+    [InlineData(0x20, RaceSample.BoostOvertakeAvailable)]
+    [InlineData(0x60, RaceSample.BoostOvertakeActive)]   // 쓰는 중이면 쓸 수 있음 비트도 함께 켜진다
+    [InlineData(0x06, RaceSample.BoostNone)]             // 추월함·추월당함 비트는 상관없다
+    public void Sample_Boost_ReadsDrsAndOvertakeBits(byte flags2, int expected)
+        => Assert.Equal(expected, new RaceSample(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, flags2, 0, 0, 0).Boost);
+
+    [Fact]
     public void YellowFlag_IsSentWithSectors_ButIsNoSceneAndKeepsOvertakes()
     {
         var samples = Race(

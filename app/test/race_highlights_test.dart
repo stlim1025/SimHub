@@ -3,10 +3,13 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:simcenter_app/core/theme/app_colors.dart';
 import 'package:simcenter_app/features/auth/domain/user_preferences.dart';
 import 'package:simcenter_app/features/lap_detail/domain/lap_detail_models.dart';
+import 'package:simcenter_app/features/sessions/domain/broadcast_graphics.dart';
 import 'package:simcenter_app/features/sessions/domain/race_highlights.dart';
 import 'package:simcenter_app/features/sessions/presentation/highlights_broadcast_overlay.dart';
+import 'package:simcenter_app/features/sessions/presentation/highlights_f1tv_graphics.dart';
 import 'package:simcenter_app/features/sessions/presentation/session_highlights_page.dart';
 
 /// 원 서킷(반지름 100m) 위를 50m/s로 도는 차의 클립 움직임: [fromMs]~[toMs], 200ms 간격, 출발 각도 [startRad].
@@ -47,7 +50,7 @@ Map<String, dynamic> _clipJson(String kind, int focus, {int? other, int startMs 
       ],
     };
 
-RaceHighlights _highlights({List<Map<String, dynamic>>? flags}) => RaceHighlights.fromJson({
+RaceHighlights _highlights({List<Map<String, dynamic>>? flags, List<Map<String, dynamic>>? mine}) => RaceHighlights.fromJson({
       'sessionId': 's1',
       'trackId': 't1',
       'gameCode': 'F1_25',
@@ -58,10 +61,11 @@ RaceHighlights _highlights({List<Map<String, dynamic>>? flags}) => RaceHighlight
         {'carIndex': 2, 'name': 'RUSSELL', 'teamColor': '#27F4D2', 'isPlayer': false, 'position': 3},
       ],
       'flags': flags ?? const [],
-      'mine': [
-        _clipJson('Start', 21, endMs: 4_000),
-        _clipJson('Overtake', 21, other: 2, startMs: 20_000, endMs: 30_000, lap: 12),
-      ],
+      'mine': mine ??
+          [
+            _clipJson('Start', 21, endMs: 4_000),
+            _clipJson('Overtake', 21, other: 2, startMs: 20_000, endMs: 30_000, lap: 12),
+          ],
       'race': [
         _clipJson('Start', 4, endMs: 4_000),
         _clipJson('Collision', 2, other: 4, startMs: 40_000, endMs: 50_000, lap: 20),
@@ -87,24 +91,41 @@ LapTrace _circleLap() {
   );
 }
 
-Future<void> _pumpPlayer(WidgetTester tester, RaceHighlights highlights, {double width = 1200}) async {
+Future<void> _pumpPlayer(
+  WidgetTester tester,
+  RaceHighlights highlights, {
+  double width = 1200,
+  Map<int, int> raceNumbers = const {},
+  Map<int, int> gridPositions = const {},
+}) async {
   tester.view
     ..physicalSize = Size(width, 1000)
     ..devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(MaterialApp(
     home: Scaffold(
-      body: SingleChildScrollView(child: HighlightsPlayer(highlights: highlights, trace: _circleLap())),
+      body: SingleChildScrollView(
+        child: HighlightsPlayer(highlights: highlights, trace: _circleLap(), raceNumbers: raceNumbers, gridPositions: gridPositions),
+      ),
     ),
   ));
   await tester.pump();
 }
 
-/// 하단 자막: 머리 칸 + 본문(없으면 머리 칸만).
-String _caption(WidgetTester t) {
-  final tag = t.widget<Text>(find.byKey(const ValueKey('highlights-caption-tag'))).data!;
-  final title = find.byKey(const ValueKey('highlights-caption-title'));
-  return title.evaluate().isEmpty ? tag : '$tag | ${t.widget<Text>(title).data}';
+String _textOf(WidgetTester t, String key) => t.widget<Text>(find.byKey(ValueKey(key))).data!;
+
+/// 하단 자막: 장면 태그 + 이름 자막의 성.
+String _caption(WidgetTester t) => '${_textOf(t, 'highlights-caption-tag')} | ${_textOf(t, 'highlights-driver-last')}';
+
+/// 재생을 켜고 [seconds]초 흘린 뒤 멈춘다.
+Future<void> _play(WidgetTester t, int seconds) async {
+  await t.tap(find.byKey(const ValueKey('highlights-play')));
+  await t.pump();
+  for (var i = 0; i < seconds * 2; i++) {
+    await t.pump(const Duration(milliseconds: 500));
+  }
+  await t.tap(find.byKey(const ValueKey('highlights-play')));
+  await t.pump();
 }
 
 void main() {
@@ -138,14 +159,85 @@ void main() {
   group('하단 자막', () {
     final highlights = _highlights();
 
-    test('머리 칸은 랩·장면(출발은 랩 없이), 본문은 드라이버(추월 →, 충돌 ↔)', () {
+    test('장면 태그는 랩·장면(출발은 랩 없이)', () {
       expect(highlightCaptionTag(highlights.mine[0]), '출발');
-      expect(highlightCaptionTitle(highlights.mine[0], highlights.nameOf), '');
       expect(highlightCaptionTag(highlights.mine[1]), 'LAP 12 · 추월');
-      expect(highlightCaptionTitle(highlights.mine[1], highlights.nameOf), 'ME → RUSSELL');
-      expect(highlightCaptionTitle(highlights.race[1], highlights.nameOf), 'RUSSELL ↔ VERSTAPPEN');
       expect(highlightCaptionTag(highlights.race[2]), 'LAP 39 · 결승');
-      expect(highlightCaptionTitle(highlights.race[2], highlights.nameOf), 'VERSTAPPEN');
+    });
+  });
+
+  group('중계 그래픽 계산', () {
+    final highlights = _highlights();
+    final start = highlights.mine[0];
+    final overtake = highlights.mine[1];
+    final collision = highlights.race[1];
+    final finish = highlights.race[2];
+
+    test('이름은 윗줄 이름 · 아랫줄 성(성만 오면 그리드 표에서 이름을 찾는다)', () {
+      expect(broadcastDriverName('VERSTAPPEN'), (first: 'Max', last: 'VERSTAPPEN'));
+      expect(broadcastDriverName('Lando Norris'), (first: 'Lando', last: 'NORRIS'));
+      expect(broadcastDriverName('ME'), (first: null, last: 'ME'));
+      expect(broadcastDriverName('  '), (first: null, last: ''));
+    });
+
+    test('서수 접미사', () {
+      expect([1, 2, 3, 4, 11, 12, 13, 21, 22].map(ordinalSuffix), ['ST', 'ND', 'RD', 'TH', 'TH', 'TH', 'TH', 'ST', 'ND']);
+    });
+
+    test('순위는 그 순간 순위표에서 읽는다', () {
+      expect(highlightPositionAt(overtake, 20_000, 21), 2);
+      expect(highlightPositionAt(overtake, 24_000, 21), 1);
+      expect(highlightPositionAt(overtake, 20_000, 9), isNull);
+    });
+
+    test('자막 오른쪽 칸: 추월 전 CHASING, 추월 뒤·출발은 레이스 스토리, 결승선 뒤 1위는 WINNER, 그 밖은 차 번호', () {
+      final chasing = lowerThirdDetail(overtake, 20_000, gridPosition: 5) as LowerThirdChasing;
+      expect((chasing.otherCar, chasing.position), (2, 3));
+      final story = lowerThirdDetail(overtake, 26_000, gridPosition: 5) as LowerThirdStory;
+      expect((story.started, story.now, story.finished), (5, 1, false));
+      expect(lowerThirdDetail(start, 0, gridPosition: 5), isA<LowerThirdStory>());
+      // 출발 순위를 모르면 스토리 대신 차 번호.
+      expect(lowerThirdDetail(start, 0), isA<LowerThirdNumber>());
+      expect(lowerThirdDetail(collision, 46_000, gridPosition: 5), isA<LowerThirdNumber>());
+      expect(lowerThirdDetail(finish, 60_000, gridPosition: 1), isA<LowerThirdNumber>());
+      // 결승 클립 순위표(63초부터 21 · 4 · 2): 4번 차는 2위로, 21번 차는 1위로 결승선을 지난다.
+      final finished = lowerThirdDetail(finish, 66_000, gridPosition: 1) as LowerThirdStory;
+      expect((finished.started, finished.now, finished.finished), (1, 2, true));
+      final won = _highlights(mine: [_clipJson('Finish', 21, startMs: 60_000, endMs: 70_000, lap: 39)]).mine.single;
+      expect(lowerThirdDetail(won, 66_000, gridPosition: 3), isA<LowerThirdWinner>());
+    });
+
+    test('레이스 컨트롤 메시지: 장면 순간부터, 충돌은 두 차 · 벽 충돌은 한 차 · 리타이어', () {
+      final nameOf = highlights.nameOf;
+      expect(raceControlMessage(collision, 44_000, nameOf, turn: '4'), isNull);
+      expect(raceControlMessage(collision, 45_000, nameOf, turn: '4'), 'TURN 4 INCIDENT INVOLVING RUSSELL AND VERSTAPPEN NOTED');
+      expect(raceControlMessage(collision, 45_000, nameOf), 'INCIDENT INVOLVING RUSSELL AND VERSTAPPEN NOTED');
+      expect(raceControlMessage(overtake, 26_000, nameOf, turn: '4'), isNull);
+      final others = _highlights(mine: [_clipJson('Crash', 4), _clipJson('Retirement', 2)]).mine;
+      expect(raceControlMessage(others[0], 5_000, nameOf, turn: '7A'), 'TURN 7A INCIDENT INVOLVING VERSTAPPEN NOTED');
+      expect(raceControlMessage(others[1], 5_000, nameOf, turn: '7A'), 'RUSSELL RETIRED FROM THE RACE');
+    });
+
+    test('표본에 RPM·DRS/오버테이크 열이 있으면 읽고, 없으면 RPM 없음·표시 꺼짐', () {
+      final track = HighlightCarTrack.fromJsonOrNull(
+        _trackJson(1, fromMs: 0, toMs: 1000)
+          ..['rpm'] = [for (var i = 0; i < 6; i++) 10_000 + i * 100]
+          ..['boost'] = [0, 1, 2, 3, 0, 0],
+      )!;
+      final path = TimedCarPath(track);
+      expect(path.hasRpm, isTrue);
+      expect(path.frameAt(100).rpm, 10_050);
+      expect([0, 200, 400, 600, 800].map((ms) => path.boostAt(ms.toDouble())), [
+        HighlightBoost.none,
+        HighlightBoost.drs,
+        HighlightBoost.overtakeAvailable,
+        HighlightBoost.overtakeActive,
+        HighlightBoost.none,
+      ]);
+
+      final plain = TimedCarPath(HighlightCarTrack.fromJsonOrNull(_trackJson(1))!);
+      expect(plain.hasRpm, isFalse);
+      expect(plain.boostAt(0), HighlightBoost.none);
     });
   });
 
@@ -291,7 +383,7 @@ void main() {
     testWidgets('내 하이라이트부터 첫 장면 캡션과 장면 수를 보인다', (t) async {
       await _pumpPlayer(t, _highlights());
 
-      expect(_caption(t), '출발');
+      expect(_caption(t), '출발 | ME');
       expect(find.text('1 / 2'), findsOneWidget);
       expect(find.byKey(const ValueKey('highlights-view')), findsOneWidget);
     });
@@ -301,12 +393,12 @@ void main() {
 
       await t.tap(find.byKey(const ValueKey('highlights-next')));
       await t.pump();
-      expect(_caption(t), 'LAP 12 · 추월 | ME → RUSSELL');
+      expect(_caption(t), 'LAP 12 · 추월 | ME');
       expect(find.text('2 / 2'), findsOneWidget);
 
       await t.tap(find.byKey(const ValueKey('highlights-reel-race')));
       await t.pump();
-      expect(_caption(t), '출발');
+      expect(_caption(t), '출발 | VERSTAPPEN');
       expect(find.text('1 / 3'), findsOneWidget);
     });
 
@@ -319,7 +411,7 @@ void main() {
       await t.pump(const Duration(milliseconds: 2500));
       await t.pump();
 
-      expect(_caption(t), 'LAP 12 · 추월 | ME → RUSSELL');
+      expect(_caption(t), 'LAP 12 · 추월 | ME');
       await t.tap(find.byKey(const ValueKey('highlights-play')));
       await t.pump();
     });
@@ -363,20 +455,98 @@ void main() {
       expect(banner, findsNothing);
     });
 
-    testWidgets('넓으면 오른쪽 아래에 중심 차 텔레메트리(이름·속도·기어), 좁으면 없다', (t) async {
+    testWidgets('넓으면 오른쪽 아래에 중심 차 속도계(속도·기어·DRS 칸), 좁으면 없다', (t) async {
       await _pumpPlayer(t, _highlights());
 
-      final panel = find.byKey(const ValueKey('highlights-telemetry'));
-      expect(panel, findsOneWidget);
-      expect(t.widget<Text>(find.byKey(const ValueKey('highlights-telemetry-name'))).data, 'ME');
-      expect(find.byKey(const ValueKey('highlights-telemetry-speed')), findsOneWidget);
-      expect(find.byKey(const ValueKey('highlights-telemetry-gear')), findsOneWidget);
+      final dial = find.byKey(const ValueKey('highlights-telemetry'));
+      expect(dial, findsOneWidget);
+      expect(_textOf(t, 'highlights-telemetry-speed'), '180');
+      expect(_textOf(t, 'highlights-telemetry-gear'), '6');
+      expect(find.descendant(of: find.byKey(const ValueKey('highlights-telemetry-boost')), matching: find.text('DRS')), findsOneWidget);
+      // 고정 데이터에 RPM·ERS 잔량이 없으면 RPM 줄·배터리 게이지도 없다.
       expect(find.byKey(const ValueKey('highlights-telemetry-rpm')), findsNothing);
-      // 고정 데이터에 ERS 잔량이 없으면 배터리 게이지도 없다.
       expect(find.byKey(const ValueKey('highlights-telemetry-battery')), findsNothing);
+      // 정사각형으로 재생 화면 오른쪽 아래 안쪽.
+      final rect = t.getRect(dial);
+      final view = t.getRect(find.byKey(const ValueKey('highlights-view')));
+      expect(rect.width, closeTo(rect.height, 0.5));
+      expect(view.right - rect.right, closeTo(12, 0.5));
+      expect(view.bottom - rect.bottom, closeTo(12, 0.5));
 
       await _pumpPlayer(t, _highlights(), width: 400);
-      expect(panel, findsNothing);
+      expect(dial, findsNothing);
+    });
+
+    testWidgets('아래에 중심 차 이름 자막: 출발은 레이스 스토리, 추월 전에는 CHASING, 추월 뒤에는 다시 스토리', (t) async {
+      await _pumpPlayer(t, _highlights(), width: 1900, raceNumbers: {21: 44}, gridPositions: {21: 5});
+
+      final name = find.byKey(const ValueKey('highlights-driver-name'));
+      expect(name, findsOneWidget);
+      expect(_textOf(t, 'highlights-driver-position'), '2');
+      expect(_textOf(t, 'highlights-driver-last'), 'ME');
+      expect(find.descendant(of: name, matching: find.text('RACE STORY')), findsOneWidget);
+      expect(_textOf(t, 'highlights-driver-story-started'), '5');
+      expect(_textOf(t, 'highlights-driver-story-now'), '2');
+      // 자막은 순위표 오른쪽·속도계 왼쪽, 장면 태그 아래.
+      final rect = t.getRect(name);
+      expect(rect.left, greaterThan(t.getRect(find.byKey(const ValueKey('highlights-standings'))).right));
+      expect(rect.right, lessThan(t.getRect(find.byKey(const ValueKey('highlights-telemetry'))).left));
+      expect(rect.top, greaterThan(t.getRect(find.byKey(const ValueKey('highlights-caption'))).bottom));
+
+      await t.tap(find.byKey(const ValueKey('highlights-next')));
+      await t.pump();
+      expect(_textOf(t, 'highlights-driver-chasing-name'), 'RUSSELL');
+      expect(_textOf(t, 'highlights-driver-chasing-position'), '3');
+      expect(find.byKey(const ValueKey('highlights-driver-story')), findsNothing);
+      // 자막 종류가 바뀌어도 배율(높이)은 그대로.
+      expect(t.getRect(name).height, closeTo(rect.height, 0.01));
+
+      await _play(t, 6);
+      expect(find.byKey(const ValueKey('highlights-driver-chasing')), findsNothing);
+      expect(_textOf(t, 'highlights-driver-story-started'), '5');
+      expect(_textOf(t, 'highlights-driver-story-now'), '1');
+    });
+
+    testWidgets('차 번호·출발 순위를 모르면 자막은 이름 칸까지만, 넓은 자막이 안 들어가는 폭이면 차 번호 칸만', (t) async {
+      await _pumpPlayer(t, _highlights(), width: 1900);
+      final name = find.byKey(const ValueKey('highlights-driver-name'));
+      expect(find.byKey(const ValueKey('highlights-driver-number')), findsNothing);
+      expect(find.byKey(const ValueKey('highlights-driver-story')), findsNothing);
+      final plain = t.getSize(name).width;
+
+      await _pumpPlayer(t, _highlights(), width: 1900, raceNumbers: {21: 44});
+      expect(_textOf(t, 'highlights-driver-number'), '44');
+      expect(t.getSize(name).width, greaterThan(plain));
+
+      // 순위표와 속도계 사이가 좁아 넓은 자막이 읽을 만하게 안 들어가면, 출발 순위를 알아도 차 번호 칸.
+      for (final width in [1200.0, 400.0]) {
+        await _pumpPlayer(t, _highlights(), width: width, raceNumbers: {21: 44}, gridPositions: {21: 5});
+        expect(_textOf(t, 'highlights-driver-number'), '44');
+        expect(find.byKey(const ValueKey('highlights-driver-story')), findsNothing);
+        expect(t.getRect(name).right, lessThanOrEqualTo(t.getRect(find.byKey(const ValueKey('highlights-view'))).right));
+      }
+      expect(t.takeException(), isNull);
+    });
+
+    testWidgets('충돌 장면 순간부터 위에 레이스 컨트롤 메시지, 좁으면 없다', (t) async {
+      await _pumpPlayer(t, _highlights());
+      await t.tap(find.byKey(const ValueKey('highlights-reel-race')));
+      await t.pump();
+      await t.tap(find.byKey(const ValueKey('highlights-next')));
+      await t.pump();
+      final box = find.byKey(const ValueKey('highlights-race-control'));
+      expect(box, findsNothing);
+
+      await _play(t, 6);
+      expect(_textOf(t, 'highlights-race-control-text'), endsWith('INCIDENT INVOLVING RUSSELL AND VERSTAPPEN NOTED'));
+      expect(find.descendant(of: box, matching: find.text('CONTROL')), findsOneWidget);
+      // 순위표 오른쪽, 재생 화면 위쪽.
+      expect(t.getRect(box).left, greaterThan(t.getRect(find.byKey(const ValueKey('highlights-standings'))).right));
+      expect(t.getRect(box).top, closeTo(t.getRect(find.byKey(const ValueKey('highlights-view'))).top + 12, 0.5));
+
+      await _pumpPlayer(t, _highlights(), width: 400);
+      expect(box, findsNothing);
+      expect(t.takeException(), isNull);
     });
 
     testWidgets('옐로 플래그면 순위표 배너에 섹터를 쓴다', (t) async {
@@ -493,7 +663,7 @@ void main() {
 
       await t.tap(find.byKey(const ValueKey('highlights-list-row-1')));
       await t.pump();
-      expect(_caption(t), 'LAP 12 · 추월 | ME → RUSSELL');
+      expect(_caption(t), 'LAP 12 · 추월 | ME');
       expect(find.text('2 / 2'), findsOneWidget);
 
       // 묶음을 바꾸면 목록도 그 묶음 장면.
@@ -529,19 +699,117 @@ void main() {
     });
   });
 
-  testWidgets('텔레메트리 판: 잔량을 알면 기어 위에 배터리 게이지와 %', (t) async {
-    final track = HighlightCarTrack.fromJsonOrNull(
-      _trackJson(1, fromMs: 0, toMs: 1000)..['ersStoreKj'] = [for (var i = 0; i < 6; i++) 2480],
-    )!;
-    await t.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: BroadcastTelemetry(name: 'NORRIS', color: Colors.orange, frame: TimedCarPath(track).frameAt(0), units: UnitSystem.metric),
-      ),
-    ));
+  group('중계 그래픽 위젯', () {
+    Future<void> pump(WidgetTester t, Widget child) =>
+        t.pumpWidget(MaterialApp(home: Scaffold(body: Center(child: FittedBox(child: child)))));
 
-    final battery = find.byKey(const ValueKey('highlights-telemetry-battery'));
-    expect(battery, findsOneWidget);
-    expect(find.descendant(of: battery, matching: find.text('62%')), findsOneWidget); // 2480kJ / 4MJ
-    expect(t.getBottomLeft(battery).dy, lessThan(t.getTopLeft(find.byKey(const ValueKey('highlights-telemetry-gear'))).dy));
+    testWidgets('속도계: 잔량을 알면 기어 위에 배터리 게이지와 %, RPM 열이 있으면 RPM', (t) async {
+      final track = HighlightCarTrack.fromJsonOrNull(
+        _trackJson(1, fromMs: 0, toMs: 1000)
+          ..['ersStoreKj'] = [for (var i = 0; i < 6; i++) 2480]
+          ..['rpm'] = [for (var i = 0; i < 6; i++) 11_250],
+      )!;
+      final path = TimedCarPath(track);
+      await pump(t, BroadcastSpeedometer(frame: path.frameAt(0), units: UnitSystem.metric, showRpm: path.hasRpm));
+
+      final battery = find.byKey(const ValueKey('highlights-telemetry-battery'));
+      expect(find.descendant(of: battery, matching: find.text('62%')), findsOneWidget); // 2480kJ / 4MJ
+      expect(t.getBottomLeft(battery).dy, lessThan(t.getTopLeft(find.byKey(const ValueKey('highlights-telemetry-gear'))).dy));
+      expect(_textOf(t, 'highlights-telemetry-speed'), '180');
+      expect(_textOf(t, 'highlights-telemetry-rpm'), '11250');
+      expect(find.text('KMH'), findsOneWidget);
+      expect(find.text('GEAR'), findsOneWidget);
+
+      await pump(t, BroadcastSpeedometer(frame: path.frameAt(0), units: UnitSystem.imperial, showRpm: false));
+      expect(_textOf(t, 'highlights-telemetry-speed'), '112'); // 180km/h
+      expect(find.text('MPH'), findsOneWidget);
+      expect(find.byKey(const ValueKey('highlights-telemetry-rpm')), findsNothing);
+      expect(t.takeException(), isNull);
+    });
+
+    testWidgets('속도계 표시 칸: 꺼짐은 DRS(2026 규정 차는 OT), DRS 열림은 초록, 오버테이크는 청록(쓸 수 있으면 테두리만)', (t) async {
+      final frame = TimedCarPath(HighlightCarTrack.fromJsonOrNull(_trackJson(1))!).frameAt(0);
+      final indicator = find.byKey(const ValueKey('highlights-telemetry-boost'));
+      BoxDecoration box() => t.widget<Container>(indicator).decoration! as BoxDecoration;
+      String label() => t.widget<Text>(find.descendant(of: indicator, matching: find.byType(Text))).data!;
+      Future<void> show(HighlightBoost boost, {bool overtakeRegs = false}) =>
+          pump(t, BroadcastSpeedometer(frame: frame, units: UnitSystem.metric, boost: boost, overtakeRegs: overtakeRegs));
+
+      await show(HighlightBoost.none);
+      expect(label(), 'DRS');
+      expect(box().color, AppColors.replayF1tvIndicator);
+      expect(box().border, isNull);
+
+      await show(HighlightBoost.none, overtakeRegs: true);
+      expect(label(), 'OT');
+
+      await show(HighlightBoost.drs);
+      expect(label(), 'DRS');
+      expect(box().color, AppColors.replayF1tvDrs);
+
+      await show(HighlightBoost.overtakeAvailable);
+      expect(label(), 'OT');
+      expect(box().color, AppColors.replayF1tvIndicator);
+      expect((box().border! as Border).top.color, AppColors.replayF1tvOvertake);
+
+      await show(HighlightBoost.overtakeActive);
+      expect(label(), 'OT');
+      expect(box().color, AppColors.replayF1tvOvertake);
+    });
+
+    testWidgets('이름 자막: 번호 · 추격 · 스토리 · 우승 칸', (t) async {
+      const orange = Color(0xFFFF8000);
+      Future<void> show(LowerThirdDetail detail, {int? number}) => pump(
+            t,
+            BroadcastDriverName(
+              name: 'VERSTAPPEN',
+              teamColor: const Color(0xFF3671C6),
+              detail: detail,
+              position: 3,
+              teamName: 'Red Bull Racing',
+              raceNumber: number,
+              otherName: 'NORRIS',
+              otherColor: orange,
+            ),
+          );
+
+      await show(const LowerThirdNumber(), number: 1);
+      expect(_textOf(t, 'highlights-driver-first'), 'Max');
+      expect(_textOf(t, 'highlights-driver-last'), 'VERSTAPPEN');
+      expect(_textOf(t, 'highlights-driver-team'), 'RED BULL RACING');
+      expect(_textOf(t, 'highlights-driver-position'), '3');
+      expect(_textOf(t, 'highlights-driver-number'), '1');
+
+      await show(const LowerThirdChasing(otherCar: 4, position: 2));
+      final chased = t.widget<Text>(find.byKey(const ValueKey('highlights-driver-chasing-name')));
+      expect((chased.data, chased.style!.color), ('NORRIS', orange));
+      expect(find.text('CHASING'), findsOneWidget);
+      expect(find.text('ND'), findsOneWidget);
+      expect(find.byKey(const ValueKey('highlights-driver-number')), findsNothing);
+
+      await show(const LowerThirdStory(started: 10, now: 3, finished: true));
+      expect(_textOf(t, 'highlights-driver-story-started'), '10');
+      expect(_textOf(t, 'highlights-driver-story-now'), '3');
+      expect(find.text('FINISHED:'), findsOneWidget);
+      expect(find.text('NOW:'), findsNothing);
+
+      await show(const LowerThirdWinner());
+      expect(find.text('RACE'), findsOneWidget);
+      expect(find.text('WINNER'), findsOneWidget);
+      expect(t.takeException(), isNull);
+    });
+
+    testWidgets('턴 표시와 레이스 컨트롤 메시지', (t) async {
+      await pump(t, const BroadcastTurnIndicator(turn: '7A'));
+      expect(find.text('TURN'), findsOneWidget);
+      expect(_textOf(t, 'highlights-turn-number'), '7A');
+
+      const message = 'TURN 4 INCIDENT INVOLVING VERSTAPPEN AND RUSSELL NOTED';
+      await pump(t, const BroadcastMessageBox(message: message));
+      expect(find.text('RACE'), findsOneWidget);
+      expect(find.text('CONTROL'), findsOneWidget);
+      expect(_textOf(t, 'highlights-race-control-text'), message);
+      expect(t.takeException(), isNull);
+    });
   });
 }

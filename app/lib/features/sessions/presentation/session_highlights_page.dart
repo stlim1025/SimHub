@@ -25,7 +25,6 @@ import '../../lap_detail/domain/lap_detail_models.dart';
 import '../../lap_detail/presentation/ghost_replay.dart';
 import '../../lap_detail/presentation/ghost_replay_3d_painter.dart';
 import '../../lap_detail/presentation/replay_circuit.dart';
-import '../../lap_detail/presentation/replay_corner_badge.dart';
 import '../../lap_detail/presentation/replay_three_scene.dart';
 import '../../lap_detail/presentation/replay_three_view.dart';
 import '../../profile/application/team_logos_provider.dart';
@@ -35,9 +34,11 @@ import '../../tracks/application/tracks_providers.dart';
 import '../../tracks/domain/track_sample_geometry.dart';
 import '../../tracks/domain/track_width_profile.dart';
 import '../application/sessions_providers.dart';
+import '../domain/broadcast_graphics.dart';
 import '../domain/race_highlights.dart';
 import '../domain/session_models.dart';
 import 'highlights_broadcast_overlay.dart';
+import 'highlights_f1tv_graphics.dart';
 import 'session_widgets.dart';
 import 'tyre_stints_view.dart';
 
@@ -85,9 +86,26 @@ const double _compactTowerMaxViewWidth = 600;
 /// 순위표가 차지할 수 있는 재생 화면 폭 비율(높이에 맞춰 키우다 이 폭에서 멈춘다).
 const double _towerWidthFraction = 0.3;
 
-/// 오른쪽 아래 텔레메트리 판이 차지할 수 있는 재생 화면 폭·높이 비율(넘으면 줄인다).
-const double _telemetryWidthFraction = 0.24;
-const double _telemetryHeightFraction = 0.55;
+/// 오른쪽 아래 속도계(정사각형)가 차지할 수 있는 재생 화면 폭·높이 비율(둘 중 작은 쪽, 설계 크기까지만 키운다).
+const double _speedometerWidthFraction = 0.24;
+const double _speedometerHeightFraction = 0.55;
+
+/// 장면 태그와 그 아래 드라이버 이름 자막 사이 간격.
+const double _captionGap = 4;
+
+/// 넓은 자막(추격 · 레이스 스토리 · 우승)을 쓰는 최소 배율: 순위표와 속도계 사이에 이보다 작게 들어가야 하면
+/// 글자가 안 읽히므로 차 번호 자막으로 고정한다.
+const double _nameMinFullScale = 0.45;
+
+/// 턴 표시 높이: 재생 화면 높이 비율과 그 하한(상한은 설계 높이).
+const double _turnHeightFraction = 0.085;
+const double _turnMinHeight = 28;
+
+/// 레이스 컨트롤 메시지 상자가 차지할 수 있는 재생 화면 폭 비율(설계 크기까지만 키운다).
+const double _messageWidthFraction = 0.4;
+
+/// 오버테이크 모드(2026 규정) 차를 쓰는 게임: 속도계 표시 칸의 꺼진 글자가 `DRS` 대신 `OT`.
+const String _overtakeRegsGameCode = 'F1_26';
 
 /// 조작 줄 폭이 이보다 좁으면 시간 막대를 아랫줄로 내린다.
 const double _singleRowControlsMinWidth = 760;
@@ -294,6 +312,14 @@ class _Loaded extends ConsumerWidget {
       officialCorners: ref.watch(trackCornersProvider).valueOrNull?[trackName],
       teamLogoUrl: ref.watch(teamLogoUrlProvider),
       units: ref.watch(authControllerProvider).valueOrNull?.preferences.units ?? UnitSystem.metric,
+      raceNumbers: {
+        for (final result in detail.results)
+          if (result.raceNumber != null) result.carIndex: result.raceNumber!,
+      },
+      gridPositions: {
+        for (final result in detail.results)
+          if (result.gridPosition > 0) result.carIndex: result.gridPosition,
+      },
     );
   }
 }
@@ -326,6 +352,8 @@ class HighlightsPlayer extends StatefulWidget {
     this.officialCorners,
     this.teamLogoUrl,
     this.units = UnitSystem.metric,
+    this.raceNumbers = const {},
+    this.gridPositions = const {},
   });
 
   final RaceHighlights highlights;
@@ -340,11 +368,15 @@ class HighlightsPlayer extends StatefulWidget {
   /// 이 트랙의 공식 코너(번호·위치). 없으면 주행선에서 코너를 찾는다.
   final List<OfficialCorner>? officialCorners;
 
-  /// 팀 로고 URL(순위표). null이면 로고 없이 팀 색 띠.
+  /// 팀 로고 URL(순위표·드라이버 이름 자막). null이면 로고 없이 팀 색 띠.
   final TeamLogoUrlBuilder? teamLogoUrl;
 
-  /// 텔레메트리 판 속도 단위(내 설정).
+  /// 속도계 속도 단위(내 설정).
   final UnitSystem units;
+
+  /// 차 번호·출발 순위(차 인덱스 → 값, 드라이버 이름 자막). 모르는 차는 빠져 있다.
+  final Map<int, int> raceNumbers;
+  final Map<int, int> gridPositions;
 
   @override
   State<HighlightsPlayer> createState() => _HighlightsPlayerState();
@@ -804,8 +836,10 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
 
   Widget _view(BuildContext context, HighlightClip clip) => LayoutBuilder(builder: (context, box) => _viewSized(context, clip, box));
 
-  /// 재생 화면(중계 그래픽: 왼쪽 순위표 — 깃발은 순위표 위쪽 배너, 아래 자막, 오른쪽 아래 중심 차 텔레메트리,
-  /// 위 피니시 띠·순위표가 없을 때의 깃발 띠). 좁으면(폰) 순위표는 간격 칸 없이 좁게, 텔레메트리는 뺀다.
+  /// 재생 화면(중계 그래픽: 왼쪽 순위표 — 깃발은 순위표 위쪽 배너, 아래 장면 태그와 중심 차 드라이버 이름 자막,
+  /// 오른쪽 아래 중심 차 속도계, 위 레이스 컨트롤 메시지·피니시 띠·순위표가 없을 때의 깃발 띠, 오른쪽 위 턴 표시).
+  /// 좁으면(폰) 순위표는 간격 칸 없이 좁게, 속도계와 레이스 컨트롤 메시지는 뺀다. 자막은 넓은 칸(추격·스토리·우승)이
+  /// 읽을 만하게 들어갈 때만 쓰고, 아니면 차 번호 칸까지만 보인다.
   Widget _viewSized(BuildContext context, HighlightClip clip, BoxConstraints box) {
     final highlights = widget.highlights;
     final compact = box.maxWidth < _compactTowerMaxViewWidth;
@@ -820,9 +854,23 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
           );
     final captionLeft = _overlayInset + (towerWidth == 0 ? 0 : towerWidth + _overlayInset);
     final focus = compact ? null : _focus;
-    final telemetryMaxWidth = box.maxWidth * _telemetryWidthFraction;
-    final captionRight = _overlayInset +
-        (focus == null ? 0 : math.min(telemetryMaxWidth, kBroadcastTelemetryWidth) + _overlayInset);
+    final speedometerSide = [
+      box.maxWidth * _speedometerWidthFraction,
+      box.maxHeight * _speedometerHeightFraction,
+      kBroadcastSpeedometerSize,
+    ].reduce(math.min);
+    final captionRight = _overlayInset + (focus == null ? 0 : speedometerSide + _overlayInset);
+    // 자막 배율: 가장 넓은 자막이 순위표와 속도계 사이에 들어가게, 설계 크기까지만 키운다.
+    // 넓은 자막이 읽을 만한 배율로 안 들어가면(좁은 화면 포함) 차 번호 자막으로 고정하고 그 폭에 맞춘다.
+    final nameRoom = box.maxWidth - captionLeft - captionRight;
+    final numberOnly = compact || nameRoom < kBroadcastDriverNameMaxWidth * _nameMinFullScale;
+    final nameDesignWidth =
+        numberOnly ? broadcastDriverNameWidth(const LowerThirdNumber(), hasNumber: true) : kBroadcastDriverNameMaxWidth;
+    final nameScale = (nameRoom / nameDesignWidth).clamp(0.0, 1.0);
+    final turnHeight = (box.maxHeight * _turnHeightFraction).clamp(_turnMinHeight, kBroadcastTurnHeight);
+    // 레이스 컨트롤 메시지에 넣을, 장면이 난 코너.
+    final incident = _cornerOf(_focus!, clip.eventMs.toDouble());
+    final incidentTurn = incident == null ? null : _turnText(incident);
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -853,19 +901,17 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
           Positioned(
             right: _overlayInset,
             bottom: _overlayInset,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: telemetryMaxWidth, maxHeight: box.maxHeight * _telemetryHeightFraction),
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.bottomRight,
-                child: ValueListenableBuilder<double>(
-                  valueListenable: _time,
-                  builder: (context, time, _) => BroadcastTelemetry(
-                    name: highlights.nameOf(clip.focusCar),
-                    color: _colorOf(clip.focusCar),
-                    frame: focus.frameAt(time),
-                    units: widget.units,
-                  ),
+            width: speedometerSide,
+            height: speedometerSide,
+            child: FittedBox(
+              child: ValueListenableBuilder<double>(
+                valueListenable: _time,
+                builder: (context, time, _) => BroadcastSpeedometer(
+                  frame: focus.frameAt(time),
+                  units: widget.units,
+                  boost: focus.boostAt(time),
+                  overtakeRegs: highlights.gameCode == _overtakeRegsGameCode,
+                  showRpm: focus.hasRpm,
                 ),
               ),
             ),
@@ -874,13 +920,17 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
           left: captionLeft,
           right: captionRight,
           bottom: _overlayInset,
-          child: Align(
-            alignment: Alignment.bottomLeft,
-            child: BroadcastCaption(
-              tag: highlightCaptionTag(clip),
-              title: highlightCaptionTitle(clip, highlights.nameOf),
-              accent: _colorOf(clip.focusCar),
-            ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              BroadcastCaption(tag: highlightCaptionTag(clip)),
+              const SizedBox(height: _captionGap),
+              ValueListenableBuilder<double>(
+                valueListenable: _time,
+                builder: (context, time, _) => _driverName(clip, time, scale: nameScale, numberOnly: numberOnly),
+              ),
+            ],
           ),
         ),
         Positioned(
@@ -893,11 +943,17 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
               // 순위표가 있으면 깃발은 순위표 위쪽 배너로 띄운다(실제 중계처럼) — 가운데 띠는 순위표가 없을 때만.
               final flag = clip.standings.isEmpty ? activeRaceFlag(highlights.flags, time) : null;
               final finished = highlightFinished(clip, time);
+              final message = compact ? null : raceControlMessage(clip, time, highlights.nameOf, turn: incidentTurn);
               return Column(
                 children: [
                   if (flag != null) BroadcastFlagStrip(flag),
-                  if (flag != null && finished) const SizedBox(height: _bannerGap),
+                  if (flag != null && (finished || message != null)) const SizedBox(height: _bannerGap),
                   if (finished) const BroadcastFinishStrip(),
+                  if (message != null)
+                    ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: box.maxWidth * _messageWidthFraction),
+                      child: FittedBox(fit: BoxFit.scaleDown, child: BroadcastMessageBox(message: message)),
+                    ),
                 ],
               );
             },
@@ -906,14 +962,51 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
         Positioned(
           top: _overlayInset,
           right: _overlayInset,
+          height: turnHeight,
           child: ValueListenableBuilder<double>(
             valueListenable: _time,
-            builder: (context, time, _) => ReplayCornerBadge(corner: _cornerOf(_focus!, time)),
+            builder: (context, time, _) {
+              final corner = _cornerOf(_focus!, time);
+              return corner == null
+                  ? const SizedBox.shrink()
+                  : FittedBox(alignment: Alignment.topRight, child: BroadcastTurnIndicator(turn: _turnText(corner)));
+            },
           ),
         ),
       ],
     );
   }
+
+  /// 중심 차의 드라이버 이름 자막([scale]배). [numberOnly]면 오른쪽 칸을 차 번호로 고정한다.
+  Widget _driverName(HighlightClip clip, double time, {required double scale, required bool numberOnly}) {
+    final highlights = widget.highlights;
+    final car = clip.focusCar;
+    final detail =
+        numberOnly ? const LowerThirdNumber() : lowerThirdDetail(clip, time, gridPosition: widget.gridPositions[car]);
+    final number = widget.raceNumbers[car];
+    final other = detail is LowerThirdChasing ? detail.otherCar : null;
+    return SizedBox(
+      width: broadcastDriverNameWidth(detail, hasNumber: number != null) * scale,
+      height: kBroadcastDriverNameHeight * scale,
+      child: FittedBox(
+        alignment: Alignment.bottomLeft,
+        child: BroadcastDriverName(
+          name: highlights.nameOf(car),
+          teamColor: _colorOf(car),
+          detail: detail,
+          position: highlightPositionAt(clip, time, car),
+          teamName: highlights.car(car)?.teamName,
+          logoUrl: _logoOf(car),
+          raceNumber: number,
+          otherName: other == null ? null : highlights.nameOf(other),
+          otherColor: other == null ? null : _colorOf(other),
+        ),
+      ),
+    );
+  }
+
+  /// 턴 표시·레이스 컨트롤 메시지에 쓰는 코너 번호 글자(`3`·`7A`).
+  static String _turnText(LapCorner corner) => '${corner.number}${corner.letter}';
 
   /// 중심 차의 지금 코너: 그 위치에서 가장 가까운 내 랩 지점이 든 코너.
   LapCorner? _cornerOf(TimedCarPath car, double time) {

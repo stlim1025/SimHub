@@ -4,7 +4,7 @@ namespace SimCenter.Application.TrackSamples;
 
 /// <summary>
 /// 레이스 한 순간 차 한 대(표본 열을 한데 모은 값). 상태·표시 비트는 계약(<c>shared/schema/track_samples_chunk.json</c>) 그대로.
-/// <see cref="ErsStoreKj"/> = ERS 배터리 잔량(kJ, format 5부터, 모르면 null).
+/// <see cref="ErsStoreKj"/> = ERS 배터리 잔량(kJ, format 5부터, 모르면 null), <see cref="Rpm"/> = 엔진 회전수(format 5부터, 모르면 null).
 /// </summary>
 public readonly record struct RaceSample(
     int TimeMs,
@@ -22,8 +22,26 @@ public readonly record struct RaceSample(
     float GLateral,
     float GLongitudinal,
     byte TyreVisualRaw = 0,
-    ushort? ErsStoreKj = null)
+    ushort? ErsStoreKj = null,
+    ushort? Rpm = null)
 {
+    /// <summary>표시 비트 2: DRS 열림, (UDP 형식 2026) 오버테이크 모드 쓸 수 있음·쓰는 중.</summary>
+    public const byte DrsFlag = 0x01;
+    public const byte OvertakeAvailableFlag = 0x20;
+    public const byte OvertakeActiveFlag = 0x40;
+
+    /// <summary>중계 속도계의 DRS·오버테이크 표시 값: 0 없음, 1 DRS 열림, 2 오버테이크 모드 쓸 수 있음, 3 오버테이크 모드 쓰는 중.</summary>
+    public const int BoostNone = 0;
+    public const int BoostDrs = 1;
+    public const int BoostOvertakeAvailable = 2;
+    public const int BoostOvertakeActive = 3;
+
+    /// <summary>이 표본의 DRS·오버테이크 표시 값(<see cref="BoostNone"/>…<see cref="BoostOvertakeActive"/>).</summary>
+    public int Boost => (Flags2 & OvertakeActiveFlag) != 0 ? BoostOvertakeActive
+        : (Flags2 & OvertakeAvailableFlag) != 0 ? BoostOvertakeAvailable
+        : (Flags2 & DrsFlag) != 0 ? BoostDrs
+        : BoostNone;
+
     /// <summary>F1 게임 보이는 컴파운드 원시 값(소프트·미디엄·하드·인터·웻).</summary>
     private const byte RawSoft = 16;
     private const byte RawMedium = 17;
@@ -126,7 +144,8 @@ public sealed class RaceTimeline
                     chunk.GLateral?[i] ?? 0,
                     chunk.GLongitudinal?[i] ?? 0,
                     chunk.TyreCompound?[i] ?? 0,
-                    chunk.ErsStoreKj?[i])));
+                    chunk.ErsStoreKj?[i],
+                    chunk.Rpm?[i])));
             }
         }
 

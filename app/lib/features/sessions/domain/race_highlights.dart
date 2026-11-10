@@ -114,6 +114,8 @@ class HighlightCarTrack {
     this.pit = const [],
     this.tyre = const [],
     this.ersStoreKj = const [],
+    this.rpm = const [],
+    this.boost = const [],
   });
 
   final int carIndex;
@@ -130,6 +132,12 @@ class HighlightCarTrack {
 
   /// 표본마다 ERS 배터리 잔량(kJ). 옛 표본이라 없으면 비어 있다.
   final List<int> ersStoreKj;
+
+  /// 표본마다 엔진 회전수. 옛 표본·옛 서버라 없으면 비어 있다.
+  final List<int> rpm;
+
+  /// 표본마다 DRS·오버테이크 표시. 구간 내내 없으면(또는 옛 서버) 비어 있다.
+  final List<HighlightBoost> boost;
 
   int get length => timeMs.length;
 
@@ -149,11 +157,15 @@ class HighlightCarTrack {
     final pit = ints('pit');
     final tyre = json['tyre'] as List<dynamic>? ?? const [];
     final ers = ints('ersStoreKj');
+    final rpm = ints('rpm');
+    final boost = ints('boost');
     final n = time.length;
     if (car == null || n == 0 || [x, z, speed, gear, throttle, brake, lap].any((c) => c.length != n)) {
       return null;
     }
     HighlightPit pitOf(int value) => value >= 0 && value < HighlightPit.values.length ? HighlightPit.values[value] : HighlightPit.none;
+    HighlightBoost boostOf(int value) =>
+        value >= 0 && value < HighlightBoost.values.length ? HighlightBoost.values[value] : HighlightBoost.none;
     return HighlightCarTrack(
       carIndex: car,
       timeMs: time,
@@ -167,12 +179,17 @@ class HighlightCarTrack {
       pit: pit.length == n ? [for (final p in pit) pitOf(p)] : const [],
       tyre: tyre.length == n ? [for (final t in tyre) _tyreOf(t)] : const [],
       ersStoreKj: ers.length == n ? ers : const [],
+      rpm: rpm.length == n ? rpm : const [],
+      boost: boost.length == n ? [for (final b in boost) boostOf(b)] : const [],
     );
   }
 }
 
 /// 순위표 칸 상태(서버 `StandingState` 값 순서).
 enum StandingState { running, pit, finished, out }
+
+/// 중계 속도계의 DRS·오버테이크 표시(서버 `boost` 값 순서): 없음, DRS 열림, 오버테이크 모드 쓸 수 있음, 오버테이크 모드 쓰는 중.
+enum HighlightBoost { none, drs, overtakeAvailable, overtakeActive }
 
 /// 순위표 한 칸: 차, 리더와의 간격(ms, 리더 0, 모르면 null), 랩 뒤처짐, 상태, 끼고 있는 컴파운드.
 typedef HighlightStandingRow = ({int carIndex, int? gapMs, int lapsDown, StandingState state, HighlightTyre tyre});
@@ -396,23 +413,10 @@ const int _tenthsPerMinute = 600;
 /// `ss.s` 글자 폭(1분 넘는 간격의 초 칸, 앞을 0으로 채운다).
 const int _secondsWidth = 4;
 
-/// 하단 자막 머리 글자: `LAP 12 · 추월`, 출발은 `출발`(순수 함수).
+/// 하단 장면 태그 글자: `LAP 12 · 추월`, 출발은 `출발`(순수 함수).
 String highlightCaptionTag(HighlightClip clip) {
   final kind = kHighlightKindLabels[clip.kind]!;
   return clip.kind == HighlightKind.start ? kind : 'LAP ${clip.lap} · $kind';
-}
-
-/// 하단 자막 본문: 추월 `A → B`, 충돌 `A ↔ B`, 그 밖은 중심 차 이름, 출발은 빈 글자(순수 함수).
-String highlightCaptionTitle(HighlightClip clip, String Function(int carIndex) nameOf) {
-  final focus = nameOf(clip.focusCar);
-  final other = clip.otherCar == null ? null : nameOf(clip.otherCar!);
-  return switch (clip.kind) {
-    HighlightKind.start => '',
-    HighlightKind.overtake when other != null => '$focus → $other',
-    HighlightKind.collision when other != null => '$focus ↔ $other',
-    HighlightKind.safetyCar || HighlightKind.virtualSafetyCar || HighlightKind.redFlag => '',
-    _ => focus,
-  };
 }
 
 /// 피트 표시 글자.
@@ -552,6 +556,13 @@ class TimedCarPath implements ReplayCar {
   HighlightTyre tyreAt(double elapsedMs) =>
       track.tyre.isEmpty ? HighlightTyre.unknown : track.tyre[_positionAt(elapsedMs).floor()];
 
+  /// 엔진 회전수 표본이 있는지(없으면 [frameAt]의 rpm은 0이다).
+  bool get hasRpm => track.rpm.isNotEmpty;
+
+  /// [elapsedMs]의 DRS·오버테이크 표시(바로 앞 표본 값, 표시가 없으면 none).
+  HighlightBoost boostAt(double elapsedMs) =>
+      track.boost.isEmpty ? HighlightBoost.none : track.boost[_positionAt(elapsedMs).floor()];
+
   /// [elapsedMs]의 피트 인·아웃(바로 앞 표본 값, 표시가 없으면 none).
   HighlightPit pitAt(double elapsedMs) {
     if (track.pit.isEmpty) {
@@ -572,7 +583,7 @@ class TimedCarPath implements ReplayCar {
       speedKph: _lerp(track.speedKph, position),
       steer: 0,
       gear: track.gear[position.floor()],
-      rpm: 0,
+      rpm: track.rpm.isEmpty ? 0 : _lerp(track.rpm, position).round(),
       throttle: _lerp(track.throttle, position).round(),
       brake: _lerp(track.brake, position).round(),
       finished: false,
