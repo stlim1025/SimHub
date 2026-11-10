@@ -182,6 +182,31 @@ public sealed class SeasonsApiE2ETests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task SeasonAiDifficulty_ReturnsWeekendsWithTeammateComparison_And404ForUnknownSeason()
+    {
+        var seeded = await SeedTwoRoundSeasonAsync();
+        var seasonId = (await GetOkAsync(seeded.Client, SeasonsUrl))
+            .GetProperty("items")[0].GetProperty("seasonId").GetGuid();
+
+        var guide = await GetOkAsync(seeded.Client, $"{SeasonsUrl}/{seasonId}/ai-difficulty");
+        var weekends = guide.GetProperty("weekends").EnumerateArray().ToList();
+        Assert.Equal(RoundCount, weekends.Count);
+        Assert.Equal(new[] { 1, 2 }, weekends.Select(w => w.GetProperty("round").GetInt32()).ToArray());
+        Assert.All(weekends, w => Assert.Single(w.GetProperty("races").EnumerateArray()));
+        Assert.True(guide.GetProperty("qualifying").TryGetProperty("verdict", out _));
+        Assert.True(guide.GetProperty("race").TryGetProperty("verdict", out _));
+        Assert.Equal(JsonValueKind.Array, guide.GetProperty("timeTrial").ValueKind);
+
+        // 시즌 상세 라운드에는 우승자 팀 색이 함께 온다.
+        var (_, detail) = await GetJsonAsync(seeded.Client, $"{SeasonsUrl}/{seasonId}");
+        Assert.All(detail.GetProperty("rounds").EnumerateArray(), round =>
+            Assert.Matches("^#[0-9A-Fa-f]{6}$", round.GetProperty("winnerTeamColor").GetString()!));
+
+        var (status, _) = await GetJsonAsync(seeded.Client, $"{SeasonsUrl}/{Guid.NewGuid()}/ai-difficulty");
+        Assert.Equal(HttpStatusCode.NotFound, status);
+    }
+
+    [Fact]
     public async Task Sessions_ListFilterAndDetail()
     {
         var seeded = await SeedTwoRoundSeasonAsync();

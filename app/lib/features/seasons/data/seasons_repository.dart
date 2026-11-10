@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_provider.dart';
+import '../domain/season_ai_difficulty.dart';
 import '../domain/season_display.dart';
 import '../domain/season_import_models.dart';
 import '../domain/season_models.dart';
@@ -58,6 +59,16 @@ class SeasonsRepository {
   Future<void> deleteSeason(String seasonId) async {
     try {
       await _dio.delete<void>(_seasonPath(seasonId));
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// 시즌 AI 난이도 가이드(AI 팀메이트 대비 예선·레이스 차이, 차 수준, 타임트라이얼 비교). 남의 시즌이거나 없으면 404 [ApiException].
+  Future<SeasonAiDifficulty> getMySeasonAiDifficulty(String seasonId) async {
+    try {
+      final res = await _dio.get<Map<String, dynamic>>('${_seasonPath(seasonId)}/ai-difficulty');
+      return SeasonAiDifficulty.fromJson(res.data!);
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }

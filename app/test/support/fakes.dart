@@ -23,6 +23,7 @@ import 'package:simcenter_app/features/ranking/data/ranking_repository.dart';
 import 'package:simcenter_app/features/ranking/domain/ranking_models.dart';
 import 'package:simcenter_app/features/seasons/data/seasons_repository.dart';
 import 'package:simcenter_app/features/seasons/domain/season_display.dart';
+import 'package:simcenter_app/features/seasons/domain/season_ai_difficulty.dart';
 import 'package:simcenter_app/features/seasons/domain/season_import_models.dart';
 import 'package:simcenter_app/features/seasons/domain/season_models.dart';
 import 'package:simcenter_app/features/sessions/data/sessions_repository.dart';
@@ -731,6 +732,18 @@ class FakeSeasonsRepository implements SeasonsRepository {
       throw ApiException('대상을 찾을 수 없어요.', statusCode: 404);
     }
     return detail;
+  }
+
+  /// 시즌 AI 난이도 가이드. 없으면 404.
+  Map<String, SeasonAiDifficulty> aiDifficulties = const {};
+
+  @override
+  Future<SeasonAiDifficulty> getMySeasonAiDifficulty(String seasonId) async {
+    final guide = aiDifficulties[seasonId];
+    if (guide == null) {
+      throw ApiException('대상을 찾을 수 없어요.', statusCode: 404);
+    }
+    return guide;
   }
 
   /// 시즌 가져오기(docs/15 §12): [importPreview]가 없으면 [importError](또는 400)를 던진다.

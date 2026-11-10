@@ -5,6 +5,7 @@ using SimCenter.Application.Laps;
 using SimCenter.Application.Laps.Ingest;
 using SimCenter.Application.Profile;
 using SimCenter.Application.Rankings;
+using SimCenter.Application.Seasons.AiDifficulty;
 using SimCenter.Application.Seasons.Commands;
 using SimCenter.Application.Seasons.Import;
 using SimCenter.Application.Seasons.Ingest;
@@ -34,6 +35,7 @@ public static class DependencyInjection
         services.AddScoped<IHighlightsService, HighlightsService>();
         services.AddScoped<IRaceAnalysisService, RaceAnalysisService>();
         services.AddScoped<ISeasonQueryService, SeasonQueryService>();
+        services.AddScoped<ISeasonAiDifficultyService, SeasonAiDifficultyService>();
         services.AddScoped<ISeasonImportService, SeasonImportService>();
         services.AddScoped<ISeasonCommandService, SeasonCommandService>();
         services.AddScoped<ISessionQueryService, SessionQueryService>();

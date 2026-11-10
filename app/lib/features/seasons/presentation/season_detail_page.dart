@@ -10,6 +10,7 @@ import '../../../core/widgets/not_found_state.dart';
 import '../application/seasons_providers.dart';
 import '../domain/season_display.dart';
 import '../domain/season_models.dart';
+import 'season_ai_tab.dart';
 import 'season_calendar_tab.dart';
 import 'season_header.dart';
 import 'season_results_tab.dart';
@@ -21,11 +22,15 @@ const String _notFoundBackLabel = 'Seasons';
 
 const int _httpNotFound = 404;
 
+/// 콘텐츠 폭이 이보다 좁으면 탭 막대를 가로 스크롤로 바꾼다(탭 4개가 잘리지 않게).
+const double _scrollableTabsBelowWidth = 600;
+
 /// 탭 값 → 탭 글자(`kSeasonTabs`와 같은 순서로 그린다).
 const Map<String, String> _tabLabels = {
   kSeasonTabSeason: 'Season',
   kSeasonTabResults: 'Results',
   kSeasonTabStandings: 'Standings',
+  kSeasonTabAi: 'AI Difficulty',
 };
 
 /// 시즌 상세(docs/12 §8.3): 헤더([SeasonHeader] — 시즌 메뉴 + 옵션) + 탭 3개(Season · Results · Standings).
@@ -108,10 +113,18 @@ class _SeasonDetailPageState extends ConsumerState<SeasonDetailPage> with Single
           data: (data) => Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              TabBar(
-                controller: _tabController,
-                onTap: _selectTab,
-                tabs: [for (final tab in kSeasonTabs) Tab(text: _tabLabels[tab])],
+              // 좁은 화면에서는 탭 글자가 잘리지 않게 탭 막대를 가로로 스크롤한다.
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final scrollable = constraints.maxWidth < _scrollableTabsBelowWidth;
+                  return TabBar(
+                    controller: _tabController,
+                    onTap: _selectTab,
+                    isScrollable: scrollable,
+                    tabAlignment: scrollable ? TabAlignment.start : null,
+                    tabs: [for (final tab in kSeasonTabs) Tab(text: _tabLabels[tab])],
+                  );
+                },
               ),
               const SizedBox(height: 16),
               _TabContent(tab: _tab, detail: data),
@@ -137,6 +150,7 @@ class _TabContent extends StatelessWidget {
     return switch (tab) {
       kSeasonTabResults => SeasonResultsTab(rounds: detail.rounds, drivers: detail.standings.drivers),
       kSeasonTabStandings => SeasonStandingsTab(standings: detail.standings),
+      kSeasonTabAi => SeasonAiTab(seasonId: detail.season.seasonId),
       _ => SeasonCalendarTab(calendar: detail.calendar, totalPoints: detail.season.myPoints, rounds: detail.rounds),
     };
   }

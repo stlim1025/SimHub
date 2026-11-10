@@ -22,8 +22,11 @@ const String kSeasonTabSeason = 'season';
 const String kSeasonTabResults = 'results';
 const String kSeasonTabStandings = 'standings';
 
+/// AI 난이도 가이드 탭.
+const String kSeasonTabAi = 'ai';
+
 /// 화면에 보이는 순서.
-const List<String> kSeasonTabs = [kSeasonTabSeason, kSeasonTabResults, kSeasonTabStandings];
+const List<String> kSeasonTabs = [kSeasonTabSeason, kSeasonTabResults, kSeasonTabStandings, kSeasonTabAi];
 
 /// 주소의 `tab` 값을 탭으로 바꾼다. 없거나 모르는 값이면 `season`(docs/12 §8.1).
 String normalizeSeasonTab(String? value) => kSeasonTabs.contains(value) ? value! : kSeasonTabSeason;

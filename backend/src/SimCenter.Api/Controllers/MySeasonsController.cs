@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SimCenter.Api.Common;
 using SimCenter.Application.Rankings;
+using SimCenter.Application.Seasons.AiDifficulty;
 using SimCenter.Application.Seasons.Commands;
 using SimCenter.Application.Seasons.Queries;
 
@@ -15,7 +16,8 @@ namespace SimCenter.Api.Controllers;
 [ApiController]
 [Route("api/v1/me/seasons")]
 [Authorize]
-public sealed class MySeasonsController(ISeasonQueryService seasonService, ISeasonCommandService seasonCommands) : ControllerBase
+public sealed class MySeasonsController(
+    ISeasonQueryService seasonService, ISeasonCommandService seasonCommands, ISeasonAiDifficultyService aiDifficulty) : ControllerBase
 {
     /// <summary>내 시즌 목록(마지막 세션 시각 내림차순). pageSize 기본 20, 최대 20. gameCode(선택)가 있으면 그 게임의 시즌만.</summary>
     [HttpGet]
@@ -39,6 +41,19 @@ public sealed class MySeasonsController(ISeasonQueryService seasonService, ISeas
     public async Task<ActionResult<SeasonDetailDto>> GetMySeason(Guid seasonId, CancellationToken cancellationToken)
     {
         var result = await seasonService.GetMySeasonAsync(User.GetRequiredUserId(), seasonId, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// 내 시즌의 AI 난이도 가이드: AI 팀메이트(같은 차) 대비 예선·레이스 차이로 지금 난이도가 맞는지, 차 수준, 주말별 비교,
+    /// 타임트라이얼 최고 랩 대 마른 노면 예선의 가장 빠른 AI 랩. 남의 시즌이거나 없으면 404.
+    /// </summary>
+    [HttpGet("{seasonId:guid}/ai-difficulty")]
+    [ProducesResponseType(typeof(SeasonAiDifficultyDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<SeasonAiDifficultyDto>> GetMySeasonAiDifficulty(Guid seasonId, CancellationToken cancellationToken)
+    {
+        var result = await aiDifficulty.GetAsync(User.GetRequiredUserId(), seasonId, cancellationToken);
         return Ok(result);
     }
 

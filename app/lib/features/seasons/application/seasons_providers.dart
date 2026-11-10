@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../profile/application/selected_game_provider.dart';
 import '../data/seasons_repository.dart';
+import '../domain/season_ai_difficulty.dart';
 import '../domain/season_display.dart';
 import '../domain/season_models.dart';
 
@@ -23,4 +24,9 @@ final allSeasonsProvider = FutureProvider.autoDispose<List<SeasonSummary>>((ref)
 /// 시즌 하나의 상세(라운드 + Standings). 세 탭이 같은 스냅샷을 쓰고, 화면을 다시 열면 새로 불러온다.
 final seasonDetailProvider = FutureProvider.autoDispose.family<SeasonDetail, String>(
   (ref, seasonId) => ref.watch(seasonsRepositoryProvider).getMySeason(seasonId),
+);
+
+/// 시즌 AI 난이도 가이드(AI 탭을 열 때만 읽는다).
+final seasonAiDifficultyProvider = FutureProvider.autoDispose.family<SeasonAiDifficulty, String>(
+  (ref, seasonId) => ref.watch(seasonsRepositoryProvider).getMySeasonAiDifficulty(seasonId),
 );

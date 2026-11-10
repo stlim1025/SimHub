@@ -7,6 +7,7 @@ import 'package:simcenter_app/core/network/api_exception.dart';
 import 'package:simcenter_app/core/theme/app_colors.dart';
 import 'package:simcenter_app/core/theme/app_theme.dart';
 import 'package:simcenter_app/features/seasons/data/seasons_repository.dart';
+import 'package:simcenter_app/features/seasons/domain/season_ai_difficulty.dart';
 import 'package:simcenter_app/features/seasons/domain/season_display.dart';
 import 'package:simcenter_app/features/seasons/domain/season_models.dart';
 import 'package:simcenter_app/features/seasons/presentation/season_detail_page.dart';
@@ -585,6 +586,70 @@ void main() {
 
       expect(t.takeException(), isNull);
       expect(find.byKey(const ValueKey('season-options')), findsOneWidget);
+    });
+  });
+
+  group('SeasonDetailPage - AI 탭', () {
+    SeasonAiDifficulty guide({List<Map<String, dynamic>> timeTrial = const []}) => SeasonAiDifficulty.fromJson({
+          'currentAiDifficulty': 103,
+          'qualifying': {'verdict': 'Keep', 'steps': null, 'medianGapPercent': 0.12, 'medianGapMs': 105, 'samples': 6, 'aheadOfTeammate': 3},
+          'race': {'verdict': 'Raise', 'steps': '1-2', 'medianGapPercent': -0.85, 'medianGapMs': -774, 'samples': 7, 'aheadOfTeammate': 6},
+          'car': {'teammateQualiPosition': 3.4, 'teammateRacePosition': 6.8, 'myQualiPosition': 4.1, 'myRacePosition': 2.0},
+          'weekends': [
+            {
+              'weekendId': 'w1', 'round': 1, 'trackName': 'Bahrain', 'countryCode': 'BH', 'aiDifficulty': 103,
+              'weather': 'Clear', 'teammateName': 'VERSTAPPEN', 'myQualiPosition': 2, 'teammateQualiPosition': 4,
+              'qualiGapMs': -419, 'qualiGapPercent': -0.64,
+              'races': [
+                {
+                  'sessionId': 'r1', 'sessionKind': 'Race', 'isSprint': false, 'myGrid': 2, 'myPosition': 1, 'teammatePosition': 9,
+                  'paceGapPerLapMs': -1592, 'paceGapPercent': -2.3, 'myResultStatus': 'Finished',
+                },
+              ],
+            },
+          ],
+          'timeTrial': timeTrial,
+        });
+
+    testWidgets('SeasonDetail_AiTab_ShowsVerdictsCarAndWeekendComparison', (t) async {
+      final repo = FakeSeasonsRepository(details: {'se1': _detail()})..aiDifficulties = {'se1': guide()};
+      await _pumpPage(t, repo, initialLocation: '/seasons/se1?tab=ai', size: const Size(1600, 2400));
+
+      expect(_selectedTab(t), 3);
+      final quali = find.byKey(const ValueKey('ai-verdict-qualifying'));
+      expect(find.descendant(of: quali, matching: find.text('적정')), findsOneWidget);
+      expect(find.descendant(of: quali, matching: find.text('AI 103')), findsOneWidget);
+      final race = find.byKey(const ValueKey('ai-verdict-race'));
+      expect(find.descendant(of: race, matching: find.text('올려도 됨')), findsOneWidget);
+      expect(find.descendant(of: race, matching: find.text('+1~2단계 (추정)')), findsOneWidget);
+      expect(find.descendant(of: race, matching: find.textContaining('랩당 -0.85% (-0.774초) · 7번 중 6번 앞섬')), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const ValueKey('ai-car-level')), matching: find.text('예선 P3.4 · 레이스 P6.8')),
+          findsOneWidget);
+
+      final row = find.byKey(const ValueKey('ai-weekend-1'));
+      expect(find.descendant(of: row, matching: find.text('-0.419')), findsOneWidget);
+      expect(find.descendant(of: row, matching: find.text('-1.592')), findsOneWidget);
+      expect(find.descendant(of: row, matching: find.text('VERSTAPPEN')), findsOneWidget);
+      expect(t.widget<Text>(find.descendant(of: row, matching: find.text('-1.592'))).style?.color, AppColors.success);
+      expect(find.text('이 시즌 트랙의 마른 노면 타임트라이얼 기록이 없어요.'), findsOneWidget);
+    });
+
+    testWidgets('SeasonDetail_AiTab_TimeTrialRow_AndNarrowScreenDoesNotOverflow', (t) async {
+      final repo = FakeSeasonsRepository(details: {'se1': _detail()})
+        ..aiDifficulties = {
+          'se1': guide(timeTrial: [
+            {
+              'weekendId': 'w1', 'trackName': 'Bahrain', 'countryCode': 'BH', 'timeTrialBestMs': 89100,
+              'aiFastestQualiMs': 90000, 'aiDifficulty': 103, 'gapPercent': -1.0,
+            },
+          ]),
+        };
+      await _pumpPage(t, repo, initialLocation: '/seasons/se1?tab=ai', size: const Size(360, 2400));
+
+      expect(t.takeException(), isNull);
+      final tt = find.byKey(const ValueKey('ai-time-trial-w1'));
+      expect(find.descendant(of: tt, matching: find.text('1:29.100')), findsOneWidget);
+      expect(find.descendant(of: tt, matching: find.text('-1.00%')), findsOneWidget);
     });
   });
 
