@@ -15,6 +15,7 @@ using SimCenter.Application.Setups.Refresh;
 using SimCenter.Application.Telemetry;
 using SimCenter.Application.TrackOverviews;
 using SimCenter.Application.TrackSamples;
+using SimCenter.Application.Trends;
 
 namespace SimCenter.Application;
 
@@ -36,6 +37,7 @@ public static class DependencyInjection
         services.AddScoped<IRaceAnalysisService, RaceAnalysisService>();
         services.AddScoped<ISeasonQueryService, SeasonQueryService>();
         services.AddScoped<ISeasonAiDifficultyService, SeasonAiDifficultyService>();
+        services.AddScoped<ITrendsService, TrendsService>();
         services.AddScoped<ISeasonImportService, SeasonImportService>();
         services.AddScoped<ISeasonCommandService, SeasonCommandService>();
         services.AddScoped<ISessionQueryService, SessionQueryService>();

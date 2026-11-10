@@ -43,6 +43,7 @@ public static class DependencyInjection
         services.AddScoped<IGameSessionRepository, GameSessionRepository>();
         services.AddScoped<ISeasonQueryRepository, SeasonQueryRepository>();
         services.AddScoped<IAiDifficultyQueryRepository, AiDifficultyQueryRepository>();
+        services.AddScoped<ITrendsQueryRepository, TrendsQueryRepository>();
         services.AddScoped<ISeasonImportRepository, SeasonImportRepository>();
         services.AddScoped<IGameSessionQueryRepository, GameSessionQueryRepository>();
         services.AddScoped<ISessionDetailQueryRepository, SessionDetailQueryRepository>();

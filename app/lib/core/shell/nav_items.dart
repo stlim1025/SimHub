@@ -18,6 +18,7 @@ const List<NavItem> navItems = [
   NavItem(label: 'Seasons', icon: Icons.calendar_month_outlined, path: '/seasons'),
   NavItem(label: 'Sessions', icon: Icons.flag_outlined, path: '/sessions'),
   NavItem(label: 'Laps', icon: Icons.timer_outlined, path: '/laps'),
+  NavItem(label: 'Trends', icon: Icons.insights_outlined, path: '/trends'),
   NavItem(label: 'Tracks', icon: Icons.route_outlined, path: '/tracks', aliases: ['/setups']),
 ];
 

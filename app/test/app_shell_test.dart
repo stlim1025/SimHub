@@ -154,7 +154,7 @@ Future<void> _openDrawer(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
-const _menuPaths = ['/', '/seasons', '/sessions', '/laps', '/tracks'];
+const _menuPaths = ['/', '/seasons', '/sessions', '/laps', '/trends', '/tracks'];
 
 void main() {
   testWidgets('1100px 이상이면 위쪽 가로 메뉴·검색·Agent 칩·계정 메뉴가 보이고 서랍 버튼은 없다', (t) async {
@@ -163,7 +163,7 @@ void main() {
     for (final path in _menuPaths) {
       expect(_menu(path), findsOneWidget, reason: path);
     }
-    for (final label in ['Dashboard', 'Seasons', 'Sessions', 'Laps', 'Tracks']) {
+    for (final label in ['Dashboard', 'Seasons', 'Sessions', 'Laps', 'Trends', 'Tracks']) {
       expect(find.text(label), findsOneWidget, reason: label);
     }
     expect(_menu('/telemetry-app'), findsNothing); // Telemetry App은 메뉴가 아니라 Agent 칩·계정 메뉴에서 연다.
@@ -185,10 +185,10 @@ void main() {
     expect(_menu('/'), findsOneWidget);
   });
 
-  testWidgets('메뉴 순서는 Dashboard · Seasons · Sessions · Laps · Tracks(Leaderboard는 혼자 쓰는 동안 뺐다)', (t) async {
+  testWidgets('메뉴 순서는 Dashboard · Seasons · Sessions · Laps · Trends · Tracks(Leaderboard는 혼자 쓰는 동안 뺐다)', (t) async {
     await _pumpShell(t, _wide);
 
-    expect(_topMenuLabels(t), ['Dashboard', 'Seasons', 'Sessions', 'Laps', 'Tracks']);
+    expect(_topMenuLabels(t), ['Dashboard', 'Seasons', 'Sessions', 'Laps', 'Trends', 'Tracks']);
   });
 
   testWidgets('/setups/au/s1에서는 셋업을 합친 Tracks 메뉴가 선택되어 있다', (t) async {
@@ -368,7 +368,7 @@ void main() {
 
       expect(
         _drawerLabels(t),
-        ['Dashboard', 'Seasons', 'Sessions', 'Laps', 'Tracks', 'Telemetry App'],
+        ['Dashboard', 'Seasons', 'Sessions', 'Laps', 'Trends', 'Tracks', 'Telemetry App'],
       );
       expect(_isDrawerSelected(t, 'Dashboard'), isTrue);
     });
@@ -424,7 +424,7 @@ void main() {
         find.ancestor(of: find.byKey(const ValueKey('drawer-account-settings')), matching: find.byType(Material)).first,
       );
       expect(footer.color, isNot(Colors.transparent));
-      for (final label in ['Dashboard', 'Seasons', 'Sessions', 'Laps', 'Tracks', 'Telemetry App']) {
+      for (final label in ['Dashboard', 'Seasons', 'Sessions', 'Laps', 'Trends', 'Tracks', 'Telemetry App']) {
         expect(_isDrawerSelected(t, label), isFalse, reason: label);
       }
     });
@@ -522,8 +522,8 @@ void main() {
     final seasons = navItems.firstWhere((i) => i.path == '/seasons');
     final tracks = navItems.firstWhere((i) => i.path == '/tracks');
 
-    test('메뉴는 Dashboard · Seasons · Sessions · Laps · Tracks이고 Telemetry App은 따로 있다', () {
-      expect([for (final i in navItems) i.label], ['Dashboard', 'Seasons', 'Sessions', 'Laps', 'Tracks']);
+    test('메뉴는 Dashboard · Seasons · Sessions · Laps · Trends · Tracks이고 Telemetry App은 따로 있다', () {
+      expect([for (final i in navItems) i.label], ['Dashboard', 'Seasons', 'Sessions', 'Laps', 'Trends', 'Tracks']);
       expect([for (final i in navItems) i.path], isNot(contains('/telemetry-app')));
       expect(telemetryAppNavItem.path, '/telemetry-app');
       expect(isNavItemSelected(telemetryAppNavItem, '/telemetry-app'), isTrue);
@@ -582,16 +582,17 @@ void main() {
         '/seasons',
         '/sessions',
         '/laps',
+        '/trends',
         '/tracks',
         '/telemetry-app',
         '/settings',
         '/tracks/au',
         '/laps/tracks/au',
       ]);
-      expect([for (final e in entries.take(6)) e.label],
-          ['Dashboard', 'Seasons', 'Sessions', 'Laps', 'Tracks', 'Telemetry App']);
-      expect([for (final e in entries.take(7)) e.detail], everyElement(isNull));
-      final trackEntries = entries.skip(7).toList();
+      expect([for (final e in entries.take(7)) e.label],
+          ['Dashboard', 'Seasons', 'Sessions', 'Laps', 'Trends', 'Tracks', 'Telemetry App']);
+      expect([for (final e in entries.take(8)) e.detail], everyElement(isNull));
+      final trackEntries = entries.skip(8).toList();
       expect([for (final e in trackEntries) e.label], everyElement('Australia'));
       expect([for (final e in trackEntries) e.detail], everyElement(isNotNull));
     });
@@ -602,6 +603,7 @@ void main() {
         '/seasons',
         '/sessions',
         '/laps',
+        '/trends',
         '/tracks',
         '/telemetry-app',
         '/settings',

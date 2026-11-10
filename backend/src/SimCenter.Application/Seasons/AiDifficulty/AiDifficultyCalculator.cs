@@ -1,4 +1,3 @@
-using SimCenter.Application.Common;
 using SimCenter.Application.Seasons.Queries;
 using SimCenter.Domain.Enums;
 
@@ -6,9 +5,10 @@ namespace SimCenter.Application.Seasons.AiDifficulty;
 
 /// <summary>
 /// 시즌 AI 난이도 가이드 계산(순수 함수 — 상태 없음).
-/// 기준은 같은 차를 탄 AI 팀메이트다: 예선은 둘 다 기록한 마지막 단계의 최고 랩 차이, 레이스는 둘 다 완주한 판의 랩당 평균 차이.
-/// 차 성능이 같으니 남는 차이가 곧 "나 대 이 난이도의 AI"다. 판정은 지금 난이도(가장 최근 레이스)로 달린 세션의 중앙값으로 한다:
-/// ±<see cref="KeepBandPercent"/>% 안이면 적정, 내가 빠르면 올리기, 느리면 낮추기. 폭은 <see cref="LargeGapPercent"/>% 기준의 추정이다.
+/// 기준은 같은 차를 탄 AI 팀메이트다(<see cref="SessionComparison"/>): 예선은 둘 다 기록한 마지막 단계의 최고 랩 차이,
+/// 레이스는 둘 다 완주한 판의 랩당 평균 차이. 차 성능이 같으니 남는 차이가 곧 "나 대 이 난이도의 AI"다.
+/// 판정은 지금 난이도(가장 최근 레이스)로 달린 세션의 중앙값으로 한다: ±<see cref="KeepBandPercent"/>% 안이면 적정,
+/// 내가 빠르면 올리기, 느리면 낮추기. 폭은 <see cref="LargeGapPercent"/>% 기준의 추정이다.
 /// 타임트라이얼 비교는 마른 노면(내 랩 날씨가 모두 Overcast 이하) 예선의 가장 빠른 AI 랩과 내 TT 최고 랩(마른 노면·날씨 모름)이다.
 /// </summary>
 public static class AiDifficultyCalculator
@@ -33,12 +33,6 @@ public static class AiDifficultyCalculator
     private const int PercentDigits = 2;
     private const int PositionDigits = 1;
 
-    private static readonly HashSet<SessionKind> MainQualifyingKinds =
-    [
-        SessionKind.Qualifying1, SessionKind.Qualifying2, SessionKind.Qualifying3,
-        SessionKind.ShortQualifying, SessionKind.OneShotQualifying,
-    ];
-
     public static SeasonAiDifficultyDto Calculate(
         string gameCode,
         IReadOnlyList<WeekendRow> weekends,
@@ -53,7 +47,7 @@ public static class AiDifficultyCalculator
         ArgumentNullException.ThrowIfNull(weather);
         ArgumentNullException.ThrowIfNull(timeTrialLaps);
 
-        var sessions = rows.GroupBy(r => r.SessionId).Select(g => SessionView.Of(g.ToList(), gameCode)).ToList();
+        var sessions = rows.GroupBy(r => r.SessionId).Select(g => SessionComparison.Of(g.ToList(), gameCode)).ToList();
         var byWeekend = sessions.ToLookup(s => s.WeekendId);
         var weatherByKey = weather.ToLookup(w => w.SessionKey, w => w.Weather);
         var timeTrialBest = BestDryTimeTrial(timeTrialLaps);
@@ -79,7 +73,7 @@ public static class AiDifficultyCalculator
     // ---- 판정 ----
 
     /// <summary>가장 최근 레이스(없으면 예선)의 AI 난이도. 모르면(0) null.</summary>
-    private static int? CurrentAiDifficulty(IReadOnlyList<SessionView> sessions)
+    private static int? CurrentAiDifficulty(IReadOnlyList<SessionComparison> sessions)
     {
         var latest = sessions.Where(s => s.Type == SessionType.Race && s.AiDifficulty > 0).MaxBy(s => s.ClassifiedAt)
             ?? sessions.Where(s => s.AiDifficulty > 0).MaxBy(s => s.ClassifiedAt);
@@ -89,8 +83,8 @@ public static class AiDifficultyCalculator
     private static AiVerdictDto QualifyingVerdict(IReadOnlyList<WeekendView> weekends, int? currentAi)
     {
         var samples = weekends
-            .Where(w => w.QualiGap is not null && w.QualiGapAi == currentAi)
-            .Select(w => w.QualiGap!.Value)
+            .Where(w => w.Qualifying.Gap is not null && w.Qualifying.GapAiDifficulty == currentAi)
+            .Select(w => w.Qualifying.Gap!.Value)
             .ToList();
         return Verdict(samples, samples.Count(s => s.Ms < 0));
     }
@@ -106,7 +100,7 @@ public static class AiDifficultyCalculator
             races.Count(r => r.MyPosition is { } mine && r.TeammatePosition is { } theirs && mine < theirs));
     }
 
-    private static AiVerdictDto Verdict(IReadOnlyList<Gap> samples, int ahead)
+    private static AiVerdictDto Verdict(IReadOnlyList<TeammateGap> samples, int ahead)
     {
         if (samples.Count == 0)
         {
@@ -154,9 +148,9 @@ public static class AiDifficultyCalculator
 
         var mainRaces = weekends.Select(w => w.Races.LastOrDefault(r => !r.IsSprint)).Where(r => r is not null).ToList();
         return new AiCarLevelDto(
-            Average(weekends.Select(w => w.TeammateQualiPosition)),
+            Average(weekends.Select(w => w.Qualifying.TeammatePosition)),
             Average(mainRaces.Select(r => r!.TeammatePosition)),
-            Average(weekends.Select(w => w.MyQualiPosition)),
+            Average(weekends.Select(w => w.Qualifying.MyPosition)),
             Average(mainRaces.Select(r => r!.MyPosition)));
     }
 
@@ -175,7 +169,7 @@ public static class AiDifficultyCalculator
         foreach (var w in weekends)
         {
             if (w.QualiWeather is not { } worst || !IsDry(worst) || w.AiFastestQualiMs is not { } aiFastest
-                || w.QualiAiDifficulty is not { } ai || !timeTrialBest.TryGetValue(w.Row.TrackId, out var tt))
+                || w.Qualifying.AiDifficulty is not { } ai || !timeTrialBest.TryGetValue(w.Row.TrackId, out var tt))
             {
                 continue;
             }
@@ -205,10 +199,10 @@ public static class AiDifficultyCalculator
         w.AiDifficulty,
         w.QualiWeather?.ToString(),
         w.TeammateName,
-        w.MyQualiPosition,
-        w.TeammateQualiPosition,
-        w.QualiGap?.Ms,
-        w.QualiGap?.Percent,
+        w.Qualifying.MyPosition,
+        w.Qualifying.TeammatePosition,
+        w.Qualifying.Gap?.Ms,
+        w.Qualifying.Gap?.Percent,
         w.Races.Select(r => new AiRaceDto(
             r.SessionId,
             r.Kind.ToString(),
@@ -220,50 +214,7 @@ public static class AiDifficultyCalculator
             r.PaceGap?.Percent,
             r.MyResultStatus?.ToString())).ToList());
 
-    private static Gap? GapOf(int mine, int theirs)
-        => mine > 0 && theirs > 0
-            ? new Gap(mine - theirs, Math.Round((mine - theirs) * PercentScale / theirs, PercentDigits))
-            : null;
-
-    private static int? Known(int? position) => position is > 0 ? position : null;
-
     // ---- 보기 ----
-
-    /// <summary>팀메이트 대비 차이(ms, %). 음수 = 내가 빠름.</summary>
-    private readonly record struct Gap(int Ms, double Percent);
-
-    /// <summary>세션 하나: 내 행과 팀메이트 행(같은 팀 대표 ID의 다른 차, 팀을 모르면 없음).</summary>
-    private sealed record SessionView(
-        Guid WeekendId,
-        Guid SessionId,
-        string SessionKey,
-        SessionType Type,
-        SessionKind Kind,
-        DateTime ClassifiedAt,
-        int AiDifficulty,
-        IReadOnlyList<AiPaceRow> Rows,
-        AiPaceRow? Me,
-        AiPaceRow? Teammate)
-    {
-        public static SessionView Of(List<AiPaceRow> rows, string gameCode)
-        {
-            var head = rows[0];
-            var me = rows.Where(r => r.IsPlayer).OrderBy(r => r.CarIndex).FirstOrDefault();
-            AiPaceRow? teammate = null;
-            if (me?.TeamId is { } myTeam)
-            {
-                var team = TeamCatalog.CanonicalTeamId(gameCode, myTeam);
-                teammate = rows
-                    .Where(r => !r.IsPlayer && r.TeamId is { } t && TeamCatalog.CanonicalTeamId(gameCode, t) == team)
-                    .OrderBy(r => r.CarIndex)
-                    .FirstOrDefault();
-            }
-
-            return new SessionView(
-                head.WeekendId, head.SessionId, head.SessionKey, head.SessionType, head.SessionKind, head.ClassifiedAt,
-                head.AiDifficulty, rows, me, teammate);
-        }
-    }
 
     private sealed record RaceView(
         Guid SessionId,
@@ -273,7 +224,7 @@ public static class AiDifficultyCalculator
         int? MyGrid,
         int? MyPosition,
         int? TeammatePosition,
-        Gap? PaceGap,
+        TeammateGap? PaceGap,
         ResultStatus? MyResultStatus);
 
     private sealed record WeekendView(
@@ -281,26 +232,18 @@ public static class AiDifficultyCalculator
         int Round,
         int? AiDifficulty,
         string? TeammateName,
-        int? MyQualiPosition,
-        int? TeammateQualiPosition,
-        Gap? QualiGap,
-        int? QualiGapAi,
-        int? QualiAiDifficulty,
+        QualifyingSummary Qualifying,
         Weather? QualiWeather,
         int? AiFastestQualiMs,
         IReadOnlyList<RaceView> Races)
     {
         public static WeekendView Of(
-            WeekendRow row, int round, IEnumerable<SessionView> weekendSessions, ILookup<string, Weather> weatherByKey)
+            WeekendRow row, int round, IEnumerable<SessionComparison> weekendSessions, ILookup<string, Weather> weatherByKey)
         {
             var ordered = weekendSessions.OrderBy(s => s.ClassifiedAt).ToList();
-            var qualifying = ordered.Where(s => s.Type == SessionType.Qualifying).ToList();
-            var mainQualifying = qualifying.Where(s => MainQualifyingKinds.Contains(s.Kind)).ToList();
-            var chosen = mainQualifying.Count > 0 ? mainQualifying : qualifying;
-
-            var gapSession = chosen.LastOrDefault(s => s.Me is { BestLapTimeMs: > 0 } && s.Teammate is { BestLapTimeMs: > 0 });
-            var weatherValues = chosen.SelectMany(s => weatherByKey[s.SessionKey]).ToList();
-            var aiTimes = chosen
+            var qualifying = SessionComparison.Qualifying(ordered);
+            var weatherValues = qualifying.Parts.SelectMany(s => weatherByKey[s.SessionKey]).ToList();
+            var aiTimes = qualifying.Parts
                 .SelectMany(s => s.Rows)
                 .Where(r => r.IsAiControlled && !r.IsPlayer && r.BestLapTimeMs > 0)
                 .Select(r => r.BestLapTimeMs)
@@ -313,43 +256,23 @@ public static class AiDifficultyCalculator
                 s.Kind,
                 sprintWeekend && s.Kind == SessionKind.Race,
                 s.AiDifficulty > 0 ? s.AiDifficulty : null,
-                Known(s.Me?.GridPosition),
-                Known(s.Me?.Position),
-                Known(s.Teammate?.Position),
-                PaceGapOf(s.Me, s.Teammate),
+                SessionComparison.Known(s.Me?.GridPosition),
+                SessionComparison.Known(s.Me?.Position),
+                SessionComparison.Known(s.Teammate?.Position),
+                s.PaceGap,
                 s.Me?.ResultStatus)).ToList();
 
             var mainRace = races.LastOrDefault(r => !r.IsSprint);
-            var qualiAi = chosen.LastOrDefault(s => s.AiDifficulty > 0)?.AiDifficulty;
 
             return new WeekendView(
                 row,
                 round,
-                mainRace?.AiDifficulty ?? qualiAi,
+                mainRace?.AiDifficulty ?? qualifying.AiDifficulty,
                 ordered.Select(s => s.Teammate?.DriverName).LastOrDefault(n => n is not null),
-                Known(chosen.LastOrDefault(s => s.Me is { Position: > 0 })?.Me!.Position),
-                Known(chosen.LastOrDefault(s => s.Teammate is { Position: > 0 })?.Teammate!.Position),
-                gapSession is null ? null : GapOf(gapSession.Me!.BestLapTimeMs, gapSession.Teammate!.BestLapTimeMs),
-                gapSession is { AiDifficulty: > 0 } ? gapSession.AiDifficulty : null,
-                qualiAi,
+                qualifying,
                 weatherValues.Count == 0 ? null : weatherValues.Max(),
                 aiTimes.Count == 0 ? null : aiTimes.Min(),
                 races);
-        }
-
-        /// <summary>둘 다 완주하고 랩 수가 같으면 (내 총 시간 − 팀메이트 총 시간) ÷ 랩 수.</summary>
-        private static Gap? PaceGapOf(AiPaceRow? me, AiPaceRow? teammate)
-        {
-            if (me is not { ResultStatus: ResultStatus.Finished, NumLaps: > 0, TotalRaceTimeMs: > 0 }
-                || teammate is not { ResultStatus: ResultStatus.Finished, TotalRaceTimeMs: > 0 }
-                || teammate.NumLaps != me.NumLaps)
-            {
-                return null;
-            }
-
-            var myLap = (double)me.TotalRaceTimeMs / me.NumLaps;
-            var theirLap = (double)teammate.TotalRaceTimeMs / teammate.NumLaps;
-            return new Gap((int)Math.Round(myLap - theirLap), Math.Round((myLap - theirLap) * PercentScale / theirLap, PercentDigits));
         }
     }
 }

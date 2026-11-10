@@ -207,6 +207,28 @@ public sealed class SeasonsApiE2ETests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Trends_ListRacesAndQualifyingInTimeOrder_AndRejectUnknownGame()
+    {
+        var seeded = await SeedTwoRoundSeasonAsync();
+
+        var trends = await GetOkAsync(seeded.Client, "/api/v1/me/trends?gameCode=F1_25");
+        var races = trends.GetProperty("races").EnumerateArray().ToList();
+        Assert.Equal(RoundCount, races.Count);
+        Assert.All(races, r =>
+        {
+            Assert.Equal("Silverstone", r.GetProperty("trackName").GetString());
+            Assert.Equal(PlayerPosition, r.GetProperty("position").GetInt32());
+        });
+        Assert.True(races[0].GetProperty("classifiedAt").GetDateTime() < races[1].GetProperty("classifiedAt").GetDateTime());
+        Assert.Equal(RoundCount, trends.GetProperty("qualifying").GetArrayLength());
+        Assert.Equal(JsonValueKind.Array, trends.GetProperty("weeklyLaps").ValueKind);
+        Assert.Equal(JsonValueKind.Array, trends.GetProperty("tracks").ValueKind);
+
+        var (status, _) = await GetJsonAsync(seeded.Client, "/api/v1/me/trends?gameCode=NOPE");
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+    }
+
+    [Fact]
     public async Task Sessions_ListFilterAndDetail()
     {
         var seeded = await SeedTwoRoundSeasonAsync();

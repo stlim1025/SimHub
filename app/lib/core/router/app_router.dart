@@ -26,6 +26,7 @@ import '../../features/setups/domain/setups_display.dart';
 import '../../features/setups/presentation/setup_detail_page.dart';
 import '../../features/tracks/presentation/track_overview_page.dart';
 import '../../features/tracks/presentation/tracks_page.dart';
+import '../../features/trends/presentation/trends_page.dart';
 import '../shell/app_shell.dart';
 import 'auth_redirect.dart';
 
@@ -126,6 +127,8 @@ final routerProvider = Provider<GoRouter>((ref) {
             (state) => SessionHighlightsPage(sessionId: state.pathParameters['sessionId']!),
           ),
           _screen('/laps',(_) => const LapsPage()),
+          // 내 성과 추세(레이스 결과·AI 난이도·팀메이트 대비 페이스·꾸준함·주행량·트랙별 최고 랩 변화).
+          _screen('/trends', (_) => const TrendsPage()),
           _screen(
             '/laps/tracks/:trackId',
             (state) => TrackLapsPage(trackId: state.pathParameters['trackId']!),

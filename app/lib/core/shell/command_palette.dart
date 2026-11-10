@@ -36,6 +36,7 @@ const Map<String, String> _menuKeywords = {
   '/seasons': '시즌 season',
   '/sessions': '세션 레이스 session race',
   '/laps': '랩 기록 lap',
+  '/trends': '추세 트렌드 분석 성과 analytics',
   '/tracks': '트랙 셋업 setups setup',
   '/telemetry-app': 'agent 에이전트 연결 다운로드 telemetry',
 };
