@@ -149,7 +149,7 @@ class _TabContent extends StatelessWidget {
   Widget build(BuildContext context) {
     return switch (tab) {
       kSeasonTabResults => SeasonResultsTab(rounds: detail.rounds, drivers: detail.standings.drivers),
-      kSeasonTabStandings => SeasonStandingsTab(standings: detail.standings),
+      kSeasonTabStandings => SeasonStandingsTab(standings: detail.standings, headToHead: detail.headToHead),
       kSeasonTabAi => SeasonAiTab(seasonId: detail.season.seasonId),
       _ => SeasonCalendarTab(calendar: detail.calendar, totalPoints: detail.season.myPoints, rounds: detail.rounds),
     };

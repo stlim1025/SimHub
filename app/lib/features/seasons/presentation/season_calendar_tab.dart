@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/compact_table.dart';
+import '../../../core/widgets/team_color_bar.dart';
 import '../../../core/widgets/track_flag.dart';
 import '../../sessions/domain/session_detail_display.dart';
 import '../../sessions/domain/session_display.dart';
@@ -261,7 +262,7 @@ class _TeamCell extends StatelessWidget {
   }
 }
 
-/// WINNER 칸: 우승자 팀 색 점 + 이름. 달리지 않았거나 본 레이스가 없으면 비운다.
+/// WINNER 칸: 우승자 팀 색 세로 막대 + 이름. 달리지 않았거나 본 레이스가 없으면 비운다.
 class _WinnerCell extends StatelessWidget {
   const _WinnerCell({required this.weekend});
 
@@ -276,7 +277,10 @@ class _WinnerCell extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        TeamDot(key: ValueKey('season-calendar-winner-team-${weekend!.weekendId}'), colorHex: weekend!.winnerTeamColor),
+        TeamColorBar(
+          key: ValueKey('season-calendar-winner-team-${weekend!.weekendId}'),
+          colorHex: weekend!.winnerTeamColor ?? '',
+        ),
         const SizedBox(width: _teamDotGap),
         Flexible(child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis)),
       ],

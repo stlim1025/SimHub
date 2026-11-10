@@ -33,7 +33,33 @@ public sealed record SeasonDetailDto(
     SeasonSummaryDto Season,
     IReadOnlyList<SeasonRoundDto> Rounds,
     SeasonStandingsDto Standings,
-    IReadOnlyList<SeasonCalendarRoundDto> Calendar);
+    IReadOnlyList<SeasonCalendarRoundDto> Calendar,
+    TeammateHeadToHeadDto? HeadToHead = null);
+
+/// <summary>
+/// 팀메이트 맞대결(Standings 탭): 나 대 시즌 동안 가장 자주 같은 팀이었던 AI 드라이버.
+/// <see cref="Races"/> = 둘 다 순위가 있는 본 레이스에서 앞선 횟수, <see cref="Qualifying"/> = 둘 다 순위가 있는 주말 예선에서 앞선 횟수,
+/// <see cref="Points"/>·<see cref="Podiums"/> = Standings 값, <see cref="BestRaceFinish"/> = 완주한 본 레이스 최고 순위,
+/// <see cref="HighestGrid"/> = 본 레이스 최고 출발 순위, <see cref="Dnfs"/> = 본 레이스 리타이어(DNF·Retired) 수.
+/// </summary>
+public sealed record TeammateHeadToHeadDto(
+    string MyName,
+    string TeammateName,
+    string TeamName,
+    string TeamColor,
+    HeadToHeadCountDto Races,
+    HeadToHeadCountDto Qualifying,
+    HeadToHeadCountDto Points,
+    HeadToHeadCountDto Podiums,
+    HeadToHeadPositionDto BestRaceFinish,
+    HeadToHeadPositionDto HighestGrid,
+    HeadToHeadCountDto Dnfs);
+
+/// <summary>맞대결 항목 하나의 두 값(나 · 팀메이트).</summary>
+public sealed record HeadToHeadCountDto(int Me, int Teammate);
+
+/// <summary>맞대결 순위 항목(나 · 팀메이트, 기록이 없으면 null).</summary>
+public sealed record HeadToHeadPositionDto(int? Me, int? Teammate);
 
 /// <summary>
 /// 시즌 탭 한 줄(F1Laps 시즌 표, docs/15 §12): 게임 캘린더 트랙 전부 + 캘린더 밖 트랙에서 달린 주말(시간 순 자리에 끼움).

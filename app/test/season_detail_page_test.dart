@@ -11,7 +11,7 @@ import 'package:simcenter_app/features/seasons/domain/season_ai_difficulty.dart'
 import 'package:simcenter_app/features/seasons/domain/season_display.dart';
 import 'package:simcenter_app/features/seasons/domain/season_models.dart';
 import 'package:simcenter_app/features/seasons/presentation/season_detail_page.dart';
-import 'package:simcenter_app/features/sessions/presentation/session_widgets.dart' show TeamDot;
+import 'package:simcenter_app/features/seasons/presentation/teammate_head_to_head_card.dart';
 
 import 'support/fakes.dart';
 
@@ -99,8 +99,17 @@ SeasonDetail _sprintDetail() => seasonDetailOf(
       ],
     );
 
+/// 팀메이트 맞대결(나 vs NORRIS, McLaren).
+final _headToHead = TeammateHeadToHead.fromJson({
+  'myName': 'ME', 'teammateName': 'NORRIS', 'teamName': 'McLaren', 'teamColor': '#FF8000',
+  'races': {'me': 7, 'teammate': 5}, 'qualifying': {'me': 8, 'teammate': 4}, 'points': {'me': 99, 'teammate': 92},
+  'podiums': {'me': 3, 'teammate': 0}, 'bestRaceFinish': {'me': 2, 'teammate': 4}, 'highestGrid': {'me': 1, 'teammate': 2},
+  'dnfs': {'me': 2, 'teammate': 1},
+});
+
 /// 라운드 2개 · 드라이버 3명(AI 2명 + 나) · 팀 2개.
 SeasonDetail _detail({
+  TeammateHeadToHead? headToHead,
   String id = 'se1',
   int seasonNumber = 1,
   String? name,
@@ -110,6 +119,7 @@ SeasonDetail _detail({
     seasonDetailOf(
       id,
       calendar: _calendar,
+      headToHead: headToHead,
       season: seasonOf(
         id,
         gameMode: 'DriverCareer',
@@ -589,6 +599,45 @@ void main() {
     });
   });
 
+  group('SeasonDetailPage - 팀메이트 맞대결', () {
+    testWidgets('SeasonDetail_Standings_HeadToHead_MirrorsMeAndTeammate', (t) async {
+      final repo = FakeSeasonsRepository(details: {'se1': _detail(headToHead: _headToHead)});
+      await _pumpPage(t, repo, initialLocation: '/seasons/se1?tab=standings', size: const Size(1600, 2400));
+
+      expect(find.byKey(const ValueKey('season-h2h')), findsOneWidget);
+      Finder inRow(String key, String text) =>
+          find.descendant(of: find.byKey(ValueKey('season-h2h-$key')), matching: find.text(text));
+      expect(inRow('race', '7'), findsOneWidget);
+      expect(inRow('race', '5'), findsOneWidget);
+      expect(inRow('points', '99'), findsOneWidget);
+      expect(inRow('best-finish', 'P2'), findsOneWidget);
+      expect(inRow('best-grid', 'P1'), findsOneWidget);
+      expect(inRow('dnf', '1'), findsOneWidget);
+
+      // 넓은 화면: 맞대결은 오른쪽 열(Drivers 오른쪽)의 Constructors 위.
+      final h2h = t.getTopLeft(find.byKey(const ValueKey('season-h2h')));
+      expect(h2h.dx, greaterThan(t.getTopLeft(find.text('Drivers')).dx));
+      expect(h2h.dy, lessThan(t.getTopLeft(find.text('Constructors')).dy));
+    });
+
+    test('headToHeadFractions: 큰 값을 꽉 채우고, 순위는 앞일수록 길다', () {
+      expect(headToHeadFractions((me: 3, teammate: 0), position: false), (1.0, 0.0));
+      expect(headToHeadFractions((me: 0, teammate: 0), position: false), (0.0, 0.0));
+      final (p2, p4) = headToHeadFractions((me: 2, teammate: 4), position: true);
+      expect(p2, 1.0);
+      expect(p4, closeTo(19 / 21, 1e-9));
+      expect(headToHeadFractions((me: null, teammate: 3), position: true).$1, 0.0);
+    });
+
+    testWidgets('SeasonDetail_Standings_HeadToHead_NarrowScreenDoesNotOverflow', (t) async {
+      final repo = FakeSeasonsRepository(details: {'se1': _detail(headToHead: _headToHead)});
+      await _pumpPage(t, repo, initialLocation: '/seasons/se1?tab=standings', size: const Size(320, 2400));
+
+      expect(t.takeException(), isNull);
+      expect(find.byKey(const ValueKey('season-h2h')), findsOneWidget);
+    });
+  });
+
   group('SeasonDetailPage - AI 탭', () {
     SeasonAiDifficulty guide({List<Map<String, dynamic>> timeTrial = const []}) => SeasonAiDifficulty.fromJson({
           'currentAiDifficulty': 103,
@@ -793,8 +842,8 @@ void main() {
       expect(find.descendant(of: bahrain, matching: find.text('2026-10-17')), findsOneWidget);
       expect(find.descendant(of: bahrain, matching: find.text('NORRIS')), findsOneWidget);
       // 우승자 이름 옆에 우승자 팀 색 점.
-      final winnerDot = find.descendant(of: bahrain, matching: find.byKey(const ValueKey('season-calendar-winner-team-w1')));
-      expect(t.widget<TeamDot>(winnerDot).colorHex, '#FF8000');
+      expect(find.descendant(of: bahrain, matching: find.byKey(const ValueKey('season-calendar-winner-team-w1'))), findsOneWidget);
+      expect(teamBarColor(t, const ValueKey('season-calendar-winner-team-w1')), const Color(0xFFFF8000)); // 세로 막대
       final suzuka = find.byKey(const ValueKey('season-calendar-3'));
       expect(find.descendant(of: suzuka, matching: find.textContaining('2026')), findsNothing); // 달리지 않은 라운드
 
@@ -844,7 +893,7 @@ void main() {
     });
 
     testWidgets('SeasonDetail_Standings_Narrow_ScrollsWithoutOverflow', (t) async {
-      final repo = FakeSeasonsRepository(details: {'se1': _detail()});
+      final repo = FakeSeasonsRepository(details: {'se1': _detail(headToHead: _headToHead)});
       await _pumpPage(t, repo, initialLocation: '/seasons/se1?tab=standings', size: const Size(320, 2400));
 
       expect(t.takeException(), isNull);

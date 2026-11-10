@@ -946,12 +946,14 @@ SeasonDetail seasonDetailOf(
   List<DriverStanding> drivers = const [],
   List<ConstructorStanding> constructors = const [],
   List<SeasonCalendarRound> calendar = const [],
+  TeammateHeadToHead? headToHead,
 }) =>
     SeasonDetail(
       season: season ?? seasonOf(id),
       rounds: rounds,
       standings: SeasonStandings(drivers: drivers, constructors: constructors),
       calendar: calendar,
+      headToHead: headToHead,
     );
 
 /// 팀 색 막대([key]가 붙은 `TeamColorBar`)가 칠한 색.

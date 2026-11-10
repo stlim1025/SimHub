@@ -5,6 +5,7 @@ import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/ai_badge.dart';
 import '../../../core/widgets/team_color_bar.dart';
 import '../domain/season_models.dart';
+import 'teammate_head_to_head_card.dart';
 
 const String _note = '기록된 세션 기준입니다. 라운드 번호는 기록된 주말 순서라 게임과 다를 수 있습니다.';
 
@@ -16,17 +17,34 @@ const double _sideBySideWidth = 1100;
 const int _driversFlex = 7;
 const int _constructorsFlex = 5;
 const double _columnGap = 20;
+const double _sectionGap = 24;
+const String _headToHeadTitle = 'Teammate Head-to-Head';
 
-/// Standings 탭(docs/12 §8.3): Drivers 표와 Constructors 표 + 집계 기준 안내.
-/// 넓으면([_sideBySideWidth] 이상) 두 표를 나란히, 좁으면 위아래로. 좁은 화면에서는 표를 가로로 스크롤한다.
+/// Standings 탭(docs/12 §8.3): 팀메이트 맞대결(있으면) + Drivers 표 + Constructors 표 + 집계 기준 안내.
+/// 넓으면([_sideBySideWidth] 이상) Drivers 왼쪽, 오른쪽 열에 맞대결 → Constructors. 좁으면 맞대결 → Drivers → Constructors.
+/// 좁은 화면에서는 표를 가로로 스크롤한다.
 class SeasonStandingsTab extends StatelessWidget {
-  const SeasonStandingsTab({super.key, required this.standings});
+  const SeasonStandingsTab({super.key, required this.standings, this.headToHead});
 
   final SeasonStandings standings;
+
+  /// 팀메이트 맞대결. 없으면(내 결과·팀메이트가 없음) 그리지 않는다.
+  final TeammateHeadToHead? headToHead;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final h2h = headToHead;
+    final headToHeadSection = h2h == null
+        ? null
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const _SectionTitle(_headToHeadTitle),
+              const SizedBox(height: 8),
+              TeammateHeadToHeadCard(headToHead: h2h),
+            ],
+          );
     final drivers = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -54,12 +72,26 @@ class SeasonStandingsTab extends StatelessWidget {
                   children: [
                     Expanded(flex: _driversFlex, child: drivers),
                     const SizedBox(width: _columnGap),
-                    Expanded(flex: _constructorsFlex, child: constructors),
+                    Expanded(
+                      flex: _constructorsFlex,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (headToHeadSection != null) ...[headToHeadSection, const SizedBox(height: _sectionGap)],
+                          constructors,
+                        ],
+                      ),
+                    ),
                   ],
                 )
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [drivers, const SizedBox(height: 24), constructors],
+                  children: [
+                    if (headToHeadSection != null) ...[headToHeadSection, const SizedBox(height: _sectionGap)],
+                    drivers,
+                    const SizedBox(height: _sectionGap),
+                    constructors,
+                  ],
                 ),
         ),
         const SizedBox(height: 16),

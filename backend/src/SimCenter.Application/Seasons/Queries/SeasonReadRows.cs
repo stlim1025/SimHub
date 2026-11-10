@@ -26,7 +26,8 @@ public sealed record SeasonResultRow(
     int Points,
     bool IsImported = false,
     int AiDifficulty = 0,
-    string? TeamName = null);
+    string? TeamName = null,
+    int GridPosition = 0);
 
 /// <summary>그랑프리 주말 행(라운드 번호 계산·트랙 이름 표시용).</summary>
 /// <remarks>

@@ -389,12 +389,16 @@ class SeasonDetail {
     required this.rounds,
     required this.standings,
     this.calendar = const [],
+    this.headToHead,
   });
 
   final SeasonSummary season;
   final List<SeasonRound> rounds;
   final SeasonStandings standings;
   final List<SeasonCalendarRound> calendar;
+
+  /// 팀메이트 맞대결. 내 결과나 팀메이트가 없으면(또는 옛 서버) null.
+  final TeammateHeadToHead? headToHead;
 
   factory SeasonDetail.fromJson(Map<String, dynamic> json) => SeasonDetail(
         season: SeasonSummary.fromJson(json['season'] as Map<String, dynamic>),
@@ -405,5 +409,62 @@ class SeasonDetail {
         calendar: ((json['calendar'] as List<dynamic>?) ?? const [])
             .map((e) => SeasonCalendarRound.fromJson(e as Map<String, dynamic>))
             .toList(),
+        headToHead: switch (json['headToHead']) {
+          final Map<String, dynamic> h2h => TeammateHeadToHead.fromJson(h2h),
+          _ => null,
+        },
       );
+}
+
+/// 맞대결 항목 하나의 두 값(나 · 팀메이트). 순위 항목은 기록이 없으면 null.
+typedef HeadToHeadValues = ({int? me, int? teammate});
+
+/// 팀메이트 맞대결(Standings 탭): 본 레이스·예선에서 앞선 횟수, 점수, 포디움, 최고 완주 순위, 최고 출발 순위, 리타이어 수.
+class TeammateHeadToHead {
+  const TeammateHeadToHead({
+    required this.myName,
+    required this.teammateName,
+    required this.teamName,
+    required this.teamColor,
+    required this.races,
+    required this.qualifying,
+    required this.points,
+    required this.podiums,
+    required this.bestRaceFinish,
+    required this.highestGrid,
+    required this.dnfs,
+  });
+
+  final String myName;
+  final String teammateName;
+  final String teamName;
+  final String teamColor;
+  final HeadToHeadValues races;
+  final HeadToHeadValues qualifying;
+  final HeadToHeadValues points;
+  final HeadToHeadValues podiums;
+  final HeadToHeadValues bestRaceFinish;
+  final HeadToHeadValues highestGrid;
+  final HeadToHeadValues dnfs;
+
+  factory TeammateHeadToHead.fromJson(Map<String, dynamic> json) {
+    HeadToHeadValues pair(String key) {
+      final value = json[key] as Map<String, dynamic>;
+      return (me: value['me'] as int?, teammate: value['teammate'] as int?);
+    }
+
+    return TeammateHeadToHead(
+      myName: json['myName'] as String,
+      teammateName: json['teammateName'] as String,
+      teamName: json['teamName'] as String,
+      teamColor: json['teamColor'] as String,
+      races: pair('races'),
+      qualifying: pair('qualifying'),
+      points: pair('points'),
+      podiums: pair('podiums'),
+      bestRaceFinish: pair('bestRaceFinish'),
+      highestGrid: pair('highestGrid'),
+      dnfs: pair('dnfs'),
+    );
+  }
 }

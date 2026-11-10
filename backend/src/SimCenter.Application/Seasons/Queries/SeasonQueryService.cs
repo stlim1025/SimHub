@@ -82,7 +82,8 @@ public sealed class SeasonQueryService : ISeasonQueryService
             BuildRounds(weekends, rounds, rows, selection, season.GameCode),
             ToStandingsDto(standings, rounds, season.GameCode),
             // 시즌 탭(docs/15 §12): 캘린더 전부 + 내 라운드 값. 가져온 세션(D-55)은 내 결과 행만 있어도 된다.
-            SeasonCalendar.Build(season.GameCode, calendar, weekends, selection, seasonMe?.TeamId, seasonMe?.TeamName));
+            SeasonCalendar.Build(season.GameCode, calendar, weekends, selection, seasonMe?.TeamId, seasonMe?.TeamName),
+            TeammateHeadToHead.Build(selection, standings, season.GameCode));
     }
 
     // ---- 계산 ----
