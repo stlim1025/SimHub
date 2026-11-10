@@ -20,7 +20,6 @@ const String _settingsLabel = '계정 설정';
 const String _hint = '페이지·트랙 검색';
 const String _emptyText = '맞는 항목이 없어요.';
 const String _trackDetail = '트랙 · 기록 · 셋업';
-const String _leaderboardDetail = '리더보드';
 const String _lapsDetail = '내 랩';
 
 const double _paletteWidth = 560;
@@ -37,19 +36,17 @@ const Map<String, String> _menuKeywords = {
   '/seasons': '시즌 season',
   '/sessions': '세션 레이스 session race',
   '/laps': '랩 기록 lap',
-  '/leaderboard': '리더보드 순위 랭킹 ranking',
   '/tracks': '트랙 셋업 setups setup',
   '/telemetry-app': 'agent 에이전트 연결 다운로드 telemetry',
 };
 
-/// 메뉴·계정 설정·트랙마다 개요·리더보드·내 랩을 담은 검색 항목(순수 함수).
+/// 메뉴·계정 설정·트랙마다 개요·내 랩을 담은 검색 항목(순수 함수).
 List<CommandEntry> commandEntries(List<Track> tracks) => [
       for (final item in [...navItems, telemetryAppNavItem])
         (label: item.label, detail: null, icon: item.icon, location: item.path, keywords: _menuKeywords[item.path] ?? ''),
       (label: _settingsLabel, detail: null, icon: Icons.settings_outlined, location: _settingsPath, keywords: 'settings profile account 설정 프로필'),
       for (final track in tracks) ...[
         (label: track.name, detail: _trackDetail, icon: Icons.route_outlined, location: trackOverviewLocation(track.trackId), keywords: 'track setup 트랙 셋업'),
-        (label: track.name, detail: _leaderboardDetail, icon: Icons.emoji_events_outlined, location: leaderboardLocation(track.trackId), keywords: 'leaderboard ranking 리더보드 순위'),
         (label: track.name, detail: _lapsDetail, icon: Icons.timer_outlined, location: trackLapsLocation(track.trackId), keywords: 'laps lap 랩'),
       ],
     ];

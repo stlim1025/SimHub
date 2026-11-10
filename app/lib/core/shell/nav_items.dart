@@ -12,12 +12,12 @@ class NavItem {
 
 /// 위쪽 바 메뉴(B안 화면 개편). Setups는 같은 트랙 고르기 화면을 쓰던 Tracks에 합쳤다 —
 /// 트랙 화면 안의 셋업 탭으로 가고, 예전 `/setups` 주소도 Tracks 메뉴로 본다.
+/// Leaderboard는 혼자 쓰는 동안 의미가 없어 메뉴에서 뺐다(`/leaderboard` 주소와 화면은 남아 있다).
 const List<NavItem> navItems = [
   NavItem(label: 'Dashboard', icon: Icons.dashboard_outlined, path: '/'),
   NavItem(label: 'Seasons', icon: Icons.calendar_month_outlined, path: '/seasons'),
   NavItem(label: 'Sessions', icon: Icons.flag_outlined, path: '/sessions'),
   NavItem(label: 'Laps', icon: Icons.timer_outlined, path: '/laps'),
-  NavItem(label: 'Leaderboard', icon: Icons.emoji_events_outlined, path: '/leaderboard'),
   NavItem(label: 'Tracks', icon: Icons.route_outlined, path: '/tracks', aliases: ['/setups']),
 ];
 

@@ -39,7 +39,6 @@ const String _errorMessage = '트랙 정보를 불러오지 못했다.';
 const String _notFoundMessage = '찾을 수 없는 트랙이다.';
 
 const String _setupsLinkTitle = 'Top Setups';
-const String _leaderboardLinkTitle = 'Leaderboard';
 const String _statsSuffix = 'stats';
 
 const String _statBestLap = 'My best lap';
@@ -51,7 +50,6 @@ const String _statSessions = 'Sessions';
 
 const String _topTimeTrialTitle = 'Fastest Time Trial laps';
 const String _topTimeTrialEmpty = '아직 이 트랙의 Time Trial 기록이 없다.';
-const String _fullLeaderboardLabel = 'Full leaderboard';
 const String _bestLapsTitle = 'Best Lap Times';
 const String _bestLapsEmpty = '이 트랙에서 달린 랩이 아직 없다.';
 const String _invalidLabel = 'Invalid';
@@ -91,7 +89,7 @@ const double kTrackStatsRowWidth = 900;
 const double kTrackDetailsRowWidth = 1400;
 
 /// 트랙 개요(`/tracks/:trackId`, F1Laps `F1 26 Australia` 모양): 이동 경로 + 국기·제목·서킷 이름,
-/// 바로가기(Top Setups · Leaderboard), `{트랙} stats`(내 기록 요약 + Fastest Time Trial laps), Theoretical Best(이론상 최고 랩), Best Lap Times(내 빠른 랩 10개),
+/// 바로가기(Top Setups), `{트랙} stats`(내 기록 요약 + Fastest Time Trial laps), Theoretical Best(이론상 최고 랩), Best Lap Times(내 빠른 랩 10개),
 /// Track Details(+ [TrackOverview.mapLapId] 랩의 트랙 지도).
 /// 트랙 화면 탭: 개요 | 셋업(Setups 메뉴를 Tracks에 합쳤다).
 const List<ButtonGroupOption<String>> kTrackTabOptions = [
@@ -178,12 +176,6 @@ class _OverviewBody extends StatelessWidget {
         icon: Icons.tune,
         title: _setupsLinkTitle,
         path: setupTrackLocation(track.trackId),
-      ),
-      _QuickLinkCard(
-        key: const ValueKey('track-link-leaderboard'),
-        icon: Icons.emoji_events_outlined,
-        title: _leaderboardLinkTitle,
-        path: leaderboardLocation(track.trackId),
       ),
     ];
     final stats = _MyStatsCard(stats: overview.myStats);
@@ -311,7 +303,7 @@ class _MyStatsCard extends StatelessWidget {
   }
 }
 
-/// Fastest Time Trial laps(상위 3): 순위 · 시간 · 이름 · 팀. 아래에 리더보드 링크.
+/// Fastest Time Trial laps(상위 3): 순위 · 시간 · 이름 · 팀.
 class _TopTimeTrialCard extends StatelessWidget {
   const _TopTimeTrialCard({required this.laps, required this.trackId});
 
@@ -350,8 +342,6 @@ class _TopTimeTrialCard extends StatelessWidget {
                 ],
               ),
             ],
-          const SizedBox(height: _topRowGap),
-          TextButton(onPressed: () => context.go(leaderboardLocation(trackId)), child: const Text(_fullLeaderboardLabel)),
         ],
       ),
     );

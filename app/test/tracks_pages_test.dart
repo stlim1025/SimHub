@@ -493,13 +493,12 @@ void main() {
       expect(find.text('Australia stats'), findsOneWidget);
     });
 
-    testWidgets('Leaderboard 바로가기는 그 트랙을 고른 리더보드로', (t) async {
-      final router = await _pump(t, '/tracks/au', tracksRepo: FakeTracksRepository(overviews: {'au': trackOverviewOf()}));
+    testWidgets('혼자 쓰는 동안은 리더보드로 가는 바로가기·Full leaderboard 버튼이 없다', (t) async {
+      await _pump(t, '/tracks/au', tracksRepo: FakeTracksRepository(overviews: {'au': trackOverviewOf()}));
 
-      await t.tap(find.byKey(const ValueKey('track-link-leaderboard')));
-      await t.pumpAndSettle();
-
-      expect(_location(router), '/leaderboard?trackId=au');
+      expect(find.byKey(const ValueKey('track-link-setups')), findsOneWidget);
+      expect(find.byKey(const ValueKey('track-link-leaderboard')), findsNothing);
+      expect(find.text('Full leaderboard'), findsNothing);
     });
 
     testWidgets('내 빠른 랩 줄을 누르면 랩 상세로', (t) async {

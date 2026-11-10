@@ -154,7 +154,7 @@ Future<void> _openDrawer(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
-const _menuPaths = ['/', '/seasons', '/sessions', '/laps', '/leaderboard', '/tracks'];
+const _menuPaths = ['/', '/seasons', '/sessions', '/laps', '/tracks'];
 
 void main() {
   testWidgets('1100px 이상이면 위쪽 가로 메뉴·검색·Agent 칩·계정 메뉴가 보이고 서랍 버튼은 없다', (t) async {
@@ -163,7 +163,7 @@ void main() {
     for (final path in _menuPaths) {
       expect(_menu(path), findsOneWidget, reason: path);
     }
-    for (final label in ['Dashboard', 'Seasons', 'Sessions', 'Laps', 'Leaderboard', 'Tracks']) {
+    for (final label in ['Dashboard', 'Seasons', 'Sessions', 'Laps', 'Tracks']) {
       expect(find.text(label), findsOneWidget, reason: label);
     }
     expect(_menu('/telemetry-app'), findsNothing); // Telemetry App은 메뉴가 아니라 Agent 칩·계정 메뉴에서 연다.
@@ -185,10 +185,10 @@ void main() {
     expect(_menu('/'), findsOneWidget);
   });
 
-  testWidgets('메뉴 순서는 Dashboard · Seasons · Sessions · Laps · Leaderboard · Tracks', (t) async {
+  testWidgets('메뉴 순서는 Dashboard · Seasons · Sessions · Laps · Tracks(Leaderboard는 혼자 쓰는 동안 뺐다)', (t) async {
     await _pumpShell(t, _wide);
 
-    expect(_topMenuLabels(t), ['Dashboard', 'Seasons', 'Sessions', 'Laps', 'Leaderboard', 'Tracks']);
+    expect(_topMenuLabels(t), ['Dashboard', 'Seasons', 'Sessions', 'Laps', 'Tracks']);
   });
 
   testWidgets('/setups/au/s1에서는 셋업을 합친 Tracks 메뉴가 선택되어 있다', (t) async {
@@ -196,7 +196,7 @@ void main() {
 
     expect(find.text('body:setup'), findsOneWidget);
     expect(_isMenuSelected(t, '/tracks'), isTrue);
-    for (final other in ['/', '/seasons', '/sessions', '/laps', '/leaderboard']) {
+    for (final other in ['/', '/seasons', '/sessions', '/laps']) {
       expect(_isMenuSelected(t, other), isFalse, reason: other);
     }
   });
@@ -205,7 +205,7 @@ void main() {
     await _pumpShell(t, _wide, initialLocation: '/tracks/au');
 
     expect(_isMenuSelected(t, '/tracks'), isTrue);
-    expect(_isMenuSelected(t, '/leaderboard'), isFalse);
+    expect(_isMenuSelected(t, '/laps'), isFalse);
   });
 
   testWidgets('Seasons 메뉴를 누르면 /seasons로 이동하고 선택 상태(앰버 막대)가 된다', (t) async {
@@ -228,7 +228,7 @@ void main() {
 
     expect(find.text('body:season:abc'), findsOneWidget);
     expect(_isMenuSelected(t, '/seasons'), isTrue);
-    for (final other in ['/', '/sessions', '/laps', '/leaderboard', '/tracks']) {
+    for (final other in ['/', '/sessions', '/laps', '/tracks']) {
       expect(_isMenuSelected(t, other), isFalse, reason: other);
     }
   });
@@ -248,17 +248,17 @@ void main() {
 
     expect(find.text('body:session:abc'), findsOneWidget);
     expect(_isMenuSelected(t, '/sessions'), isTrue);
-    for (final other in ['/', '/seasons', '/laps', '/leaderboard', '/tracks']) {
+    for (final other in ['/', '/seasons', '/laps', '/tracks']) {
       expect(_isMenuSelected(t, other), isFalse, reason: other);
     }
   });
 
-  testWidgets('메뉴를 누르면 해당 경로로 이동한다(Leaderboard · Tracks)', (t) async {
+  testWidgets('메뉴를 누르면 해당 경로로 이동한다(Laps · Tracks)', (t) async {
     await _pumpShell(t, _wide);
 
-    await t.tap(_menu('/leaderboard'));
+    await t.tap(_menu('/laps'));
     await t.pumpAndSettle();
-    expect(find.text('body:leaderboard'), findsOneWidget);
+    expect(find.text('body:laps'), findsOneWidget);
 
     await t.tap(_menu('/tracks'));
     await t.pumpAndSettle();
@@ -368,7 +368,7 @@ void main() {
 
       expect(
         _drawerLabels(t),
-        ['Dashboard', 'Seasons', 'Sessions', 'Laps', 'Leaderboard', 'Tracks', 'Telemetry App'],
+        ['Dashboard', 'Seasons', 'Sessions', 'Laps', 'Tracks', 'Telemetry App'],
       );
       expect(_isDrawerSelected(t, 'Dashboard'), isTrue);
     });
@@ -424,7 +424,7 @@ void main() {
         find.ancestor(of: find.byKey(const ValueKey('drawer-account-settings')), matching: find.byType(Material)).first,
       );
       expect(footer.color, isNot(Colors.transparent));
-      for (final label in ['Dashboard', 'Seasons', 'Sessions', 'Laps', 'Leaderboard', 'Tracks', 'Telemetry App']) {
+      for (final label in ['Dashboard', 'Seasons', 'Sessions', 'Laps', 'Tracks', 'Telemetry App']) {
         expect(_isDrawerSelected(t, label), isFalse, reason: label);
       }
     });
@@ -473,14 +473,14 @@ void main() {
       await t.pumpAndSettle();
       expect(find.byKey(const ValueKey('command-palette')), findsOneWidget);
 
-      await t.enterText(find.byKey(const ValueKey('command-palette-input')), 'leader');
+      await t.enterText(find.byKey(const ValueKey('command-palette-input')), 'sessions');
       await t.pump();
-      await t.tap(find.byKey(const ValueKey('command-/leaderboard')));
+      await t.tap(find.byKey(const ValueKey('command-/sessions')));
       await t.pumpAndSettle();
 
-      expect(find.text('body:leaderboard'), findsOneWidget);
+      expect(find.text('body:sessions'), findsOneWidget);
       expect(find.byKey(const ValueKey('command-palette')), findsNothing);
-      expect(_isMenuSelected(t, '/leaderboard'), isTrue);
+      expect(_isMenuSelected(t, '/sessions'), isTrue);
     });
 
     testWidgets('트랙 이름으로 찾아 Enter를 누르면 그 트랙 화면으로 간다', (t) async {
@@ -522,8 +522,8 @@ void main() {
     final seasons = navItems.firstWhere((i) => i.path == '/seasons');
     final tracks = navItems.firstWhere((i) => i.path == '/tracks');
 
-    test('메뉴는 Dashboard · Seasons · Sessions · Laps · Leaderboard · Tracks이고 Telemetry App은 따로 있다', () {
-      expect([for (final i in navItems) i.label], ['Dashboard', 'Seasons', 'Sessions', 'Laps', 'Leaderboard', 'Tracks']);
+    test('메뉴는 Dashboard · Seasons · Sessions · Laps · Tracks이고 Telemetry App은 따로 있다', () {
+      expect([for (final i in navItems) i.label], ['Dashboard', 'Seasons', 'Sessions', 'Laps', 'Tracks']);
       expect([for (final i in navItems) i.path], isNot(contains('/telemetry-app')));
       expect(telemetryAppNavItem.path, '/telemetry-app');
       expect(isNavItemSelected(telemetryAppNavItem, '/telemetry-app'), isTrue);
@@ -576,24 +576,22 @@ void main() {
     final entries = commandEntries(const [_australia]);
     List<String> locations(List<CommandEntry> list) => [for (final e in list) e.location];
 
-    test('메뉴 · Telemetry App · 계정 설정 다음에 트랙마다 개요 · 리더보드 · 내 랩 항목을 둔다', () {
+    test('메뉴 · Telemetry App · 계정 설정 다음에 트랙마다 개요 · 내 랩 항목을 둔다(리더보드는 혼자 쓰는 동안 뺐다)', () {
       expect(locations(entries), [
         '/',
         '/seasons',
         '/sessions',
         '/laps',
-        '/leaderboard',
         '/tracks',
         '/telemetry-app',
         '/settings',
         '/tracks/au',
-        '/leaderboard?trackId=au',
         '/laps/tracks/au',
       ]);
-      expect([for (final e in entries.take(7)) e.label],
-          ['Dashboard', 'Seasons', 'Sessions', 'Laps', 'Leaderboard', 'Tracks', 'Telemetry App']);
-      expect([for (final e in entries.take(8)) e.detail], everyElement(isNull));
-      final trackEntries = entries.skip(8).toList();
+      expect([for (final e in entries.take(6)) e.label],
+          ['Dashboard', 'Seasons', 'Sessions', 'Laps', 'Tracks', 'Telemetry App']);
+      expect([for (final e in entries.take(7)) e.detail], everyElement(isNull));
+      final trackEntries = entries.skip(7).toList();
       expect([for (final e in trackEntries) e.label], everyElement('Australia'));
       expect([for (final e in trackEntries) e.detail], everyElement(isNotNull));
     });
@@ -604,7 +602,6 @@ void main() {
         '/seasons',
         '/sessions',
         '/laps',
-        '/leaderboard',
         '/tracks',
         '/telemetry-app',
         '/settings',
@@ -619,7 +616,7 @@ void main() {
     test('대소문자를 무시하고 이름 · 부제 · 함께 찾을 말 어디서든 찾는다', () {
       expect(locations(filterCommands(entries, 'DASH')), ['/']);
       expect(locations(filterCommands(entries, '대시보드')), ['/']);
-      expect(locations(filterCommands(entries, '리더보드')), ['/leaderboard', '/leaderboard?trackId=au']);
+      expect(filterCommands(entries, '리더보드'), isEmpty);
     });
 
     test('예전 Setups를 찾으면 Tracks 메뉴와 트랙 개요가 나온다', () {
