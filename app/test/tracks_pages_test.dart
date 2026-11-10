@@ -18,6 +18,7 @@ import 'package:simcenter_app/features/tracks/domain/theoretical_best.dart';
 import 'package:simcenter_app/features/tracks/domain/track_outline.dart';
 import 'package:simcenter_app/features/tracks/domain/track_overview_models.dart';
 import 'package:simcenter_app/features/tracks/presentation/track_overview_page.dart';
+import 'package:simcenter_app/features/tracks/presentation/track_side_panel.dart';
 import 'package:simcenter_app/features/tracks/presentation/tracks_page.dart';
 
 import 'support/lap_detail_harness.dart';
@@ -339,6 +340,41 @@ void main() {
 
       expect(find.byKey(const ValueKey('track-overview-map')), findsOneWidget);
       expect(find.byKey(const ValueKey('track-outline-map')), findsNothing);
+    });
+
+    testWidgets('목록 보드 오른쪽 열: 트랙 지도는 정보·내 기록과 따로 맨 위 카드(지도 랩이 없으면 서킷 윤곽 카드)', (t) async {
+      const outline = TrackOutline(width: 1, height: 0.5, points: [Offset(0, 0), Offset(1, 0), Offset(1, 0.5)]);
+      Future<void> pumpPanel(TrackOverview overview) async {
+        setViewSize(t, const Size(400, 1600));
+        await t.pumpWidget(ProviderScope(
+          overrides: [
+            tracksRepositoryProvider.overrideWithValue(FakeTracksRepository(overviews: {'au': overview})),
+            lapDetailRepositoryProvider.overrideWithValue(
+              FakeLapDetailRepository(details: {'l1': sampleDetail()}, traces: {'l1': _positionedTrace}),
+            ),
+            trackOutlinesProvider.overrideWith((ref) async => {'Australia': outline}),
+            trackCornersProvider.overrideWith((ref) async => const {}),
+          ],
+          child: const MaterialApp(home: Scaffold(body: SingleChildScrollView(child: TrackSidePanel(trackId: 'au')))),
+        ));
+        await t.pumpAndSettle();
+      }
+
+      // 지도 랩이 있으면 레이스 리뷰와 같은 트랙 지도 카드(섹터 범례 포함)가 정보 카드 위에 따로 선다.
+      await pumpPanel(trackOverviewOf(mapLapId: 'l1'));
+      final map = find.byKey(const ValueKey('race-review-track-map'));
+      expect(map, findsOneWidget);
+      expect(find.descendant(of: map, matching: find.text('트랙 지도')), findsOneWidget);
+      expect(find.descendant(of: map, matching: find.text('섹터 1')), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const ValueKey('track-side-info')), matching: map), findsNothing);
+      expect(t.getTopLeft(map).dy, lessThan(t.getTopLeft(find.byKey(const ValueKey('track-side-info'))).dy));
+
+      // 지도 랩이 없으면 서킷 윤곽을 같은 '트랙 지도' 카드로.
+      await pumpPanel(trackOverviewOf());
+      final outlineCard = find.byKey(const ValueKey('track-side-outline'));
+      expect(outlineCard, findsOneWidget);
+      expect(find.descendant(of: outlineCard, matching: find.byKey(const ValueKey('track-outline-map'))), findsOneWidget);
+      expect(find.byKey(const ValueKey('race-review-track-map')), findsNothing);
     });
 
     testWidgets('mapLapId가 있으면 그 랩 트레이스로 트랙 지도를 그린다', (t) async {
