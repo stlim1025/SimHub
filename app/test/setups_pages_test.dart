@@ -117,9 +117,36 @@ void main() {
       expect(repo.listRequests.last, (trackId: 'au', condition: 'Dry', session: 'TimeTrial'));
     });
 
-    testWidgets('줄을 누르면 셋업 상세로', (t) async {
-      final router = await _pump(t, repo, '/tracks/au');
+    testWidgets('넓으면 목록 옆에 1위 셋업을 보이고, 줄을 누르면 옆 칸만 그 셋업으로 바뀐다', (t) async {
+      final detailRepo = FakeSetupsRepository(
+        lists: {'au|Dry': _listOf('Dry', [setupItemOf('s1', 1), setupItemOf('s2', 2, team: 'Red Bull Racing')])},
+        details: {
+          's1': setupDetailOf('s1'),
+          's2': setupDetailOf('s2', sections: const [
+            (title: 'Suspension', items: [(label: 'Front Ride Height', value: '30')]),
+          ]),
+        },
+      );
+      final router = await _pump(t, detailRepo, '/tracks/au');
 
+      final panel = find.byKey(const ValueKey('setup-detail-panel'));
+      expect(panel, findsOneWidget);
+      expect(find.descendant(of: panel, matching: find.textContaining('Aerodynamics')), findsWidgets);
+      expect(t.getTopLeft(panel).dx, greaterThan(t.getTopLeft(find.byKey(const ValueKey('setup-row-s1'))).dx));
+
+      await t.tap(find.byKey(const ValueKey('setup-row-s2')));
+      await t.pumpAndSettle();
+
+      expect(_location(router), '/tracks/au'); // 화면은 그대로
+      expect(find.descendant(of: panel, matching: find.textContaining('Suspension')), findsWidgets);
+      expect(find.descendant(of: panel, matching: find.textContaining('Aerodynamics')), findsNothing);
+      expect(detailRepo.detailRequests, ['s1', 's2']);
+    });
+
+    testWidgets('좁으면 목록만 두고, 줄을 누르면 셋업 상세로', (t) async {
+      final router = await _pump(t, repo, '/tracks/au', size: const Size(900, 2400));
+
+      expect(find.byKey(const ValueKey('setup-detail-panel')), findsNothing);
       await t.tap(find.byKey(const ValueKey('setup-row-s2')));
       await t.pumpAndSettle();
 

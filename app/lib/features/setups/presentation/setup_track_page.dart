@@ -19,6 +19,7 @@ import '../application/setups_providers.dart';
 import '../domain/setup_models.dart';
 import '../domain/setups_display.dart';
 import 'page_heading.dart';
+import 'setup_detail_page.dart';
 import 'setups_page.dart';
 
 const String _setupsLabel = 'Setups';
@@ -33,6 +34,15 @@ const double _rankWidth = 40;
 const double _lapTimeWidth = 100;
 const int _teamFlex = 3;
 const int _sessionFlex = 2;
+
+/// 콘텐츠 폭이 이 이상이면 셋업 목록 옆에 고른 셋업을 나란히 보인다. 목록 · 셋업 칸 비율과 사이 간격.
+const double kSetupSplitWidth = 1100;
+const int _listFlex = 2;
+const int _detailFlex = 3;
+const double _splitGap = 20;
+
+/// 표 폭이 이보다 좁을 때만 SESSION 열을 숨긴다.
+const double _tableCompactWidth = 460;
 
 
 /// 한 트랙의 상위 셋업(`/setups/:trackId`, F1Laps `F1 25 Australia Setups` 모양):
@@ -117,14 +127,24 @@ class SetupTrackPage extends ConsumerWidget {
   }
 }
 
-class _SetupListBody extends StatelessWidget {
+/// 셋업 목록. 넓으면([kSetupSplitWidth] 이상) 왼쪽 목록 + 오른쪽 고른 셋업(기본 = 1위)을 나란히 두고, 줄을 누르면 오른쪽만 바뀐다.
+/// 좁으면 목록만 두고 줄을 누르면 셋업 상세 화면으로 간다.
+class _SetupListBody extends StatefulWidget {
   const _SetupListBody({required this.list, required this.trackId});
 
   final SetupList list;
   final String trackId;
 
   @override
+  State<_SetupListBody> createState() => _SetupListBodyState();
+}
+
+class _SetupListBodyState extends State<_SetupListBody> {
+  String? _selectedId;
+
+  @override
   Widget build(BuildContext context) {
+    final list = widget.list;
     if (list.items.isEmpty) {
       return EmptyStateCard(
         message: _emptyMessage,
@@ -132,15 +152,52 @@ class _SetupListBody extends StatelessWidget {
         actionPath: setupsLocation(condition: list.condition),
       );
     }
-    // 열이 넷뿐이라 넓은 화면 전체 폭으로 늘리면 칸 사이가 비므로, 리더보드처럼 읽기 좋은 폭까지만 쓴다(위 토글과 같이 왼쪽 정렬).
-    return Align(
-      alignment: Alignment.topLeft,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: kReadableContentMaxWidth),
-        child: CompactTable<SetupListItem>(
-          rows: list.items,
+    // 조건·세션을 바꿔 목록이 바뀌면, 고른 셋업이 새 목록에 없을 때 1위로 돌아간다.
+    final selectedId = list.items.any((item) => item.id == _selectedId) ? _selectedId! : list.items.first.id;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < kSetupSplitWidth) {
+          // 열이 넷뿐이라 넓게 늘리면 칸 사이가 비므로 읽기 좋은 폭까지만 쓴다(위 토글과 같이 왼쪽 정렬).
+          return Align(
+            alignment: Alignment.topLeft,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: kReadableContentMaxWidth),
+              child: _table(onRowTap: (item) => context.go(setupDetailLocation(widget.trackId, item.id))),
+            ),
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: _listFlex,
+              child: _table(
+                selectedId: selectedId,
+                onRowTap: (item) => setState(() => _selectedId = item.id),
+              ),
+            ),
+            const SizedBox(width: _splitGap),
+            Expanded(
+              flex: _detailFlex,
+              child: KeyedSubtree(
+                key: const ValueKey('setup-detail-panel'),
+                child: SetupDetailView(trackId: widget.trackId, setupId: selectedId),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// `# | TEAM | SESSION | LAP TIME` 표. [selectedId]가 있으면 그 줄을 강조한다.
+  Widget _table({required ValueChanged<SetupListItem> onRowTap, String? selectedId}) => CompactTable<SetupListItem>(
+          rows: widget.list.items,
           rowKey: (item) => ValueKey('setup-row-${item.id}'),
-          onRowTap: (item) => context.go(setupDetailLocation(trackId, item.id)),
+          // 열이 넷뿐이라 목록 칸(넓은 화면의 2/5)에서도 SESSION 열을 보인다.
+          compactWidth: _tableCompactWidth,
+          onRowTap: onRowTap,
+          isHighlighted: selectedId == null ? null : (item) => item.id == selectedId,
           columns: [
             CompactColumn(label: '#', width: _rankWidth, cell: (item) => Text('${item.rank}', style: kTabularStyle)),
             CompactColumn(label: 'Team', flex: _teamFlex, cell: (item) => TeamNameCell(teamName: item.teamName)),
@@ -156,8 +213,5 @@ class _SetupListBody extends StatelessWidget {
               cell: (item) => Text(formatLapTime(item.lapTimeMs), style: kTabularStyle),
             ),
           ],
-        ),
-      ),
-    );
-  }
+        );
 }

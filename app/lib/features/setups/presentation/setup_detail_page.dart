@@ -72,7 +72,23 @@ class SetupDetailPage extends ConsumerWidget {
           showFlag: value != null,
         ),
         const SizedBox(height: _headingGap),
-        detail.when(
+        SetupDetailView(trackId: trackId, setupId: setupId),
+      ],
+    );
+  }
+}
+
+/// 셋업 하나의 본문(요약 카드 + 묶음 카드 격자). 셋업 상세 화면과, 넓은 화면의 트랙 셋업 목록 옆 칸이 함께 쓴다.
+/// 불러오는 중이면 진행 막대, 없으면 404 상태, 실패하면 다시 시도.
+class SetupDetailView extends ConsumerWidget {
+  const SetupDetailView({super.key, required this.trackId, required this.setupId});
+
+  final String trackId;
+  final String setupId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return ref.watch(setupDetailProvider(setupId)).when(
           loading: () => const PageLoadingBar(),
           error: (e, _) => e is ApiException && e.statusCode == _httpNotFound
               ? NotFoundState(
@@ -86,9 +102,7 @@ class SetupDetailPage extends ConsumerWidget {
                   onRetry: () => ref.invalidate(setupDetailProvider(setupId)),
                 ),
           data: (data) => _SetupDetailBody(detail: data),
-        ),
-      ],
-    );
+        );
   }
 }
 

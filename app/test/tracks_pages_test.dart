@@ -472,9 +472,11 @@ void main() {
       expect(_location(router), '/tracks/au?tab=setups&condition=wet&session=qualifying');
       expect(setupsRepo.listRequests.last, (trackId: 'au', condition: 'Wet', session: 'Qualifying'));
 
+      // 넓은 화면: 줄을 누르면 화면은 그대로, 목록 옆 칸에 그 셋업을 보인다.
       await t.tap(find.byKey(const ValueKey('setup-row-w1')));
       await t.pumpAndSettle();
-      expect(_location(router), '/setups/au/w1');
+      expect(_location(router), '/tracks/au?tab=setups&condition=wet&session=qualifying');
+      expect(find.byKey(const ValueKey('setup-detail-panel')), findsOneWidget);
 
       router.go('/tracks/au?tab=setups');
       await t.pumpAndSettle();
