@@ -136,17 +136,66 @@ void main() {
     expect(h.repo.requests, hasLength(1));
   });
 
-  testWidgets('TOP10 표: 1위와의 차이와 기록한 날을 보인다', (t) async {
+  List<RankingEntry> fiveEntries(String trackId, String period, int call) => [
+        entryOf(1, '선두', 80000),
+        entryOf(2, '추격자', 80456),
+        entryOf(3, '세번째', 81000),
+        entryOf(4, '네번째', 81500),
+        entryOf(5, '다섯번째', 82250),
+      ];
+
+  testWidgets('1~3위는 시상대(2위 · 1위 · 3위 순, 1위 단이 가장 높다)에 1위와의 차이와 함께 둔다', (t) async {
+    await _pumpLeaderboard(t, entriesFor: fiveEntries);
+
+    Finder inStep(int rank, Finder matching) =>
+        find.descendant(of: find.byKey(ValueKey('ranking-podium-$rank')), matching: matching);
+    expect(inStep(1, find.text('선두')), findsOneWidget);
+    expect(inStep(1, find.text('1:20.000')), findsOneWidget);
+    expect(inStep(2, find.textContaining('+0.456')), findsOneWidget);
+    expect(inStep(3, find.textContaining('+1.000')), findsOneWidget);
+
+    final x = [for (final rank in [2, 1, 3]) t.getTopLeft(find.byKey(ValueKey('ranking-podium-$rank'))).dx];
+    expect(x[0], lessThan(x[1]));
+    expect(x[1], lessThan(x[2]));
+    double top(int rank) => t.getTopLeft(find.byKey(ValueKey('ranking-podium-$rank'))).dy;
+    expect(top(1), lessThan(top(2)));
+    expect(top(2), lessThan(top(3)));
+
+    for (final rank in [1, 2, 3]) {
+      expect(find.byKey(ValueKey('ranking-row-$rank')), findsNothing);
+    }
+  });
+
+  testWidgets('4위부터는 1위와의 차이(GAP)·바로 앞 순위와의 차이(INT)·기록한 날을 보이는 순위표에 둔다', (t) async {
+    await _pumpLeaderboard(t, entriesFor: fiveEntries);
+
+    for (final header in ['#', 'DRIVER', 'LAP TIME', 'GAP', 'INT', 'DATE']) {
+      expect(find.text(header), findsOneWidget, reason: header);
+    }
+    Finder inRow(int rank, String text) =>
+        find.descendant(of: find.byKey(ValueKey('ranking-row-$rank')), matching: find.text(text));
+    expect(inRow(4, '+1.500'), findsOneWidget);
+    expect(inRow(4, '+0.500'), findsOneWidget);
+    expect(inRow(5, '+2.250'), findsOneWidget);
+    expect(inRow(5, '+0.750'), findsOneWidget);
+  });
+
+  testWidgets('3명 이하면 순위표 없이 시상대만 둔다', (t) async {
     await _pumpLeaderboard(
       t,
       entriesFor: (trackId, period, _) => [entryOf(1, '선두', 80000), entryOf(2, '추격자', 80456)],
     );
 
-    for (final header in ['#', 'DRIVER', 'LAP TIME', 'GAP', 'DATE']) {
-      expect(find.text(header), findsOneWidget, reason: header);
-    }
-    expect(find.descendant(of: find.byKey(const ValueKey('ranking-row-2')), matching: find.text('+0.456')), findsOneWidget);
-    expect(find.descendant(of: find.byKey(const ValueKey('ranking-row-1')), matching: find.text('-')), findsOneWidget);
+    expect(find.byKey(const ValueKey('ranking-podium-2')), findsOneWidget);
+    expect(find.text('DRIVER'), findsNothing);
+  });
+
+  testWidgets('좁은 화면(320)에서도 시상대와 순위표가 넘치지 않는다', (t) async {
+    await _pumpLeaderboard(t, entriesFor: fiveEntries, size: const Size(320, 800));
+
+    expect(t.takeException(), isNull);
+    expect(find.byKey(const ValueKey('ranking-podium')), findsOneWidget);
+    expect(find.byKey(const ValueKey('ranking-row-4')), findsOneWidget);
   });
 
   testWidgets('넓은 화면이면 왼쪽 트랙 목록(누르면 그 트랙으로)과 오른쪽 트랙 정보·내 기록 카드 열을 둔다', (t) async {
