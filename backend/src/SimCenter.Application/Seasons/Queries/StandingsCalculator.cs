@@ -257,7 +257,7 @@ public static class StandingsCalculator
     {
         var teams = scoringRows
             .Where(r => r.TeamId is not null)
-            .GroupBy(r => r.TeamId!.Value)
+            .GroupBy(r => TeamCatalog.CanonicalTeamId(gameCode, r.TeamId!.Value))
             .Select(g => NewTeamTotal(
                 gameCode,
                 g.Key,
@@ -273,7 +273,7 @@ public static class StandingsCalculator
     {
         var teams = drivers
             .Where(d => d.TeamId is not null)
-            .GroupBy(d => d.TeamId!.Value)
+            .GroupBy(d => TeamCatalog.CanonicalTeamId(gameCode, d.TeamId!.Value))
             .Select(g => NewTeamTotal(
                 gameCode,
                 g.Key,
@@ -293,12 +293,13 @@ public static class StandingsCalculator
         string gameCode,
         IReadOnlyList<ImportedConstructorPoints> baseline)
     {
-        var points = baseline.GroupBy(t => t.TeamId).ToDictionary(g => g.Key, g => g.Sum(t => (long)t.Points));
-        var names = baseline.Where(t => t.TeamName is not null).GroupBy(t => t.TeamId).ToDictionary(g => g.Key, g => g.First().TeamName);
+        int Canonical(int teamId) => TeamCatalog.CanonicalTeamId(gameCode, teamId);
+        var points = baseline.GroupBy(t => Canonical(t.TeamId)).ToDictionary(g => g.Key, g => g.Sum(t => (long)t.Points));
+        var names = baseline.Where(t => t.TeamName is not null).GroupBy(t => Canonical(t.TeamId)).ToDictionary(g => g.Key, g => g.First().TeamName);
         var wins = new Dictionary<int, int>();
         foreach (var row in scoringRows.Where(r => r.TeamId is not null))
         {
-            var teamId = row.TeamId!.Value;
+            var teamId = Canonical(row.TeamId!.Value);
             if (row.TeamName is not null)
             {
                 names.TryAdd(teamId, row.TeamName);

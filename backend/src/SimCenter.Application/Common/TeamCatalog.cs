@@ -18,6 +18,7 @@ public static class TeamCatalog
 
     public const string UnknownTeamName = "Unknown Team";
 
+    private const int BaseTeamCount = 10;
     private const int Season2024FirstTeamId = 185;
     private const int Season2026FirstTeamId = 476;
     private const int Season2026TeamCount = 9;
@@ -69,6 +70,29 @@ public static class TeamCatalog
         }
 
         return new TeamInfo($"Team {id}", FallbackColor);
+    }
+
+    /// <summary>
+    /// 같은 팀의 여러 게임 팀 ID(2024 차량 185~, 2026 시즌팩 476~, v1.26 그리드 220~)를 하나의 대표 ID로 모은다.
+    /// 게임이 시즌 중에 팀 ID 묶음을 바꿔 보내도(예: 220~230 → 476~486) 컨스트럭터 순위에 같은 팀이 두 번 나오지 않게 한다.
+    /// 대표 ID = 2025 팀 순서(0~9)의 ID, Audi·Cadillac = 485·486. 그 밖의 ID와 다른 게임은 그대로 둔다.
+    /// </summary>
+    public static int CanonicalTeamId(string gameCode, int teamId)
+    {
+        if (gameCode is not (GameCodes.F1_25 or GameCodes.F1_26))
+        {
+            return teamId;
+        }
+
+        return teamId switch
+        {
+            >= Season2024FirstTeamId and < Season2024FirstTeamId + BaseTeamCount => teamId - Season2024FirstTeamId,
+            >= Season2026FirstTeamId and < Season2026FirstTeamId + Season2026TeamCount => teamId - Season2026FirstTeamId,
+            >= Grid2026FirstTeamId and < Grid2026FirstTeamId + Grid2026BaseTeamCount => teamId - Grid2026FirstTeamId,
+            Grid2026AudiTeamId => AudiTeamId,
+            Grid2026CadillacTeamId => CadillacTeamId,
+            _ => teamId,
+        };
     }
 
     /// <summary>

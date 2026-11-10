@@ -127,7 +127,7 @@ public sealed class StandingsBaselineTests
             Row(2, 2, "driver:7", 1, 25, hours: 48, name: "RUSSELL", teamId: 220),
             Row(2, 2, "driver:5", 2, 18, hours: 48, name: "NORRIS", teamId: 228));
 
-        Assert.Equal([(228, 190), (220, 152)], standings.Constructors.Select(c => (c.TeamId, c.Points)));
+        Assert.Equal([(8, 190), (0, 152)], standings.Constructors.Select(c => (c.TeamId, c.Points)));
         Assert.Equal(1, standings.Constructors[0].Wins);
     }
 
@@ -142,7 +142,7 @@ public sealed class StandingsBaselineTests
             Row(1, 1, "player", 1, 25, isPlayer: true, isAi: false, teamId: 221, name: "GOM") with { IsImported = true });
 
         var ferrari = Assert.Single(standings.Constructors);
-        Assert.Equal((221, 50), (ferrari.TeamId, ferrari.Points));
+        Assert.Equal((1, 50), (ferrari.TeamId, ferrari.Points)); // 컨스트럭터는 같은 팀의 여러 ID를 대표 ID(2025 팀 순서)로 모은다.
     }
 
     [Fact]

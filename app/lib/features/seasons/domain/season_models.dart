@@ -141,6 +141,7 @@ class SeasonRound {
     required this.winnerName,
     required this.myPoints,
     required this.sessions,
+    this.winnerTeamColor,
   });
 
   final int round;
@@ -150,6 +151,9 @@ class SeasonRound {
 
   /// 본 레이스 1위. 본 레이스가 없으면 null.
   final String? winnerName;
+
+  /// 우승자 팀 색(`#RRGGBB`). 우승자가 없거나 옛 서버면 null.
+  final String? winnerTeamColor;
 
   /// 그 주말 내 점수 합. 내 결과가 없으면 null.
   final int? myPoints;
@@ -161,6 +165,7 @@ class SeasonRound {
         trackName: json['trackName'] as String,
         firstSessionAt: DateTime.parse(json['firstSessionAt'] as String),
         winnerName: json['winnerName'] as String?,
+        winnerTeamColor: json['winnerTeamColor'] as String?,
         myPoints: json['myPoints'] as int?,
         sessions: (json['sessions'] as List<dynamic>)
             .map((e) => SeasonRoundSession.fromJson(e as Map<String, dynamic>))

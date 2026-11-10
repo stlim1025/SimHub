@@ -368,12 +368,27 @@ public class StandingsCalculatorTests
             Row(session: 2, weekend: 2, "a", 2, 0, teamId: 2, hours: 20),
             Row(session: 2, weekend: 2, "c", 3, 5, teamId: 8, hours: 20));
 
-        // McLaren 14점 → Red Bull(2)와 Red Bull(478)은 10점·1승으로 동점, 이름도 같아 TeamId 순.
+        // Red Bull(2)와 Red Bull(478, 2026 시즌팩 ID)은 같은 팀이라 대표 ID 2로 합쳐 20점·2승 → McLaren 14점.
         Assert.Equal(
-            new[] { (1, 8, 14, 0), (2, 2, 10, 1), (3, 478, 10, 1) },
+            new[] { (1, 2, 20, 2), (2, 8, 14, 0) },
             standings.Constructors.Select(c => (c.Position, c.TeamId, c.Points, c.Wins)));
         Assert.DoesNotContain(standings.Constructors, c => c.TeamId == 0);
         Assert.Equal(5, standings.Drivers.Count);
+    }
+
+    [Fact]
+    public void Constructors_TeamIdsSwitchedMidSeason_StayOneTeamEach()
+    {
+        // 게임이 시즌 중에 팀 ID 묶음을 220~230에서 476~486으로 바꿔 보낸 경우(2026-11-08 Zandvoort 본 레이스).
+        var standings = Calculate(
+            Row(session: 1, weekend: 1, "a", 1, 25, teamId: 222, hours: 10),   // Red Bull
+            Row(session: 1, weekend: 1, "b", 2, 18, teamId: 229, hours: 10),   // Audi
+            Row(session: 2, weekend: 2, "a", 2, 18, teamId: 478, hours: 20),   // Red Bull
+            Row(session: 2, weekend: 2, "b", 1, 25, teamId: 485, hours: 20));  // Audi
+
+        Assert.Equal(
+            new[] { (2, 43, 1), (485, 43, 1) },
+            standings.Constructors.Select(c => (c.TeamId, c.Points, c.Wins)).OrderBy(c => c.TeamId));
     }
 
     [Fact]
@@ -452,6 +467,24 @@ public class StandingsCalculatorTests
         Assert.Equal("Car 3", winners[Id(1)]);
         Assert.Equal("NORRIS", winners[Id(2)]);
         Assert.False(winners.ContainsKey(Id(3)));
+    }
+
+    [Fact]
+    public void WinnerTeamColors_UseMainRaceWinnersTeam_GrayWhenTeamUnknown()
+    {
+        var selection = SeasonSessionSelector.Select(new[]
+        {
+            // 주말 1: 스프린트 우승 Ferrari, 본 레이스 우승 McLaren
+            Row(session: 1, weekend: 1, "x", 1, 8, teamId: 1, kind: SessionKind.Race, hours: 10),
+            Row(session: 2, weekend: 1, "y", 1, 25, teamId: 8, kind: SessionKind.Race2, hours: 14),
+            // 주말 2: 팀을 모르는 우승자
+            Row(session: 3, weekend: 2, "z", 1, 25, teamId: null, hours: 20),
+        });
+
+        var colors = WinnerNames.TeamColorByWeekend(selection, GameCode);
+
+        Assert.Equal("#FF8000", colors[Id(1)]);
+        Assert.Equal("#9CA3AF", colors[Id(2)]);
     }
 
     // ---- 도우미 ----

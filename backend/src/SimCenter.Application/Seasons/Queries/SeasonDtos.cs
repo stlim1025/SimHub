@@ -71,6 +71,7 @@ public sealed record SeasonCalendarSessionDto(Guid SessionId, string SessionKind
 /// 라운드(그랑프리 주말) 한 줄. <see cref="WinnerName"/>은 본 레이스 1위(없으면 null),
 /// <see cref="MyPoints"/>는 그 주말 내 점수 합(계산 대상 세션만, 내 결과가 없으면 null).
 /// <see cref="Sessions"/>는 저장된 모든 세션을 <c>ClassifiedAt</c> 오름차순으로 담는다.
+/// <see cref="WinnerTeamColor"/>는 우승자 팀 색(<c>#RRGGBB</c>, 우승자가 없으면 null).
 /// </summary>
 public sealed record SeasonRoundDto(
     int Round,
@@ -79,7 +80,8 @@ public sealed record SeasonRoundDto(
     DateTime FirstSessionAt,
     string? WinnerName,
     int? MyPoints,
-    IReadOnlyList<SeasonRoundSessionDto> Sessions);
+    IReadOnlyList<SeasonRoundSessionDto> Sessions,
+    string? WinnerTeamColor = null);
 
 /// <summary>라운드 안의 세션 칩. 내 결과가 없으면 <c>My*</c>는 null.</summary>
 public sealed record SeasonRoundSessionDto(

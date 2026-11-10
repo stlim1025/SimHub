@@ -118,7 +118,7 @@ class SeasonCalendarTab extends StatelessWidget {
           label: 'Winner',
           flex: _winnerFlex,
           hideBelowWidth: _wideTableWidth,
-          cell: (r) => Text(weekendOf(r)?.winnerName ?? '', maxLines: 1, overflow: TextOverflow.ellipsis),
+          cell: (r) => _WinnerCell(weekend: weekendOf(r)),
         ),
       ],
     );
@@ -256,6 +256,29 @@ class _TeamCell extends StatelessWidget {
         TeamDot(colorHex: round.myTeamColor),
         const SizedBox(width: _teamDotGap),
         Flexible(child: Text(team, maxLines: 1, overflow: TextOverflow.ellipsis)),
+      ],
+    );
+  }
+}
+
+/// WINNER 칸: 우승자 팀 색 점 + 이름. 달리지 않았거나 본 레이스가 없으면 비운다.
+class _WinnerCell extends StatelessWidget {
+  const _WinnerCell({required this.weekend});
+
+  final SeasonRound? weekend;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = weekend?.winnerName;
+    if (name == null) {
+      return const SizedBox.shrink();
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TeamDot(key: ValueKey('season-calendar-winner-team-${weekend!.weekendId}'), colorHex: weekend!.winnerTeamColor),
+        const SizedBox(width: _teamDotGap),
+        Flexible(child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis)),
       ],
     );
   }

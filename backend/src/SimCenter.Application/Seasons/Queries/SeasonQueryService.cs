@@ -79,7 +79,7 @@ public sealed class SeasonQueryService : ISeasonQueryService
 
         return new SeasonDetailDto(
             ToSummary(season, weekends.Count, standings, numbers),
-            BuildRounds(weekends, rounds, rows, selection),
+            BuildRounds(weekends, rounds, rows, selection, season.GameCode),
             ToStandingsDto(standings, rounds, season.GameCode),
             // 시즌 탭(docs/15 §12): 캘린더 전부 + 내 라운드 값. 가져온 세션(D-55)은 내 결과 행만 있어도 된다.
             SeasonCalendar.Build(season.GameCode, calendar, weekends, selection, seasonMe?.TeamId, seasonMe?.TeamName));
@@ -134,9 +134,11 @@ public sealed class SeasonQueryService : ISeasonQueryService
         IReadOnlyList<WeekendRow> weekends,
         IReadOnlyDictionary<Guid, int> rounds,
         IReadOnlyList<SeasonResultRow> allRows,
-        SeasonSelection selection)
+        SeasonSelection selection,
+        string gameCode)
     {
         var winners = WinnerNames.ByWeekend(selection);
+        var winnerColors = WinnerNames.TeamColorByWeekend(selection, gameCode);
         var allByWeekend = allRows.ToLookup(r => r.WeekendId);
         var countedByWeekend = selection.CountedRows.ToLookup(r => r.WeekendId);
 
@@ -149,7 +151,8 @@ public sealed class SeasonQueryService : ISeasonQueryService
                 w.FirstSessionAt,
                 winners.GetValueOrDefault(w.WeekendId),
                 MyWeekendPoints(countedByWeekend[w.WeekendId]),
-                BuildSessionChips(allByWeekend[w.WeekendId])))
+                BuildSessionChips(allByWeekend[w.WeekendId]),
+                winnerColors.GetValueOrDefault(w.WeekendId)))
             .ToList();
     }
 

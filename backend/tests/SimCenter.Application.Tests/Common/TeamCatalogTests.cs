@@ -42,6 +42,33 @@ public class TeamCatalogTests
     [InlineData(229, "Audi", "#BB0A30")]
     [InlineData(230, "Cadillac", "#B5B5B5")]
     public void Resolve_KnownTeam(int id, string name, string color)
+        => AssertTeam(id, name, color);
+
+    [Theory]
+    [InlineData(2, 2)]
+    [InlineData(187, 2)]
+    [InlineData(222, 2)]
+    [InlineData(478, 2)]
+    [InlineData(220, 0)]
+    [InlineData(476, 0)]
+    [InlineData(229, 485)]
+    [InlineData(485, 485)]
+    [InlineData(230, 486)]
+    [InlineData(486, 486)]
+    [InlineData(41, 41)]
+    [InlineData(104, 104)]
+    [InlineData(999, 999)]
+    public void CanonicalTeamId_SameTeamAcrossIdSets_MapsToOneId(int id, int expected)
+    {
+        Assert.Equal(expected, TeamCatalog.CanonicalTeamId(GameCode, id));
+        Assert.Equal(TeamCatalog.Resolve(GameCode, id), TeamCatalog.Resolve(GameCode, expected));
+    }
+
+    [Fact]
+    public void CanonicalTeamId_OtherGame_KeepsId()
+        => Assert.Equal(478, TeamCatalog.CanonicalTeamId("OTHER_GAME", 478));
+
+    private static void AssertTeam(int id, string name, string color)
     {
         var team = TeamCatalog.Resolve(GameCode, id);
 

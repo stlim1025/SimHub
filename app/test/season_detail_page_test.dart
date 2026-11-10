@@ -10,6 +10,7 @@ import 'package:simcenter_app/features/seasons/data/seasons_repository.dart';
 import 'package:simcenter_app/features/seasons/domain/season_display.dart';
 import 'package:simcenter_app/features/seasons/domain/season_models.dart';
 import 'package:simcenter_app/features/seasons/presentation/season_detail_page.dart';
+import 'package:simcenter_app/features/sessions/presentation/session_widgets.dart' show TeamDot;
 
 import 'support/fakes.dart';
 
@@ -126,6 +127,7 @@ SeasonDetail _detail({
           1,
           trackName: 'Bahrain',
           winnerName: 'NORRIS',
+          winnerTeamColor: '#FF8000',
           myPoints: 12,
           firstSessionAt: DateTime(2026, 10, 17, 12),
           sessions: [
@@ -725,6 +727,9 @@ void main() {
       final bahrain = find.byKey(const ValueKey('season-calendar-1'));
       expect(find.descendant(of: bahrain, matching: find.text('2026-10-17')), findsOneWidget);
       expect(find.descendant(of: bahrain, matching: find.text('NORRIS')), findsOneWidget);
+      // 우승자 이름 옆에 우승자 팀 색 점.
+      final winnerDot = find.descendant(of: bahrain, matching: find.byKey(const ValueKey('season-calendar-winner-team-w1')));
+      expect(t.widget<TeamDot>(winnerDot).colorHex, '#FF8000');
       final suzuka = find.byKey(const ValueKey('season-calendar-3'));
       expect(find.descendant(of: suzuka, matching: find.textContaining('2026')), findsNothing); // 달리지 않은 라운드
 

@@ -863,6 +863,7 @@ SeasonRound seasonRoundOf(
   int round, {
   String? trackName,
   String? winnerName,
+  String? winnerTeamColor,
   int? myPoints,
   List<SeasonRoundSession> sessions = const [],
   DateTime? firstSessionAt,
@@ -873,6 +874,7 @@ SeasonRound seasonRoundOf(
       trackName: trackName ?? 'Track $round',
       firstSessionAt: firstSessionAt ?? DateTime(2026, 10, 16 + round, 12),
       winnerName: winnerName,
+      winnerTeamColor: winnerTeamColor,
       myPoints: myPoints,
       sessions: sessions,
     );

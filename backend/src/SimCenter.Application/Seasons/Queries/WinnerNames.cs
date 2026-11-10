@@ -1,3 +1,5 @@
+using SimCenter.Application.Common;
+
 namespace SimCenter.Application.Seasons.Queries;
 
 /// <summary>
@@ -10,6 +12,17 @@ public static class WinnerNames
     private const int WinnerPosition = 1;
 
     public static IReadOnlyDictionary<Guid, string> ByWeekend(SeasonSelection selection)
+        => WinnerRows(selection).ToDictionary(p => p.Key, p => DriverLabels.Name(p.Value.DriverName, p.Value.CarIndex));
+
+    /// <summary>
+    /// 라운드별 우승자 팀 색(<c>rounds[].winnerTeamColor</c>, 시즌 탭 WINNER 칸의 팀 점). 키는 <see cref="ByWeekend"/>와 같다.
+    /// 팀을 모르면 <see cref="TeamCatalog"/>의 중립 회색이다.
+    /// </summary>
+    public static IReadOnlyDictionary<Guid, string> TeamColorByWeekend(SeasonSelection selection, string gameCode)
+        => WinnerRows(selection).ToDictionary(p => p.Key, p => TeamCatalog.Resolve(gameCode, p.Value.TeamId, p.Value.TeamName).Color);
+
+    /// <summary>주말 Id → 본 레이스 1위 행(같은 순위가 여럿이면 차 번호가 작은 쪽).</summary>
+    private static Dictionary<Guid, SeasonResultRow> WinnerRows(SeasonSelection selection)
     {
         ArgumentNullException.ThrowIfNull(selection);
 
@@ -18,15 +31,15 @@ public static class WinnerNames
             .GroupBy(r => r.SessionId)
             .ToDictionary(g => g.Key, g => g.OrderBy(r => r.CarIndex).First());
 
-        var names = new Dictionary<Guid, string>();
+        var winners = new Dictionary<Guid, SeasonResultRow>();
         foreach (var (weekendId, mainRaceSessionId) in selection.MainRaceSessionByWeekend)
         {
             if (winnerBySession.TryGetValue(mainRaceSessionId, out var winner))
             {
-                names[weekendId] = DriverLabels.Name(winner.DriverName, winner.CarIndex);
+                winners[weekendId] = winner;
             }
         }
 
-        return names;
+        return winners;
     }
 }
