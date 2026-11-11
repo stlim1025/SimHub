@@ -13,12 +13,12 @@ import '../domain/ghost_replay.dart';
 import '../domain/lap_corners.dart';
 import '../domain/lap_detail_models.dart';
 import '../domain/telemetry_math.dart';
+import '../../sessions/presentation/highlights_f1tv_graphics.dart';
 import '../../sessions/presentation/tyre_stints_view.dart';
 import 'ghost_replay_3d_painter.dart';
 import 'ghost_replay_hud.dart';
 import 'ghost_replay_painter.dart';
 import 'replay_circuit.dart';
-import 'replay_corner_badge.dart';
 import 'replay_three_view.dart';
 
 /// 재생 화면 높이(넓은 화면·좁은 화면).
@@ -55,8 +55,11 @@ class GhostReplaySeek extends ChangeNotifier {
   }
 }
 
-/// 지금 코너 이름표의 위 여백.
+/// 지금 코너 턴 표시(`TURN 7`): 위 여백, 높이(재생 화면 높이 비율과 그 하한 — 상한은 설계 높이), 화면 폭 대비 최대 폭.
 const double _cornerBadgeInset = 10;
+const double _turnHeightFraction = 0.085;
+const double _turnMinHeight = 24;
+const double _turnMaxWidthFraction = 0.14;
 
 /// 조작 줄 폭이 이보다 좁으면 시간 막대를 아랫줄로 내리고 버튼은 줄을 바꿔 감싼다.
 const double _singleRowControlsMinWidth = 760;
@@ -341,14 +344,8 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
                         ),
                         ValueListenableBuilder<double>(
                           valueListenable: _time,
-                          builder: (context, elapsed, _) => Align(
-                            alignment: Alignment.topCenter,
-                            child: Padding(
-                              padding: const EdgeInsets.only(top: _cornerBadgeInset),
-                              child: ReplayCornerBadge(
-                                corner: cornerAt(widget.corners, _player.frameAt(elapsed).distanceM),
-                              ),
-                            ),
+                          builder: (context, elapsed, _) => _turnIndicator(
+                            cornerAt(widget.corners, _player.frameAt(elapsed).distanceM),
                           ),
                         ),
                       ],
@@ -359,6 +356,29 @@ class _GhostReplayState extends State<GhostReplay> with SingleTickerProviderStat
               const SizedBox(height: _controlsGap),
               _controls(palette),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 화면 위 가운데의 지금 코너 턴 표시(중계 그래픽 `TURN 7`). 직선이면 아무것도 그리지 않는다.
+  /// 좁은 화면에서 양쪽 계기판에 닿지 않게 폭도 화면 비율로 묶는다.
+  Widget _turnIndicator(LapCorner? corner) {
+    if (corner == null) {
+      return const SizedBox.shrink();
+    }
+    return LayoutBuilder(
+      builder: (context, box) => Align(
+        alignment: Alignment.topCenter,
+        child: Padding(
+          padding: const EdgeInsets.only(top: _cornerBadgeInset),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: box.maxWidth * _turnMaxWidthFraction,
+              maxHeight: (widget.height * _turnHeightFraction).clamp(_turnMinHeight, kBroadcastTurnHeight),
+            ),
+            child: FittedBox(child: BroadcastTurnIndicator(turn: corner.turnText)),
           ),
         ),
       ),

@@ -134,7 +134,8 @@ const String _overtakeLabel = 'OT';
 /// 안쪽 라임 스로틀 고리와 빨간 브레이크 고리(고리를 따라 THROTTLE · BRAKE 글자), 가운데 속도 · 단위 ·
 /// ([showRpm]이면) RPM, (잔량을 알면) 파란 배터리 게이지와 %, DRS/OT 표시 칸, 아래 `GEAR 7`.
 /// 표시 칸: 꺼짐(어두운 칸 · 회색 글자), 오버테이크 쓸 수 있음(청록 테두리), DRS 열림(초록)·오버테이크 쓰는 중(청록)은 칸을 채운다.
-/// [overtakeRegs](2026 규정 차)면 꺼졌을 때 글자가 `OT`, 아니면 `DRS`.
+/// [overtakeRegs](2026 규정 차)면 꺼졌을 때 글자가 `OT`, 아니면 `DRS`. DRS·오버테이크를 모르는 기록(랩 트레이스)은 [showBoost]를 끈다.
+/// 키는 `[keyName]`(전체, [rootKey]를 주면 그 키)·`-speed`·`-rpm`·`-battery`·`-battery-text`·`-boost`·`-gear`.
 class BroadcastSpeedometer extends StatelessWidget {
   const BroadcastSpeedometer({
     super.key,
@@ -143,6 +144,9 @@ class BroadcastSpeedometer extends StatelessWidget {
     this.boost = HighlightBoost.none,
     this.overtakeRegs = false,
     this.showRpm = true,
+    this.showBoost = true,
+    this.keyName = 'highlights-telemetry',
+    this.rootKey,
   });
 
   final ReplayFrame frame;
@@ -153,6 +157,13 @@ class BroadcastSpeedometer extends StatelessWidget {
   /// RPM 줄을 보일지(옛 표본에는 RPM이 없다).
   final bool showRpm;
 
+  /// DRS·오버테이크 표시 칸을 보일지.
+  final bool showBoost;
+
+  /// 안쪽 값 위젯 키의 앞 글자, 전체 상자의 키(null이면 [keyName]).
+  final String keyName;
+  final Key? rootKey;
+
   @override
   Widget build(BuildContext context) {
     final imperial = units == UnitSystem.imperial;
@@ -160,7 +171,7 @@ class BroadcastSpeedometer extends StatelessWidget {
     final maxSpeed = imperial ? _sImperialMax : _sMetricMax;
     final battery = frame.batteryPercent;
     return SizedBox(
-      key: const ValueKey('highlights-telemetry'),
+      key: rootKey ?? ValueKey(keyName),
       width: kBroadcastSpeedometerSize,
       height: kBroadcastSpeedometerSize,
       child: Stack(
@@ -191,7 +202,7 @@ class BroadcastSpeedometer extends StatelessWidget {
                   fit: BoxFit.scaleDown,
                   child: Text(
                     '${speed.round()}',
-                    key: const ValueKey('highlights-telemetry-speed'),
+                    key: ValueKey('$keyName-speed'),
                     style: _f1Text(context, size: _sSpeedSize),
                   ),
                 ),
@@ -202,7 +213,7 @@ class BroadcastSpeedometer extends StatelessWidget {
                     fit: BoxFit.scaleDown,
                     child: Text(
                       '${frame.rpm}',
-                      key: const ValueKey('highlights-telemetry-rpm'),
+                      key: ValueKey('$keyName-rpm'),
                       style: _f1Text(context, size: _sRpmSize),
                     ),
                   ),
@@ -210,10 +221,14 @@ class BroadcastSpeedometer extends StatelessWidget {
                   const SizedBox(height: _sValueGap),
                 ],
                 if (battery != null) ...[
-                  _SpeedometerBattery(key: const ValueKey('highlights-telemetry-battery'), percent: battery),
-                  const SizedBox(height: _sValueGap),
+                  _SpeedometerBattery(
+                    key: ValueKey('$keyName-battery'),
+                    textKey: ValueKey('$keyName-battery-text'),
+                    percent: battery,
+                  ),
+                  if (showBoost) const SizedBox(height: _sValueGap),
                 ],
-                _BoostIndicator(boost: boost, overtakeRegs: overtakeRegs),
+                if (showBoost) _BoostIndicator(boxKey: ValueKey('$keyName-boost'), boost: boost, overtakeRegs: overtakeRegs),
               ],
             ),
           ),
@@ -230,7 +245,7 @@ class BroadcastSpeedometer extends StatelessWidget {
                 const SizedBox(width: _sGearGap),
                 Text(
                   gearLabel(frame.gear),
-                  key: const ValueKey('highlights-telemetry-gear'),
+                  key: ValueKey('$keyName-gear'),
                   style: _f1Text(context, size: _sGearSize),
                 ),
               ],
@@ -333,7 +348,10 @@ class _SpeedometerPainter extends CustomPainter {
 
 /// DRS·오버테이크 표시 칸.
 class _BoostIndicator extends StatelessWidget {
-  const _BoostIndicator({required this.boost, required this.overtakeRegs});
+  const _BoostIndicator({required this.boxKey, required this.boost, required this.overtakeRegs});
+
+  /// 표시 칸 상자의 키.
+  final Key boxKey;
 
   final HighlightBoost boost;
   final bool overtakeRegs;
@@ -349,7 +367,7 @@ class _BoostIndicator extends StatelessWidget {
     final active = boost == HighlightBoost.drs || boost == HighlightBoost.overtakeActive;
     final available = boost == HighlightBoost.overtakeAvailable;
     return Container(
-      key: const ValueKey('highlights-telemetry-boost'),
+      key: boxKey,
       width: _sIndicatorWidth,
       height: _sIndicatorHeight,
       alignment: Alignment.center,
@@ -373,9 +391,10 @@ class _BoostIndicator extends StatelessWidget {
 
 /// 속도계 배터리 게이지: 파란 배터리 모양(잔량만큼 채움) + `62%`.
 class _SpeedometerBattery extends StatelessWidget {
-  const _SpeedometerBattery({super.key, required this.percent});
+  const _SpeedometerBattery({super.key, required this.percent, this.textKey});
 
   final double percent;
+  final Key? textKey;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -401,6 +420,7 @@ class _SpeedometerBattery extends StatelessWidget {
             width: _sBatteryTextWidth,
             child: Text(
               '${percent.round()}%',
+              key: textKey,
               style: _f1Text(context, size: _sBatteryTextSize, color: AppColors.replayF1tvBattery),
             ),
           ),
@@ -589,13 +609,7 @@ class BroadcastDriverName extends StatelessWidget {
               height: _nPanelHeight,
               child: ColoredBox(color: AppColors.replayF1tvPanel.withValues(alpha: _nPanelOpacity)),
             ),
-            Positioned(
-              left: 0,
-              top: _nStrokeTop,
-              width: width,
-              height: _nStrokeHeight,
-              child: const Opacity(opacity: _nStrokeOpacity, child: CustomPaint(painter: _HatchPainter())),
-            ),
+            Positioned(left: 0, top: _nStrokeTop, width: width, child: const BroadcastHatchStrip()),
             if (detail is LowerThirdNumber && number != null) ...[
               Positioned(
                 left: _nGlowLeft,
@@ -931,6 +945,17 @@ class BroadcastDriverName extends StatelessWidget {
       word(_winnerLabel, _nWinnerWordLeft, _nWinnerWordWidth, _readable(teamColor), key: const ValueKey('highlights-driver-winner')),
     ];
   }
+}
+
+/// 중계 그래픽 판 아래에 붙는 사선 띠(이름 자막 · 고스트 재생 이름판).
+class BroadcastHatchStrip extends StatelessWidget {
+  const BroadcastHatchStrip({super.key});
+
+  @override
+  Widget build(BuildContext context) => const SizedBox(
+        height: _nStrokeHeight,
+        child: Opacity(opacity: _nStrokeOpacity, child: CustomPaint(painter: _HatchPainter())),
+      );
 }
 
 /// 자막 아래 사선 띠: 옅은 흰 바탕 위 어두운 사선(오른쪽 위로).

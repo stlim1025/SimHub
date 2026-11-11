@@ -48,6 +48,9 @@ class LapCorner {
   /// 화면 이름(`T7`·`T12A`).
   String get label => 'T$number$letter';
 
+  /// 중계 턴 표시(`TURN 7A`)·레이스 컨트롤 메시지에 쓰는 번호 글자(`7`·`7A`).
+  String get turnText => '$number$letter';
+
   bool contains(double distanceM) => distanceM >= startM && distanceM <= endM;
 }
 

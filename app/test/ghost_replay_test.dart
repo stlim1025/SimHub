@@ -18,6 +18,7 @@ import 'package:simcenter_app/features/lap_detail/presentation/replay_circuit.da
 import 'package:simcenter_app/features/lap_detail/presentation/telemetry_chart.dart';
 import 'package:simcenter_app/features/lap_detail/presentation/telemetry_tab.dart';
 import 'package:simcenter_app/features/laps/domain/lap_models.dart';
+import 'package:simcenter_app/features/sessions/presentation/highlights_f1tv_graphics.dart';
 
 /// 위치가 있는 트레이스: 표본 [count]개(5m 간격), 시간 i×[msPerSample], 속도 200+i, 기어 i÷10+1, 위치는 [positionAt].
 LapTrace _positionedTrace(
@@ -350,6 +351,12 @@ void main() {
       await _pumpCharts(t, trace: _player, reference: _reference, sectors: mine, referenceSectors: theirs);
 
       expect(find.byKey(const ValueKey('ghost-replay-player-hud-dial')), findsOneWidget);
+      // 다이얼은 하이라이트와 같은 중계 속도계이고, 랩 기록에는 DRS·오버테이크가 없어 표시 칸은 없다.
+      expect(
+        find.descendant(of: find.byKey(const ValueKey('ghost-replay-player-hud')), matching: find.byType(BroadcastSpeedometer)),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('ghost-replay-player-hud-boost')), findsNothing);
       // 비교 랩도 같은 계기판(다이얼·속도·기어)을 따로 보인다.
       expect(find.byKey(const ValueKey('ghost-replay-ghost-hud-dial')), findsOneWidget);
       expect(_textOf(t, 'ghost-replay-ghost-hud-speed'), '200');

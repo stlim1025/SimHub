@@ -870,7 +870,7 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
     final turnHeight = (box.maxHeight * _turnHeightFraction).clamp(_turnMinHeight, kBroadcastTurnHeight);
     // 레이스 컨트롤 메시지에 넣을, 장면이 난 코너.
     final incident = _cornerOf(_focus!, clip.eventMs.toDouble());
-    final incidentTurn = incident == null ? null : _turnText(incident);
+    final incidentTurn = incident?.turnText;
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -969,7 +969,7 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
               final corner = _cornerOf(_focus!, time);
               return corner == null
                   ? const SizedBox.shrink()
-                  : FittedBox(alignment: Alignment.topRight, child: BroadcastTurnIndicator(turn: _turnText(corner)));
+                  : FittedBox(alignment: Alignment.topRight, child: BroadcastTurnIndicator(turn: corner.turnText));
             },
           ),
         ),
@@ -1005,8 +1005,6 @@ class _HighlightsPlayerState extends State<HighlightsPlayer> with SingleTickerPr
     );
   }
 
-  /// 턴 표시·레이스 컨트롤 메시지에 쓰는 코너 번호 글자(`3`·`7A`).
-  static String _turnText(LapCorner corner) => '${corner.number}${corner.letter}';
 
   /// 중심 차의 지금 코너: 그 위치에서 가장 가까운 내 랩 지점이 든 코너.
   LapCorner? _cornerOf(TimedCarPath car, double time) {

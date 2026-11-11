@@ -5,90 +5,62 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/util/lap_time.dart';
 import '../../auth/domain/user_preferences.dart';
+import '../../sessions/presentation/highlights_f1tv_graphics.dart';
 import '../../sessions/presentation/tyre_stints_view.dart';
 import '../domain/ghost_replay.dart';
-import '../domain/telemetry_channels.dart';
-import '../domain/telemetry_math.dart';
 
-/// 계기판 배치: 이 랩은 오른쪽, 비교 랩은 왼쪽. 넓은 화면은 아래 귀퉁이에 원래 크기로,
-/// 좁은 화면은 차를 가리지 않게 위 귀퉁이(하늘·앞길 자리)에 화면 폭 비율로 줄여 둔다.
+/// 계기판 배치: 이 랩은 오른쪽, 비교 랩은 왼쪽. 넓은 화면은 아래 귀퉁이에, 좁은 화면은 차를 가리지 않게
+/// 위 귀퉁이(하늘·앞길 자리)에 화면 폭 비율로 줄여 둔다. 넓어도 [_maxWidth]까지만 키운다.
 const double _inset = 10;
 const double _wideMaxWidthFraction = 0.32;
 const double _narrowMaxWidthFraction = 0.4;
 const double _narrowWidth = 520;
+const double _maxWidth = 230;
 
-/// 계기판 판(디자인 크기, 화면에 맞춰 줄어든다).
-const double _panelWidth = 250;
-const double _panelRadius = 8;
-const EdgeInsets _panelPadding = EdgeInsets.fromLTRB(12, 10, 12, 10);
-const double _dialHeight = 210;
+// -- 이름판(설계 단위 — 속도계 설계 폭에 맞추고 화면에서는 통째로 줄인다) --------------------------------
 
-/// 다이얼: 바깥 고리(속도, 눈금), 안쪽 고리(스로틀 → 브레이크). 각도는 왼쪽 아래(135°)에서 시계 방향 270°.
-/// 안쪽 고리는 스로틀이 더 넓다(왼쪽 아래부터 [_throttleShare]), 나머지 오른쪽이 브레이크.
-const double _dialStart = math.pi * 3 / 4;
-const double _dialSweep = math.pi * 3 / 2;
-const double _throttleShare = 0.66;
-const double _pedalGap = 0.03;
-const double _speedStroke = 15;
-const double _pedalStroke = 17;
-const double _ringGap = 4;
-const double _tickFontSize = 8.5;
-const double _arcLabelFontSize = 8.5;
-const double _arcLabelSpacing = 0.085;
-const double _dialRadiusFraction = 0.49;
-const double _dialCenterYFraction = 0.53;
+/// 이름판: 바탕 불투명도, 안쪽 여백, 줄 사이 간격, 이름판과 속도계 사이 간격, 아래 팀 색 줄 굵기.
+const double _plateOpacity = 0.94;
+const EdgeInsets _platePadding = EdgeInsets.fromLTRB(16, 12, 16, 12);
+const double _rowGap = 10;
+const double _dialGap = 10;
+const double _accentHeight = 4;
 
-/// 속도 눈금: 최고 값·간격(km/h, mph).
-const double _metricMaxSpeed = 360;
-const double _metricTickStep = 60;
-const double _imperialMaxSpeed = 220;
-const double _imperialTickStep = 40;
+/// 이름 줄: 팀 색 띠(폭·높이)와 이름 사이 간격, 이름 글자, 타이어 표시(크기·고리 굵기·글자).
+const double _stripWidth = 6;
+const double _stripHeight = 30;
+const double _stripGap = 12;
+const double _nameFontSize = 26;
+const double _tyreBadgeSize = 40;
+const double _tyreRingWidth = 4;
+const double _tyreFontSize = 19;
 
-const double _timeFontSize = 16;
-const double _gapFontSize = 12;
-const double _speedFontSize = 40;
-const double _rpmFontSize = 19;
-const double _unitFontSize = 9;
-const double _gearFontSize = 20;
-const double _labelFontSize = 10;
-const double _nameFontSize = 11;
-const double _nameStripWidth = 3;
-const double _nameStripHeight = 14;
-const double _sectorFontSize = 11;
-const double _tyreBadgeSize = 22;
-const double _tyreRingWidth = 2.5;
-const double _sectorBarHeight = 3;
-const double _barHeight = 4;
-const double _flowBarWidth = 70;
+/// 시간 줄: 경과 시간·시간 차 글자와 그 사이 간격.
+const double _timeFontSize = 38;
+const double _gapFontSize = 27;
+const double _timeGap = 16;
 
-/// 다이얼 배터리 게이지(기어 위): 몸통 폭·높이·모서리·테두리 굵기·안쪽 여백, 오른쪽 단자 폭·높이,
-/// 몸통과 % 글자 사이·% 글자 칸 폭(자릿수가 바뀌어도 게이지가 흔들리지 않게), 기어와의 간격.
-const double _batteryBodyWidth = 30;
-const double _batteryBodyHeight = 13;
-const double _batteryRadius = 2.5;
-const double _batteryBorder = 1.5;
-const double _batteryInset = 1.5;
-const double _batteryCapWidth = 2.5;
-const double _batteryCapHeight = 6;
-const double _batteryTextGap = 4;
-const double _batteryPercentWidth = 28;
-const double _batteryGap = 4;
+/// ERS 줄: 번개 아이콘, 충전/사용 막대 높이, kW 글자·칸 폭(자릿수가 바뀌어도 막대가 흔들리지 않게 고정).
+const double _boltSize = 26;
+const double _boltGap = 8;
+const double _flowBarHeight = 8;
+const double _flowFontSize = 21;
+const double _flowTextWidth = 124;
+const double _flowCenterWidth = 2;
 
-/// ERS 줄의 글자 칸 폭(값 자릿수가 바뀌어도 막대 길이·자리가 흔들리지 않게 고정).
-const double _batteryTextWidth = 36;
-const double _flowTextWidth = 58;
-const double _percentMax = 100;
+/// 섹터 줄: 칸 사이 간격, 이름 글자, 밑줄 굵기, 시간·차이 글자, 줄 사이 간격.
+const double _sectorGap = 12;
+const double _sectorFontSize = 22;
+const double _sectorBarHeight = 6;
+const double _sectorTimeFontSize = 20;
+const double _sectorRowGap = 6;
+
 const List<FontFeature> _tabular = [FontFeature.tabularFigures()];
 
-const String _throttleLabel = 'THROTTLE';
-const String _brakeLabel = 'BRAKE';
-const String _rpmLabel = 'RPM';
-const String _gearLabel = 'GEAR';
-
-/// 고스트 재생 계기판(게임 텔레메트리 화면처럼). 이 랩은 오른쪽, 비교 랩이 있으면 같은 계기판을 왼쪽에 둔다.
-/// - 위: 팀 색 띠·이름(이 랩은 타이어 컴파운드), 이 랩은 그 아래 경과 시간(초록)·비교 랩과의 시간 차.
-/// - 가운데 다이얼: 바깥 고리 속도(파랑, 눈금), 안쪽 고리 스로틀(초록, 넓게)·브레이크(빨강), 가운데 속도·RPM, 아래 기어.
-/// - ERS 배터리·충전/사용, 섹터 S1·S2·S3(지난 섹터는 그 랩 시간·상대 랩과의 차이, 지금 섹터는 흰 밑줄).
+/// 고스트 재생 계기판(F1 중계 그래픽 모양 — 하이라이트와 같은 속도계). 이 랩은 오른쪽, 비교 랩이 있으면 같은 계기판을 왼쪽에 둔다.
+/// - 이름판: 팀 색 띠·이름(타이어 컴파운드), 이 랩은 그 아래 경과 시간(초록)·비교 랩과의 시간 차, ERS 충전/사용,
+///   섹터 S1·S2·S3(지난 섹터는 그 랩 시간·상대 랩과의 차이, 지금 섹터는 흰 밑줄), 아래 팀 색 줄과 사선 띠.
+/// - 속도계([BroadcastSpeedometer]): 바깥 고리 속도, 안쪽 고리 스로틀·브레이크, 가운데 속도·RPM·배터리 잔량, 아래 기어.
 class GhostReplayHud extends StatelessWidget {
   const GhostReplayHud({
     super.key,
@@ -135,7 +107,10 @@ class GhostReplayHud extends StatelessWidget {
                 top: narrow ? _inset : null,
                 bottom: narrow ? null : _inset,
                 child: ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: box.maxWidth * fraction, maxHeight: box.maxHeight - _inset * 2),
+                  constraints: BoxConstraints(
+                    maxWidth: math.min(box.maxWidth * fraction, _maxWidth),
+                    maxHeight: box.maxHeight - _inset * 2,
+                  ),
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
                     alignment: switch ((narrow, right)) {
@@ -176,8 +151,37 @@ class GhostReplayHud extends StatelessWidget {
         },
       );
 
-  /// 계기판 하나. [isPlayer]면 경과 시간·시간 차·타이어·섹터도 넣는다.
+  /// 계기판 하나: 이름판 아래 속도계. [isPlayer]면 이름판에 경과 시간·시간 차도 넣는다.
   Widget _dashboard({
+    required String keyName,
+    required ReplayFrame frame,
+    required Color color,
+    required String label,
+    required bool isPlayer,
+  }) =>
+      SizedBox(
+        key: ValueKey(keyName),
+        width: kBroadcastSpeedometerSize,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _plate(keyName: keyName, frame: frame, color: color, label: label, isPlayer: isPlayer),
+            const SizedBox(height: _dialGap),
+            // 랩 트레이스에는 DRS·오버테이크 기록이 없어 표시 칸을 뺀다.
+            BroadcastSpeedometer(
+              frame: frame,
+              units: units,
+              showBoost: false,
+              keyName: keyName,
+              rootKey: ValueKey('$keyName-dial'),
+            ),
+          ],
+        ),
+      );
+
+  /// 이름판: 어두운 판 위 이름 줄 · (이 랩) 시간 줄 · ERS 줄 · 섹터 줄, 아래 팀 색 줄과 사선 띠.
+  Widget _plate({
     required String keyName,
     required ReplayFrame frame,
     required Color color,
@@ -186,226 +190,121 @@ class GhostReplayHud extends StatelessWidget {
   }) {
     final gap = gapMs;
     final compound = isPlayer ? tyreCompound : referenceTyreCompound;
-    final battery = frame.batteryPercent;
     final flow = frame.ersFlowKw;
-    return Container(
-      key: ValueKey(keyName),
-      width: _panelWidth,
-      padding: _panelPadding,
-      decoration: BoxDecoration(color: AppColors.replayDashPanel, borderRadius: BorderRadius.circular(_panelRadius)),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ColoredBox(
+          color: AppColors.replayF1tvPanel.withValues(alpha: _plateOpacity),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(width: _nameStripWidth, height: _nameStripHeight, color: color),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: AppColors.replayHudText, fontSize: _nameFontSize, fontWeight: FontWeight.w700),
-                ),
-              ),
-              if (compound != null) _TyreBadge(compound: compound),
-            ],
-          ),
-          if (isPlayer) ...[
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Text(
-                  formatLapTime(elapsedMs.round()),
-                  key: const ValueKey('ghost-replay-elapsed'),
-                  style: const TextStyle(
-                    color: AppColors.replayDashTime,
-                    fontSize: _timeFontSize,
-                    fontWeight: FontWeight.w700,
-                    fontFeatures: _tabular,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                if (gap != null)
-                  Text(
-                    formatReplayGap(gap),
-                    key: const ValueKey('ghost-replay-gap'),
-                    style: TextStyle(
-                      color: _deltaColor(gap),
-                      fontSize: _gapFontSize,
-                      fontWeight: FontWeight.w700,
-                      fontFeatures: _tabular,
+              Padding(
+                padding: _platePadding,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Container(width: _stripWidth, height: _stripHeight, color: color),
+                        const SizedBox(width: _stripGap),
+                        Expanded(
+                          child: Text(
+                            label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppColors.replayF1tvName,
+                              fontSize: _nameFontSize,
+                              fontWeight: FontWeight.w800,
+                              fontStyle: FontStyle.italic,
+                              height: 1,
+                            ),
+                          ),
+                        ),
+                        if (compound != null) _TyreBadge(compound: compound),
+                      ],
                     ),
-                  ),
-              ],
-            ),
-          ],
-          ReplayDial(keyName: keyName, frame: frame, units: units),
-          if (battery != null && flow != null) ...[
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.bolt, size: 13, color: AppColors.replayBattery),
-                SizedBox(
-                  width: _batteryTextWidth,
-                  child: Text(
-                    '${battery.round()}%',
-                    key: ValueKey('$keyName-battery-text'),
-                    style: const TextStyle(
-                      color: AppColors.replayBattery,
-                      fontSize: _sectorFontSize,
-                      fontWeight: FontWeight.w700,
-                      fontFeatures: _tabular,
-                    ),
-                  ),
-                ),
-                Expanded(child: _Bar(key: ValueKey('$keyName-battery'), fraction: battery / _percentMax)),
-                const SizedBox(width: 10),
-                _ErsFlowBar(key: ValueKey('$keyName-ers-flow'), fraction: flow / kErsMaxFlowKw),
-                SizedBox(
-                  width: _flowTextWidth,
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: _ErsFlowText(textKey: ValueKey('$keyName-ers-flow-text'), flowKw: flow),
-                  ),
-                ),
-              ],
-            ),
-          ],
-          if (sectors.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            _Sectors(
-              key: ValueKey(isPlayer ? 'ghost-replay-sectors' : 'ghost-replay-ghost-sectors'),
-              rows: sectors,
-              isPlayer: isPlayer,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-}
-
-/// 계기판 다이얼(고스트 재생·하이라이트 공용): 바깥 고리 속도(파랑, 눈금), 안쪽 고리 스로틀(초록, 넓게)·브레이크(빨강),
-/// 가운데 속도(와 [showRpm]이면 RPM), 아래 기어. [showBattery]이고 잔량을 알면 기어 바로 위에 파란 배터리 모양 게이지와 %.
-/// 키는 `[keyName]-dial`·`-speed`·`-rpm`·`-gear`·`-battery`. 다이얼 글자(눈금·THROTTLE·BRAKE)는 앱 글꼴을 따른다.
-class ReplayDial extends StatelessWidget {
-  const ReplayDial({
-    super.key,
-    required this.keyName,
-    required this.frame,
-    required this.units,
-    this.showRpm = true,
-    this.showBattery = false,
-  });
-
-  final String keyName;
-  final ReplayFrame frame;
-  final UnitSystem units;
-
-  /// RPM을 보일지(하이라이트 표본에는 RPM이 없다).
-  final bool showRpm;
-
-  /// 기어 위에 ERS 배터리 게이지를 둘지(고스트 재생은 계기판 아래 ERS 줄에 따로 보인다).
-  final bool showBattery;
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-        height: _dialHeight,
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: CustomPaint(
-                key: ValueKey('$keyName-dial'),
-                painter: _DialPainter(
-                  throttle: frame.throttle / _percentMax,
-                  brake: frame.brake / _percentMax,
-                  speed: _speedIn(frame.speedKph, units),
-                  imperial: units == UnitSystem.imperial,
-                  baseStyle: DefaultTextStyle.of(context).style,
-                ),
-              ),
-            ),
-            Align(
-              alignment: const Alignment(0, 0.08),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    '${_speedIn(frame.speedKph, units).round()}',
-                    key: ValueKey('$keyName-speed'),
-                    style: const TextStyle(
-                      color: AppColors.replayHudText,
-                      fontSize: _speedFontSize,
-                      fontWeight: FontWeight.w700,
-                      fontFeatures: _tabular,
-                      height: 1,
-                    ),
-                  ),
-                  _unit(units == UnitSystem.imperial ? 'MPH' : 'KMH'),
-                  if (showRpm) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      '${frame.rpm}',
-                      key: ValueKey('$keyName-rpm'),
-                      style: const TextStyle(
-                        color: AppColors.replayHudText,
-                        fontSize: _rpmFontSize,
-                        fontWeight: FontWeight.w600,
-                        fontFeatures: _tabular,
-                        height: 1,
-                      ),
-                    ),
-                    _unit(_rpmLabel),
-                  ],
-                ],
-              ),
-            ),
-            // 기어(다이얼 아래 열린 자리)와 그 바로 위 배터리 게이지.
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (showBattery && frame.batteryPercent != null) ...[
-                    _BatteryGauge(key: ValueKey('$keyName-battery'), percent: frame.batteryPercent!),
-                    const SizedBox(height: _batteryGap),
-                  ],
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      _unit(_gearLabel),
-                      const SizedBox(width: 6),
-                      Text(
-                        gearLabel(frame.gear),
-                        key: ValueKey('$keyName-gear'),
-                        style: const TextStyle(color: AppColors.replayHudText, fontSize: _gearFontSize, fontWeight: FontWeight.w700),
+                    if (isPlayer) ...[
+                      const SizedBox(height: _rowGap),
+                      // 한 줄 — 글꼴이 넓어 칸을 넘으면 줄여 맞춘다.
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
+                          children: [
+                            Text(
+                              formatLapTime(elapsedMs.round()),
+                              key: const ValueKey('ghost-replay-elapsed'),
+                              style: const TextStyle(
+                                color: AppColors.replayDashTime,
+                                fontSize: _timeFontSize,
+                                fontWeight: FontWeight.w700,
+                                fontFeatures: _tabular,
+                                height: 1,
+                              ),
+                            ),
+                            if (gap != null) ...[
+                              const SizedBox(width: _timeGap),
+                              Text(
+                                formatReplayGap(gap),
+                                key: const ValueKey('ghost-replay-gap'),
+                                style: TextStyle(
+                                  color: _deltaColor(gap),
+                                  fontSize: _gapFontSize,
+                                  fontWeight: FontWeight.w700,
+                                  fontFeatures: _tabular,
+                                  height: 1,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
                     ],
-                  ),
-                ],
+                    if (flow != null) ...[
+                      const SizedBox(height: _rowGap),
+                      Row(
+                        children: [
+                          const Icon(Icons.bolt, size: _boltSize, color: AppColors.replayF1tvBattery),
+                          const SizedBox(width: _boltGap),
+                          Expanded(child: _ErsFlowBar(key: ValueKey('$keyName-ers-flow'), fraction: flow / kErsMaxFlowKw)),
+                          SizedBox(
+                            width: _flowTextWidth,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerRight,
+                              child: _ErsFlowText(textKey: ValueKey('$keyName-ers-flow-text'), flowKw: flow),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    if (sectors.isNotEmpty) ...[
+                      const SizedBox(height: _rowGap),
+                      _Sectors(
+                        key: ValueKey(isPlayer ? 'ghost-replay-sectors' : 'ghost-replay-ghost-sectors'),
+                        rows: sectors,
+                        isPlayer: isPlayer,
+                      ),
+                    ],
+                  ],
+                ),
               ),
-            ),
-          ],
+              Container(height: _accentHeight, color: color),
+            ],
+          ),
         ),
-      );
-}
-
-Widget _unit(String text) => Text(
-      text,
-      style: const TextStyle(
-        color: AppColors.replayHudMuted,
-        fontSize: _unitFontSize,
-        fontWeight: FontWeight.w600,
-        letterSpacing: 1,
-      ),
+        const BroadcastHatchStrip(),
+      ],
     );
-
-double _speedIn(double kph, UnitSystem units) => units == UnitSystem.imperial ? kphToMph(kph) : kph;
+  }
+}
 
 /// 앞서면 초록, 뒤지면 노랑, 같으면 흐린 색.
 Color _deltaColor(double delta) => delta < 0 ? AppColors.replayFaster : (delta > 0 ? AppColors.replaySlower : AppColors.replayHudMuted);
@@ -429,7 +328,7 @@ class _TyreBadge extends StatelessWidget {
         ),
         child: Text(
           compound.isEmpty ? '' : compound[0].toUpperCase(),
-          style: const TextStyle(color: AppColors.replayHudText, fontSize: _labelFontSize, fontWeight: FontWeight.w800, height: 1),
+          style: const TextStyle(color: AppColors.replayHudText, fontSize: _tyreFontSize, fontWeight: FontWeight.w800, height: 1),
         ),
       );
 }
@@ -450,7 +349,7 @@ class _Sectors extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         for (var i = 0; i < rows.length; i++) ...[
-          if (i > 0) const SizedBox(width: 6),
+          if (i > 0) const SizedBox(width: _sectorGap),
           Expanded(child: _cell(rows[i], isCurrent: i == current)),
         ],
       ],
@@ -464,6 +363,14 @@ class _Sectors extends StatelessWidget {
     final bar = isCurrent
         ? AppColors.replayHudText
         : (delta != null ? _deltaColor(delta) : (playerMs != null ? AppColors.replayHudMuted : AppColors.replayDashTrack));
+    // 시간·차이는 한 줄 — 글꼴이 넓어 칸을 넘으면 줄여 맞춘다.
+    Widget line(String text, Color color, FontWeight weight) => FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            text,
+            style: TextStyle(color: color, fontSize: _sectorTimeFontSize, fontWeight: weight, fontFeatures: _tabular, height: 1.15),
+          ),
+        );
     return Column(
       children: [
         Text(
@@ -471,23 +378,18 @@ class _Sectors extends StatelessWidget {
           style: TextStyle(
             color: isCurrent || playerMs != null ? AppColors.replayHudText : AppColors.replayHudMuted,
             fontSize: _sectorFontSize,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w800,
+            fontStyle: FontStyle.italic,
+            height: 1,
           ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: _sectorRowGap),
         Container(height: _sectorBarHeight, color: bar),
         if (playerMs != null) ...[
-          const SizedBox(height: 4),
-          Text(
-            formatLapTime(playerMs),
-            style: const TextStyle(color: AppColors.replayHudText, fontSize: _labelFontSize, fontWeight: FontWeight.w600, fontFeatures: _tabular),
-          ),
+          const SizedBox(height: _sectorRowGap),
+          line(formatLapTime(playerMs), AppColors.replayF1tvSilver, FontWeight.w600),
         ],
-        if (delta != null)
-          Text(
-            formatReplayGap(delta),
-            style: TextStyle(color: _deltaColor(delta), fontSize: _labelFontSize, fontWeight: FontWeight.w700, fontFeatures: _tabular),
-          ),
+        if (delta != null) line(formatReplayGap(delta), _deltaColor(delta), FontWeight.w700),
       ],
     );
   }
@@ -509,83 +411,13 @@ class _ErsFlowText extends StatelessWidget {
       key: textKey,
       style: TextStyle(
         color: charging ? AppColors.replayThrottle : (kw < 0 ? AppColors.replayDeploy : AppColors.replayHudMuted),
-        fontSize: _labelFontSize,
+        fontSize: _flowFontSize,
         fontWeight: FontWeight.w700,
         fontFeatures: _tabular,
+        height: 1,
       ),
     );
   }
-}
-
-/// 다이얼 ERS 배터리 게이지: 파란 테두리 배터리 모양(오른쪽 단자) 안을 잔량만큼 왼쪽부터 채우고, 옆에 %.
-class _BatteryGauge extends StatelessWidget {
-  const _BatteryGauge({super.key, required this.percent});
-
-  final double percent;
-
-  @override
-  Widget build(BuildContext context) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // % 글자 칸만큼 왼쪽을 비워 배터리 몸통이 다이얼 가운데에 오게 한다.
-          const SizedBox(width: _batteryPercentWidth + _batteryTextGap - _batteryCapWidth),
-          Container(
-            width: _batteryBodyWidth,
-            height: _batteryBodyHeight,
-            padding: const EdgeInsets.all(_batteryInset),
-            alignment: Alignment.centerLeft,
-            decoration: BoxDecoration(
-              border: Border.all(color: AppColors.replayDeploy, width: _batteryBorder),
-              borderRadius: BorderRadius.circular(_batteryRadius),
-            ),
-            child: FractionallySizedBox(
-              widthFactor: (percent / _percentMax).clamp(0.0, 1.0),
-              heightFactor: 1,
-              child: const ColoredBox(color: AppColors.replayDeploy),
-            ),
-          ),
-          Container(
-            width: _batteryCapWidth,
-            height: _batteryCapHeight,
-            decoration: const BoxDecoration(
-              color: AppColors.replayDeploy,
-              borderRadius: BorderRadius.horizontal(right: Radius.circular(_batteryCapWidth / 2)),
-            ),
-          ),
-          const SizedBox(width: _batteryTextGap),
-          SizedBox(
-            width: _batteryPercentWidth,
-            child: Text(
-              '${percent.round()}%',
-              style: const TextStyle(
-                color: AppColors.replayDeploy,
-                fontSize: _labelFontSize,
-                fontWeight: FontWeight.w700,
-                fontFeatures: _tabular,
-              ),
-            ),
-          ),
-        ],
-      );
-}
-
-/// 배터리 잔량 막대(노랑, 0~1 채움).
-class _Bar extends StatelessWidget {
-  const _Bar({super.key, required this.fraction});
-
-  final double fraction;
-
-  @override
-  Widget build(BuildContext context) => Container(
-        height: _barHeight,
-        color: AppColors.replayDashTrack,
-        alignment: Alignment.centerLeft,
-        child: FractionallySizedBox(
-          widthFactor: fraction.clamp(0.0, 1.0),
-          heightFactor: 1,
-          child: const ColoredBox(color: AppColors.replayBattery),
-        ),
-      );
 }
 
 /// ERS 충전/사용 막대: 가운데에서 오른쪽(초록)으로 차면 충전, 왼쪽(파랑)으로 차면 사용. [fraction]은 −1 ~ 1.
@@ -599,8 +431,7 @@ class _ErsFlowBar extends StatelessWidget {
     final amount = fraction.abs().clamp(0.0, 1.0);
     final charging = fraction > 0;
     return Container(
-      width: _flowBarWidth,
-      height: _barHeight,
+      height: _flowBarHeight,
       color: AppColors.replayDashTrack,
       child: Row(
         children: [
@@ -614,7 +445,7 @@ class _ErsFlowBar extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 1, height: _barHeight, child: ColoredBox(color: AppColors.replayHudText)),
+          const SizedBox(width: _flowCenterWidth, height: _flowBarHeight, child: ColoredBox(color: AppColors.replayHudText)),
           Expanded(
             child: Align(
               alignment: Alignment.centerLeft,
@@ -629,99 +460,4 @@ class _ErsFlowBar extends StatelessWidget {
       ),
     );
   }
-}
-
-/// 다이얼: 바깥 고리 속도(파랑, 왼쪽 아래 0에서 시계 방향, 고리 위 눈금 숫자),
-/// 안쪽 고리 스로틀(왼쪽 아래에서 시계 방향으로 초록, 넓은 쪽)·브레이크(오른쪽 아래에서 위로 빨강), 고리 위 글자.
-class _DialPainter extends CustomPainter {
-  const _DialPainter({
-    required this.throttle,
-    required this.brake,
-    required this.speed,
-    required this.imperial,
-    required this.baseStyle,
-  });
-
-  final double throttle;
-  final double brake;
-  final double speed;
-  final bool imperial;
-  final TextStyle baseStyle;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height * _dialCenterYFraction);
-    final outer = math.min(size.width, size.height) * _dialRadiusFraction - _speedStroke / 2;
-    final inner = outer - _speedStroke / 2 - _ringGap - _pedalStroke / 2;
-    Paint ring(Color color, double stroke) => Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = stroke;
-    void arc(double radius, double start, double sweep, Paint paint) =>
-        canvas.drawArc(Rect.fromCircle(center: center, radius: radius), start, sweep, false, paint);
-
-    // 바깥 고리: 속도와 눈금 숫자(고리 위).
-    final maxSpeed = imperial ? _imperialMaxSpeed : _metricMaxSpeed;
-    arc(outer, _dialStart, _dialSweep, ring(AppColors.replayDashTrack, _speedStroke));
-    final s = (speed / maxSpeed).clamp(0.0, 1.0);
-    if (s > 0) {
-      arc(outer, _dialStart, _dialSweep * s, ring(AppColors.replayDashSpeed, _speedStroke));
-    }
-    final step = imperial ? _imperialTickStep : _metricTickStep;
-    for (var v = step; v < maxSpeed; v += step) {
-      final angle = _dialStart + _dialSweep * v / maxSpeed;
-      final at = center + Offset(math.cos(angle), math.sin(angle)) * outer;
-      final painter = _text('${v.round()}', AppColors.replayHudText, _tickFontSize);
-      painter.paint(canvas, at - Offset(painter.width / 2, painter.height / 2));
-    }
-
-    // 안쪽 고리: 스로틀(왼쪽 아래 → 시계 방향, 넓게), 브레이크(오른쪽 아래 → 위로).
-    const throttleSweep = _dialSweep * _throttleShare - _pedalGap;
-    const brakeSweep = _dialSweep * (1 - _throttleShare) - _pedalGap;
-    const brakeStart = _dialStart + _dialSweep;
-    final track = ring(AppColors.replayDashTrack, _pedalStroke);
-    arc(inner, _dialStart, throttleSweep, track);
-    arc(inner, brakeStart, -brakeSweep, track);
-    final t = throttle.clamp(0.0, 1.0);
-    final b = brake.clamp(0.0, 1.0);
-    if (t > 0) {
-      arc(inner, _dialStart, throttleSweep * t, ring(AppColors.replayDashThrottle, _pedalStroke));
-    }
-    if (b > 0) {
-      arc(inner, brakeStart, -brakeSweep * b, ring(AppColors.replayBrake, _pedalStroke));
-    }
-    _arcText(canvas, center, inner, _throttleLabel, _dialStart + throttleSweep * 0.32);
-    _arcText(canvas, center, inner, _brakeLabel, brakeStart - brakeSweep * 0.5);
-  }
-
-  /// 고리를 따라 글자를 하나씩 세운다(시계 방향으로 읽힘 — 왼쪽은 아래에서 위로, 오른쪽은 위에서 아래로). [middle]은 가운데 각도.
-  void _arcText(Canvas canvas, Offset center, double radius, String text, double middle) {
-    final first = middle - _arcLabelSpacing * (text.length - 1) / 2;
-    for (var k = 0; k < text.length; k++) {
-      final angle = first + _arcLabelSpacing * k;
-      final painter = _text(text[k], AppColors.replayHudText, _arcLabelFontSize);
-      canvas
-        ..save()
-        ..translate(center.dx + radius * math.cos(angle), center.dy + radius * math.sin(angle))
-        ..rotate(angle + math.pi / 2);
-      painter.paint(canvas, Offset(-painter.width / 2, -painter.height / 2));
-      canvas.restore();
-    }
-  }
-
-  TextPainter _text(String text, Color color, double fontSize) => TextPainter(
-        text: TextSpan(
-          text: text,
-          style: baseStyle.copyWith(color: color, fontSize: fontSize, fontWeight: FontWeight.w700, fontFeatures: _tabular),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-
-  @override
-  bool shouldRepaint(_DialPainter old) =>
-      old.throttle != throttle ||
-      old.brake != brake ||
-      old.speed != speed ||
-      old.imperial != imperial ||
-      old.baseStyle != baseStyle;
 }
