@@ -7,9 +7,28 @@ import '../domain/ghost_replay.dart';
 import 'ghost_replay_3d_painter.dart';
 import 'replay_circuit.dart';
 
-/// 바닥 층마다 노면 위로 띄우는 높이(m): 겹친 면이 깜빡이지 않게(잔디 < 그래블 < 아스팔트 < 흰 선 < 연석).
+/// 바닥 층마다 노면 위로 띄우는 높이(m): 겹친 면이 깜빡이지 않게(잔디 < 그래블 < 포장 런오프 < 아스팔트 < 흰 선 < 연석).
 const double _gravelLiftM = 0.02;
+const double _runoffLiftM = 0.03;
 const double _asphaltLiftM = 0.04;
+
+/// 포장 런오프 아스팔트 색(본선보다 아주 조금 밝게 — 흰 선·연석 너머라는 것만 구분된다).
+const double _runoffLighten = 0.05;
+
+/// 지형(트랙 높이를 따라가는 바닥): 격자 한 칸(m), 트랙에서 이 거리(m)까지 깔고, 이 거리(m)부터 넓은 바닥 높이로 서서히 내려간다.
+/// 높이는 가까운 중심선 높이의 거리 가중 평균(가중치 = 1 / (거리² + [_terrainSoftM]²)²)이고, 노면·잔디 면보다 [_terrainBelowM] 아래에 둔다.
+const double _terrainCellM = 20;
+const double _terrainReachM = 320;
+const double _terrainFadeStartM = 60;
+const double _terrainSoftM = 12;
+const double _terrainBelowM = 0.25;
+
+/// 지형을 누르는 노면 표본을 중심선에서 방호벽까지 이 간격(m)으로 잡고, 지형 높이를 재는 중심선 점은 이 칸마다 하나씩 쓴다.
+const double _terrainSampleStepM = 5;
+const int _terrainAnchorStride = 2;
+
+/// 지형이 내려가 닿는 바닥: 가장 낮은 노면보다 이만큼(m) 아래.
+const double _terrainBaseBelowM = 0.5;
 const double _edgeLineLiftM = 0.05;
 
 /// 연석 단면 높이(m): 도로 쪽 끝, 가장 솟은 곳(폭의 [_kerbCrownAt] 지점), 바깥 끝. 살짝 솟은 둔덕 모양.
@@ -146,8 +165,9 @@ class _LayerBuilder {
   );
 }
 
-/// [track]을 three.js 메시로(순수 계산): 방호벽 사이 바닥(잔디), 그래블, 아스팔트, 흰 가장자리 선·출발선, 연석(살짝 솟은 단면),
-/// 방호벽, 그 위 펜스, 피트 레인. 층마다 조금씩 띄워 겹친 면이 깜빡이지 않게 한다.
+/// [track]을 three.js 메시로(순수 계산): 방호벽 사이 바닥(잔디), 그래블, 포장 런오프(도로 끝 너머 차들이 포장 노면으로 달린 자리),
+/// 아스팔트, 흰 가장자리 선(연석 옆으로도 이어진다)·출발선, 연석(살짝 솟은 단면), 방호벽, 그 위 펜스, 피트 레인,
+/// 그리고 방호벽 바깥으로 트랙 높이를 따라가는 지형(트랙이 낮은 바닥 위에 떠 보이지 않게). 층마다 조금씩 띄워 겹친 면이 깜빡이지 않게 한다.
 /// 무늬 좌표 U는 중심선을 따라 잰 거리, V는 중심선에서 잰 옆 거리(벽·펜스는 높이)라 무늬가 길을 따라 흐른다.
 /// 출발 그리드는 [grid](실제 출발 위치)가 있으면 그 자리에, 없으면 출발선 뒤로 일정한 간격으로 그린다.
 ReplayTrackMesh buildReplayTrackMesh(ReplayTrack3d track, {List<ReplayGridSlot>? grid}) {
@@ -156,6 +176,7 @@ ReplayTrackMesh buildReplayTrackMesh(ReplayTrack3d track, {List<ReplayGridSlot>?
   final n = center.length;
   final ground = circuit.street ? AppColors.replayStreetGround : AppColors.replayGrass3d;
   final layers = {for (final s in ReplaySurface.values) s: _LayerBuilder(s)};
+  final runoffColor = Color.lerp(AppColors.replayAsphalt, AppColors.replayRoadEdge, _runoffLighten)!;
 
   // 점마다 중심선을 따라 잰 거리(m).
   final along = List<double>.filled(n, 0);
@@ -209,6 +230,44 @@ ReplayTrackMesh buildReplayTrackMesh(ReplayTrack3d track, {List<ReplayGridSlot>?
       );
     }
 
+    // 포장 런오프: 도로 끝 너머 포장 노면 끝까지(방호벽 안쪽에서만). 흰 선·연석은 그 위에 그대로 남는다.
+    for (final (ei, ej, oi, oj, extraI, extraJ, wi, wj, vi, vj) in [
+      (
+        leftI,
+        leftJ,
+        oli,
+        olj,
+        circuit.runoffLeftM[i] - circuit.leftWidths[i],
+        circuit.runoffLeftM[j] - circuit.leftWidths[j],
+        track.wallLeftM[i],
+        track.wallLeftM[j],
+        li,
+        lj,
+      ),
+      (
+        rightI,
+        rightJ,
+        ori,
+        orj,
+        circuit.runoffRightM[i] - circuit.rightWidths[i],
+        circuit.runoffRightM[j] - circuit.rightWidths[j],
+        track.wallRightM[i],
+        track.wallRightM[j],
+        ri,
+        rj,
+      ),
+    ]) {
+      if (extraI > kCircuitRunoffMinM || extraJ > kCircuitRunoffMinM) {
+        layers[ReplaySurface.asphalt]!.quad(
+          vi(ei, _runoffLiftM),
+          vj(ej, _runoffLiftM),
+          vj(ej + oj * math.min(extraJ, wj), _runoffLiftM),
+          vi(ei + oi * math.min(extraI, wi), _runoffLiftM),
+          runoffColor,
+        );
+      }
+    }
+
     layers[ReplaySurface.asphalt]!
       ..quad(li(leftI, _asphaltLiftM), lj(leftJ, _asphaltLiftM), lj(center[j], _asphaltLiftM), li(center[i], _asphaltLiftM), AppColors.replayAsphalt)
       ..quad(ri(center[i], _asphaltLiftM), rj(center[j], _asphaltLiftM), rj(rightJ, _asphaltLiftM), ri(rightI, _asphaltLiftM), AppColors.replayAsphalt);
@@ -235,15 +294,16 @@ ReplayTrackMesh buildReplayTrackMesh(ReplayTrack3d track, {List<ReplayGridSlot>?
             vi(ei + oi * kCircuitKerbWidthM, _kerbOuterLiftM),
             AppColors.replayRoadEdge,
           );
-      } else {
-        layers[ReplaySurface.line]!.quad(
-          vi(ei - oi * _edgeLineWidthM, _edgeLineLiftM),
-          vj(ej - oj * _edgeLineWidthM, _edgeLineLiftM),
-          vj(ej, _edgeLineLiftM),
-          vi(ei, _edgeLineLiftM),
-          AppColors.replayRoadEdge,
-        );
       }
+      // 흰 가장자리 선은 연석이 있는 곳에도 도로 끝 안쪽에 그대로 이어 그린다(실제 서킷처럼 연석은 흰 선 바깥에 붙는다) —
+      // 연석 구간에서 선을 끊으면 연석이 끝나는 자리에서 흰 선이 연석보다 도로 쪽으로 튀어나와 보인다.
+      layers[ReplaySurface.line]!.quad(
+        vi(ei - oi * _edgeLineWidthM, _edgeLineLiftM),
+        vj(ej - oj * _edgeLineWidthM, _edgeLineLiftM),
+        vj(ej, _edgeLineLiftM),
+        vi(ei, _edgeLineLiftM),
+        AppColors.replayRoadEdge,
+      );
     }
 
     for (final (standing, edges, outward, offsets) in [
@@ -348,6 +408,8 @@ ReplayTrackMesh buildReplayTrackMesh(ReplayTrack3d track, {List<ReplayGridSlot>?
     laneU += step;
   }
 
+  _addTerrain(layers[ReplaySurface.ground]!, track, ground);
+
   // 넓은 바닥은 가장 낮은 꼭짓점 아래에 깐다 — 뱅크 안쪽 끝은 중심선보다 몇 m 낮을 수 있다(Zandvoort 마지막 코너).
   var lowest = double.infinity;
   for (final b in layers.values) {
@@ -364,6 +426,143 @@ ReplayTrackMesh buildReplayTrackMesh(ReplayTrack3d track, {List<ReplayGridSlot>?
     minElevationM: lowest.isFinite ? lowest : 0,
     street: circuit.street,
   );
+}
+
+/// 방호벽 바깥 지형: 트랙 둘레 [_terrainReachM]까지 [_terrainCellM] 격자를 깔고, 꼭짓점 높이를 가까운 중심선 높이의 거리 가중 평균으로 잡는다
+/// (트랙 옆에서는 그 자리 트랙 높이, 멀어질수록 넓은 바닥 높이로 내려간다). 그래서 오르막·내리막 구간에서도 방호벽 밖 땅이 트랙과 같은
+/// 높이로 이어지고, 트랙이 저 아래 평평한 바닥 위에 떠 보이지 않는다. 격자가 노면·잔디 면 위로 올라오지 않게, 중심선에서 방호벽까지와
+/// 피트 레인 위의 표본마다 그 칸의 네 꼭짓점을 필요한 만큼 내린다(겹쳐 지나는 길에서는 낮은 길에 맞춰 내려가 높은 길 밑이 비어 보일 수 있다).
+void _addTerrain(_LayerBuilder layer, ReplayTrack3d track, Color color) {
+  final circuit = track.circuit;
+  final center = circuit.center;
+  final n = center.length;
+  if (n < 2) {
+    return;
+  }
+  var minX = double.infinity;
+  var maxX = double.negativeInfinity;
+  var minZ = double.infinity;
+  var maxZ = double.negativeInfinity;
+  var lowest = double.infinity;
+  for (var i = 0; i < n; i++) {
+    minX = math.min(minX, center[i].dx);
+    maxX = math.max(maxX, center[i].dx);
+    minZ = math.min(minZ, center[i].dy);
+    maxZ = math.max(maxZ, center[i].dy);
+    lowest = math.min(lowest, circuit.elevations[i]);
+  }
+  final base = lowest - _terrainBaseBelowM;
+  final originX = minX - _terrainReachM;
+  final originZ = minZ - _terrainReachM;
+  final columns = ((maxX - minX + _terrainReachM * 2) / _terrainCellM).ceil();
+  final rows = ((maxZ - minZ + _terrainReachM * 2) / _terrainCellM).ceil();
+  final stride = columns + 1;
+
+  // 꼭짓점 높이: 중심선 점(몇 칸마다 하나)의 높이를 거리로 가중 평균한다. 트랙에서 먼 꼭짓점은 쓰지 않는다(null).
+  final anchors = [for (var i = 0; i < n; i += _terrainAnchorStride) i];
+  const soft = _terrainSoftM * _terrainSoftM;
+  final heights = List<double?>.filled(stride * (rows + 1), null);
+  for (var r = 0; r <= rows; r++) {
+    final z = originZ + r * _terrainCellM;
+    for (var c = 0; c <= columns; c++) {
+      final x = originX + c * _terrainCellM;
+      var weightSum = 0.0;
+      var heightSum = 0.0;
+      var nearest = double.infinity;
+      for (final i in anchors) {
+        final dx = center[i].dx - x;
+        final dz = center[i].dy - z;
+        final d2 = dx * dx + dz * dz;
+        if (d2 < nearest) {
+          nearest = d2;
+        }
+        final w = 1 / ((d2 + soft) * (d2 + soft));
+        weightSum += w;
+        heightSum += w * circuit.elevations[i];
+      }
+      final distance = math.sqrt(nearest);
+      if (distance > _terrainReachM) {
+        continue;
+      }
+      // 멀어질수록 넓은 바닥 높이로(부드럽게) 내려간다.
+      final t = ((distance - _terrainFadeStartM) / (_terrainReachM - _terrainFadeStartM)).clamp(0.0, 1.0);
+      final fade = t * t * (3 - 2 * t);
+      final near = heightSum / weightSum - _terrainBelowM;
+      heights[r * stride + c] = near + (base - near) * fade;
+    }
+  }
+
+  // 표본 [p](높이 [y])가 든 칸의 지형이 그 높이 − [_terrainBelowM]보다 위면 네 꼭짓점을 그만큼 내린다.
+  // 칸은 대각선(왼쪽 아래 → 오른쪽 위)으로 나눈 두 삼각형이라 그 면에서 잰다(그리는 면과 같다).
+  void press(Offset p, double y) {
+    final fx = (p.dx - originX) / _terrainCellM;
+    final fz = (p.dy - originZ) / _terrainCellM;
+    final c = fx.floor();
+    final r = fz.floor();
+    if (c < 0 || r < 0 || c >= columns || r >= rows) {
+      return;
+    }
+    final ia = r * stride + c;
+    final ib = ia + 1;
+    final ic = ia + stride + 1;
+    final id = ia + stride;
+    final a = heights[ia];
+    final b = heights[ib];
+    final cc = heights[ic];
+    final d = heights[id];
+    if (a == null || b == null || cc == null || d == null) {
+      return;
+    }
+    final u = fx - c;
+    final v = fz - r;
+    final surface = u >= v ? a + (b - a) * u + (cc - b) * v : a + (cc - d) * u + (d - a) * v;
+    final over = surface - (y - _terrainBelowM);
+    if (over > 0) {
+      heights[ia] = a - over;
+      heights[ib] = b - over;
+      heights[ic] = cc - over;
+      heights[id] = d - over;
+    }
+  }
+
+  for (var i = 0; i < n; i++) {
+    for (final wall in [
+      circuit.leftPoints[i] + track.outwardLeft[i] * track.wallLeftM[i],
+      circuit.rightPoints[i] + track.outwardRight[i] * track.wallRightM[i],
+    ]) {
+      final steps = math.max(1, ((wall - center[i]).distance / _terrainSampleStepM).ceil());
+      for (var s = 0; s <= steps; s++) {
+        final p = Offset.lerp(center[i], wall, s / steps)!;
+        press(p, circuit.heightAt(i, p));
+      }
+    }
+  }
+  final lane = circuit.pitLane;
+  for (var k = 0; k < lane.length; k++) {
+    for (final side in const [-kCircuitPitLaneWidthM / 2, 0.0, kCircuitPitLaneWidthM / 2]) {
+      press(lane[k] + circuit.pitNormals[k] * side, circuit.pitElevations[k]);
+    }
+  }
+
+  // 무늬 좌표는 월드 X·Z(m) — 잔디 무늬가 땅에 고정된다.
+  _Vertex at(int c, int r, double y) {
+    final x = originX + c * _terrainCellM;
+    final z = originZ + r * _terrainCellM;
+    return (x: x, y: y, z: z, u: x, v: z);
+  }
+
+  for (var r = 0; r < rows; r++) {
+    for (var c = 0; c < columns; c++) {
+      final a = heights[r * stride + c];
+      final b = heights[r * stride + c + 1];
+      final cc = heights[(r + 1) * stride + c + 1];
+      final d = heights[(r + 1) * stride + c];
+      if (a == null || b == null || cc == null || d == null) {
+        continue;
+      }
+      layer.quad(at(c, r, a), at(c + 1, r, b), at(c + 1, r + 1, cc), at(c, r + 1, d), color);
+    }
+  }
 }
 
 /// 경과 시간 [elapsedMs]의 프레임 상태를 한 줄로 묶는다(순수 계산): 카메라 자세, 보이는 차 수, 차마다 자세·색·불투명도.

@@ -209,6 +209,9 @@ public sealed class TrackGeometryBuilderTests
         Assert.Equal(0, geometry.KerbOuterLeftM[bin]);
         Near(-OffsetAt(bin, Radius + 10) + 1, geometry.ReachRightM[bin]);  // 3번 몸체(잔디 위)까지
         Near(OffsetAt(bin, Radius - 4) + 1, geometry.ReachLeftM[bin]);
+        // 포장 노면 끝: 연석 위 2번 바깥 바퀴까지(잔디 위 3번은 넣지 않는다), 안쪽은 1번 바깥 바퀴.
+        Near(-OffsetAt(bin, Radius + 3) + 1, geometry.PavedOuterRightM![bin]);
+        Near(OffsetAt(bin, Radius - 4) + 1, geometry.PavedOuterLeftM![bin]);
         // 150m: 멈춘 4번은 방향을 몰라 어느 쪽으로든 대각선 반길이(√(1² + 2.8²) ≈ 2.97m)만큼 닿는다고 본다.
         Near(OffsetAt(30, Radius - 20) + Math.Sqrt(1 + 2.8 * 2.8), geometry.ReachLeftM[30]);
     }

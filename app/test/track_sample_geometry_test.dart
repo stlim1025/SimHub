@@ -5,6 +5,7 @@ import 'package:simcenter_app/features/lap_detail/domain/ghost_replay.dart';
 import 'package:simcenter_app/features/lap_detail/domain/lap_detail_models.dart';
 import 'package:simcenter_app/features/lap_detail/presentation/ghost_replay_3d_painter.dart';
 import 'package:simcenter_app/features/lap_detail/presentation/replay_circuit.dart';
+import 'package:simcenter_app/features/lap_detail/presentation/replay_three_scene.dart';
 import 'package:simcenter_app/features/tracks/domain/track_sample_geometry.dart';
 import 'package:simcenter_app/features/tracks/domain/track_width_profile.dart';
 
@@ -145,6 +146,88 @@ void main() {
     expect(circuit.asphalt.contains(at(107)), isFalse);
     expect(circuit.kerbRed.contains(at(107.2)) || circuit.kerbWhite.contains(at(107.2)), isTrue);
     expect(circuit.asphalt.contains(at(115)), isFalse);
+  });
+
+  group('포장 런오프', () {
+    Offset at(double radius, [double angle = 1.0]) => Offset(radius * math.cos(angle), radius * math.sin(angle));
+    ReplayCircuit build(Map<String, dynamic> json) =>
+        ReplayCircuit.build(LapReplay(_circleLap()), samples: TrackSampleGeometry.fromJsonOrNull(json)!, baseWidthM: 10);
+
+    test('도로 끝(연석) 너머 차들이 포장 노면으로 달린 자리까지 런오프로 칠하고, 3D 메시에도 아스팔트로 깐다', () {
+      final json = _geometryJson(
+        pit: false,
+        columns: {
+          'edgeLeftM': 3.5,
+          'edgeRightM': 20,
+          'kerbOuterLeftM': 0,
+          'kerbOuterRightM': 8,
+          'reachLeftM': 4.5,
+          'reachRightM': 21,
+        },
+      );
+      json['kerbRight'] = [for (var i = 0; i < (json['x'] as List).length; i++) true];
+      final circuit = build(json);
+
+      // 오른쪽(바깥): 도로는 연석 안쪽 끝(6.5m)까지지만, 네 바퀴가 아스팔트에 있던 차가 20m까지 나갔다 — 그 자리까지 런오프.
+      expect(circuit.asphalt.contains(at(115)), isFalse);
+      expect(circuit.runoff.contains(at(115)), isTrue);
+      expect(circuit.runoff.contains(at(119)), isTrue);
+      expect(circuit.runoff.contains(at(122)), isFalse);
+      // 왼쪽(안쪽): 포장 노면 끝이 도로 끝과 같아 런오프가 없다.
+      expect(circuit.runoffLeftM[20], closeTo(circuit.leftWidths[20], 1e-6));
+      expect(circuit.runoff.contains(at(92)), isFalse);
+
+      final asphalt = buildReplayTrackMesh(ReplayTrack3d.build(circuit)).layer(ReplaySurface.asphalt)!.positions;
+      var farthest = 0.0;
+      for (var k = 0; k < asphalt.length; k += 3) {
+        farthest = math.max(farthest, Offset(asphalt[k], asphalt[k + 2]).distance);
+      }
+      expect(farthest, closeTo(120, 0.5));
+    });
+
+    test('서버가 가장 먼 포장 자리(빼는 표본 없이)를 주면 그 자리까지 칠한다 — 가장 먼 1%로 달린 차도 잔디 위에 그리지 않는다', () {
+      const columns = {'edgeLeftM': 7.0, 'edgeRightM': 3.0, 'kerbOuterLeftM': 0.0, 'kerbOuterRightM': 0.0};
+      final usual = build(_geometryJson(pit: false, columns: columns));
+      final far = build(_geometryJson(pit: false, columns: {...columns, 'pavedOuterLeftM': 12, 'pavedOuterRightM': 3}));
+
+      expect(usual.runoff.contains(at(89)), isFalse);
+      expect(far.runoff.contains(at(89)), isTrue);
+      expect(far.runoff.contains(at(87)), isFalse);
+      // 도로 가운데가 레이싱 라인에서 안쪽으로 2m 옮겨져(아스팔트 끝 7m · 3m), 가운데에서 잰 포장 노면 끝은 10m.
+      expect(far.runoffLeftM.every((w) => (w - 10).abs() < 0.1), isTrue);
+    });
+
+    test('가장 먼 자리가 피트 레인에 닿으면: 평소 자리도 닿고 피트 레인이 붙어 있으면 피트 레인까지 잇고, 아니면 평소 자리까지만', () {
+      // 오른쪽(바깥) 연석 바깥 끝 8m → 도로 끝 106.5m. 네 바퀴가 아스팔트에 있던 차는 평소 13m(반지름 113m)까지 나간다.
+      Map<String, dynamic> json({required double pitRadius, required double farthest}) {
+        final json = _geometryJson(
+          pitRadius: pitRadius,
+          columns: {
+            'edgeLeftM': 3.5,
+            'edgeRightM': 13,
+            'kerbOuterLeftM': 0,
+            'kerbOuterRightM': 8,
+            'pavedOuterLeftM': 3.5,
+            'pavedOuterRightM': farthest,
+          },
+        );
+        json['kerbRight'] = [for (var i = 0; i < (json['x'] as List).length; i++) true];
+        return json;
+      }
+
+      // 피트 레인 가운데가 115m(가까운 끝 111.5m, 도로 끝과 5m): 평소 자리도 피트 레인에 닿는다 — 한 포장 구역이라 피트 레인까지 잇는다.
+      final near = build(json(pitRadius: 115, farthest: 14));
+      expect(near.runoff.contains(at(110, 0.2)), isTrue);
+      expect(near.runoff.contains(at(112.5, 0.2)), isFalse);
+      // 피트 레인에서 먼 곳은 가장 먼 자리(114m) 그대로.
+      expect(near.runoff.contains(at(113.5, 3.6)), isTrue);
+
+      // 피트 레인 가운데가 130m(가까운 끝 126.5m): 25m까지 나간 차만 피트 레인을 지났다 — 그 차는 버리고 평소 자리(113m)까지만.
+      final apart = build(json(pitRadius: 130, farthest: 25));
+      expect(apart.runoff.contains(at(112, 0.2)), isTrue);
+      expect(apart.runoff.contains(at(115, 0.2)), isFalse);
+      expect(apart.runoff.contains(at(120, 3.6)), isTrue);
+    });
   });
 
   test('양쪽 연석이 다 밟힌 코너는 안쪽 연석에 도로 가장자리를 맞춰, 레이싱 라인이 꼭짓점에서 연석을 타고 지난다', () {
@@ -372,10 +455,11 @@ void main() {
   test('피트 월은 피트를 드나들지 않는 차가 연석 너머 포장 노면으로 달린 자리보다 바깥에 서고, 그 자리가 피트 레인에 닿으면 세우지 않는다', () {
     // 원을 반시계로 돈다(오른쪽 = 바깥). 오른쪽 연석 바깥 끝 8m → 도로 끝 106.5m, 피트 레인(반지름 118m) 안쪽 끝 114.5m.
     // 띠 끝 [band]m의 차 몸체는 100 + band + 1m까지 닿는다 — 가운데(110.5m)에 세우면 그 차들이 벽을 뚫고 지나간다(Zandvoort 1번 코너 안쪽).
+    // 그 자리가 피트 레인에 닿으면(띠 13m) 도로와 피트 레인이 한 포장 구역이라 벽 없이 피트 레인까지 아스팔트로 잇는다.
     ReplayTrack3d build(double band, void Function(ReplayCircuit) check) {
       final json = _geometryJson(
         pitRadius: 118,
-        columns: {'edgeLeftM': 3.5, 'edgeRightM': 20, 'kerbOuterLeftM': 0, 'kerbOuterRightM': 8, 'bandRightM': band},
+        columns: {'edgeLeftM': 3.5, 'edgeRightM': 9, 'kerbOuterLeftM': 0, 'kerbOuterRightM': 8, 'bandRightM': band},
       );
       json['kerbRight'] = [for (var i = 0; i < (json['x'] as List).length; i++) true];
       final circuit = ReplayCircuit.build(
@@ -389,7 +473,8 @@ void main() {
 
     late ReplayCircuit wide;
     final passing = build(10, (c) => wide = c);
-    for (var i = 2; i <= 7; i++) {
+    // 피트 레인 가운데 칸만 본다 — 양 끝 칸은 도로로 이어지는 입구·출구 길 옆이라 한 포장 구역으로 이어져 벽이 없다.
+    for (var i = 3; i <= 7; i++) {
       final wallRadius = wide.center[i].distance + wide.rightWidths[i] + passing.wallRightM[i];
       expect(passing.hasWallRight[i], isTrue);
       expect(wallRadius, greaterThanOrEqualTo(111));

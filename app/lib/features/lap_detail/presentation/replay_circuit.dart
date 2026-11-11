@@ -87,6 +87,21 @@ const int _minFeatureRunSamples = 4;
 /// 노면 높이를 고르는 이동 평균 반폭(표본 수, 서스펜션·연석으로 튀는 높이를 없앤다).
 const int _elevationSmoothSamples = 4;
 
+/// 피트 레인 점 하나가 앞뒤로 덮는 거리(m): 피트 레인 표본은 듬성듬성해(Spa 약 17m) 그 사이 점도 피트 레인 옆으로 본다.
+const double _pitNearSpreadM = 15;
+
+/// 포장 노면 끝이 피트 레인 가까운 끝에서 이 거리(m) 안쪽부터 닿으면 피트 레인 위를 달린 차로 본다(그린 피트 레인보다 실제가 넓다).
+const double _pitEdgeSlackM = 3;
+
+/// 도로 끝과 피트 레인 사이가 이 거리(m) 이하면(평소 달린 자리도 피트 레인에 닿을 때) 한 포장 구역으로 보고 피트 레인까지 이어 포장한다.
+const double _pitApronMaxGapM = 12;
+
+/// 도로 끝과 피트 레인 사이 틈이 이 거리(m) 이하면 가장 먼 표본만 피트 레인에 닿아도 피트 레인까지 이어 포장한다.
+const double _pitTightGapM = 6;
+
+/// 포장 런오프는 도로 끝보다 이만큼(m) 넘게 바깥일 때만 그린다(그보다 얇은 조각은 흰 선·연석에 가려 보이지 않는다).
+const double kCircuitRunoffMinM = 0.2;
+
 /// 주행 표본을 중심선 점에 짝지을 때 앞 표본의 짝 둘레로 찾는 범위(점 수)·그 안에서 이보다 멀면(m) 전체에서 다시 찾는다.
 const int _matchWindow = 40;
 const double _rematchM = 30;
@@ -128,6 +143,9 @@ class ReplayCircuit {
     required this.reachRightM,
     required this.pavedLeftM,
     required this.pavedRightM,
+    required this.runoffLeftM,
+    required this.runoffRightM,
+    required this.runoff,
     this.pitLane = const [],
     this.pitElevations = const [],
     this.pitNormals = const [],
@@ -197,6 +215,14 @@ class ReplayCircuit {
   /// 표본 형상이 없으면 0.
   final List<double> pavedLeftM;
   final List<double> pavedRightM;
+
+  /// 점마다 중심선에서 포장 노면 끝(m, 왼쪽·오른쪽 — 그 쪽 도로 폭 이상). 도로 끝(흰 선·연석) 너머 이 자리까지는 포장 런오프라
+  /// 아스팔트로 그린다(피트 출구 옆 포장 구역·탈출로 — 포장 노면을 달린 차가 잔디 위에 있어 보이지 않게). 표본 형상이 없으면 도로 폭과 같다.
+  final List<double> runoffLeftM;
+  final List<double> runoffRightM;
+
+  /// 2D로 칠할 포장 런오프 면(도로 끝 바깥). 없으면 빈 경로.
+  final Path runoff;
 
   /// 피트 레인 선(입구 → 출구, 월드 X·Z)·점마다 노면 높이·왼쪽 법선, 그리고 2D로 칠할 피트 레인 면. 표본 형상에 피트 레인이 없으면 비어 있다.
   final List<Offset> pitLane;
@@ -280,6 +306,73 @@ class ReplayCircuit {
     final left = [for (var i = 0; i < n; i++) center[i] + normals[i] * leftWidths[i]];
     final right = [for (var i = 0; i < n; i++) center[i] - normals[i] * rightWidths[i]];
 
+    final joined = _joinedPitLane(
+      samples?.pitLine ?? const <Offset>[],
+      samples?.pitY,
+      center,
+      normals,
+      leftWidths,
+      rightWidths,
+      spacing: spacing,
+      closed: closed,
+    );
+    final pitLane = joined.lane;
+    // 점마다 그 쪽 피트 레인(도로에 이은 입구·출구 길 포함)의 가까운 끝까지 거리(중심선에서 m). 그 쪽에 피트 레인이 없으면 무한대.
+    final pitNearLeft = List<double>.filled(n, double.infinity);
+    final pitNearRight = List<double>.filled(n, double.infinity);
+    final pitSpread = math.max(1, (_pitNearSpreadM / spacing).round());
+    for (final p in pitLane) {
+      final j = _nearestIndex(center, p);
+      final lateral = (p.dx - center[j].dx) * normals[j].dx + (p.dy - center[j].dy) * normals[j].dy;
+      final near = lateral.abs() - kCircuitPitLaneWidthM / 2;
+      final target = lateral >= 0 ? pitNearLeft : pitNearRight;
+      for (var k = j - pitSpread; k <= j + pitSpread; k++) {
+        if (closed || (k >= 0 && k < n)) {
+          target[at(k)] = math.min(target[at(k)], near);
+        }
+      }
+    }
+    // 포장 런오프 끝(도로 폭 이상): 표본 형상의 포장 노면 끝 — 가장 먼 표본까지 넣은 값이 있으면 그것.
+    // 그 값이 피트 레인에 닿는 곳(피트 레인 가까운 끝에서 [_pitEdgeSlackM] 안쪽부터)은 피트 레인 위를 달린 차가 섞인 것이라 그대로 쓰지 않는다:
+    // - 평소 값(가장 먼 1%를 뺀 값)은 피트 레인에 닿지 않으면 평소 값을 쓴다(피트 상태 없이 피트 레인을 지난 차 한두 대만 버린다).
+    //   다만 도로 끝과 피트 레인 사이 틈이 [_pitTightGapM] 이하면 피트 레인까지 잇는다 — 벽이 설 자리가 없는 한 포장 구역이라
+    //   (Zandvoort 피트 출구 길은 도로 옆 1~4m를 300m쯤 따라간다) 그 틈을 달린 차가 잔디 위에 있어 보이면 안 된다.
+    // - 평소 값도 닿는데 피트 레인이 도로에 붙어 있으면(사이가 [_pitApronMaxGapM] 이하 — 피트 입구·출구가 도로와 한 포장 구역이라
+    //   차들이 늘 넘나드는 곳, Zandvoort 1번 코너 안쪽) 피트 레인까지 이어 포장한다.
+    // - 평소 값도 닿는데 떨어져 있으면(Austria 결승선 앞 — 사이에 잔디·피트 월) 피트를 드나들지 않는 차들이 달린 띠([band])까지만 쓴다.
+    // 급한 코너 안쪽은 도로 폭과 같은 한도로 자른다(면이 접히지 않게).
+    List<double> runoffOf(
+      List<double>? regular,
+      List<double>? far,
+      List<double>? band,
+      List<double> widths,
+      List<double> pitNear,
+      int inside,
+    ) =>
+        [
+          for (var i = 0; i < n; i++)
+            () {
+              final usual = regular?[i] ?? 0.0;
+              final farthest = far?[i] ?? usual;
+              final onPitLane = pitNear[i] - _pitEdgeSlackM;
+              final double paved;
+              if (farthest <= onPitLane) {
+                paved = farthest;
+              } else if (usual <= onPitLane) {
+                paved = pitNear[i] - widths[i] <= _pitTightGapM ? pitNear[i] : usual;
+              } else if (pitNear[i] - widths[i] <= _pitApronMaxGapM) {
+                paved = pitNear[i];
+              } else {
+                paved = math.min(band?[i] ?? 0.0, pitNear[i]);
+              }
+              return math.max(widths[i], inside * curvatures[i] > 0 ? math.min(paved, innerLimit(i)) : paved);
+            }(),
+        ];
+    final runoffLeft =
+        runoffOf(sampled?.runoffLeftM, sampled?.runoffFarLeftM, sampled?.pavedLeftM, leftWidths, pitNearLeft, 1);
+    final runoffRight =
+        runoffOf(sampled?.runoffRightM, sampled?.runoffFarRightM, sampled?.pavedRightM, rightWidths, pitNearRight, -1);
+
     final reach = _reach(sampled, lines, center, normals, closed: closed);
     final traceKerbs = _kerbSides(lines, center, normals, curvatures, spacing: spacing, closed: closed);
     final sampleKerbs = samples == null ? null : _sampleKerbs(samples, center, spacing: spacing, closed: closed);
@@ -300,6 +393,7 @@ class ReplayCircuit {
         : _dropShortRuns([for (final k in curvatures) k.abs() >= kCircuitGravelCurvature], closed: closed);
 
     final asphalt = Path();
+    final runoff = Path();
     final kerbRed = Path();
     final kerbWhite = Path();
     final gravel = Path();
@@ -307,6 +401,13 @@ class ReplayCircuit {
     for (var i = 0; i < segments; i++) {
       final j = at(i + 1);
       _quad(asphalt, left[i], left[j], right[j], right[i]);
+      for (final (edge, side, widths, ends) in [(left, 1.0, leftWidths, runoffLeft), (right, -1.0, rightWidths, runoffRight)]) {
+        final extraI = ends[i] - widths[i];
+        final extraJ = ends[j] - widths[j];
+        if (extraI > kCircuitRunoffMinM || extraJ > kCircuitRunoffMinM) {
+          _quad(runoff, edge[i], edge[j], edge[j] + normals[j] * (side * extraJ), edge[i] + normals[i] * (side * extraI));
+        }
+      }
 
       for (final (edge, side, flags) in [(left, 1.0, kerbs.left), (right, -1.0, kerbs.right)]) {
         if (!flags[i]) {
@@ -342,17 +443,6 @@ class ReplayCircuit {
     final start = _nearestIndex(center, playerLine.first);
     final elevations = _elevations(player.trace, playerLine, center, normals, at, samples);
     final banks = _banks(samples, center, at);
-    final joined = _joinedPitLane(
-      samples?.pitLine ?? const <Offset>[],
-      samples?.pitY,
-      center,
-      normals,
-      leftWidths,
-      rightWidths,
-      spacing: spacing,
-      closed: closed,
-    );
-    final pitLane = joined.lane;
     final pitNormals = [
       for (var i = 0; i < pitLane.length; i++)
         () {
@@ -403,6 +493,9 @@ class ReplayCircuit {
       reachRightM: reach.right,
       pavedLeftM: sampled?.pavedLeftM ?? List.filled(n, 0),
       pavedRightM: sampled?.pavedRightM ?? List.filled(n, 0),
+      runoffLeftM: runoffLeft,
+      runoffRightM: runoffRight,
+      runoff: runoff,
     );
   }
 

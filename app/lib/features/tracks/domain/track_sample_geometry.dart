@@ -38,6 +38,9 @@ const int _edgeMedianBins = 2;
 /// 연석 칸의 가장자리(연석 안쪽 끝)에서 멀어질수록 가장자리가 넓어질 수 있는 기울기(옆 m / 진행 m) — 연석 둘레가 깔때기처럼 풀린다.
 const double _kerbFunnelSlope = 0.2;
 
+/// 포장 런오프 끝을 고르는 반폭(칸): 앞뒤 가장 먼 값으로 넓힌 뒤 같은 범위로 평균한다(칸마다 원래 값 이상 — 포장 노면을 달린 차를 놓치지 않게).
+const int _runoffSmoothBins = 2;
+
 /// 양쪽 연석이 다 밟힌 칸: 앞뒤 이 칸 수로 잰 굽는 정도(1/m)가 이 이상이면 안쪽 연석만 따른다(덜 굽으면 두 쪽을 평균한다).
 const int _apexCurvatureBins = 2;
 const double _apexSideCurvature = 0.002;
@@ -97,6 +100,8 @@ class TrackSampleGeometry {
     this.reachLeftM,
     this.reachRightM,
     this.bankSlope,
+    this.pavedOuterLeftM,
+    this.pavedOuterRightM,
   });
 
   final double resolutionM;
@@ -130,6 +135,11 @@ class TrackSampleGeometry {
 
   /// 노면 옆 기울기(뱅크): 레이싱 라인에서 왼쪽(법선 (−sin, cos))으로 1m 갈 때 높아지는 높이(m). 예전 서버 응답이면 null.
   final List<double>? bankSlope;
+
+  /// 포장 노면 끝: 네 바퀴가 모두 포장 노면(아스팔트·연석)에 있던 차의 바깥 바퀴가 닿은 가장 먼 자리(빼는 표본 없이).
+  /// 도로 끝 너머 이 자리까지를 포장 런오프로 그린다. 예전 서버 응답이면 null.
+  final List<double>? pavedOuterLeftM;
+  final List<double>? pavedOuterRightM;
 
   int get length => x.length;
 
@@ -201,6 +211,8 @@ class TrackSampleGeometry {
       reachLeftM: hasReach ? reachLeft : null,
       reachRightM: hasReach ? reachRight : null,
       bankSlope: column('bankSlope'),
+      pavedOuterLeftM: column('pavedOuterLeftM'),
+      pavedOuterRightM: column('pavedOuterRightM'),
     );
   }
 }
@@ -467,6 +479,33 @@ TrackWidthProfile trackProfileFromSamples(TrackSampleGeometry geometry, {require
   // 피트를 드나들지 않는 차가 포장 노면으로 달린 자리: 띠 끝(차 가운데) + 차 반폭. 바퀴 끝(가장 먼 1% 제외)은 표본이 적은 칸에서
   // 피트 상태 없이 피트 레인을 지난 차 하나로 30m 넘게 튀므로(Austria·Catalunya 결승선 앞) 쓰지 않는다.
   List<double> paved(List<double> band, int sign) => [for (var k = 0; k < n; k++) band[k] + _carHalfWidthM - sign * shift[k]];
+  // 포장 런오프 끝(레이싱 라인에서 m): 네 바퀴가 포장 노면에 있던 차의 바깥 바퀴가 닿은 자리 — 서버가 준 가장 먼 값([outer], 새 응답),
+  // 없으면 아스팔트만 밟은 차(가장 먼 1% 제외)·연석을 밟은 차·차들이 달린 띠 + 차 반폭 가운데 가장 먼 값. 도로 끝보다 안쪽이면 도로 끝이다.
+  // [outer]가 null이면 평소 값(가장 먼 1%를 뺀 값)만으로 만든다 — 가장 먼 값이 피트 레인에 걸리는 칸에서 서킷이 대신 쓴다.
+  List<double>? runoff(List<double>? wheels, List<double>? kerbOuter, List<double> band, List<double> end, List<double>? outer) {
+    if (wheels == null || kerbOuter == null) {
+      return null;
+    }
+    final raw = [
+      for (var k = 0; k < n; k++)
+        [wheels[k], kerbOuter[k], band[k] + _carHalfWidthM, outer?[k] ?? 0.0].reduce(math.max),
+    ];
+    final widened = [
+      for (var k = 0; k < n; k++)
+        [for (var j = -_runoffSmoothBins; j <= _runoffSmoothBins; j++) raw[at(k + j)]].reduce(math.max),
+    ];
+    final smooth = average(widened, _runoffSmoothBins);
+    return [for (var k = 0; k < n; k++) math.max(end[k], smooth[k])];
+  }
+
+  final runoffLeft = runoff(geometry.edgeLeftM, geometry.kerbOuterLeftM, geometry.bandLeftM, leftEnd, null);
+  final runoffRight = runoff(geometry.edgeRightM, geometry.kerbOuterRightM, geometry.bandRightM, rightEnd, null);
+  final farLeft = geometry.pavedOuterLeftM;
+  final farRight = geometry.pavedOuterRightM;
+  final runoffFarLeft =
+      farLeft == null ? null : runoff(geometry.edgeLeftM, geometry.kerbOuterLeftM, geometry.bandLeftM, leftEnd, farLeft);
+  final runoffFarRight =
+      farRight == null ? null : runoff(geometry.edgeRightM, geometry.kerbOuterRightM, geometry.bandRightM, rightEnd, farRight);
   return TrackWidthProfile(
     center: [for (var k = 0; k < n; k++) line[k] + normals[k] * shift[k]],
     leftM: [for (var k = 0; k < n; k++) leftEnd[k] - shift[k]],
@@ -475,5 +514,9 @@ TrackWidthProfile trackProfileFromSamples(TrackSampleGeometry geometry, {require
     reachRightM: reachRight == null ? null : [for (var k = 0; k < n; k++) reachRight[k] + shift[k]],
     pavedLeftM: paved(geometry.bandLeftM, 1),
     pavedRightM: paved(geometry.bandRightM, -1),
+    runoffLeftM: runoffLeft == null ? null : [for (var k = 0; k < n; k++) runoffLeft[k] - shift[k]],
+    runoffRightM: runoffRight == null ? null : [for (var k = 0; k < n; k++) runoffRight[k] + shift[k]],
+    runoffFarLeftM: runoffFarLeft == null ? null : [for (var k = 0; k < n; k++) runoffFarLeft[k] - shift[k]],
+    runoffFarRightM: runoffFarRight == null ? null : [for (var k = 0; k < n; k++) runoffFarRight[k] + shift[k]],
   );
 }

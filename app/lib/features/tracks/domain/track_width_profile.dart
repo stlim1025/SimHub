@@ -12,6 +12,10 @@ class TrackWidthProfile {
     this.reachRightM,
     this.pavedLeftM,
     this.pavedRightM,
+    this.runoffLeftM,
+    this.runoffRightM,
+    this.runoffFarLeftM,
+    this.runoffFarRightM,
   });
 
   final List<Offset> center;
@@ -26,6 +30,17 @@ class TrackWidthProfile {
   /// 도로와 피트 레인 사이 피트 월은 이보다 바깥에 선다. 바퀴 표본이 있는 표본 형상에만 있다.
   final List<double>? pavedLeftM;
   final List<double>? pavedRightM;
+
+  /// 점마다 [center]에서 포장 노면 끝(m, 왼쪽·오른쪽 — 그 쪽 도로 폭 이상): 네 바퀴가 모두 포장 노면에 있던 차의 바깥 바퀴가 닿은 자리.
+  /// 도로 끝(흰 선·연석) 너머 이 자리까지는 포장 런오프(피트 출구 옆 포장 구역·탈출로·출발 직후 차들이 넓게 퍼지는 자리)라
+  /// 아스팔트로 그린다 — 포장 노면을 달린 차가 잔디 위에 있어 보이지 않게. 바퀴 표본이 있는 표본 형상에만 있다.
+  final List<double>? runoffLeftM;
+  final List<double>? runoffRightM;
+
+  /// 위와 같되 가장 먼 표본까지 넣은 포장 노면 끝([runoffLeftM]은 칸마다 가장 먼 1%를 뺀 평소 값). 서버가 가장 먼 값을 줄 때만 있다.
+  /// 가장 먼 값이 피트 레인에 걸리는 곳(피트 상태 없이 피트 레인을 지난 차)에서는 서킷이 평소 값을 쓴다.
+  final List<double>? runoffFarLeftM;
+  final List<double>? runoffFarRightM;
 
   int get length => center.length;
 }

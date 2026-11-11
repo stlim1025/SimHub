@@ -19,6 +19,10 @@ namespace SimCenter.Application.TrackSamples;
 /// <param name="BankSlope">
 /// 노면 옆 기울기(뱅크): 레이싱 라인에서 왼쪽으로 1m 갈 때 높아지는 높이(m, 왼쪽이 높으면 +). 높이 열이 있는 표본이 없으면 null.
 /// </param>
+/// <param name="PavedOuterLeftM">
+/// 네 바퀴가 모두 포장 노면(아스팔트·연석)에 있던 차의 바깥 바퀴가 닿은 가장 먼 자리(빼는 표본 없이 가장 먼 값) = 포장 노면 왼쪽 끝.
+/// 앱은 도로 끝 너머 이 자리까지를 포장 런오프로 그린다(포장 노면을 달린 차가 잔디 위에 있어 보이지 않게).
+/// </param>
 public sealed record TrackGeometry(
     double ResolutionM,
     int SampleCount,
@@ -38,7 +42,9 @@ public sealed record TrackGeometry(
     double[]? PitX = null,
     double[]? PitZ = null,
     double[]? PitY = null,
-    double[]? BankSlope = null);
+    double[]? BankSlope = null,
+    double[]? PavedOuterLeftM = null,
+    double[]? PavedOuterRightM = null);
 
 /// <summary>
 /// 모든 차 표본 → 트랙 형상(순수 계산). 서킷은 닫혀 있다고 본다(마지막 칸 다음 = 첫 칸).
@@ -242,6 +248,8 @@ public static class TrackGeometryBuilder
         var kerbWheels = (Left: new List<double>(), Right: new List<double>());
         var reachLeft = new double[n];
         var reachRight = new double[n];
+        var pavedOuterLeft = new double[n];
+        var pavedOuterRight = new double[n];
         var bank = new double?[n];
         var curvatures = Curvatures(lineX, lineZ);
         for (var k = 0; k < n; k++)
@@ -319,6 +327,8 @@ public static class TrackGeometryBuilder
                     var wheels = p.Rumble ? kerbWheels : tarmacWheels;
                     wheels.Left.Add(offset + wheel);
                     wheels.Right.Add(-offset + wheel);
+                    pavedOuterLeft[k] = Math.Max(pavedOuterLeft[k], offset + wheel);
+                    pavedOuterRight[k] = Math.Max(pavedOuterRight[k], -offset + wheel);
                 }
             }
 
@@ -354,7 +364,8 @@ public static class TrackGeometryBuilder
         var bankSlope = bank.Any(v => v.HasValue) ? Smooth(FillGaps(bank), bins: BankSmoothBins) : null;
         return new TrackGeometry(
             ResolutionM, sampleCount, lineX, lineZ, heightsOut, bandLeft, bandRight, kerbLeft, kerbRight,
-            edgeLeft, edgeRight, kerbOuterLeft, kerbOuterRight, reachLeft, reachRight, pit?.X, pit?.Z, pit?.Y, bankSlope);
+            edgeLeft, edgeRight, kerbOuterLeft, kerbOuterRight, reachLeft, reachRight, pit?.X, pit?.Z, pit?.Y, bankSlope,
+            pavedOuterLeft, pavedOuterRight);
     }
 
     /// <summary>

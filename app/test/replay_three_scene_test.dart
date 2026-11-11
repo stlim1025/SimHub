@@ -73,7 +73,7 @@ void main() {
       expect(mesh.vertexCount, greaterThan(track.length * 6));
     });
 
-    test('바닥·아스팔트·선(가장자리와 출발선)이 있고, 넓은 바닥은 잔디 색·가장 낮은 노면 높이', () {
+    test('바닥·아스팔트·선(가장자리와 출발선)이 있고, 넓은 바닥은 잔디 색·지형이 내려가 닿는 높이', () {
       final asphalt = mesh.layer(ReplaySurface.asphalt)!;
       final ground = mesh.layer(ReplaySurface.ground)!;
 
@@ -81,13 +81,14 @@ void main() {
       expect(ground.colors[0], closeTo(AppColors.replayGrass3d.r, 1e-6));
       expect(mesh.layer(ReplaySurface.line), isNotNull);
       expect(mesh.groundColor, AppColors.replayGrass3d);
-      expect(mesh.minElevationM, 0);
+      // 평평한 서킷(노면 높이 0): 지형이 트랙에서 멀어지며 노면보다 0.5m 아래까지 내려간다.
+      expect(mesh.minElevationM, closeTo(-0.5, 1e-3));
       expect(mesh.street, isFalse);
     });
 
     test('출발선 뒤 그리드 22칸(칸마다 가로선 + 옆 다리 둘)이 흰 선 층에 들어 있고, 좌우를 번갈아 앉는다', () {
-      // 반지름 100m 원은 곡률이 커서 둘레가 모두 연석이라 가장자리 선이 없다: 출발선 한 장 뒤에 그리드가 온다.
-      const withoutGrid = 6;
+      // 흰 가장자리 선(칸마다 양쪽 한 장씩 — 연석 옆으로도 이어 그린다)과 출발선 한 장 뒤에 그리드가 온다.
+      final withoutGrid = track.length * 2 * 6 + 6;
       final line = mesh.layer(ReplaySurface.line)!;
 
       expect(line.vertexCount, withoutGrid + 22 * 3 * 6);
@@ -99,7 +100,7 @@ void main() {
     });
 
     test('실제 출발 위치를 주면 차마다 그 앞바퀴 바로 앞에 칸을 노면 높이로 그린다', () {
-      const withoutGrid = 6;
+      final withoutGrid = track.length * 2 * 6 + 6;
       final line = buildReplayTrackMesh(track, grid: [(x: 100, z: 0, heading: math.pi / 2)]).layer(ReplaySurface.line)!;
 
       expect(line.vertexCount, withoutGrid + 3 * 6);
@@ -107,6 +108,41 @@ void main() {
       expect(bar.dx, closeTo(100, 0.01));
       expect(bar.dy, closeTo(2.1, 0.01));
       expect(line.positions[withoutGrid * 3 + 1], closeTo(track.locate(bar).elevation + 0.05, 1e-3));
+    });
+
+    test('흰 가장자리 선은 연석이 있는 곳에도 도로 끝 안쪽에 이어 그린다(연석이 끝나는 자리에서 선이 튀어나오지 않게)', () {
+      // 반지름 100m 원은 곡률이 커서 둘레가 모두 연석이다.
+      expect(track.circuit.kerbLeft.every((k) => k), isTrue);
+      expect(mesh.layer(ReplaySurface.kerb), isNotNull);
+      final line = mesh.layer(ReplaySurface.line)!;
+      // 첫 칸의 왼쪽 가장자리 선: 도로 왼쪽 끝에서 안쪽으로 0.4m 폭.
+      final edge = track.circuit.leftPoints[0].distance;
+      final radii = [for (var k = 0; k < 6; k++) Offset(line.positions[k * 3], line.positions[k * 3 + 2]).distance];
+      expect(radii.reduce(math.min), closeTo(edge, 0.05));
+      expect(radii.reduce(math.max), closeTo(edge + 0.4, 0.05));
+    });
+
+    test('지형: 방호벽 바깥으로 트랙 높이를 따라 깔리고(멀어지면 넓은 바닥 높이로), 노면·잔디 면 위로 올라오지 않는다', () {
+      final ground = mesh.layer(ReplaySurface.ground)!;
+      final p = ground.positions;
+      var farthest = 0.0;
+      var highest = double.negativeInfinity;
+      double? nearWall;
+      for (var k = 0; k < p.length; k += 3) {
+        final radius = Offset(p[k], p[k + 2]).distance;
+        farthest = math.max(farthest, radius);
+        highest = math.max(highest, p[k + 1]);
+        // 방호벽 바로 바깥(중심에서 125~135m)의 지형 높이.
+        if (radius > 125 && radius < 135 && p[k + 1] < 0) {
+          nearWall = math.max(nearWall ?? double.negativeInfinity, p[k + 1]);
+        }
+      }
+      // 트랙(반지름 100m)에서 300m 넘게 깔린다.
+      expect(farthest, greaterThan(400));
+      // 잔디 면(높이 0) 위로 올라온 꼭짓점이 없다.
+      expect(highest, lessThanOrEqualTo(1e-6));
+      // 트랙 옆 지형은 노면 바로 아래(0.25m)다 — 저 아래 바닥으로 뚝 떨어지지 않는다.
+      expect(nearWall, closeTo(-0.25, 0.05));
     });
 
     test('바닥 면(잔디·그래블·아스팔트·선·연석)은 왼쪽·오른쪽 모두 위를 향한다(한쪽 면만 그리므로 뒤집히면 안 보인다)', () {

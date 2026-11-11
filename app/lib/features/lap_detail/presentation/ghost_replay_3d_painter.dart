@@ -523,14 +523,23 @@ class ReplayTrack3d {
       List<double> widths,
       List<double> reach,
       List<double> paved,
+      List<double> runoff,
     ) {
       final smooth = smoothWall(kerbs, side);
       final need = widenThenAverage([
         for (var i = 0; i < n; i++) math.max(0.0, reach[i] - widths[i] + _wallCarClearanceM),
       ]);
-      final drove = widenThenAverage([
+      // 포장 런오프(도로 끝 너머 아스팔트)가 있는 점은 피트 월을 그 바깥에 세운다 — 포장 노면을 달린 차가 벽을 뚫지 않게.
+      // 런오프는 앞뒤로 넓히지 않고 그 점 값만 쓴다(피트 입구·출구의 넓은 포장 구역이 번져 옆 구간의 피트 월까지 지우지 않게).
+      final droveBand = widenThenAverage([
         for (var i = 0; i < n; i++) math.max(0.0, paved[i] - widths[i] + _wallCarClearanceM),
       ]);
+      final drove = [
+        for (var i = 0; i < n; i++)
+          runoff[i] > widths[i] + kCircuitRunoffMinM
+              ? math.max(droveBand[i], runoff[i] - widths[i] + _wallCarClearanceM)
+              : droveBand[i],
+      ];
       final offsets = <double>[];
       final standing = <bool>[];
       final pitWall = List<bool>.filled(n, false);
@@ -602,6 +611,7 @@ class ReplayTrack3d {
       circuit.leftWidths,
       circuit.reachLeftM,
       circuit.pavedLeftM,
+      circuit.runoffLeftM,
     );
     final right = wall(
       circuit.rightPoints,
@@ -611,6 +621,7 @@ class ReplayTrack3d {
       circuit.rightWidths,
       circuit.reachRightM,
       circuit.pavedRightM,
+      circuit.runoffRightM,
     );
 
     // 중계 카메라 자리: 간격마다 그 둘레(앞뒤 1/3)에서 곡률이 가장 큰 점의 코너 바깥, 방호벽 밖 높은 곳.

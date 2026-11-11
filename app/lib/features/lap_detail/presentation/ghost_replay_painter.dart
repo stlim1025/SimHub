@@ -248,6 +248,7 @@ class GhostReplayPainter extends CustomPainter {
     canvas
       ..drawPath(circuit.gravel, fill(AppColors.replayGravel))
       ..drawPath(circuit.pitAsphalt, fill(AppColors.replayAsphalt))
+      ..drawPath(circuit.runoff, fill(AppColors.replayAsphalt))
       ..drawPath(circuit.asphalt, fill(AppColors.replayAsphalt))
       ..drawPath(circuit.kerbRed, fill(AppColors.replayKerbRed))
       ..drawPath(circuit.kerbWhite, fill(AppColors.replayRoadEdge))

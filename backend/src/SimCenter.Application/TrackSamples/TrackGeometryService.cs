@@ -17,6 +17,9 @@ namespace SimCenter.Application.TrackSamples;
 /// <param name="KerbOuterLeftM">연석을 밟은 차의 바깥 바퀴가 닿은 먼 자리(m, 같은 규칙) = 연석 바깥 끝. 없으면 0.</param>
 /// <param name="ReachLeftM">차 몸체가 닿은 가장 먼 자리(m): 코스를 벗어난 차, 멈춘 차까지 모두. 방호벽은 이보다 바깥이다.</param>
 /// <param name="BankSlope">노면 옆 기울기(뱅크): 레이싱 라인에서 왼쪽으로 1m 갈 때 높아지는 높이(m). 높이를 모으지 못했으면 null.</param>
+/// <param name="PavedOuterLeftM">
+/// 네 바퀴가 모두 포장 노면에 있던 차의 바깥 바퀴가 닿은 가장 먼 자리(m, 빼는 표본 없이) = 포장 노면 끝. 표본이 없는 칸은 0.
+/// </param>
 public sealed record TrackGeometryResponse(
     Guid TrackId,
     string GameCode,
@@ -39,7 +42,9 @@ public sealed record TrackGeometryResponse(
     IReadOnlyList<double>? KerbOuterRightM = null,
     IReadOnlyList<double>? ReachLeftM = null,
     IReadOnlyList<double>? ReachRightM = null,
-    IReadOnlyList<double>? BankSlope = null);
+    IReadOnlyList<double>? BankSlope = null,
+    IReadOnlyList<double>? PavedOuterLeftM = null,
+    IReadOnlyList<double>? PavedOuterRightM = null);
 
 /// <summary>모든 오프라인 세션의 전체 차 표본으로 트랙 형상을 만든다.</summary>
 public interface ITrackGeometryService
@@ -116,7 +121,9 @@ public sealed class TrackGeometryService : ITrackGeometryService
             Round(geometry.KerbOuterRightM),
             Round(geometry.ReachLeftM),
             Round(geometry.ReachRightM),
-            geometry.BankSlope is null ? null : Round(geometry.BankSlope, SlopeDigits));
+            geometry.BankSlope is null ? null : Round(geometry.BankSlope, SlopeDigits),
+            geometry.PavedOuterLeftM is null ? null : Round(geometry.PavedOuterLeftM),
+            geometry.PavedOuterRightM is null ? null : Round(geometry.PavedOuterRightM));
         if (version is not null)
         {
             _cache.Set(trackId, gameCode, version, response);
