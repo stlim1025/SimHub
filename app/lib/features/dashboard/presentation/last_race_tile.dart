@@ -13,6 +13,7 @@ import '../../lap_detail/domain/lap_corners.dart';
 import '../../lap_detail/domain/lap_detail_models.dart';
 import '../../lap_detail/domain/track_map.dart' as track;
 import '../../lap_detail/presentation/corner_labels.dart';
+import '../../lap_detail/presentation/track_map.dart' show TrackSectorLegend, kTrackSectorLegendGap;
 import '../../laps/domain/lap_models.dart' show LapSector;
 import '../../sessions/application/sessions_providers.dart';
 import '../../sessions/domain/session_detail_display.dart';

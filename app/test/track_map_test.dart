@@ -148,7 +148,7 @@ void main() {
 
       expect(corner.dx, greaterThan(start.dx));
       expect(corner.dy, greaterThan(start.dy));
-      expect(find.text('Sector 1'), findsOneWidget);
+      expect(find.text('섹터 1'), findsOneWidget);
       expect(_painter(t).labelStyle, isNull); // 코너를 안 주면(작은 지도) 번호 없음
     });
 

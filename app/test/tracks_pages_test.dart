@@ -400,7 +400,7 @@ void main() {
       );
 
       expect(lapRepo.detailRequests, contains('l1'));
-      expect(find.text('Sector 1'), findsOneWidget);
+      expect(find.text('섹터 1'), findsOneWidget);
     });
 
     testWidgets('기록이 없으면 각 카드에 안내 문장', (t) async {

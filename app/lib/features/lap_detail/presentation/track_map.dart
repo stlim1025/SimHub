@@ -30,7 +30,10 @@ const double _sectorWidth = 4.5;
 const double _dotRingRadius = 7;
 const double _dotCenterRadius = 4;
 const double _panelGap = 16;
-const double _legendSpacing = 16;
+
+/// 섹터 범례: 지도와의 간격, 항목 사이 간격, 점과 글자 사이 간격, 점 크기.
+const double kTrackSectorLegendGap = 12;
+const double _legendSpacing = 14;
 const double _legendDotGap = 6;
 const double _legendDotSize = 8;
 const int _mapFlex = 3;
@@ -189,30 +192,39 @@ class TrackMap extends StatelessWidget {
           ),
         ),
         if (showLegend && sectorIndexes != null) ...[
-          const SizedBox(height: _panelGap),
-          Wrap(
-            alignment: WrapAlignment.center,
-            spacing: _legendSpacing,
-            children: [
-              for (var i = 0; i < kTrackSectorColors.length; i++)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: _legendDotSize,
-                      height: _legendDotSize,
-                      decoration: BoxDecoration(shape: BoxShape.circle, color: kTrackSectorColors[i]),
-                    ),
-                    const SizedBox(width: _legendDotGap),
-                    Text('Sector ${i + 1}', style: Theme.of(context).textTheme.bodySmall),
-                  ],
-                ),
-            ],
-          ),
+          const SizedBox(height: kTrackSectorLegendGap),
+          const TrackSectorLegend(),
         ],
       ],
     );
   }
+}
+
+/// 섹터 범례(`● 섹터 1  ● 섹터 2  ● 섹터 3`, 가운데 정렬) — 섹터 색 트랙 지도 아래에 붙인다
+/// (텔레메트리 탭 · 레이스 리뷰 · 트랙 개요 · 홈 Last Race 타일이 함께 쓴다).
+class TrackSectorLegend extends StatelessWidget {
+  const TrackSectorLegend({super.key});
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+        alignment: WrapAlignment.center,
+        spacing: _legendSpacing,
+        children: [
+          for (var i = 0; i < kTrackSectorColors.length; i++)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: _legendDotSize,
+                  height: _legendDotSize,
+                  decoration: BoxDecoration(shape: BoxShape.circle, color: kTrackSectorColors[i]),
+                ),
+                const SizedBox(width: _legendDotGap),
+                Text('섹터 ${i + 1}', style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
+        ],
+      );
 }
 
 /// Telemetry 탭 맨 위 묶음: Track 카드(위치가 있을 때, [corners]의 번호를 붙인다) + Lap Telemetry 통계 카드.
