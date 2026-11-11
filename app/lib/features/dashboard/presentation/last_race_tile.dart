@@ -8,12 +8,20 @@ import '../../../core/util/lap_time.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/page_loading_bar.dart';
 import '../../../core/widgets/track_flag.dart';
+import '../../lap_detail/application/lap_detail_providers.dart';
+import '../../lap_detail/domain/lap_corners.dart';
+import '../../lap_detail/domain/lap_detail_models.dart';
+import '../../lap_detail/domain/track_map.dart' as track;
+import '../../lap_detail/presentation/corner_labels.dart';
+import '../../laps/domain/lap_models.dart' show LapSector;
 import '../../sessions/application/sessions_providers.dart';
 import '../../sessions/domain/session_detail_display.dart';
 import '../../sessions/domain/session_display.dart';
 import '../../sessions/domain/session_models.dart';
+import '../../sessions/presentation/race_review_track_map.dart';
 import '../../sessions/presentation/session_highlights_page.dart' show sessionHighlightsLocation;
 import '../../sessions/presentation/session_widgets.dart' show kTabularStyle;
+import '../../tracks/application/track_corners_provider.dart';
 import '../../tracks/application/track_outlines_provider.dart';
 import '../../tracks/domain/track_outline.dart';
 import '../application/dashboard_providers.dart';
@@ -33,6 +41,7 @@ const String _pointsLabel = '포인트';
 const String _highlightsLabel = '하이라이트';
 const String _openSessionLabel = '세션 열기';
 const String _emptyText = '아직 기록된 레이스가 없어요. 레이스를 마치면 여기에 결과와 서킷이 표시돼요.';
+const String _sectorMapSemanticLabel = '섹터와 코너 번호가 적힌 트랙 지도';
 const String _loadFailedText = '최근 레이스를 불러오지 못했어요.';
 
 // -- 크기 ---------------------------------------------------------------------
@@ -64,7 +73,7 @@ const double _buttonIconSize = 18;
 const double _trackBandWidth = 16;
 const double _trackLineWidth = 3.2;
 
-/// 홈 맨 위 "Last Race" 타일(B안 미션 컨트롤): 가장 최근 레이스의 서킷 윤곽을 크게 그리고, 옆에 결과
+/// 홈 맨 위 "Last Race" 타일(B안 미션 컨트롤): 가장 최근 레이스의 서킷(내 랩으로 그린 섹터 색 지도, 없으면 윤곽)을 크게 그리고, 옆에 결과
 /// (순위 · 출발 대비 · 우승과 차이 · 베스트 랩 · 피트 · 포인트)와 하이라이트 · 세션 열기 버튼을 둔다.
 /// 레이스가 없으면 안내 문구, 불러오지 못하면 다시 시도 버튼. [height]를 주면 어느 상태든 그 높이로 그린다(넓은 보드).
 class LastRaceTile extends ConsumerWidget {
@@ -129,8 +138,9 @@ class _RaceTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // 라운드 · 피트 · 우승과 차이 · 하이라이트 여부는 세션 상세에만 있다. 받기 전이나 못 받으면 목록 값만 보여 준다.
-    final extras = lastRaceExtrasOf(ref.watch(sessionDetailProvider(race.sessionId)).valueOrNull);
-    final outline = ref.watch(trackOutlinesProvider).valueOrNull?[race.trackName];
+    final detail = ref.watch(sessionDetailProvider(race.sessionId));
+    final extras = lastRaceExtrasOf(detail.valueOrNull);
+    final map = _map(ref, detail);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -141,8 +151,8 @@ class _RaceTile extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  if (outline != null) ...[
-                    SizedBox(height: _stackedMapHeight, child: _TrackBoardMap(outline: outline)),
+                  if (map != null) ...[
+                    SizedBox(height: _stackedMapHeight, child: map),
                     const SizedBox(height: _sectionGap),
                   ],
                   _RaceInfo(race: race, extras: extras, fill: false),
@@ -160,8 +170,8 @@ class _RaceTile extends ConsumerWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  if (outline != null) ...[
-                    Expanded(flex: _mapFlex, child: _TrackBoardMap(outline: outline)),
+                  if (map != null) ...[
+                    Expanded(flex: _mapFlex, child: map),
                     const SizedBox(width: _mapInfoGap),
                   ],
                   Expanded(flex: _infoFlex, child: _RaceInfo(race: race, extras: extras, fill: true)),
@@ -171,6 +181,72 @@ class _RaceTile extends ConsumerWidget {
           ),
         );
       },
+    );
+  }
+
+  /// 서킷 그림: 이 레이스의 내 랩(최고 랩, 없으면 저장된 첫 랩)에 위치가 있으면 그 랩으로 그린 섹터 색 지도
+  /// (레이스 리뷰 지도와 같은 그림), 없으면 서킷 윤곽, 둘 다 없으면 null.
+  /// 세션 상세·랩 트레이스·공식 코너를 받는 동안은 빈 칸(윤곽 → 섹터 지도로 바뀌어 보이지 않게).
+  Widget? _map(WidgetRef ref, AsyncValue<SessionDetail> detail) {
+    final outline = ref.watch(trackOutlinesProvider).valueOrNull?[race.trackName];
+    final corners = ref.watch(trackCornersProvider);
+    final mapLap = switch (detail.valueOrNull) {
+      final SessionDetail value => sessionMapLap(value),
+      null => null,
+    };
+    final lapId = mapLap?.lapId;
+    final trace = lapId == null ? null : ref.watch(lapTraceProvider(lapId));
+    if (detail.isLoading || corners.isLoading || (trace?.isLoading ?? false)) {
+      return const SizedBox.shrink();
+    }
+    final lapTrace = trace?.valueOrNull;
+    if (mapLap != null && lapTrace != null && lapTrace.hasPositions) {
+      return _SectorBoardMap(
+        trace: lapTrace,
+        sectors: sessionLapSectors(mapLap),
+        officialCorners: corners.valueOrNull?[race.trackName],
+      );
+    }
+    return outline == null ? null : _TrackBoardMap(outline: outline);
+  }
+}
+
+/// 섹터 색 서킷 그림(어두운 테두리 + 섹터 색 선 + 코너 번호 배지)을 칸 가득 그리고, 섹터를 알면 아래에 섹터 범례.
+class _SectorBoardMap extends StatelessWidget {
+  const _SectorBoardMap({required this.trace, required this.sectors, required this.officialCorners});
+
+  final LapTrace trace;
+  final List<LapSector> sectors;
+  final List<OfficialCorner>? officialCorners;
+
+  @override
+  Widget build(BuildContext context) {
+    final sectorIndexes = track.sectorIndexesOf(trace.timeMs, sectors);
+    return Column(
+      key: const ValueKey('last-race-sector-map'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: Semantics(
+            label: _sectorMapSemanticLabel,
+            child: RepaintBoundary(
+              child: CustomPaint(
+                painter: RaceTrackMapPainter(
+                  trace: trace,
+                  sectorIndexes: sectorIndexes,
+                  corners: resolveLapCorners(trace, officialCorners),
+                  labelStyle: cornerLabelStyleOf(context),
+                ),
+                size: Size.infinite,
+              ),
+            ),
+          ),
+        ),
+        if (sectorIndexes != null) ...[
+          const SizedBox(height: kTrackSectorLegendGap),
+          const TrackSectorLegend(),
+        ],
+      ],
     );
   }
 }

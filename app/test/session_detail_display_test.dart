@@ -6,6 +6,30 @@ import 'package:simcenter_app/features/sessions/domain/setup_display.dart';
 import 'support/fakes.dart';
 
 void main() {
+  group('sessionMapLap·sessionLapSectors', () {
+    const first = SessionLap(lapNumber: 1, lapId: 'a', sectorsMs: [25000, null, 25001]);
+    const best = SessionLap(lapNumber: 2, lapId: 'b', sectorsMs: [24000, 23384, 25000]);
+
+    test('지도 랩은 저장된 최고 랩, 없으면 저장된 첫 랩, 저장된 랩이 없으면 null', () {
+      expect(sessionMapLap(detailOf('s', myBestLap: const SessionBestLap(lapId: 'b', lapTimeMs: 1), laps: const [
+        SessionLap(lapNumber: 0),
+        first,
+        best,
+      ]))?.lapId, 'b');
+      expect(sessionMapLap(detailOf('s', myBestLap: const SessionBestLap(lapId: 'x', lapTimeMs: 1), laps: const [
+        SessionLap(lapNumber: 0),
+        first,
+        best,
+      ]))?.lapId, 'a');
+      expect(sessionMapLap(detailOf('s', laps: const [SessionLap(lapNumber: 1)])), isNull);
+    });
+
+    test('섹터 시간 → 섹터 목록(모르는 섹터는 빠진다)', () {
+      expect([for (final s in sessionLapSectors(first)) (s.sectorNumber, s.sectorTimeMs)], [(1, 25000), (3, 25001)]);
+      expect(sessionLapSectors(best).map((s) => s.sectorNumber), [1, 2, 3]);
+    });
+  });
+
   group('sessionKindName·gameModeLine', () {
     test('세션 종류 전체 이름, 모르면 -', () {
       expect(sessionKindName('Qualifying3'), 'Qualifying 3');

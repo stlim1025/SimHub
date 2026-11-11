@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import '../../laps/domain/lap_models.dart' show LapSector;
 import 'session_display.dart';
 import 'session_models.dart';
 
@@ -127,6 +128,20 @@ String formatSectorTime(int? ms) {
       ? '${value ~/ _msPerSecond}.$tail'
       : '${value ~/ _msPerMinute}:${_two((value ~/ _msPerSecond) % _secondsPerMinute)}.$tail';
 }
+
+/// 섹터 색 트랙 지도를 그릴 내 랩(레이스 리뷰 · 홈 Last Race 타일): 세션 최고 랩(저장돼 있으면), 없으면 저장된 첫 랩.
+/// 저장된 랩이 없으면 null(순수 함수).
+SessionLap? sessionMapLap(SessionDetail detail) {
+  final bestId = detail.myBestLap?.lapId;
+  final saved = detail.laps.where((l) => l.lapId != null);
+  return saved.where((l) => l.lapId == bestId).firstOrNull ?? saved.firstOrNull;
+}
+
+/// 랩의 섹터 시간 → 지도 섹터 경계에 쓰는 섹터 목록(모르는 섹터는 빠진다, 순수 함수).
+List<LapSector> sessionLapSectors(SessionLap lap) => [
+      for (var i = 0; i < lap.sectorsMs.length; i++)
+        if (lap.sectorsMs[i] case final ms?) LapSector(sectorNumber: i + 1, sectorTimeMs: ms),
+    ];
 
 /// Laps 카드 GAP 칸(내 최고 랩 대비 `+0.418`). 최고 랩(0)·값 없음은 `-`.
 /// 최고 랩보다 빠른 무효 랩은 음수로 와서 `-0.123`(서버 확정, docs/15 §11.4).

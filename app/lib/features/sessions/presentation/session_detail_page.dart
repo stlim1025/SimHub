@@ -16,7 +16,6 @@ import '../../../core/widgets/track_flag.dart';
 import '../../lap_detail/application/lap_detail_providers.dart';
 import '../../lap_detail/domain/lap_compare.dart';
 import '../../lap_detail/domain/lap_detail_display.dart';
-import '../../laps/domain/lap_models.dart' show LapSector;
 import '../../seasons/domain/season_display.dart';
 import '../../tracks/application/track_corners_provider.dart';
 import '../application/sessions_providers.dart';
@@ -303,7 +302,7 @@ class _RaceReviewTab extends ConsumerWidget {
     final sessionId = detail.header.sessionId;
     final analysis = ref.watch(raceAnalysisProvider(sessionId));
     final corners = ref.watch(trackCornersProvider);
-    final mapLap = _mapLap(detail);
+    final mapLap = sessionMapLap(detail);
     final mapLapId = mapLap?.lapId;
     final trace = mapLapId == null ? null : ref.watch(lapTraceProvider(mapLapId));
     if (analysis.isLoading || corners.isLoading || (trace?.isLoading ?? false)) {
@@ -323,14 +322,7 @@ class _RaceReviewTab extends ConsumerWidget {
         if (mapLap == null || lapTrace == null || !lapTrace.hasPositions) {
           return _ContentWidth(child: card);
         }
-        final map = RaceReviewTrackMap(
-          trace: lapTrace,
-          sectors: [
-            for (var i = 0; i < mapLap.sectorsMs.length; i++)
-              if (mapLap.sectorsMs[i] case final ms?) LapSector(sectorNumber: i + 1, sectorTimeMs: ms),
-          ],
-          officialCorners: official,
-        );
+        final map = RaceReviewTrackMap(trace: lapTrace, sectors: sessionLapSectors(mapLap), officialCorners: official);
         // 넓으면 오른쪽 칸에 지도를 두고 스크롤해도 화면 위에 붙어 따라오게, 좁으면 리뷰 위에 둔다.
         return LayoutBuilder(
           builder: (context, box) => box.maxWidth >= _reviewMapSideWidth
@@ -342,13 +334,6 @@ class _RaceReviewTab extends ConsumerWidget {
         );
       },
     );
-  }
-
-  /// 지도를 그릴 내 랩: 세션 최고 랩(저장돼 있으면), 없으면 저장된 첫 랩. 섹터 시간도 그 랩 것을 쓴다.
-  static SessionLap? _mapLap(SessionDetail detail) {
-    final bestId = detail.myBestLap?.lapId;
-    final saved = detail.laps.where((l) => l.lapId != null);
-    return saved.where((l) => l.lapId == bestId).firstOrNull ?? saved.firstOrNull;
   }
 }
 

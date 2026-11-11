@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,11 +10,15 @@ import 'package:simcenter_app/features/dashboard/presentation/dashboard_page.dar
 import 'package:simcenter_app/features/devices/application/devices_providers.dart';
 import 'package:simcenter_app/features/devices/data/devices_repository.dart';
 import 'package:simcenter_app/features/devices/domain/device_models.dart';
+import 'package:simcenter_app/features/lap_detail/data/lap_detail_repository.dart';
+import 'package:simcenter_app/features/lap_detail/domain/lap_detail_models.dart';
 import 'package:simcenter_app/features/laps/data/laps_repository.dart';
 import 'package:simcenter_app/features/laps/domain/lap_models.dart';
 import 'package:simcenter_app/features/seasons/data/seasons_repository.dart';
 import 'package:simcenter_app/features/seasons/domain/season_models.dart';
 import 'package:simcenter_app/features/sessions/data/sessions_repository.dart';
+import 'package:simcenter_app/features/sessions/domain/session_models.dart';
+import 'package:simcenter_app/features/tracks/application/track_corners_provider.dart';
 import 'package:simcenter_app/features/tracks/application/track_outlines_provider.dart';
 import 'package:simcenter_app/features/tracks/domain/track_outline.dart';
 
@@ -43,6 +49,7 @@ Future<FakeLapsRepository> _pumpDashboard(
   Map<String, TrackOutline> outlines = const {},
   Size size = _stackedSize,
   _MemorySeasonStore? seasonStore,
+  FakeLapDetailRepository? lapDetails,
 }) async {
   setViewSize(tester, size);
   final repo = FakeLapsRepository(laps: laps, tracks: tracks);
@@ -71,6 +78,8 @@ Future<FakeLapsRepository> _pumpDashboard(
       seasonsRepositoryProvider.overrideWithValue(seasons ?? FakeSeasonsRepository()),
       sessionsRepositoryProvider.overrideWithValue(sessions ?? FakeSessionsRepository()),
       trackOutlinesProvider.overrideWith((ref) async => outlines),
+      trackCornersProvider.overrideWith((ref) async => const {}),
+      lapDetailRepositoryProvider.overrideWithValue(lapDetails ?? FakeLapDetailRepository()),
       clockProvider.overrideWithValue(() => _now),
       dashboardSeasonStoreProvider.overrideWithValue(seasonStore ?? _MemorySeasonStore()),
     ],
@@ -104,7 +113,8 @@ MyTrack _myTrack(String id, String name, {int? bestMs = 83452, int lapCount = 3,
     );
 
 /// 마지막 레이스(Zandvoort, P7 출발 → P3)와 그 상세(라운드 9, 모든 차 표본, 피트 1회, 우승과 4.218초).
-FakeSessionsRepository _lastRaceRepo({bool withDetail = true, bool hasFieldSamples = true}) => FakeSessionsRepository(
+FakeSessionsRepository _lastRaceRepo({bool withDetail = true, bool hasFieldSamples = true, bool withLaps = false}) =>
+    FakeSessionsRepository(
       sessions: [
         sessionOf('race8', trackName: 'Hungaroring', classifiedAt: DateTime.utc(2026, 10, 10, 9)),
         sessionOf('race9',
@@ -125,6 +135,13 @@ FakeSessionsRepository _lastRaceRepo({bool withDetail = true, bool hasFieldSampl
             trackName: 'Zandvoort',
             round: 9,
             hasFieldSamples: hasFieldSamples,
+            myBestLap: withLaps ? const SessionBestLap(lapId: 'lap-2', lapTimeMs: 72384) : null,
+            laps: withLaps
+                ? const [
+                    SessionLap(lapNumber: 1, lapTimeMs: 74001, lapId: 'lap-1', sectorsMs: [25000, 24000, 25001]),
+                    SessionLap(lapNumber: 2, lapTimeMs: 72384, lapId: 'lap-2', sectorsMs: [24000, 23384, 25000]),
+                  ]
+                : const [],
             results: [
               resultOf(1, totalRaceTimeMs: 5400000),
               resultOf(2, gapMs: 1904),
@@ -133,6 +150,24 @@ FakeSessionsRepository _lastRaceRepo({bool withDetail = true, bool hasFieldSampl
           ),
       },
     );
+
+/// 원 서킷 한 바퀴(반지름 100m, 5m 간격, 72.4초) 랩. [positions]가 false면 위치 없는 옛 랩.
+LapTrace _circleLap(String lapId, {bool positions = true}) {
+  const count = 126;
+  return LapTrace(
+    lapId: lapId,
+    resolutionM: 5,
+    timeMs: [for (var i = 0; i < count; i++) i * 580],
+    speedKph: [for (var i = 0; i < count; i++) 180],
+    throttle: [for (var i = 0; i < count; i++) 100],
+    brake: [for (var i = 0; i < count; i++) 0],
+    steer: [for (var i = 0; i < count; i++) 0],
+    gear: [for (var i = 0; i < count; i++) 6],
+    rpm: [for (var i = 0; i < count; i++) 11000],
+    worldPosX: positions ? [for (var i = 0; i < count; i++) 100 * math.cos(i * 5 / 100)] : const [],
+    worldPosZ: positions ? [for (var i = 0; i < count; i++) 100 * math.sin(i * 5 / 100)] : const [],
+  );
+}
 
 void main() {
   testWidgets('환영 문구에 표시 이름이 들어간다', (t) async {
@@ -471,6 +506,46 @@ void main() {
       ]));
 
       expect(textOf(t, 'last-race-position'), 'DNF');
+    });
+
+    testWidgets('그 레이스의 내 최고 랩에 위치가 있으면 윤곽 대신 그 랩으로 그린 섹터 색 지도와 섹터 범례', (t) async {
+      final lapDetails = FakeLapDetailRepository(traces: {'lap-2': _circleLap('lap-2')});
+      await _pumpDashboard(t, const [],
+          sessions: _lastRaceRepo(withLaps: true),
+          outlines: {'Zandvoort': _squareOutline},
+          lapDetails: lapDetails,
+          size: _boardSize);
+
+      expect(lapDetails.traceRequests, ['lap-2']);
+      final map = find.byKey(const ValueKey('last-race-sector-map'));
+      expect(map, findsOneWidget);
+      expect(find.byKey(const ValueKey('last-race-track')), findsNothing);
+      for (final label in ['섹터 1', '섹터 2', '섹터 3']) {
+        expect(find.descendant(of: map, matching: find.text(label)), findsOneWidget);
+      }
+      // 지도는 결과 왼쪽, 타일 높이를 채운다.
+      expect(t.getRect(map).right, lessThan(t.getTopLeft(find.byKey(const ValueKey('last-race-position'))).dx));
+      expect(t.getSize(map).height, greaterThan(300));
+      expect(t.takeException(), isNull);
+    });
+
+    testWidgets('내 랩에 위치가 없으면(옛 랩) 서킷 윤곽, 375px 폭에서는 섹터 지도가 결과 위', (t) async {
+      await _pumpDashboard(t, const [],
+          sessions: _lastRaceRepo(withLaps: true),
+          outlines: {'Zandvoort': _squareOutline},
+          lapDetails: FakeLapDetailRepository(traces: {'lap-2': _circleLap('lap-2', positions: false)}));
+      expect(find.byKey(const ValueKey('last-race-sector-map')), findsNothing);
+      expect(find.byKey(const ValueKey('last-race-track')), findsOneWidget);
+
+      await _pumpDashboard(t, const [],
+          sessions: _lastRaceRepo(withLaps: true),
+          lapDetails: FakeLapDetailRepository(traces: {'lap-2': _circleLap('lap-2')}),
+          size: const Size(375, 3000));
+      expect(t.takeException(), isNull);
+      expect(
+        t.getTopLeft(find.byKey(const ValueKey('last-race-position'))).dy,
+        greaterThan(t.getBottomLeft(find.byKey(const ValueKey('last-race-sector-map'))).dy),
+      );
     });
 
     testWidgets('서킷 윤곽이 없으면 그림 없이 결과만 그린다', (t) async {

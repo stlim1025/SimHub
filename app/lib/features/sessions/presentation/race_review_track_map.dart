@@ -21,8 +21,8 @@ const double kRaceTrackMapMaxHeight = 320;
 const double _outlineWidth = 8;
 const double _sectorWidth = 4;
 
-/// 섹터 범례.
-const double _legendGap = 12;
+/// 섹터 범례: 지도와의 간격, 항목 사이 간격, 점과 글자 사이 간격, 점 크기.
+const double kTrackSectorLegendGap = 12;
 const double _legendSpacing = 14;
 const double _legendDotGap = 6;
 const double _legendDotSize = 8;
@@ -143,29 +143,37 @@ class RaceReviewTrackMap extends StatelessWidget {
             ),
           ),
           if (sectorIndexes != null) ...[
-            const SizedBox(height: _legendGap),
-            Wrap(
-              alignment: WrapAlignment.center,
-              spacing: _legendSpacing,
-              children: [
-                for (var i = 0; i < kTrackSectorColors.length; i++)
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: _legendDotSize,
-                        height: _legendDotSize,
-                        decoration: BoxDecoration(shape: BoxShape.circle, color: kTrackSectorColors[i]),
-                      ),
-                      const SizedBox(width: _legendDotGap),
-                      Text('섹터 ${i + 1}', style: Theme.of(context).textTheme.bodySmall),
-                    ],
-                  ),
-              ],
-            ),
+            const SizedBox(height: kTrackSectorLegendGap),
+            const TrackSectorLegend(),
           ],
         ],
       ),
     );
   }
+}
+
+/// 섹터 범례(`● 섹터 1  ● 섹터 2  ● 섹터 3`, 가운데 정렬) — 섹터 색 트랙 지도 아래에 붙인다.
+class TrackSectorLegend extends StatelessWidget {
+  const TrackSectorLegend({super.key});
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+        alignment: WrapAlignment.center,
+        spacing: _legendSpacing,
+        children: [
+          for (var i = 0; i < kTrackSectorColors.length; i++)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: _legendDotSize,
+                  height: _legendDotSize,
+                  decoration: BoxDecoration(shape: BoxShape.circle, color: kTrackSectorColors[i]),
+                ),
+                const SizedBox(width: _legendDotGap),
+                Text('섹터 ${i + 1}', style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
+        ],
+      );
 }
