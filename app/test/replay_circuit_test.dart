@@ -129,6 +129,40 @@ void main() {
       expect(kerbAt(onCircle(150, radius - 5.75)), isFalse); // 밟지 않은 곳에는 없다
     });
 
+    test('추정 도로: 연석은 밟은 바퀴 쪽 도로 끝에 그리고, 그 순간 차 바퀴가 연석 위에 있다', () {
+      // +x로 곧게 400m. 표본 40~43(200~215m)에서 운전자 왼쪽 바퀴가 연석을 밟았다 = 서킷 그림의 오른쪽(−y) 끝.
+      final points = [for (var i = 0; i < 80; i++) Offset(i * 5.0, 0)];
+      final touched = [for (var i = 0; i < 80; i++) i >= 40 && i <= 43];
+      final none = List.filled(80, false);
+      final base = _trace(points, kerbContact: touched);
+      final trace = LapTrace(
+        lapId: base.lapId,
+        resolutionM: base.resolutionM,
+        timeMs: base.timeMs,
+        speedKph: base.speedKph,
+        throttle: base.throttle,
+        brake: base.brake,
+        steer: base.steer,
+        gear: base.gear,
+        rpm: base.rpm,
+        worldPosX: base.worldPosX,
+        worldPosZ: base.worldPosZ,
+        kerbContact: touched,
+        kerbContactLeft: touched,
+        kerbContactRight: none,
+      );
+
+      final circuit = ReplayCircuit.build(LapReplay(trace));
+      bool kerbAt(Offset p) => circuit.kerbRed.contains(p) || circuit.kerbWhite.contains(p);
+
+      expect(circuit.isMeasured, isFalse);
+      expect(kerbAt(const Offset(207, -1)), isTrue); // 차 가운데에서 오른쪽으로 1m = 오른쪽 바퀴 자리
+      expect(kerbAt(const Offset(207, 1)), isFalse); // 왼쪽 바퀴 자리는 아스팔트
+      expect(circuit.asphalt.contains(const Offset(207, 1)), isTrue);
+      expect(circuit.kerbLeft.contains(true), isFalse);
+      expect(kerbAt(const Offset(100, -1)), isFalse); // 밟지 않은 곳에는 없다
+    });
+
     test('덮을 자리(그리드에 선 차)가 도로 밖이면 그 둘레만 폭을 넓혀 차가 통째로 도로 안에 든다', () {
       final points = [for (var i = 0; i < count; i++) onCircle(i, radius)];
       final real = _profile(points, left: 5, right: 5);
@@ -242,6 +276,10 @@ void main() {
       'surfaceTypeRR': [0, 0, 0],
     }));
     expect(trace.kerbContact, [false, true, false]);
+    // 어느 쪽 바퀴였는지도 읽는다(FL·RL = 운전자 왼쪽).
+    expect(trace.hasKerbSides, isTrue);
+    expect(trace.kerbContactLeft, [false, true, false]);
+    expect(trace.kerbContactRight, [false, false, false]);
     expect(LapTrace.fromJson(json({'worldPosX': [0, 1, 2], 'worldPosZ': [0, 0, 0], 'worldPosY': [5, 6, 7]})).worldPosY, [5, 6, 7]);
     expect(LapTrace.fromJson(json({'surfaceTypeFL': [0, 1, 0]})).hasKerbContact, isFalse);
   });

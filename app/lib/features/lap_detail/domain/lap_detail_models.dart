@@ -409,6 +409,8 @@ class LapTrace {
     this.ersDeployedJ = const [],
     this.ersDeployMode = const [],
     this.kerbContact = const [],
+    this.kerbContactLeft = const [],
+    this.kerbContactRight = const [],
   });
 
   final String lapId;
@@ -465,6 +467,13 @@ class LapTrace {
 
   bool get hasKerbContact => length > 0 && kerbContact.length == length;
 
+  /// 표본마다 운전자 기준 왼쪽 바퀴(FL·RL)·오른쪽 바퀴(FR·RR)가 연석 위에 있었는지. 채널이 없거나 길이가 다르면 빈 목록.
+  final List<bool> kerbContactLeft;
+  final List<bool> kerbContactRight;
+
+  /// 연석을 어느 쪽 바퀴로 밟았는지까지 아는지(다시보기가 연석을 그 쪽 도로 끝에 그린다).
+  bool get hasKerbSides => length > 0 && kerbContactLeft.length == length && kerbContactRight.length == length;
+
   bool get isEmpty => length == 0;
 
   /// 표본 [index]의 랩 거리(m).
@@ -495,6 +504,7 @@ class LapTrace {
     final posX = extraChannel(kWorldPosXChannel);
     final posZ = extraChannel(kWorldPosZChannel);
     final hasBoth = posX.isNotEmpty && posZ.isNotEmpty;
+    final wheels = [for (final name in kSurfaceTypeChannels) extraChannel(name, discrete: true)];
     return LapTrace(
       lapId: json['lapId'] as String,
       resolutionM: math.max(_minResolutionM, _intOrNull(json['resolutionM']) ?? _minResolutionM),
@@ -511,9 +521,9 @@ class LapTrace {
       ersStoreJ: extraChannel(kErsStoreChannel),
       ersDeployedJ: extraChannel(kErsDeployedChannel),
       ersDeployMode: List.unmodifiable(extraChannel(kErsDeployModeChannel, discrete: true).map((v) => v.round())),
-      kerbContact: _kerbContact([
-        for (final name in kSurfaceTypeChannels) extraChannel(name, discrete: true),
-      ], length),
+      kerbContact: _kerbContact(wheels, length),
+      kerbContactLeft: _kerbContact(wheels, length, only: _leftWheels),
+      kerbContactRight: _kerbContact(wheels, length, only: _rightWheels),
     );
   }
 
@@ -548,13 +558,18 @@ class LapTrace {
     return repaired;
   }
 
-  /// 네 바퀴 노면 채널 → 표본마다 연석을 밟았는지. 채널 하나라도 없거나 길이가 다르면 빈 목록.
-  static List<bool> _kerbContact(List<List<double>> wheels, int length) {
+  /// [kSurfaceTypeChannels] 순서(FL·FR·RL·RR)에서 왼쪽·오른쪽 바퀴 자리.
+  static const List<int> _leftWheels = [0, 2];
+  static const List<int> _rightWheels = [1, 3];
+
+  /// 네 바퀴 노면 채널 → 표본마다 연석을 밟았는지([only]를 주면 그 자리 바퀴만 본다). 채널 하나라도 없거나 길이가 다르면 빈 목록.
+  static List<bool> _kerbContact(List<List<double>> wheels, int length, {List<int>? only}) {
     if (length == 0 || wheels.any((w) => w.isEmpty)) {
       return const [];
     }
+    final watched = only == null ? wheels : [for (final w in only) wheels[w]];
     return List.unmodifiable([
-      for (var i = 0; i < length; i++) wheels.any((w) => w[i].round() == kSurfaceRumble),
+      for (var i = 0; i < length; i++) watched.any((w) => w[i].round() == kSurfaceRumble),
     ]);
   }
 

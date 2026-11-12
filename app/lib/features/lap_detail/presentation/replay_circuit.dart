@@ -5,18 +5,12 @@ import '../../tracks/domain/track_sample_geometry.dart';
 import '../../tracks/domain/track_width_profile.dart';
 import '../domain/ghost_replay.dart';
 import '../domain/lap_detail_models.dart';
+import '../domain/lap_line_road.dart';
 import '../domain/track_alignment.dart';
-
-/// 서킷 중심선을 구할 때 앞뒤로 평균하는 거리(m). 레이싱 라인은 코너마다 바깥 → 에이펙스 → 바깥으로 오가므로
-/// 이 거리만큼 평균하면 도로 가운데쯤이 되고, 차는 그 도로 안에서 좌우로 움직여 보인다(실측 서킷이 없을 때).
-const double kCircuitCenterSmoothM = 30;
 
 /// 실측 서킷이 없을 때의 직선 도로 폭(m). 코너에서는 곡률에 따라 [kCircuitCornerExtraWidthM]까지 넓어진다.
 const double kCircuitBaseWidthM = 13;
 const double kCircuitCornerExtraWidthM = 3;
-
-/// 곡률(1/m) × 이 값 = 코너에서 넓어지는 폭(m, [kCircuitCornerExtraWidthM]까지).
-const double _cornerWidthGain = 150;
 
 /// 노면 기록이 없을 때 이 곡률(1/m, 반지름 약 125m)보다 급한 구간 양쪽 가장자리에 연석을 그린다.
 const double kCircuitKerbCurvature = 0.008;
@@ -36,12 +30,6 @@ const double kCircuitPitLaneWidthM = 7;
 /// 그 길이는 [_pitJoinMaxM]까지만.
 const double _pitJoinSlope = 0.1;
 const double _pitJoinMaxM = 200;
-
-/// 첫·마지막 표본이 이 거리(m)보다 가까우면 한 바퀴로 이어진 닫힌 서킷으로 본다.
-const double _closedLoopM = 40;
-
-/// 추정 모양에서 주행선이 도로 중심에서 벗어날 수 있는 거리 = 직선 반폭 − 이 값(m). 차가 늘 아스팔트 위에 있게 한다.
-const double _lateralMarginM = 2;
 
 /// 코너 안쪽 반폭의 상한 = 곡률 반지름 × 이 비율.
 const double _innerRadiusFraction = 0.8;
@@ -80,8 +68,7 @@ const double _insideKerbMinCoverage = 0.25;
 const int _centerTidySamples = 2;
 const int _curvatureSmoothSamples = 3;
 
-/// 추정 도로 폭을 고르는 이동 평균 반폭(표본 수)·곡률 연석·그래블로 그릴 최소 연속 표본 수.
-const int _widthSmoothSamples = 6;
+/// 곡률 연석·그래블로 그릴 최소 연속 표본 수.
 const int _minFeatureRunSamples = 4;
 
 /// 노면 높이를 고르는 이동 평균 반폭(표본 수, 서스펜션·연석으로 튀는 높이를 없앤다).
@@ -110,8 +97,8 @@ const double _rematchM = 30;
 const int _kerbStripesPerSegment = 2;
 
 /// 고스트 재생 화면의 서킷 모양(월드 좌표 m). 실측 서킷([TrackWidthProfile])을 주행선에 맞출 수 있으면 그 중심선·좌우 폭을 쓰고,
-/// 없거나 맞지 않으면 내 랩(+ 비교 랩) 주행선을 평활해 중심선과 폭을 추정한다.
-/// 연석은 바퀴 노면 기록에서 실제로 밟은 자리에 그리고(기록이 없으면 곡률로 추정), 그래블은 곡률로 정한 코너 바깥에 그린다.
+/// 없거나 맞지 않으면 내 랩(+ 비교 랩) 주행선으로 중심선과 폭을 추정한다([roadFromLapLines] — 코너마다 주행선이 바깥 → 안쪽 → 바깥을 지나게).
+/// 연석은 바퀴 노면 기록에서 실제로 밟은 자리, 밟은 바퀴 쪽 도로 끝에 그리고(기록이 없으면 곡률로 추정), 그래블은 곡률로 정한 코너 바깥에 그린다.
 class ReplayCircuit {
   ReplayCircuit._({
     required this.center,
@@ -263,7 +250,9 @@ class ReplayCircuit {
             )
           : () {
               final estimated = _estimated(player, ghost, baseWidthM);
-              return aligned == null ? estimated : _keepLinesInside(_withMeasured(estimated, aligned), lines);
+              return aligned == null
+                  ? _coveringEstimated(estimated, lines)
+                  : _keepLinesInside(_withMeasured(estimated, aligned), lines);
             }(),
       cover,
     );
@@ -816,11 +805,37 @@ class ReplayCircuit {
     return _widened(geometry, needLeft, needRight);
   }
 
+  /// 추정 도로([_estimated])에 주행선을 담는다. 추정 도로는 주행선을 도로 끝 가까이에 두므로(에이펙스·연석) 차가 통째로 도로 안에 들게
+  /// 모자란 쪽 폭만 넓힌다. 연석을 그리는 칸에서는 차 가운데가 도로 끝 밖 [_kerbCarAllowanceM]까지 나가도 된다.
+  static _Geometry _coveringEstimated(_Geometry estimated, List<LapTrace> lines) {
+    final center = estimated.center;
+    final closed = estimated.closed;
+    final kerbs = !lines.any((l) => l.hasPositions && l.hasKerbContact)
+        ? null
+        : _kerbSides(
+            lines,
+            center,
+            _normals(center, closed: closed),
+            const [],
+            spacing: _spacing(center, closed: closed),
+            closed: closed,
+          );
+    return _coveringLines(estimated, lines, kerbLeft: kerbs?.left, kerbRight: kerbs?.right, kerbsPinned: true);
+  }
+
   /// 주행선(내 랩·비교 랩)이 도로 안에 들도록 그 쪽 폭만 넓힌다(가운데는 그대로 — 표본 형상의 다른 차들이 제자리에 남게).
   /// 연석을 밟은 표본이나 그 쪽에 표본 연석([kerbLeft]·[kerbRight], 표본 칸 = 가운데 점)이 있는 칸은 차 가운데가 가장자리 밖
   /// [_kerbCarAllowanceM]까지 나가도 되고(몸체가 연석 위 — 에이펙스에서 연석에 붙인 도로 끝을 차 반폭만큼 도로 쪽으로 다시 밀어내지 않게),
   /// 아니면 차 반폭만큼 안쪽에 들어야 한다.
-  static _Geometry _coveringLines(_Geometry geometry, List<LapTrace> lines, {List<bool>? kerbLeft, List<bool>? kerbRight}) {
+  /// [kerbsPinned](추정 도로)면 연석을 밟은 표본과 그 앞뒤 표본은 보지 않는다 — 추정이 그 표본에 도로 끝을 맞춰 두었고,
+  /// 연석을 깊게 탄 차는 차 가운데가 연석 너머에 있는 것이 맞다(넓히면 맞춘 도로 끝이 차에서 떨어진다).
+  static _Geometry _coveringLines(
+    _Geometry geometry,
+    List<LapTrace> lines, {
+    List<bool>? kerbLeft,
+    List<bool>? kerbRight,
+    bool kerbsPinned = false,
+  }) {
     final center = geometry.center;
     final n = center.length;
     final closed = geometry.closed;
@@ -828,10 +843,19 @@ class ReplayCircuit {
     final needLeft = List<double>.filled(n, 0);
     final needRight = List<double>.filled(n, 0);
     for (final line in lines.where((l) => l.hasPositions)) {
+      final pinned = !kerbsPinned
+          ? const <int>{}
+          : {
+              for (final touch in kerbTouches(line, kerbWidthM: kCircuitKerbWidthM))
+                for (var i = touch.sample - 1; i <= touch.sample + 1; i++) i,
+            };
       final matcher = _SequentialMatcher(center, closed: closed);
       for (var i = 0; i < line.length; i++) {
         final p = Offset(line.worldPosX[i], line.worldPosZ[i]);
         final j = matcher.match(p);
+        if (pinned.contains(i)) {
+          continue;
+        }
         final lateral = (p.dx - center[j].dx) * normals[j].dx + (p.dy - center[j].dy) * normals[j].dy;
         final kerbs = lateral >= 0 ? kerbLeft : kerbRight;
         final onKerb = (line.hasKerbContact && line.kerbContact[i]) || (kerbs != null && kerbs.length == n && kerbs[j]);
@@ -930,66 +954,20 @@ class ReplayCircuit {
     ];
   }
 
-  /// 실측 서킷이 없을 때: 주행선(과 비교 랩 주행선의 평균)을 평활해 중심선을 만들고 곡률로 폭을 정한다.
+  /// 실측 서킷이 없을 때: 주행선이 굽는 모양(과 연석을 밟은 자리)으로 중심선을 만들고 곡률로 폭을 정한다([roadFromLapLines]).
   static _Geometry _estimated(LapReplay player, LapReplay? ghost, double baseWidthM) {
-    final trace = player.trace;
-    final n = trace.length;
-    final raw = _positions(trace);
-    final other = ghost?.trace;
-    if (other != null && other.resolutionM == trace.resolutionM) {
-      final m = math.min(n, other.length);
-      for (var i = 0; i < m; i++) {
-        raw[i] = Offset((raw[i].dx + other.worldPosX[i]) / 2, (raw[i].dy + other.worldPosZ[i]) / 2);
-      }
-    }
-    final closed = n > 2 && (raw.first - raw.last).distance < _closedLoopM;
-    int at(int i) => closed ? (i % n + n) % n : i.clamp(0, n - 1);
-    final maxLateral = math.max(0.0, baseWidthM / 2 - _lateralMarginM);
-
-    List<Offset> movingAverage(List<Offset> points, int half) => [
-          for (var i = 0; i < n; i++)
-            () {
-              var sum = Offset.zero;
-              for (var j = i - half; j <= i + half; j++) {
-                sum += points[at(j)];
-              }
-              return sum / (half * 2 + 1).toDouble();
-            }(),
-        ];
-
-    // 주행선 − 크게 평활한 선 = 도로 안에서의 좌우 위치(추정). 급한 코너에서는 평활선이 안쪽으로 크게 당겨지므로
-    // 그 차이를 (반폭 − [_lateralMarginM])으로 자른 만큼만 빼서, 차는 늘 도로 안에서 좌우로 움직이게 한다.
-    final window = math.max(1, (kCircuitCenterSmoothM / trace.resolutionM).round());
-    final smooth = movingAverage(raw, window);
-    final shifted = <Offset>[
-      for (var i = 0; i < n; i++)
-        () {
-          final d = raw[i] - smooth[i];
-          final length = d.distance;
-          final clamped = length > maxLateral ? d * (maxLateral / length) : d;
-          return raw[i] - clamped;
-        }(),
-    ];
-    final center = movingAverage(shifted, _centerTidySamples);
-    final headings = [
-      for (var i = 0; i < n; i++)
-        () {
-          final d = center[at(i + 1)] - center[at(i - 1)];
-          return math.atan2(d.dy, d.dx);
-        }(),
-    ];
-    final curvatures = _movingAverage([
-      for (var i = 0; i < n; i++) _angleDiff(headings[at(i + 1)], headings[at(i - 1)]) / (2 * trace.resolutionM),
-    ], _curvatureSmoothSamples, at);
-    // 폭은 넓게 평균해 가장자리가 들쭉날쭉하지 않고 서서히 넓어졌다 좁아지게 한다.
-    final halves = _movingAverage([
-      for (final k in curvatures) (baseWidthM + math.min(kCircuitCornerExtraWidthM, k.abs() * _cornerWidthGain)) / 2,
-    ], _widthSmoothSamples, at);
-    return (center: center, left: halves, right: halves, closed: closed);
+    final road = roadFromLapLines(
+      player.trace,
+      ghost: ghost?.trace,
+      widthM: baseWidthM,
+      cornerExtraWidthM: kCircuitCornerExtraWidthM,
+      kerbWidthM: kCircuitKerbWidthM,
+    );
+    return (center: road.center, left: road.leftM, right: road.rightM, closed: road.closed);
   }
 
-  /// 연석이 있는 중심선 구간(왼쪽·오른쪽). 바퀴 노면 기록이 있으면 연석을 밟은 표본의 위치(중심선 왼쪽/오른쪽)에 그리고,
-  /// 기록이 하나도 없으면 곡률이 급한 구간 양쪽에 그린다.
+  /// 연석이 있는 중심선 구간(왼쪽·오른쪽). 바퀴 노면 기록이 있으면 연석을 밟은 표본 자리에, 밟은 바퀴 쪽(바퀴 쪽 기록이 없는
+  /// 트레이스는 차가 있던 중심선 왼쪽/오른쪽)에 그리고, 기록이 하나도 없으면 곡률이 급한 구간 양쪽에 그린다.
   static ({List<bool> left, List<bool> right}) _kerbSides(
     List<LapTrace> lines,
     List<Offset> center,
@@ -1016,11 +994,20 @@ class ReplayCircuit {
     }
 
     for (final line in recorded) {
+      // 바퀴 쪽 기록이 있으면 연석을 밟은 표본 → 그 연석이 있는 쪽([kerbTouches] — 시케인을 깊게 타 반대쪽 바퀴만 닿은 표본도 같은 연석이다).
+      final touched = {for (final touch in kerbTouches(line, kerbWidthM: kCircuitKerbWidthM)) touch.sample: touch.left};
       final matcher = _SequentialMatcher(center, closed: closed);
       for (var i = 0; i < line.length; i++) {
         final p = Offset(line.worldPosX[i], line.worldPosZ[i]);
         final j = matcher.match(p);
         if (!line.kerbContact[i]) {
+          continue;
+        }
+        if (line.hasKerbSides) {
+          final onLeft = touched[i];
+          if (onLeft != null) {
+            mark(onLeft ? left : right, j);
+          }
           continue;
         }
         final lateral = (p.dx - center[j].dx) * normals[j].dx + (p.dy - center[j].dy) * normals[j].dy;
